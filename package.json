@@ -1,0 +1,56 @@
+{
+  "name": "mach-table",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "MachTable - high performance, framework-agnostic data grid (monorepo)",
+  "author": "Agile Team",
+  "license": "MIT",
+  "homepage": "https://github.com/ChenyCHENYU/MachTable#readme",
+  "bugs": {
+    "url": "https://github.com/ChenyCHENYU/MachTable/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChenyCHENYU/MachTable.git"
+  },
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "scripts": {
+    "build": "pnpm --filter \"./packages/*\" run build",
+    "build:examples": "pnpm --filter \"./examples/*\" run build",
+    "typecheck": "pnpm --filter \"./packages/*\" run typecheck",
+    "lint": "eslint \"packages/**/*.{ts,tsx}\" \"tests/**/*.ts\" --max-warnings=0",
+    "lint:package": "pnpm --filter \"./packages/*\" exec publint",
+    "test": "pnpm --filter \"./packages/*\" run test",
+    "test:coverage": "pnpm --filter \"./packages/*\" run test:coverage",
+    "test:e2e": "playwright test",
+    "clean": "pnpm -r exec rimraf dist node_modules/.cache",
+    "dev": "pnpm --filter vanilla-demo dev",
+    "dev:react": "pnpm --filter react-demo dev",
+    "dev:vue": "pnpm --filter vue-demo dev",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "check:docs": "node scripts/check-doc-links.mjs",
+    "check:size": "node scripts/check-size.mjs",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm lint:package && pnpm check:size && pnpm check:docs && pnpm build:examples && pnpm docs:build"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^3.0.1",
+    "@playwright/test": "1.62.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "10.9.1",
+    "jsdom": "^30.0.1",
+    "publint": "0.3.24",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "8.68.0",
+    "vitepress": "^1.6.4",
+    "vitest": "^4.1.11"
+  }
+}

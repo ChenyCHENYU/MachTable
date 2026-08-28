@@ -1,0 +1,64 @@
+{
+  "name": "@agile-team/mach-table",
+  "version": "0.4.0",
+  "description": "Enterprise-grade, framework-agnostic TypeScript data grid with virtualization, editing, grouping and extensibility",
+  "keywords": [
+    "data-grid",
+    "table",
+    "virtualization",
+    "typescript",
+    "enterprise",
+    "vue",
+    "react"
+  ],
+  "author": "Agile Team",
+  "license": "MIT",
+  "homepage": "https://github.com/ChenyCHENYU/MachTable#readme",
+  "bugs": {
+    "url": "https://github.com/ChenyCHENYU/MachTable/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChenyCHENYU/MachTable.git",
+    "directory": "packages/core"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./styles/mach-table.css": {
+      "types": "./styles/mach-table.css.d.ts",
+      "default": "./styles/mach-table.css"
+    }
+  },
+  "files": [
+    "dist",
+    "styles"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}

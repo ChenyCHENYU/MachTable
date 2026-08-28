@@ -1,0 +1,80 @@
+# 版本升级指南
+
+## 版本策略
+
+MachTable 当前处于 `0.x`。三个包固定版本联动：
+
+- patch：兼容性修复和文档改进；
+- minor：新能力，也可能包含经过说明的破坏性调整；
+- `1.0.0`：公共 API 和兼容策略稳定后再发布。
+
+升级时 Core、Vue/React 适配器必须保持相同 minor。
+
+```bash
+pnpm up @agile-team/mach-table@^0.4.0 @agile-team/mach-table-vue@^0.4.0
+```
+
+## 标准升级流程
+
+1. 阅读 Core 与适配器的 `CHANGELOG.md`。
+2. 在独立分支升级并提交 lockfile。
+3. 执行类型检查、单元测试和表格业务 E2E。
+4. 验证选择、编辑、导出、列状态、弹窗布局和服务端数据源。
+5. 灰度发布；保留上一 lockfile/制品作为回滚点。
+
+## 0.3 → 0.4
+
+### 包名迁移
+
+| 旧名称 | 0.4 正式名称 |
+| --- | --- |
+| `@mach-table/core` | `@agile-team/mach-table` |
+| `@mach-table/vue` | `@agile-team/mach-table-vue` |
+| `@mach-table/react` | `@agile-team/mach-table-react` |
+
+替换依赖和 import，并重新生成 lockfile。
+
+### Overlay 安全默认值
+
+自定义 Overlay 的字符串现在按纯文本渲染：
+
+```ts
+overlayNoRowsTemplate: "<strong>暂无数据</strong>" // 显示为文本，不再解释 HTML
+```
+
+推荐改为 DOM 工厂：
+
+```ts
+overlayNoRowsTemplate: () => {
+  const message = document.createElement("strong");
+  message.textContent = "暂无数据";
+  return message;
+}
+```
+
+只有完全可信的静态 HTML 才可临时设置 `allowUnsafeOverlayHtml: true`。
+
+### 适配器更新
+
+- Vue/React 现在同步全部 GridOptions，运行时变化不再遗漏数据源、列默认值、树形、Feature 等选项。
+- `gridClassName` 会响应式更新内部 `.mach-root`。
+- Vue `useMachTable` 和 React `useMachGrid` 在卸载后正确清空 API 状态。
+- 同一批次同时更新数据源与结构选项只触发一次数据加载。
+
+### 扩展机制
+
+新增实例级 `components` 和 `features`。业务扩展应优先使用 `GridFeature` 组合，不要继承内部 Service 或修改 `GridCore`。
+
+## 列状态迁移
+
+如果升级同时改变了 `colId`、固定列或分组结构，应升级 `columnStateKey` 的版本后缀：
+
+```ts
+columnStateKey: "orders-v2"
+```
+
+这比尝试兼容所有旧状态更可靠。
+
+## 回滚
+
+回滚必须同时回滚三个包和 lockfile。若新版本已经写入新的列状态 key，旧版本继续使用旧 key，不要复用不兼容状态。

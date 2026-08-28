@@ -1,0 +1,309 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi } from "vitest";
+import { createGrid, buildColDefsFromSchema, describeFilter, isColDefGroup } from "../index";
+import type { GridApi, ColDef, ColDefGroup } from "../index";
+
+interface Row {
+  id: string;
+  name: string;
+  score: number;
+}
+
+function makeRows(count: number): Row[] {
+  return Array.from({ length: count }, (_, i) => ({ id: String(i), name: `n${i}`, score: i }));
+}
+
+function createHost(): HTMLElement {
+  const host = document.createElement("div");
+  Object.defineProperty(host, "clientWidth", { value: 800, configurable: true });
+  Object.defineProperty(host, "clientHeight", { value: 400, configurable: true });
+  document.body.appendChild(host);
+  return host;
+}
+
+describe("describeFilter", () => {
+  it("summarizes text and number filters", () => {
+    expect(describeFilter({ type: "text", conditions: [{ match: "contains", value: "abc" }] })).toBe("包含 abc");
+    expect(describeFilter({ type: "number", conditions: [{ match: "inRange", value: 1, value2: 9 }] })).toBe("范围 1~9");
+    expect(describeFilter({ type: "number", conditions: [{ match: "greaterThan", value: 5 }] })).toBe("> 5");
+    expect(describeFilter({ type: "text", conditions: [{ match: "blank" }] })).toBe("为空");
+    expect(describeFilter({ type: "set", values: ["a", "b"] })).toBe("已选 2 项");
+  });
+});
+
+describe("buildColDefsFromSchema", () => {
+  it("maps field types to colDef behaviors", () => {
+    const defs = buildColDefsFromSchema<Row>({
+      fields: [
+        { field: "name", title: "名称", type: "string", filterable: true },
+        { field: "score", title: "分数", type: "number" },
+        { field: "id", title: "编号", type: "select", options: [{ label: "一", value: "1" }], editable: true }
+      ]
+    });
+    expect(defs.length).toBe(3);
+    const name = defs[0] as ColDef<Row>;
+    expect(name.filter).toBe("text");
+    const score = defs[1] as ColDef<Row>;
+    expect(score.type).toBe("rightAligned");
+    expect(score.filter).toBe("number");
+    const id = defs[2] as ColDef<Row>;
+    expect(id.cellEditor).toBe("select");
+    expect(id.valueFormatter?.({ value: "1" } as any)).toBe("一");
+  });
+
+  it("builds grouped headers from schema groups", () => {
+    const defs = buildColDefsFromSchema<Row>({
+      fields: [
+        { field: "id", title: "ID" },
+        { field: "name", title: "名称" },
+        { field: "score", title: "分数" }
+      ],
+      groups: [{ title: "基本信息", fields: ["name", "score"] }]
+    });
+    expect(defs.length).toBe(2);
+    expect(isColDefGroup(defs[0])).toBe(false);
+    expect(isColDefGroup(defs[1])).toBe(true);
+    const group = defs[1] as ColDefGroup<Row>;
+    expect(group.headerName).toBe("基本信息");
+    expect(group.children.length).toBe(2);
+  });
+
+  it("formats boolean and date fields", () => {
+    const defs = buildColDefsFromSchema<any>({
+      fields: [
+        { field: "ok", type: "boolean" },
+        { field: "at", type: "date", format: "datetime" }
+      ]
+    });
+    const okDef = defs[0] as ColDef<any>;
+    const atDef = defs[1] as ColDef<any>;
+    expect((okDef.valueFormatter as any)({ value: true })).toBe("是");
+    expect((atDef.valueFormatter as any)({ value: "2024-05-06T08:09:00.000Z" })).toContain("2024-05-06");
+  });
+});
+
+describe("master detail", () => {
+  const cols: ColDef<Row>[] = [
+    { field: "id", headerName: "ID" },
+    { field: "name", headerName: "Name" }
+  ];
+
+  it("expands and collapses detail rows with custom renderer", () => {
+    const host = createHost();
+    const renderer = vi.fn((params: any) => {
+      const div = document.createElement("div");
+      div.className = "detail-content";
+      div.textContent = `detail-${params.data.id}`;
+      return div;
+    });
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: cols,
+      rowData: makeRows(5),
+      masterDetail: true,
+      detailRowHeight: 200,
+      detailRowRenderer: renderer,
+      getRowId: (p) => p.data.id
+    });
+
+    expect(api.getDisplayedRowCount()).toBe(5);
+    expect(api.isRowExpanded("1")).toBe(false);
+
+    expect(api.expandRow("1")).toBe(true);
+    expect(api.getDisplayedRowCount()).toBe(6);
+    expect(api.isRowExpanded("1")).toBe(true);
+    expect(renderer).toHaveBeenCalled();
+    expect(host.querySelector(".detail-content")?.textContent).toBe("detail-1");
+
+    expect(api.collapseRow("1")).toBe(false);
+    expect(api.getDisplayedRowCount()).toBe(5);
+
+    api.toggleDetailRow("2");
+    api.toggleDetailRow("3");
+    expect(api.getDisplayedRowCount()).toBe(7);
+
+    api.collapseAllDetails();
+    expect(api.getDisplayedRowCount()).toBe(5);
+
+    api.expandAllDetails();
+    expect(api.getDisplayedRowCount()).toBe(10);
+    api.destroy();
+  });
+
+  it("emits detailToggled and keeps selection on masters only", () => {
+    const host = createHost();
+    const listener = vi.fn();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: cols,
+      rowData: makeRows(3),
+      masterDetail: true,
+      rowSelection: "multiple",
+      getRowId: (p) => p.data.id
+    });
+    api.addEventListener("detailToggled", listener);
+    api.expandRow("0");
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ rowId: "0", expanded: true }));
+
+    api.selectNodeById("0");
+    expect(api.getSelectedRows().length).toBe(1);
+    api.destroy();
+  });
+
+  it("csv export skips detail rows", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: cols,
+      rowData: makeRows(3),
+      masterDetail: true,
+      getRowId: (p) => p.data.id
+    });
+    api.expandRow("0");
+    const lines = api.getDataAsCsv().split("\r\n");
+    expect(lines.length).toBe(4);
+    api.destroy();
+  });
+});
+
+describe("grouped headers", () => {
+  it("renders multi-level header rows and group cells", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [
+        { field: "id", headerName: "ID" },
+        {
+          headerName: "业务信息",
+          children: [
+            { field: "name", headerName: "名称" },
+            { headerName: "指标", children: [{ field: "score", headerName: "分数" }] }
+          ]
+        }
+      ] as (ColDef<Row> | ColDefGroup<Row>)[],
+      rowData: makeRows(2)
+    });
+
+    expect(host.querySelectorAll(".mach-header-row").length).toBeGreaterThanOrEqual(3);
+    const groupCells = host.querySelectorAll(".mach-header-cell--group");
+    const texts = Array.from(groupCells).map((c) => c.textContent);
+    expect(texts).toContain("业务信息");
+    expect(texts).toContain("指标");
+
+    expect(host.querySelectorAll(".mach-header-cell--leaf").length).toBe(3);
+    const firstRow = host.querySelector('.mach-row[data-index="0"]');
+    expect(firstRow?.textContent).toContain("n0");
+    api.destroy();
+  });
+
+  it("supports custom header component", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [
+        {
+          field: "name",
+          headerName: "Name",
+          headerComponent: () => {
+            const span = document.createElement("span");
+            span.className = "custom-header";
+            span.textContent = "自定义表头";
+            return span;
+          }
+        },
+        { field: "score", headerName: "Score" }
+      ],
+      rowData: makeRows(2)
+    });
+    expect(host.querySelector(".custom-header")?.textContent).toBe("自定义表头");
+    api.destroy();
+  });
+});
+
+describe("column state persistence", () => {
+  it("persists and restores column state via localStorage key", () => {
+    localStorage.clear();
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [
+        { field: "id", headerName: "ID" },
+        { field: "name", headerName: "Name" }
+      ],
+      rowData: makeRows(2),
+      columnStateKey: "test-key",
+      getRowId: (p) => p.data.id
+    });
+
+    api.setColumnState([
+      { colId: "id", width: 222 },
+      { colId: "name", hide: true }
+    ]);
+
+    const saved = localStorage.getItem("mach-table:col-state:test-key");
+    expect(saved).toBeTruthy();
+    expect(JSON.parse(saved!).some((s: any) => s.colId === "id" && s.width === 222)).toBe(true);
+
+    api.destroy();
+
+    const host2 = createHost();
+    const api2: GridApi<Row> = createGrid<Row>(host2, {
+      columnDefs: [
+        { field: "id", headerName: "ID" },
+        { field: "name", headerName: "Name" }
+      ],
+      rowData: makeRows(2),
+      columnStateKey: "test-key"
+    });
+    expect(api2.getColumnState().find((s) => s.colId === "id")?.width).toBe(222);
+    expect(api2.getColumnState().find((s) => s.colId === "name")?.hide).toBe(true);
+    api2.destroy();
+    localStorage.clear();
+  });
+
+  it("persists column order across reload", () => {
+    localStorage.clear();
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [
+        { field: "id", headerName: "ID" },
+        { field: "name", headerName: "Name" },
+        { field: "score", headerName: "Score" }
+      ],
+      rowData: makeRows(2),
+      columnStateKey: "order-key"
+    });
+    api.moveColumn("score", 0);
+    api.destroy();
+
+    const host2 = createHost();
+    const api2: GridApi<Row> = createGrid<Row>(host2, {
+      columnDefs: [
+        { field: "id", headerName: "ID" },
+        { field: "name", headerName: "Name" },
+        { field: "score", headerName: "Score" }
+      ],
+      rowData: makeRows(2),
+      columnStateKey: "order-key"
+    });
+    const headerTexts = Array.from(host2.querySelectorAll(".mach-header-cell--leaf")).map((c) => c.textContent);
+    expect(headerTexts[0]).toBe("Score");
+    api2.destroy();
+    localStorage.clear();
+  });
+
+  it("single selection keeps only the latest row", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [
+        { colId: "sel", headerName: "", width: 46, checkboxSelection: true, sortable: false, resizable: false, movable: false },
+        { field: "id", headerName: "ID" }
+      ],
+      rowData: makeRows(3),
+      rowSelection: "single",
+      getRowId: (p) => p.data.id
+    });
+    api.selectNodeById("0");
+    expect(api.getSelectedRows().length).toBe(1);
+    api.selectNodeById("1");
+    expect(api.getSelectedRows().length).toBe(1);
+    expect(api.getSelectedRows()[0].id).toBe("1");
+    const radio = host.querySelector(".mach-row-checkbox");
+    expect(radio?.getAttribute("type")).toBe("radio");
+    api.destroy();
+  });
+});

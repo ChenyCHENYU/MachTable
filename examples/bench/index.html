@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MachTable Bench</title>
+    <style>
+      * { margin: 0; padding: 0; }
+      body { font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f5f9; padding: 16px; }
+      .bar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+      button, select {
+        height: 30px; padding: 0 12px; border: 1px solid #cbd5e1; border-radius: 6px;
+        background: #fff; cursor: pointer; font-size: 13px;
+      }
+      button:hover { border-color: #2563eb; color: #2563eb; }
+      #host { height: calc(100vh - 110px); min-height: 420px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(15,23,42,.08); }
+      #stat { font-size: 12px; color: #475569; min-width: 420px; }
+      #stat b { color: #0f172a; }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <select id="rows">
+        <option value="1000">1,000 行</option>
+        <option value="10000" selected>10,000 行</option>
+        <option value="100000">100,000 行</option>
+      </select>
+      <select id="cols">
+        <option value="8" selected>8 列</option>
+        <option value="30">30 列</option>
+        <option value="60">60 列</option>
+      </select>
+      <button id="rebuild">重建</button>
+      <button id="scroll">自动滚动测试（3s）</button>
+      <span id="stat"></span>
+    </div>
+    <div id="host"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

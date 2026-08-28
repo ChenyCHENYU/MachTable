@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">MachTable mark</title>
+  <desc id="desc">A fast data grid forming the letter M.</desc>
+  <defs>
+    <linearGradient id="surface" x1="68" y1="48" x2="442" y2="476" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111C44"/>
+      <stop offset="1" stop-color="#071027"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="122" y1="164" x2="386" y2="354" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#39D9FF"/>
+      <stop offset="0.48" stop-color="#4D8DFF"/>
+      <stop offset="1" stop-color="#8B5CFF"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="104" y1="98" x2="410" y2="412" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9DEBFF" stop-opacity=".74"/>
+      <stop offset="1" stop-color="#7B61FF" stop-opacity=".18"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#020617" flood-opacity=".45"/>
+    </filter>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#surface)" filter="url(#shadow)"/>
+  <circle cx="418" cy="88" r="98" fill="#356DFF" opacity=".10"/>
+  <circle cx="96" cy="426" r="122" fill="#18D4FF" opacity=".07"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M66 172h50" stroke="#4FCBFF" stroke-width="14" opacity=".34"/>
+    <path d="M54 222h62" stroke="#4FCBFF" stroke-width="10" opacity=".22"/>
+    <path d="M72 272h44" stroke="#4FCBFF" stroke-width="8" opacity=".15"/>
+  </g>
+  <rect x="108" y="104" width="310" height="304" rx="38" fill="#FFFFFF" fill-opacity=".035" stroke="url(#edge)" stroke-width="3"/>
+  <g stroke="#B4C7FF" stroke-opacity=".13" stroke-width="3">
+    <path d="M110 188h306M110 272h306M110 356h306"/>
+    <path d="M210 106v300M316 106v300"/>
+  </g>
+  <g fill="#9BEAFF">
+    <circle cx="140" cy="145" r="6" opacity=".82"/>
+    <circle cx="164" cy="145" r="6" opacity=".48"/>
+    <circle cx="188" cy="145" r="6" opacity=".25"/>
+  </g>
+  <path d="M146 342V176L228 278L310 176V342" fill="none" stroke="#317BFF" stroke-opacity=".25" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M146 342V176L228 278L310 176V342" fill="none" stroke="url(#signal)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M338 176h42M338 218h42M338 260h42M338 302h42M338 344h42" stroke="#90A9FF" stroke-width="9" stroke-linecap="round" opacity=".56"/>
+</svg>

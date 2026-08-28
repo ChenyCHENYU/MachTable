@@ -1,0 +1,43 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ChenyCHENYU/MachTable/main/assets/mach-table-logo.svg" alt="MachTable" width="760" />
+</p>
+
+# @agile-team/mach-table-vue
+
+Official Vue 3 adapter for MachTable. It provides `<MachTable>` / `<RobotGrid>`, `useMachTable`, Vue cell/detail renderer factories, reactive option updates and automatic lifecycle cleanup.
+
+```bash
+pnpm add @agile-team/mach-table @agile-team/mach-table-vue
+```
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+import { MachTable, useMachTable } from "@agile-team/mach-table-vue";
+import type { ColDef } from "@agile-team/mach-table";
+import "@agile-team/mach-table/styles/mach-table.css";
+
+interface Row { id: string; name: string }
+const grid = useMachTable<Row>();
+const rows = ref<Row[]>([{ id: "1", name: "MachTable" }]);
+const columns: ColDef<Row>[] = [{ field: "name", headerName: "Name", flex: 1 }];
+</script>
+
+<template>
+  <div style="height: 520px">
+    <MachTable
+      :ref="grid.ref"
+      :row-data="rows"
+      :column-defs="columns"
+      :get-row-id="({ data }) => data.id"
+      striped-rows
+    />
+  </div>
+</template>
+```
+
+`@agile-team/mach-table` and `vue` are peer dependencies and are not bundled into this adapter.
+
+Documentation: [Vue guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/vue.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [Element Plus](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/element-plus.md) · [Naive UI](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/naive-ui.md)
+
+MIT © Agile Team

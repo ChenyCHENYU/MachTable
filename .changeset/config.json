@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [["@agile-team/mach-table", "@agile-team/mach-table-react", "@agile-team/mach-table-vue"]],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["vanilla-demo", "react-demo", "vue-demo", "bench-demo"]
+}
