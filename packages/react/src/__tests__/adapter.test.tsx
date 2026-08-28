@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GridApi } from "@agile-team/mach-table";
 import { RobotGrid } from "../RobotGrid";
 import { reactCellRenderer } from "../adapters";
+import { createGrid, DEFAULT_LOCALE, type ColDef } from "../index";
 import { useMachGrid } from "../useMachGrid";
 
 class ResizeObserverStub {
@@ -25,6 +26,13 @@ afterEach(() => {
 });
 
 describe("React adapter", () => {
+  it("re-exports the complete core API and types from its public entry", () => {
+    const column: ColDef<{ id: number }> = { field: "id" };
+    expect(column.field).toBe("id");
+    expect(createGrid).toBeTypeOf("function");
+    expect(DEFAULT_LOCALE.loading).toBeTruthy();
+  });
+
   it("uses the latest event callback even when it is added after mount", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);

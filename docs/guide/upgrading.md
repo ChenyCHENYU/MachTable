@@ -8,11 +8,19 @@ MachTable 当前处于 `0.x`。三个包固定版本联动：
 - minor：新能力，也可能包含经过说明的破坏性调整；
 - `1.0.0`：公共 API 和兼容策略稳定后再发布。
 
-升级时 Core、Vue/React 适配器必须保持相同 minor。
+从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table@^0.4.0 @agile-team/mach-table-vue@^0.4.0
+pnpm up @agile-team/mach-table-vue@^0.4.1
 ```
+
+如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
+
+```bash
+pnpm remove @agile-team/mach-table
+```
+
+原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
 
 ## 标准升级流程
 

@@ -9,7 +9,7 @@ MachTable 的包可以在 SSR 工程中导入，但真正创建 Grid 必须发�
 ```ts
 // nuxt.config.ts
 export default defineNuxtConfig({
-  css: ["@agile-team/mach-table/styles/mach-table.css"]
+  css: ["@agile-team/mach-table-vue/styles.css"]
 });
 ```
 
@@ -17,8 +17,7 @@ export default defineNuxtConfig({
 
 ```vue
 <script setup lang="ts">
-import { MachTable } from "@agile-team/mach-table-vue";
-import type { ColDef } from "@agile-team/mach-table";
+import { MachTable, type ColDef } from "@agile-team/mach-table-vue";
 
 interface Row { id: string; name: string }
 const rows: Row[] = [{ id: "1", name: "MachTable" }];
@@ -43,7 +42,7 @@ const columns: ColDef<Row>[] = [{ field: "name", headerName: "名称", flex: 1 }
 
 ```tsx
 // app/layout.tsx
-import "@agile-team/mach-table/styles/mach-table.css";
+import "@agile-team/mach-table-react/styles.css";
 import type { ReactNode } from "react";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -58,8 +57,7 @@ Grid 组件必须是 Client Component：
 "use client";
 
 import { useMemo } from "react";
-import { MachTable } from "@agile-team/mach-table-react";
-import type { ColDef } from "@agile-team/mach-table";
+import { MachTable, type ColDef } from "@agile-team/mach-table-react";
 
 interface Order { id: string; customer: string }
 

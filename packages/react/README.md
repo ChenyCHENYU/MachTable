@@ -7,14 +7,13 @@
 Official React 18+ adapter for MachTable. It provides `<MachTable>` / `<RobotGrid>`, `useMachGrid`, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup.
 
 ```bash
-pnpm add @agile-team/mach-table @agile-team/mach-table-react
+pnpm add @agile-team/mach-table-react
 ```
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, useMachGrid } from "@agile-team/mach-table-react";
-import type { ColDef } from "@agile-team/mach-table";
-import "@agile-team/mach-table/styles/mach-table.css";
+import { MachTable, useMachGrid, type ColDef } from "@agile-team/mach-table-react";
+import "@agile-team/mach-table-react/styles.css";
 
 interface Row { id: string; name: string }
 
@@ -38,7 +37,7 @@ export function App({ rows }: { rows: Row[] }) {
 }
 ```
 
-`@agile-team/mach-table`, `react` and `react-dom` are peer dependencies and are not bundled into this adapter.
+The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `react >= 18` and `react-dom >= 18` remain peer dependencies supplied by the host application.
 
 Documentation: [React guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/react.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [Next.js / SSR](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/ssr.md)
 

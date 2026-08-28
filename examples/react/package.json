@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@agile-team/mach-table": "workspace:*",
     "@agile-team/mach-table-react": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

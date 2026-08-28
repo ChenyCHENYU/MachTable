@@ -67,9 +67,6 @@ importers:
 
   examples/react:
     dependencies:
-      '@agile-team/mach-table':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@agile-team/mach-table-react':
         specifier: workspace:*
         version: link:../../packages/react
@@ -99,9 +96,6 @@ importers:
 
   examples/vue:
     dependencies:
-      '@agile-team/mach-table':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@agile-team/mach-table-vue':
         specifier: workspace:*
         version: link:../../packages/vue
@@ -119,10 +113,11 @@ importers:
   packages/core: {}
 
   packages/react:
-    devDependencies:
+    dependencies:
       '@agile-team/mach-table':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -131,58 +126,16 @@ importers:
         version: 18.3.1(react@18.3.1)
 
   packages/vue:
-    devDependencies:
+    dependencies:
       '@agile-team/mach-table':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
       vue:
         specifier: ^3.5.13
         version: 3.5.41(typescript@5.9.3)
 
-  test-results/package-smoke-0.4.0/consumer:
-    dependencies:
-      '@agile-team/mach-table':
-        specifier: file:..\packages\agile-team-mach-table-0.4.0.tgz
-        version: file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz
-      '@agile-team/mach-table-react':
-        specifier: file:..\packages\agile-team-mach-table-react-0.4.0.tgz
-        version: file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-react-0.4.0.tgz(@agile-team/mach-table@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@agile-team/mach-table-vue':
-        specifier: file:..\packages\agile-team-mach-table-vue-0.4.0.tgz
-        version: file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-vue-0.4.0.tgz(@agile-team/mach-table@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz)(vue@3.5.13(typescript@5.9.3))
-      react:
-        specifier: 18.3.1
-        version: 18.3.1
-      react-dom:
-        specifier: 18.3.1
-        version: 18.3.1(react@18.3.1)
-      vue:
-        specifier: 3.5.13
-        version: 3.5.13(typescript@5.9.3)
-
 packages:
-
-  '@agile-team/mach-table-react@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-react-0.4.0.tgz':
-    resolution: {integrity: sha512-rUPgx4W/ghvN3FabArjZvmhDyUeiSJnPip8YDldJ/nvKO5DdOhTrby2gxHyzb9xtagIxnNrs6ioX9E1JPVRmGA==, tarball: file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-react-0.4.0.tgz}
-    version: 0.4.0
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      '@agile-team/mach-table': 0.4.0
-      react: '>=18.0.0'
-      react-dom: '>=18.0.0'
-
-  '@agile-team/mach-table-vue@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-vue-0.4.0.tgz':
-    resolution: {integrity: sha512-FZRGNoU92QxMXlWqKXE4EU0xKxyfKQCxy26dZ2G5wktWyCi7Cbq0j7X44TWiAS8RUiHtT5GEUGKywoYVQpvmzw==, tarball: file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-vue-0.4.0.tgz}
-    version: 0.4.0
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      '@agile-team/mach-table': 0.4.0
-      vue: '>=3.2.0'
-
-  '@agile-team/mach-table@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz':
-    resolution: {integrity: sha512-7xE0Hqr77M/bN+qKQetLvkqd1HayKolrbmajy8MjRuXOhSlcRvThRJtfNXPgZD21949ZPyfpVATI/erH3TZKBA==, tarball: file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz}
-    version: 0.4.0
-    engines: {node: '>=18.0.0'}
 
   '@algolia/abtesting@1.23.0':
     resolution: {integrity: sha512-j45MBISstltys9QyQ4xf6quRiN1g7vMuwQL9VM4dx8YuRZvCQ173b9royZAx6iAbRX3IB1VnG1z//NuwyQ8jpQ==}
@@ -1096,26 +1049,14 @@ packages:
   '@vitest/utils@4.1.11':
     resolution: {integrity: sha512-zTCVGpyFsGWBhllOyKlTw/vnr6D9qxsfSDyfbyZmTyjHw5N/VuvzHpHoQjm2ZJzn4RJgx5w4r7V0er69CmLgPQ==}
 
-  '@vue/compiler-core@3.5.13':
-    resolution: {integrity: sha512-oOdAkwqUfW1WqpwSYJce06wvt6HljgY3fGeM9NcVA1HaYOij3mZG9Rkysn0OHuyUAGMbEbARIpsG+LPVlBJ5/Q==}
-
   '@vue/compiler-core@3.5.41':
     resolution: {integrity: sha512-q0Xtv/F9w2YO/7htQhtiL+Ev2WCJbe5N2hc+XfgyKkEKqWpSxknmT8QOuGdEKNdjPq0c3F7rNpFkTo3Kfrm7pg==}
-
-  '@vue/compiler-dom@3.5.13':
-    resolution: {integrity: sha512-ZOJ46sMOKUjO3e94wPdCzQ6P1Lx/vhp2RSvfaab88Ajexs0AHeV0uasYhi99WPaogmBlRHNRuly8xV75cNTMDA==}
 
   '@vue/compiler-dom@3.5.41':
     resolution: {integrity: sha512-oKacVfNglLvGjnS6BXOlGL7EyG2h8X03pqXCjzotRZUaXGjbrTJUnVAQjrCqUnS+lyu31nwQjZY/d817GmCnfw==}
 
-  '@vue/compiler-sfc@3.5.13':
-    resolution: {integrity: sha512-6VdaljMpD82w6c2749Zhf5T9u5uLBWKnVue6XWxprDobftnletJ8+oel7sexFfM3qIxNmVE7LSFGTpv6obNyaQ==}
-
   '@vue/compiler-sfc@3.5.41':
     resolution: {integrity: sha512-XJhip7R2wy6vX3knCxdZN4KracFaZUef58s1KYewqluedHIJaPIVfXoYT7MF1F8nCvv6k8bWWxDC8opMkg1VTQ==}
-
-  '@vue/compiler-ssr@3.5.13':
-    resolution: {integrity: sha512-wMH6vrYHxQl/IybKJagqbquvxpWCuVYpoUJfCqFZwa/JY1GdATAQ+TgVtgrwwMZ0D07QhA99rs/EAAWfvG6KpA==}
 
   '@vue/compiler-ssr@3.5.41':
     resolution: {integrity: sha512-U3v5OejKEGqOI0Wy0+Sz7hGuIFZHA4LSXzrNM3IMIeDyJEBBfTpX26n3SDgToRpP2bLc9FfI2j/kSgcJ8Emq5A==}
@@ -1129,34 +1070,17 @@ packages:
   '@vue/devtools-shared@7.7.10':
     resolution: {integrity: sha512-wOPslzB8vTvpxwdaOcR2qAbwmuSP0L+rhpoC6Cf56V3Jip+HWb7PQQXOUPgBNQARpXsbQX/+mvi8kKucmBGRwQ==}
 
-  '@vue/reactivity@3.5.13':
-    resolution: {integrity: sha512-NaCwtw8o48B9I6L1zl2p41OHo/2Z4wqYGGIK1Khu5T7yxrn+ATOixn/Udn2m+6kZKB/J7cuT9DbWWhRxqixACg==}
-
   '@vue/reactivity@3.5.41':
     resolution: {integrity: sha512-rznsqKM0np0x18EjzF8x88MpEhdNsffbvFbckLL5+oUKz1BxAImEmO7J1ArRYSyo6aQaVoBDp7jEkT91OOxydA==}
-
-  '@vue/runtime-core@3.5.13':
-    resolution: {integrity: sha512-Fj4YRQ3Az0WTZw1sFe+QDb0aXCerigEpw418pw1HBUKFtnQHWzwojaukAs2X/c9DQz4MQ4bsXTGlcpGxU/RCIw==}
 
   '@vue/runtime-core@3.5.41':
     resolution: {integrity: sha512-Vcry58hiAKwGen9Z1jUZE0feFsNArPCMOImYI8el48A9Idf6DuQYD0U05zZIF2Iad1hGhPSvcbBbAOhNr55fhg==}
 
-  '@vue/runtime-dom@3.5.13':
-    resolution: {integrity: sha512-dLaj94s93NYLqjLiyFzVs9X6dWhTdAlEAciC3Moq7gzAc13VJUdCnjjRurNM6uTLFATRHexHCTu/Xp3eW6yoog==}
-
   '@vue/runtime-dom@3.5.41':
     resolution: {integrity: sha512-3vVBahVBS9+U6cmXBLyb8nE6/yYo4J/CGI9eVFs3KiMc0YHuudwKyShTD65jtJy/L9PUUxNAFu4cj4LiJ0UFbw==}
 
-  '@vue/server-renderer@3.5.13':
-    resolution: {integrity: sha512-wAi4IRJV/2SAW3htkTlB+dHeRmpTiVIK1OGLWV1yeStVSebSQQOwGwIq0D3ZIoBj2C2qpgz5+vX9iEBkTdk5YA==}
-    peerDependencies:
-      vue: 3.5.13
-
   '@vue/server-renderer@3.5.41':
     resolution: {integrity: sha512-n6hx/pNFfbD6SuyeuMVkvqox8bwf/ET9JlA/kAz/imw8sw++wkqKe2mHX5KutjPpbKE4Z56yTHszoOjGMI9igQ==}
-
-  '@vue/shared@3.5.13':
-    resolution: {integrity: sha512-/hnE/qP5ZoGpol0a5mDi45bOd7t3tjYJBjsgCsivow7D48cJeV5l05RD82lPqi7gRiphZM37rnhW1l6ZoCNNnQ==}
 
   '@vue/shared@3.5.41':
     resolution: {integrity: sha512-IOnwSCma8j+9xJT6b8H0dEYidC80NsYmNMlZxRsukYcSoGaDBohog5hDxzeUXdFeGWFA++vWvxqOmrr96VlqMA==}
@@ -1359,10 +1283,6 @@ packages:
 
   emoji-regex-xs@1.0.0:
     resolution: {integrity: sha512-LRlerrMYoIDrT6jgpeZ2YYl/L8EulRTt5hQcYjy5AInh7HWXKimpqx68aknBFpGL2+/IcogTcaydJEgaTmOpDg==}
-
-  entities@4.5.0:
-    resolution: {integrity: sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==}
-    engines: {node: '>=0.12'}
 
   entities@7.0.1:
     resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
@@ -2206,14 +2126,6 @@ packages:
       jsdom:
         optional: true
 
-  vue@3.5.13:
-    resolution: {integrity: sha512-wmeiSMxkZCSc+PM2w2VRsOYAZC8GdipNFRTsLSfodVqI9mbejKeXEGr8SckuLnrQPGe3oJN5c3K0vpoU9q/wCQ==}
-    peerDependencies:
-      typescript: '*'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-
   vue@3.5.41:
     resolution: {integrity: sha512-2laE0p+aK+/AOPG/XL/WepOs/GlK755LJ1XECi9kDUrz1FKNw8rb2Xzlw9JS1rqEV55nb0ttsKxVlTCcd+R5cg==}
     peerDependencies:
@@ -2279,19 +2191,6 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
-
-  '@agile-team/mach-table-react@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-react-0.4.0.tgz(@agile-team/mach-table@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
-    dependencies:
-      '@agile-team/mach-table': file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-
-  '@agile-team/mach-table-vue@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-vue-0.4.0.tgz(@agile-team/mach-table@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz)(vue@3.5.13(typescript@5.9.3))':
-    dependencies:
-      '@agile-team/mach-table': file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz
-      vue: 3.5.13(typescript@5.9.3)
-
-  '@agile-team/mach-table@file:test-results/package-smoke-0.4.0/packages/agile-team-mach-table-0.4.0.tgz': {}
 
   '@algolia/abtesting@1.23.0':
     dependencies:
@@ -3235,14 +3134,6 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.1
 
-  '@vue/compiler-core@3.5.13':
-    dependencies:
-      '@babel/parser': 7.29.8
-      '@vue/shared': 3.5.13
-      entities: 4.5.0
-      estree-walker: 2.0.2
-      source-map-js: 1.2.1
-
   '@vue/compiler-core@3.5.41':
     dependencies:
       '@babel/parser': 7.29.8
@@ -3251,27 +3142,10 @@ snapshots:
       estree-walker: 2.0.2
       source-map-js: 1.2.1
 
-  '@vue/compiler-dom@3.5.13':
-    dependencies:
-      '@vue/compiler-core': 3.5.13
-      '@vue/shared': 3.5.13
-
   '@vue/compiler-dom@3.5.41':
     dependencies:
       '@vue/compiler-core': 3.5.41
       '@vue/shared': 3.5.41
-
-  '@vue/compiler-sfc@3.5.13':
-    dependencies:
-      '@babel/parser': 7.29.8
-      '@vue/compiler-core': 3.5.13
-      '@vue/compiler-dom': 3.5.13
-      '@vue/compiler-ssr': 3.5.13
-      '@vue/shared': 3.5.13
-      estree-walker: 2.0.2
-      magic-string: 0.30.21
-      postcss: 8.5.26
-      source-map-js: 1.2.1
 
   '@vue/compiler-sfc@3.5.41':
     dependencies:
@@ -3284,11 +3158,6 @@ snapshots:
       magic-string: 0.30.21
       postcss: 8.5.26
       source-map-js: 1.2.1
-
-  '@vue/compiler-ssr@3.5.13':
-    dependencies:
-      '@vue/compiler-dom': 3.5.13
-      '@vue/shared': 3.5.13
 
   '@vue/compiler-ssr@3.5.41':
     dependencies:
@@ -3313,30 +3182,14 @@ snapshots:
     dependencies:
       rfdc: 1.4.1
 
-  '@vue/reactivity@3.5.13':
-    dependencies:
-      '@vue/shared': 3.5.13
-
   '@vue/reactivity@3.5.41':
     dependencies:
       '@vue/shared': 3.5.41
-
-  '@vue/runtime-core@3.5.13':
-    dependencies:
-      '@vue/reactivity': 3.5.13
-      '@vue/shared': 3.5.13
 
   '@vue/runtime-core@3.5.41':
     dependencies:
       '@vue/reactivity': 3.5.41
       '@vue/shared': 3.5.41
-
-  '@vue/runtime-dom@3.5.13':
-    dependencies:
-      '@vue/reactivity': 3.5.13
-      '@vue/runtime-core': 3.5.13
-      '@vue/shared': 3.5.13
-      csstype: 3.2.3
 
   '@vue/runtime-dom@3.5.41':
     dependencies:
@@ -3345,19 +3198,11 @@ snapshots:
       '@vue/shared': 3.5.41
       csstype: 3.2.3
 
-  '@vue/server-renderer@3.5.13(vue@3.5.13(typescript@5.9.3))':
-    dependencies:
-      '@vue/compiler-ssr': 3.5.13
-      '@vue/shared': 3.5.13
-      vue: 3.5.13(typescript@5.9.3)
-
   '@vue/server-renderer@3.5.41':
     dependencies:
       '@vue/compiler-ssr': 3.5.41
       '@vue/runtime-dom': 3.5.41
       '@vue/shared': 3.5.41
-
-  '@vue/shared@3.5.13': {}
 
   '@vue/shared@3.5.41': {}
 
@@ -3522,8 +3367,6 @@ snapshots:
   electron-to-chromium@1.5.406: {}
 
   emoji-regex-xs@1.0.0: {}
-
-  entities@4.5.0: {}
 
   entities@7.0.1: {}
 
@@ -4397,16 +4240,6 @@ snapshots:
       jsdom: 30.0.1
     transitivePeerDependencies:
       - msw
-
-  vue@3.5.13(typescript@5.9.3):
-    dependencies:
-      '@vue/compiler-dom': 3.5.13
-      '@vue/compiler-sfc': 3.5.13
-      '@vue/runtime-dom': 3.5.13
-      '@vue/server-renderer': 3.5.13(vue@3.5.13(typescript@5.9.3))
-      '@vue/shared': 3.5.13
-    optionalDependencies:
-      typescript: 5.9.3
 
   vue@3.5.41(typescript@5.9.3):
     dependencies:

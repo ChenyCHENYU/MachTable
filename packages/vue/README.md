@@ -7,15 +7,14 @@
 Official Vue 3 adapter for MachTable. It provides `<MachTable>` / `<RobotGrid>`, `useMachTable`, Vue cell/detail renderer factories, reactive option updates and automatic lifecycle cleanup.
 
 ```bash
-pnpm add @agile-team/mach-table @agile-team/mach-table-vue
+pnpm add @agile-team/mach-table-vue
 ```
 
 ```vue
 <script setup lang="ts">
 import { ref } from "vue";
-import { MachTable, useMachTable } from "@agile-team/mach-table-vue";
-import type { ColDef } from "@agile-team/mach-table";
-import "@agile-team/mach-table/styles/mach-table.css";
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
+import "@agile-team/mach-table-vue/styles.css";
 
 interface Row { id: string; name: string }
 const grid = useMachTable<Row>();
@@ -36,7 +35,7 @@ const columns: ColDef<Row>[] = [{ field: "name", headerName: "Name", flex: 1 }];
 </template>
 ```
 
-`@agile-team/mach-table` and `vue` are peer dependencies and are not bundled into this adapter.
+The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `vue >= 3.2` remains a peer dependency supplied by the host application.
 
 Documentation: [Vue guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/vue.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [Element Plus](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/element-plus.md) · [Naive UI](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/naive-ui.md)
 

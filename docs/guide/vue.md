@@ -5,15 +5,17 @@
 ## 安装
 
 ```bash
-pnpm add @agile-team/mach-table @agile-team/mach-table-vue
+pnpm add @agile-team/mach-table-vue
 ```
+
+适配包会自动安装匹配版本的 Core，并重导出完整 API、类型和主题样式；业务代码无需直接依赖 Core。
 
 ## 基础用法
 
 ```vue
 <script setup lang="ts">
 import { ref } from "vue";
-import "@agile-team/mach-table/styles/mach-table.css";
+import "@agile-team/mach-table-vue/styles.css";
 import { RobotGrid } from "@agile-team/mach-table-vue";
 import type {
   CellValueChangedEvent,
@@ -21,7 +23,7 @@ import type {
   GetRowIdParams,
   GridApi,
   SelectionChangedEvent
-} from "@agile-team/mach-table";
+} from "@agile-team/mach-table-vue";
 
 interface Order { id: string; product: string; qty: number; region: string }
 

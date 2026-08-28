@@ -106,7 +106,7 @@ function epEditor(component: any, props: Record<string, any> = {}) {
 }
 
 // 使用 / 注册
-import { registerCellEditor } from "@agile-team/mach-table";
+import { registerCellEditor } from "@agile-team/mach-table-vue";
 registerCellEditor("ep-select", epEditor(ElSelect));
 registerCellEditor("ep-date", epEditor(ElDatePicker, { type: "datetime", valueFormat: "YYYY-MM-DD HH:mm:ss" }));
 registerCellEditor("el-input-number" as any, epEditor(ElInputNumber, { min: 0, precision: 2 }));

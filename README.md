@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=core&color=3178c6" alt="npm core version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e" alt="MIT License" /></a>
-  <img src="https://img.shields.io/badge/runtime%20dependencies-0-14b8a6" alt="Zero runtime dependencies" />
+  <img src="https://img.shields.io/badge/core%20dependencies-0-14b8a6" alt="Zero core runtime dependencies" />
   <img src="https://img.shields.io/badge/TypeScript-first-6366f1" alt="TypeScript first" />
 </p>
 
@@ -45,15 +45,14 @@ MachTable 为后台管理、工业台账、财务报表、订单工单和低代�
 ### Vue 3（推荐）
 
 ```bash
-pnpm add @agile-team/mach-table @agile-team/mach-table-vue
+pnpm add @agile-team/mach-table-vue
 ```
 
 ```vue
 <script setup lang="ts">
 import { ref } from "vue";
-import { MachTable, useMachTable } from "@agile-team/mach-table-vue";
-import type { ColDef } from "@agile-team/mach-table";
-import "@agile-team/mach-table/styles/mach-table.css";
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
+import "@agile-team/mach-table-vue/styles.css";
 
 interface Order {
   id: string;
@@ -93,13 +92,12 @@ const columns: ColDef<Order>[] = [
 ### React 18+
 
 ```bash
-pnpm add @agile-team/mach-table @agile-team/mach-table-react
+pnpm add @agile-team/mach-table-react
 ```
 
 ```tsx
-import { MachTable, useMachGrid } from "@agile-team/mach-table-react";
-import type { ColDef } from "@agile-team/mach-table";
-import "@agile-team/mach-table/styles/mach-table.css";
+import { MachTable, useMachGrid, type ColDef } from "@agile-team/mach-table-react";
+import "@agile-team/mach-table-react/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
 
@@ -161,15 +159,15 @@ api.destroy();
 
 ## 为框架适配，也为包体积负责
 
-MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配层独立发布，框架依赖均为 peer dependency：
+MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配层独立发布；适配包自动安装 Core 并重新导出完整核心 API，框架本身仍保持 peer dependency：
 
 | 包 | 用途 | gzip 预算 / 当前值 |
 | --- | --- | --- |
 | `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 66 KB |
-| `@agile-team/mach-table-vue` | Vue 3 组件、Composable、组件渲染器 | 5 KB / 约 1.7 KB |
-| `@agile-team/mach-table-react` | React 组件、Hook、组件渲染器 | 5 KB / 约 1.5 KB |
+| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含组件、Composable、类型和样式入口 | 5 KB / 约 1.7 KB（适配代码） |
+| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 5 KB / 约 1.5 KB（适配代码） |
 
-Vue 项目不会安装 React，React 项目也不会安装 Vue。可选的大功能继续以独立包演进，Core 保持可控。
+Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
 
 ## 架构
 
@@ -198,7 +196,7 @@ flowchart TB
 
 ## 企业级质量基线
 
-- Core、Vue、React 共 207 个单元测试。
+- Core、Vue、React 共 209 个单元测试。
 - Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 三套真实页面。
 - ESLint、TypeScript、覆盖率阈值、publint、gzip 预算、示例构建和文档构建统一进入 `pnpm verify`。
 - Overlay 字符串默认按文本渲染；可信 HTML 必须显式开启 `allowUnsafeOverlayHtml`。
@@ -232,7 +230,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前版本为 `0.4.0`。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前版本为 `0.4.1`。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

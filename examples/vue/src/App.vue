@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { RobotGrid } from "@agile-team/mach-table-vue";
-import type { ColDef } from "@agile-team/mach-table";
+import { RobotGrid, type ColDef } from "@agile-team/mach-table-vue";
 
 interface Order {
   id: string;

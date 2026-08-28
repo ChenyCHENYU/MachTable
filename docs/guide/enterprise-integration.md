@@ -8,11 +8,11 @@
 
 | 项目类型 | 安装 |
 | --- | --- |
-| Vue 3 | `@agile-team/mach-table` + `@agile-team/mach-table-vue` |
-| React 18+ | `@agile-team/mach-table` + `@agile-team/mach-table-react` |
+| Vue 3 | `@agile-team/mach-table-vue` |
+| React 18+ | `@agile-team/mach-table-react` |
 | 原生 TS/JS、Web Component、其他框架 | `@agile-team/mach-table` |
 
-Vue 和 React 适配器互相独立，框架依赖是 peer dependency。Vue 项目不会因为官方支持 React 而增加 React 代码。
+Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的 Core；宿主框架仍是 peer dependency。Vue 项目不会因为官方支持 React 而增加 React 代码。
 
 ### 数据模式
 
@@ -30,23 +30,23 @@ Vue 和 React 适配器互相独立，框架依赖是 peer dependency。Vue 项�
 Vue：
 
 ```bash
-pnpm add @agile-team/mach-table@^0.4.0 @agile-team/mach-table-vue@^0.4.0
+pnpm add @agile-team/mach-table-vue@^0.4.1
 ```
 
 React：
 
 ```bash
-pnpm add @agile-team/mach-table@^0.4.0 @agile-team/mach-table-react@^0.4.0
+pnpm add @agile-team/mach-table-react@^0.4.1
 ```
 
 npm / Yarn：
 
 ```bash
-npm install @agile-team/mach-table@^0.4.0 @agile-team/mach-table-vue@^0.4.0
-yarn add @agile-team/mach-table@^0.4.0 @agile-team/mach-table-vue@^0.4.0
+npm install @agile-team/mach-table-vue@^0.4.1
+yarn add @agile-team/mach-table-vue@^0.4.1
 ```
 
-三个 MachTable 包采用同版本联动。业务项目应让 Core 与适配器保持相同 minor 版本，并提交 lockfile。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
+三个 MachTable 包采用同版本联动。适配器会锁定匹配版本的 Core，业务项目只需升级适配器并提交 lockfile。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
 
 ### 私有镜像
 
@@ -60,10 +60,14 @@ yarn add @agile-team/mach-table@^0.4.0 @agile-team/mach-table-vue@^0.4.0
 
 ## 3. 全局样式
 
-每个应用只引入一次主题 CSS。推荐放在应用入口或全局样式入口：
+每个应用只引入一次主题 CSS。推荐放在应用入口或全局样式入口，并使用所属框架的单包入口：
 
 ```ts
-import "@agile-team/mach-table/styles/mach-table.css";
+// Vue
+import "@agile-team/mach-table-vue/styles.css";
+
+// React
+import "@agile-team/mach-table-react/styles.css";
 ```
 
 表格容器必须拥有可计算高度：
@@ -85,8 +89,7 @@ import "@agile-team/mach-table/styles/mach-table.css";
 <!-- components/AppDataGrid.vue -->
 <script setup lang="ts" generic="TData extends object">
 import { computed } from "vue";
-import { MachTable } from "@agile-team/mach-table-vue";
-import type { ColDef, GridOptions } from "@agile-team/mach-table";
+import { MachTable, type ColDef, type GridOptions } from "@agile-team/mach-table-vue";
 
 const props = defineProps<{
   rows: TData[];
@@ -124,7 +127,7 @@ const defaults = computed(() => ({
 ```vue
 <script setup lang="ts">
 import { onMounted, ref, shallowRef } from "vue";
-import type { ColDef } from "@agile-team/mach-table";
+import type { ColDef } from "@agile-team/mach-table-vue";
 import AppDataGrid from "@/components/AppDataGrid.vue";
 
 interface Order { id: string; customer: string; amount: number; status: string }
@@ -165,8 +168,7 @@ onMounted(async () => {
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable } from "@agile-team/mach-table-react";
-import type { ColDef, GridOptions } from "@agile-team/mach-table";
+import { MachTable, type ColDef, type GridOptions } from "@agile-team/mach-table-react";
 
 type AppDataGridProps<TData> = {
   rows: TData[];
@@ -235,7 +237,8 @@ getRowId: ({ data }) => data.id
 无限数据源接收排序、过滤、快速搜索、取消信号和成功/失败回调：
 
 ```ts
-import type { GridDatasource } from "@agile-team/mach-table";
+// React 项目将包名替换为 @agile-team/mach-table-react。
+import type { GridDatasource } from "@agile-team/mach-table-vue";
 
 const datasource: GridDatasource<Order> = {
   async getRows(params) {

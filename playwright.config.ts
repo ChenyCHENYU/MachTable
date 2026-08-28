@@ -5,7 +5,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : 3,
+  // WebKit startup can starve one of the three Vite-backed framework pages when
+  // all browser projects render the 8k-row demos at once. Two workers keeps the
+  // run deterministic while retries remain disabled for local verification.
+  workers: 2,
   reporter: process.env.CI ? "github" : "list",
   use: {
     trace: "on-first-retry"

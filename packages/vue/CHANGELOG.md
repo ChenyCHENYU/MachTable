@@ -1,5 +1,13 @@
 # @agile-team/mach-table-vue
 
+## 0.4.1
+
+### Patch Changes
+
+- Simplify framework adoption to one package: Vue and React adapters now install the matching core automatically, re-export its complete public API and types, and expose framework-local stylesheet entry points.
+- Updated dependencies
+  - @agile-team/mach-table@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes

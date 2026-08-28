@@ -5,7 +5,7 @@
 | 现象 | 常见原因 | 处理 |
 | --- | --- | --- |
 | 页面空白，没有报错 | 容器或父级高度为 0 | 给容器明确 `height/min-height`，检查 flex 链路 |
-| 有结构但没有样式 | 未引入 Core CSS | 全局引入 `@agile-team/mach-table/styles/mach-table.css` |
+| 有结构但没有样式 | 未引入适配器 CSS | Vue 全局引入 `@agile-team/mach-table-vue/styles.css`；React 引入 `@agile-team/mach-table-react/styles.css` |
 | 弹窗首次打开列宽为 0 | 隐藏状态下完成初次测量 | 弹窗可见后的 nextTick/effect 调 `api.refreshLayout()` |
 | `pnpm add` 返回 404 | registry 不正确或企业镜像未同步 scope | 检查 `pnpm config get registry` 与 `.npmrc` scope 配置 |
 | Vue prop 不生效 | 模板未使用 kebab-case 或名称错误 | `stripedRows` 对应 `striped-rows`，查 GridOptions |
@@ -23,11 +23,11 @@
 确认实际解析到的版本：
 
 ```bash
+pnpm list @agile-team/mach-table-vue
 pnpm why @agile-team/mach-table
-pnpm list @agile-team/mach-table @agile-team/mach-table-vue
 ```
 
-Core 与适配器应保持同一 minor。删除 lockfile 不是常规修复手段；先检查重复版本和 workspace override。
+适配器会自动解析匹配版本的 Core。删除 lockfile 不是常规修复手段；先检查重复版本和 workspace override。
 
 ## 获取 GridApi
 

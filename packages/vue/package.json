@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-vue",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Official Vue 3 adapter for the MachTable enterprise data grid",
   "keywords": [
     "vue",
@@ -41,24 +41,35 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./styles.css": {
+      "types": "./dist/mach-table.css.d.ts",
+      "default": "./dist/mach-table.css"
+    },
+    "./styles/mach-table.css": {
+      "types": "./dist/mach-table.css.d.ts",
+      "default": "./dist/mach-table.css"
     }
   },
   "files": [
     "dist"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/copy-adapter-style.mjs vue",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
+  "dependencies": {
+    "@agile-team/mach-table": "workspace:*"
+  },
   "peerDependencies": {
-    "@agile-team/mach-table": "workspace:*",
     "vue": ">=3.2.0"
   },
   "devDependencies": {
-    "@agile-team/mach-table": "workspace:*",
     "vue": "^3.5.13"
   }
 }

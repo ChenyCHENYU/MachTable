@@ -1,6 +1,11 @@
 import { useMemo, useRef, useState } from "react";
-import { RobotGrid, reactCellRenderer } from "@agile-team/mach-table-react";
-import type { GridApi, ColDef, CellClickEvent } from "@agile-team/mach-table";
+import {
+  RobotGrid,
+  reactCellRenderer,
+  type GridApi,
+  type ColDef,
+  type CellClickEvent
+} from "@agile-team/mach-table-react";
 
 interface Employee {
   id: string;

@@ -5,18 +5,4 @@ export { vueCellRenderer, vueDetailRenderer } from "./adapters";
 export { useMachTable } from "./useMachTable";
 export type { UseMachTableReturn } from "./useMachTable";
 export type { VueCellRendererProps } from "./adapters";
-
-export type {
-  GridApi,
-  GridOptions,
-  ColDef,
-  RowNode,
-  CellRendererParams,
-  CellClickEvent,
-  SelectionChangedEvent,
-  CellValueChangedEvent,
-  SortChangedEvent,
-  FilterChangedEvent
-} from "@agile-team/mach-table";
-
-export { createGrid, EVENT_TYPES } from "@agile-team/mach-table";
+export * from "@agile-team/mach-table";

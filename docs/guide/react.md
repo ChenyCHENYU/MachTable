@@ -5,16 +5,17 @@
 ## 安装
 
 ```bash
-pnpm add @agile-team/mach-table @agile-team/mach-table-react
+pnpm add @agile-team/mach-table-react
 ```
+
+适配包会自动安装匹配版本的 Core，并重导出完整 API、类型和主题样式；业务代码无需直接依赖 Core。
 
 ## 基础用法
 
 ```tsx
 import { useRef, useState } from "react";
-import "@agile-team/mach-table/styles/mach-table.css";
-import { RobotGrid } from "@agile-team/mach-table-react";
-import type { GridApi, ColDef } from "@agile-team/mach-table";
+import "@agile-team/mach-table-react/styles.css";
+import { RobotGrid, type GridApi, type ColDef } from "@agile-team/mach-table-react";
 
 interface Employee { id: string; name: string; salary: number }
 

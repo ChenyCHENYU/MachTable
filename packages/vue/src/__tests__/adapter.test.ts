@@ -2,6 +2,7 @@ import { createApp, defineComponent, h, nextTick, onUnmounted, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RobotGrid } from "../RobotGrid";
 import { vueCellRenderer } from "../adapters";
+import { createGrid, DEFAULT_LOCALE, type ColDef } from "../index";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
 
 class ResizeObserverStub {
@@ -22,6 +23,13 @@ afterEach(() => {
 });
 
 describe("Vue adapter", () => {
+  it("re-exports the complete core API and types from its public entry", () => {
+    const column: ColDef<{ id: number }> = { field: "id" };
+    expect(column.field).toBe("id");
+    expect(createGrid).toBeTypeOf("function");
+    expect(DEFAULT_LOCALE.loading).toBeTruthy();
+  });
+
   it("accepts datasource and forwards ordinary host attributes", async () => {
     const getRows = vi.fn((params: any) => params.onSuccess([{ id: 1 }], 1));
     const host = document.createElement("div");

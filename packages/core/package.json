@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Enterprise-grade, framework-agnostic TypeScript data grid with virtualization, editing, grouping and extensibility",
   "keywords": [
     "data-grid",
