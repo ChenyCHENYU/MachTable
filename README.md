@@ -144,6 +144,50 @@ api.destroy();
 
 > 容器必须有明确高度，并且必须引入主题 CSS。完整的生产项目配置、SSR、错误治理、状态持久化和上线检查见[企业级项目接入手册](./docs/guide/enterprise-integration.md)。
 
+## 全局注入与按需加载
+
+主题 CSS 只需在应用入口引入一次。Vue 组件支持三种模式，业务可按表格覆盖面选择：
+
+| 模式 | 页面是否 import 组件 | JS 加载时机 | 适合场景 |
+| --- | --- | --- | --- |
+| 局部导入 | 是 | 所属路由加载时 | 只有少量表格页面 |
+| 全局同步插件 | 否 | 应用启动时 | 大多数页面都有表格 |
+| 全局异步插件 | 否 | 首次渲染 `<MachTable>` 时 | 中后台平台、低代码平台，推荐 |
+
+```ts
+// main.ts：全局注册名称和类型均已提供，页面无需运行时 import。
+import { createApp } from "vue";
+import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
+import "@agile-team/mach-table-vue/styles.css";
+import App from "./App.vue";
+
+createApp(App).use(AsyncMachTablePlugin).mount("#app");
+
+// 可选：在路由 hover/预取阶段提前加载，首次进入页面更顺滑。
+void preloadMachTable();
+```
+
+注册后任意 Vue 页面直接使用：
+
+```vue
+<template>
+  <MachTable :column-defs="columns" :row-data="rows" />
+</template>
+```
+
+React 没有全局组件注册惯例。包提供默认组件导出，可直接使用标准 `React.lazy`，并由路由级 `<Suspense>` 控制加载状态：
+
+```tsx
+import { lazy, Suspense } from "react";
+import "@agile-team/mach-table-react/styles.css";
+
+const MachTable = lazy(() => import("@agile-team/mach-table-react"));
+
+export function Orders() {
+  return <Suspense fallback={<div>Loading table...</div>}><MachTable columnDefs={columns} rowData={rows} /></Suspense>;
+}
+```
+
 ## 功能全景
 
 | 数据与性能 | 交互与编辑 | 布局与呈现 | 工程与扩展 |
@@ -164,7 +208,7 @@ MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配
 | 包 | 用途 | gzip 预算 / 当前值 |
 | --- | --- | --- |
 | `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 66 KB |
-| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含组件、Composable、类型和样式入口 | 5 KB / 约 1.7 KB（适配代码） |
+| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 6 KB / 约 2.9 KB（全部 ESM 适配代码） |
 | `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 5 KB / 约 1.5 KB（适配代码） |
 
 Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
@@ -196,7 +240,7 @@ flowchart TB
 
 ## 企业级质量基线
 
-- Core、Vue、React 共 209 个单元测试。
+- Core、Vue、React 共 212 个单元测试。
 - Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 三套真实页面。
 - ESLint、TypeScript、覆盖率阈值、publint、gzip 预算、示例构建和文档构建统一进入 `pnpm verify`。
 - Overlay 字符串默认按文本渲染；可信 HTML 必须显式开启 `allowUnsafeOverlayHtml`。
@@ -230,7 +274,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前版本为 `0.4.1`。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前版本为 `0.5.0`。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

@@ -10,6 +10,35 @@ pnpm add @agile-team/mach-table-react
 
 适配包会自动安装匹配版本的 Core，并重导出完整 API、类型和主题样式；业务代码无需直接依赖 Core。
 
+## 选择加载模式
+
+React 没有 Vue `app.use()` 式的全局组件注册。把组件放入 Context 或挂到全局变量会削弱类型推断、测试隔离和代码分割，因此 MachTable 遵循 React 官方组件组合方式。
+
+### 路由页面内导入（推荐默认）
+
+如果页面由 React Router、TanStack Router 或框架路由懒加载，在该页面正常导入 `MachTable`，表格会自动进入页面 chunk。
+
+### 表格组件独立懒加载
+
+MachTable 提供默认组件导出，可直接交给 `React.lazy`：
+
+```tsx
+import { lazy, Suspense } from "react";
+import "@agile-team/mach-table-react/styles.css";
+
+const MachTable = lazy(() => import("@agile-team/mach-table-react"));
+
+export function OrdersPage() {
+  return (
+    <Suspense fallback={<div>正在加载表格...</div>}>
+      <MachTable columnDefs={columnDefs} rowData={rowData} />
+    </Suspense>
+  );
+}
+```
+
+CSS 在应用入口引入一次；只有表格 JS 与 Core 随异步边界加载。类型可以继续使用 `import type`，编译后不会产生运行时代码。
+
 ## 基础用法
 
 ```tsx

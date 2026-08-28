@@ -31,7 +31,7 @@ features:
   - icon: 🛠
     title: 工程化
     details: TypeScript 全量类型、列状态记忆、i18n、Schema 驱动渲染、CSV 防注入导出、changesets + CI 发布流。
-footer: MIT Licensed | MachTable v0.4.1
+footer: MIT Licensed | MachTable v0.5.0
 ---
 
 ## 30 秒上手

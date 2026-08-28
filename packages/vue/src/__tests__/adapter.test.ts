@@ -1,8 +1,9 @@
-import { createApp, defineComponent, h, nextTick, onUnmounted, ref } from "vue";
+import { createApp, defineComponent, h, nextTick, onUnmounted, ref, type GlobalComponents } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RobotGrid } from "../RobotGrid";
 import { vueCellRenderer } from "../adapters";
-import { createGrid, DEFAULT_LOCALE, type ColDef } from "../index";
+import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTablePlugin, type ColDef } from "../index";
+import { AsyncMachTable, AsyncMachTablePlugin, preloadMachTable } from "../async";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
 
 class ResizeObserverStub {
@@ -28,6 +29,35 @@ describe("Vue adapter", () => {
     expect(column.field).toBe("id");
     expect(createGrid).toBeTypeOf("function");
     expect(DEFAULT_LOCALE.loading).toBeTruthy();
+  });
+
+  it("registers typed global components through app.use", () => {
+    const app = createApp({ render: () => null });
+    app.use(MachTablePlugin);
+    const globallyTyped: GlobalComponents["MachTable"] = RobotGrid;
+
+    expect(DefaultPlugin).toBe(MachTablePlugin);
+    expect(globallyTyped).toBe(RobotGrid);
+    expect(app.component("MachTable")).toBe(RobotGrid);
+    expect(app.component("RobotGrid")).toBe(RobotGrid);
+  });
+
+  it("supports a configurable async global registration and explicit preloading", async () => {
+    const app = createApp({ render: () => null });
+    app.use(AsyncMachTablePlugin, {
+      componentName: "BusinessTable",
+      registerRobotGridAlias: false
+    });
+
+    expect(app.component("BusinessTable")).toBe(AsyncMachTable);
+    expect(app.component("RobotGrid")).toBeUndefined();
+    await expect(preloadMachTable()).resolves.toBe(RobotGrid);
+  });
+
+  it("does not silently overwrite an existing global component", () => {
+    const app = createApp({ render: () => null });
+    app.component("MachTable", defineComponent({ render: () => null }));
+    expect(() => app.use(MachTablePlugin)).toThrow(/already in use/);
   });
 
   it("accepts datasource and forwards ordinary host attributes", async () => {

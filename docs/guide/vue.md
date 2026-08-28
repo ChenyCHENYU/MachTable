@@ -10,6 +10,62 @@ pnpm add @agile-team/mach-table-vue
 
 适配包会自动安装匹配版本的 Core，并重导出完整 API、类型和主题样式；业务代码无需直接依赖 Core。
 
+## 选择组件注入模式
+
+### 局部导入
+
+只有少量页面使用表格时，在页面中正常导入 `MachTable`。如果页面本身由 Vue Router 懒加载，表格代码会自然进入该路由 chunk，通常无需额外配置。
+
+### 全局同步注入
+
+大量页面都使用表格时，在应用入口注册一次，任意模板即可直接使用 `<MachTable>` / `<RobotGrid>`：
+
+```ts
+// main.ts
+import { createApp } from "vue";
+import { MachTablePlugin } from "@agile-team/mach-table-vue";
+import "@agile-team/mach-table-vue/styles.css";
+import App from "./App.vue";
+
+createApp(App).use(MachTablePlugin).mount("#app");
+```
+
+默认全局名称已包含 Volar / `vue-tsc` 类型。需要统一业务命名时可以配置：
+
+```ts
+app.use(MachTablePlugin, {
+  componentName: "BusinessTable",
+  registerRobotGridAlias: false
+});
+```
+
+### 全局异步注入（大型项目推荐）
+
+应用启动时只注册异步边界，首次真正渲染表格时才请求 Vue 适配组件与 Core：
+
+```ts
+// main.ts
+import { createApp } from "vue";
+import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
+import "@agile-team/mach-table-vue/styles.css";
+import App from "./App.vue";
+
+createApp(App).use(AsyncMachTablePlugin).mount("#app");
+
+// 可选：路由 hover、空闲时段或权限菜单预取时调用。
+void preloadMachTable();
+```
+
+页面无需运行时 import 组件：
+
+```vue
+<template>
+  <MachTable :column-defs="columnDefs" :row-data="rowData" />
+</template>
+```
+
+主题 CSS 只有约 5 KB gzip，建议始终在应用入口同步引入，避免异步组件出现无样式闪烁。`preloadMachTable()` 使用浏览器模块缓存，多次调用是安全的。
+
 ## 基础用法
 
 ```vue

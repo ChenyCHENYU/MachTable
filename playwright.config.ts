@@ -2,6 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Functional E2E includes cold Vite transforms and WebKit startup; performance
+  // budgets are enforced separately, so allow enough time for slow CI hosts.
+  timeout: 45_000,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,

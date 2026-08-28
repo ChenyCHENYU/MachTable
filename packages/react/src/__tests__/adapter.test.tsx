@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GridApi } from "@agile-team/mach-table";
 import { RobotGrid } from "../RobotGrid";
 import { reactCellRenderer } from "../adapters";
-import { createGrid, DEFAULT_LOCALE, type ColDef } from "../index";
+import DefaultMachTable, { createGrid, DEFAULT_LOCALE, type ColDef } from "../index";
 import { useMachGrid } from "../useMachGrid";
 
 class ResizeObserverStub {
@@ -31,6 +31,7 @@ describe("React adapter", () => {
     expect(column.field).toBe("id");
     expect(createGrid).toBeTypeOf("function");
     expect(DEFAULT_LOCALE.loading).toBeTruthy();
+    expect(DefaultMachTable).toBe(RobotGrid);
   });
 
   it("uses the latest event callback even when it is added after mount", async () => {

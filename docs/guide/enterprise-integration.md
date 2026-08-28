@@ -30,20 +30,20 @@ Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的
 Vue：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.4.1
+pnpm add @agile-team/mach-table-vue@^0.5.0
 ```
 
 React：
 
 ```bash
-pnpm add @agile-team/mach-table-react@^0.4.1
+pnpm add @agile-team/mach-table-react@^0.5.0
 ```
 
 npm / Yarn：
 
 ```bash
-npm install @agile-team/mach-table-vue@^0.4.1
-yarn add @agile-team/mach-table-vue@^0.4.1
+npm install @agile-team/mach-table-vue@^0.5.0
+yarn add @agile-team/mach-table-vue@^0.5.0
 ```
 
 三个 MachTable 包采用同版本联动。适配器会锁定匹配版本的 Core，业务项目只需升级适配器并提交 lockfile。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
@@ -84,6 +84,32 @@ import "@agile-team/mach-table-react/styles.css";
 ## 4. Vue 3 标准封装
 
 建议在业务组件库中封装统一入口，集中默认配置、错误上报和主题策略。
+
+### 注入策略
+
+| 项目特征 | 推荐模式 | 原因 |
+| --- | --- | --- |
+| 少量路由使用表格 | 页面或业务封装内局部导入 | 随路由自然分包，边界最清楚 |
+| 大部分页面使用表格 | `app.use(MachTablePlugin)` | 启动后任意模板直接使用 |
+| 大型中后台、低代码平台 | `app.use(AsyncMachTablePlugin)` | 全局可用，同时首次渲染才加载 Core |
+
+大型平台入口示例：
+
+```ts
+import { createApp } from "vue";
+import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
+import "@agile-team/mach-table-vue/styles.css";
+import App from "./App.vue";
+
+const app = createApp(App);
+app.use(AsyncMachTablePlugin);
+app.mount("#app");
+
+// 可在权限菜单 hover 或 requestIdleCallback 中预取。
+void preloadMachTable();
+```
+
+全局注入解决组件发现和代码加载问题；统一默认列、错误上报、审计字段等治理要求仍建议通过 `AppDataGrid` 业务封装落实。
 
 ```vue
 <!-- components/AppDataGrid.vue -->
@@ -165,6 +191,22 @@ onMounted(async () => {
 适配器会在组件卸载时自动 `destroy()`。需要导出、选中或命令式操作时使用 [`useMachTable`](/guide/vue#usemachtable-组合式-api-推荐)。
 
 ## 5. React 标准封装
+
+React 项目不使用全局组件注册。路由本身已懒加载时，在路由组件内正常 import；需要把表格从页面 chunk 继续拆分时使用标准懒加载：
+
+```tsx
+import { lazy, Suspense } from "react";
+
+const LazyMachTable = lazy(() => import("@agile-team/mach-table-react"));
+
+export function DeferredGrid() {
+  return (
+    <Suspense fallback={<div>正在加载表格...</div>}>
+      <LazyMachTable columnDefs={columns} rowData={rows} />
+    </Suspense>
+  );
+}
+```
 
 ```tsx
 import { useMemo } from "react";
@@ -340,8 +382,10 @@ await expect(grid).toBeFocused();
 
 ## 14. 上线检查清单
 
-- [ ] Core 与框架适配器版本一致并提交 lockfile
+- [ ] lockfile 中适配器只解析到一个匹配版本的 Core
 - [ ] 全局 CSS 只引入一次
+- [ ] 已按页面覆盖面选择局部、全局同步或全局异步策略
+- [ ] 异步模式的 chunk 路径、CSP 与错误监控已在生产环境验证
 - [ ] 容器在桌面、弹窗、Tab、全屏模式都有确定高度
 - [ ] 所有生产表格提供稳定 `getRowId`
 - [ ] 服务端数据源透传 `AbortSignal`

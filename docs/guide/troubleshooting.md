@@ -12,6 +12,10 @@
 | 更新数据后选择丢失 | 没有稳定 `getRowId` | 使用数据库主键/业务唯一键 |
 | 行重复或事务异常 | `getRowId` 返回重复值 | 保持全数据集唯一，开发环境不要抑制警告 |
 | React 频繁重建或更新 | 每次 render 创建新列/对象配置 | 用 `useMemo` 稳定引用 |
+| Vue 提示无法解析 `<MachTable>` | 全局插件未安装、安装到了另一个 app 实例，或自定义了组件名 | 确认入口调用 `app.use(MachTablePlugin)` / `app.use(AsyncMachTablePlugin)` 且发生在 `mount` 前 |
+| Vue 全局组件运行正常但 IDE 报红 | 类型服务尚未加载包的模块增强 | 确认入口有插件 import，重启 Volar / `vue-tsc`；自定义名称需在项目 `GlobalComponents` 中声明 |
+| 异步表格一直停留在 fallback | chunk 请求失败、CSP 拦截或部署遗漏静态资源 | 检查 Network、`app.config.errorHandler`、`script-src` 与构建产物部署；可提前调用 `preloadMachTable()` 暴露错误 |
+| React.lazy 报缺少边界 | 懒加载组件外没有 `<Suspense>` | 在路由或页面提供稳定的 loading/error boundary |
 | 富单元格滚动后内存增加 | 自定义 renderer 未清理框架实例 | 返回 `{ el, destroy }`，在 destroy 中 unmount |
 | 无限加载重复/竞态 | HTTP 请求未使用传入的 `signal` | 将 `AbortSignal` 传给 fetch/axios |
 | 复制粘贴没有反应 | 浏览器权限、非安全上下文或 `suppressClipboard` | 使用 HTTPS/localhost 并检查配置与权限 |
@@ -28,6 +32,15 @@ pnpm why @agile-team/mach-table
 ```
 
 适配器会自动解析匹配版本的 Core。删除 lockfile 不是常规修复手段；先检查重复版本和 workspace override。
+
+异步 Vue 入口可单独确认：
+
+```ts
+import { preloadMachTable } from "@agile-team/mach-table-vue/async";
+await preloadMachTable();
+```
+
+若此调用失败，问题位于 chunk 网络、部署或 CSP，而不是 Grid 配置。
 
 ## 获取 GridApi
 

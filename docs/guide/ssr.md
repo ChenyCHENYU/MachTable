@@ -13,11 +13,24 @@ export default defineNuxtConfig({
 });
 ```
 
+需要全局组件且希望延迟加载时，增加客户端插件：
+
+```ts
+// plugins/mach-table.client.ts
+import AsyncMachTablePlugin from "@agile-team/mach-table-vue/async";
+
+export default defineNuxtPlugin((nuxtApp) => {
+  nuxtApp.vueApp.use(AsyncMachTablePlugin);
+});
+```
+
+之后页面无需 import 组件，但仍应放在 `<ClientOnly>` 内。
+
 页面使用客户端边界：
 
 ```vue
 <script setup lang="ts">
-import { MachTable, type ColDef } from "@agile-team/mach-table-vue";
+import type { ColDef } from "@agile-team/mach-table-vue";
 
 interface Row { id: string; name: string }
 const rows: Row[] = [{ id: "1", name: "MachTable" }];
@@ -78,6 +91,14 @@ export function OrdersGrid({ rows }: { rows: Order[] }) {
   );
 }
 ```
+
+如果表格需要独立于页面 chunk 加载，可以在 Client Component 中使用：
+
+```tsx
+const MachTable = lazy(() => import("@agile-team/mach-table-react"));
+```
+
+并在外层提供 `<Suspense>` fallback；CSS 仍放在根布局中，避免加载时样式闪烁。
 
 Server Component 可以请求数据，再把可序列化的 `rows` 传给 Client Component。函数型列定义不能从 Server Component 跨边界传递，应在 Client Component 内声明。
 

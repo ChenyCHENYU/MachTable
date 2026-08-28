@@ -1,5 +1,16 @@
 # @agile-team/mach-table-react
 
+## 0.5.0
+
+### Minor Changes
+
+- Add production-ready loading strategies: Vue now supports typed synchronous and asynchronous global plugins with explicit preloading, while React exposes its component as the package default for direct `React.lazy` integration. Documentation and examples now cover local, global, route-level, SSR and lazy-loading adoption patterns.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes

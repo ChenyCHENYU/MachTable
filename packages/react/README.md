@@ -6,14 +6,23 @@
 
 Official React 18+ adapter for MachTable. It provides `<MachTable>` / `<RobotGrid>`, `useMachGrid`, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup.
 
+## Install
+
 ```bash
 pnpm add @agile-team/mach-table-react
 ```
 
+Import the stylesheet once from your application entry:
+
+```ts
+import "@agile-team/mach-table-react/styles.css";
+```
+
+## Direct import
+
 ```tsx
 import { useMemo } from "react";
 import { MachTable, useMachGrid, type ColDef } from "@agile-team/mach-table-react";
-import "@agile-team/mach-table-react/styles.css";
 
 interface Row { id: string; name: string }
 
@@ -36,6 +45,26 @@ export function App({ rows }: { rows: Row[] }) {
   );
 }
 ```
+
+## Route-level lazy loading
+
+React intentionally has no global component registry. MachTable provides a default component export so the standard `React.lazy` API works without a mapping wrapper:
+
+```tsx
+import { lazy, Suspense } from "react";
+
+const MachTable = lazy(() => import("@agile-team/mach-table-react"));
+
+export function OrdersPage() {
+  return (
+    <Suspense fallback={<div>Loading table...</div>}>
+      <MachTable columnDefs={columns} rowData={rows} />
+    </Suspense>
+  );
+}
+```
+
+When the page itself is route-lazy, a normal named import inside that page already produces the same route-level split. Use `React.lazy` when the grid should be split independently from the page.
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `react >= 18` and `react-dom >= 18` remain peer dependencies supplied by the host application.
 

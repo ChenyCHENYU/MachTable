@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { RobotGrid, type ColDef } from "@agile-team/mach-table-vue";
+import type { ColDef } from "@agile-team/mach-table-vue";
 
 interface Order {
   id: string;
@@ -50,7 +50,7 @@ const columnDefs: ColDef<Order>[] = [
       <span style="color: #64748b; font-size: 13px">已选中 {{ selectedCount }} 行</span>
     </div>
     <div style="height: 70vh; min-height: 400px">
-      <RobotGrid
+      <MachTable
         ref="grid"
         :column-defs="columnDefs"
         :row-data="rowData"

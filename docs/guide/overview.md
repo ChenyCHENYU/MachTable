@@ -65,8 +65,8 @@ MachTable（马赫表格）是一个**高性能、零运行时依赖、跨框架
 | 包 | 说明 | 依赖 |
 | --- | --- | --- |
 | `@agile-team/mach-table` | 内核 + 原生用法 + 主题 CSS | 无 |
-| `@agile-team/mach-table-vue` | Vue 单包入口；自动安装 Core 并重导出完整 API、类型、样式 | peer: vue ≥ 3.2 |
-| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core 并重导出完整 API、类型、样式 | peer: react/react-dom ≥ 18 |
+| `@agile-team/mach-table-vue` | Vue 单包入口；局部导入、全局同步插件、全局异步插件与预加载 | peer: vue ≥ 3.2 |
+| `@agile-team/mach-table-react` | React 单包入口；命名导入与标准 `React.lazy` 默认导出 | peer: react/react-dom ≥ 18 |
 
 内核与适配层独立发版、版本联动（changesets fixed），core 修 bug 不需要动框架包。
 

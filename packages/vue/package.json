@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-vue",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Official Vue 3 adapter for the MachTable enterprise data grid",
   "keywords": [
     "vue",
@@ -40,6 +40,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./async": {
+      "import": {
+        "types": "./dist/async.d.ts",
+        "default": "./dist/async.js"
+      },
+      "require": {
+        "types": "./dist/async.d.cts",
+        "default": "./dist/async.cjs"
       }
     },
     "./styles.css": {
