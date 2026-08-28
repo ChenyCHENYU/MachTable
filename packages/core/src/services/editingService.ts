@@ -28,6 +28,8 @@ interface EditingState {
 
 export class EditingService {
   private editing: EditingState | null = null;
+  private stopPromise: Promise<boolean> | null = null;
+  private stopToken = 0;
 
   constructor(private core: EditingContext) {}
 
@@ -61,7 +63,7 @@ export class EditingService {
   }
 
   start(rowIndex: number, column: Column, keyPress?: string | null): boolean {
-    if (this.editing) this.stop(false);
+    if (this.editing) return false;
     const node = this.core.rowModel.getDisplayedRow(rowIndex);
     if (!node || node.data == null) return false;
     if (!this.isEditable(node, column)) return false;
@@ -147,41 +149,79 @@ export class EditingService {
   }
 
   stop(cancel = false): void {
+    void this.stopAsync(cancel);
+  }
+
+  stopAsync(cancel = false): Promise<boolean> {
     const editing = this.editing;
-    if (!editing) return;
-    this.editing = null;
+    if (!editing) return Promise.resolve(false);
+    if (cancel) {
+      this.stopToken++;
+      this.stopPromise = null;
+      return Promise.resolve(this.finishStop(editing, true, editing.oldValue));
+    }
+    if (this.stopPromise) return this.stopPromise;
 
     let newValue: any;
-    let changed = false;
-    if (!cancel) {
-      try {
-        newValue = editing.editor.getValue();
-      } catch (error) {
-        this.core.reportError(error, "cellEditor.getValue", { colId: editing.column.id, rowId: editing.node.id });
-        cancel = true;
-      }
-      let cancelAfterEnd = cancel;
-      if (!cancelAfterEnd) {
-        try {
-          cancelAfterEnd = editing.editor.isCancelAfterEnd?.(newValue) ?? false;
-        } catch (error) {
-          this.core.reportError(error, "cellEditor.isCancelAfterEnd", { colId: editing.column.id, rowId: editing.node.id });
-          cancelAfterEnd = true;
-        }
-      }
-      if (!cancelAfterEnd) {
-        const validationError = this.validateValue(editing, newValue);
-        if (typeof validationError === "string") {
-          this.editing = editing;
-          this.showError(editing, validationError);
-          return;
-        }
-        changed = this.applyValue(editing, newValue);
-      }
+    try {
+      newValue = editing.editor.getValue();
+    } catch (error) {
+      this.core.reportError(error, "cellEditor.getValue", { colId: editing.column.id, rowId: editing.node.id });
+      return Promise.resolve(this.finishStop(editing, true, editing.oldValue));
     }
+    try {
+      if (editing.editor.isCancelAfterEnd?.(newValue)) {
+        return Promise.resolve(this.finishStop(editing, true, editing.oldValue));
+      }
+    } catch (error) {
+      this.core.reportError(error, "cellEditor.isCancelAfterEnd", { colId: editing.column.id, rowId: editing.node.id });
+      return Promise.resolve(this.finishStop(editing, true, editing.oldValue));
+    }
+
+    const validation = this.validateValue(editing, newValue);
+    if (validation && typeof (validation as Promise<unknown>).then === "function") {
+      const token = ++this.stopToken;
+      editing.editor.el.classList.add("mach-editor-validating");
+      editing.editor.el.setAttribute("aria-busy", "true");
+      editing.editor.el.inert = true;
+      const task = Promise.resolve(validation)
+        .then((result) => {
+          if (token !== this.stopToken || this.editing !== editing) return false;
+          if (typeof result === "string") {
+            this.showError(editing, result);
+            return false;
+          }
+          return this.finishStop(editing, false, newValue);
+        })
+        .catch((error) => {
+          if (token !== this.stopToken || this.editing !== editing) return false;
+          this.core.reportError(error, "validate", { colId: editing.column.id, rowId: editing.node.id });
+          this.showError(editing, "Validation failed");
+          return false;
+        })
+        .finally(() => {
+          if (this.stopPromise === task) this.stopPromise = null;
+        });
+      this.stopPromise = task;
+      return task;
+    }
+    if (typeof validation === "string") {
+      this.showError(editing, validation);
+      return Promise.resolve(false);
+    }
+    return Promise.resolve(this.finishStop(editing, false, newValue));
+  }
+
+  private finishStop(editing: EditingState, cancel: boolean, newValue: any): boolean {
+    if (this.editing !== editing) return false;
+    this.editing = null;
+    const changed = !cancel && this.applyValue(editing, newValue);
 
     editing.editor.el.removeEventListener("keydown", this.onEditorKeyDown);
     editing.editor.el.removeEventListener("focusout", this.onEditorBlur);
+    editing.editor.el.classList.remove("mach-editor-validating");
+    editing.editor.el.removeAttribute("aria-busy");
+    editing.editor.el.inert = false;
     try {
       editing.editor.destroy?.();
     } catch (error) {
@@ -205,9 +245,13 @@ export class EditingService {
     if (editing.node.rowIndex >= 0) {
       this.core.bodyRenderer.refreshRows([editing.node.rowIndex]);
     }
+    return true;
   }
 
-  private validateValue(editing: EditingState, newValue: any): string | true | null | undefined {
+  private validateValue(
+    editing: EditingState,
+    newValue: any
+  ): string | true | null | undefined | Promise<string | true | null | undefined> {
     const validate = editing.column.colDef.validate;
     if (!validate) return true;
     try {
@@ -231,6 +275,9 @@ export class EditingService {
     editorEl.classList.add("mach-editor-invalid");
     editorEl.setAttribute("title", message);
     editorEl.setAttribute("aria-invalid", "true");
+    editorEl.classList.remove("mach-editor-validating");
+    editorEl.removeAttribute("aria-busy");
+    editorEl.inert = false;
     const input = editorEl.querySelector("input, select") ?? editorEl;
     (input as HTMLElement).focus?.();
     const clear = () => {
@@ -261,22 +308,23 @@ export class EditingService {
       e.stopPropagation();
       const current = this.editing;
       const next = this.core.keyboardService.nextEditable(current.rowIndex, current.column.id, e.shiftKey ? -1 : 1);
-      this.stop(false);
-      if (next) {
-        this.core.bodyRenderer.scrollToIndex(next.rowIndex, "nearest");
-        this.core.bodyRenderer.setFocusedCell(next.rowIndex, next.column.id);
-        this.start(next.rowIndex, next.column);
-      }
+      void this.stopAsync(false).then((stopped) => {
+        if (stopped && next) {
+          this.core.bodyRenderer.scrollToIndex(next.rowIndex, "nearest");
+          this.core.bodyRenderer.setFocusedCell(next.rowIndex, next.column.id);
+          this.start(next.rowIndex, next.column);
+        }
+      });
     }
   };
 
   private onEditorBlur = (): void => {
     window.setTimeout(() => {
-      if (this.editing) this.stop(false);
+      if (this.editing) void this.stopAsync(false);
     }, 0);
   };
 
   destroy(): void {
-    if (this.editing) this.stop(true);
+    if (this.editing) void this.stopAsync(true);
   }
 }

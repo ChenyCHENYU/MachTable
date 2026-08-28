@@ -8,6 +8,8 @@
 | --- | --- |
 | `setRowData(rows)` | 全量替换（清空撤销栈；有 `getRowId` 时选中态按 id 保留） |
 | `applyTransaction({ add?, addIndex?, remove?, update? })` | 增量事务。remove 按行引用或 `getRowId` 匹配；树形 remove 递归删整棵子树；update 后局部刷新 |
+| `applyTransactionAsync(transaction): Promise<void>` | 高频事务排队；默认 16ms 内按调用顺序合并并只刷新一次数据管线 |
+| `flushAsyncTransactions()` | 立即提交队列，不等待时间窗 |
 | `reload(): Promise<void>` | 无限模式重新从第 0 行加载并等待首块完成；客户端模式重放 rowData |
 | `isInfinite()` | 是否无限滚动模式 |
 | `importCsv(text, { mode?, separator?, headerRowIndex? })` | CSV 导入：`replace` 替换 / `append` 追加 / `paste` 走粘贴管线（可撤销），表头自动映射列，数值自动转型 |
@@ -61,7 +63,12 @@
 | 方法 | 说明 |
 | --- | --- |
 | `startEditingCell({ rowIndex, colId, keyPress? })` | 编程式进入编辑（返回是否成功） |
-| `stopEditing(cancel?)` | 结束编辑（`cancel: true` 还原） |
+| `stopEditing(cancel?)` | 结束编辑；兼容同步调用。异步校验时不阻塞调用栈 |
+| `stopEditingAsync(cancel?): Promise<boolean>` | 等待同步/异步校验；成功结束返回 `true`，校验失败保持编辑并返回 `false` |
+| `getDirtyRowIds()` / `getChanges()` | 查询尚未确认保存的行和逐单元格原值/当前值 |
+| `saveChanges(handler, rowIds?)` | 把稳定快照交给异步保存函数；成功后只确认该快照，保留请求期间产生的新编辑 |
+| `markChangesSaved(rowIds?)` | 业务已自行保存时手动确认 |
+| `rollbackChanges(rowIds?)` | 回滚全部或指定行到最近已确认值 |
 | `undo()` / `redo()` / `canUndo()` / `canRedo()` | 撤销栈操作，见[配方](/recipes/undo-redo) |
 
 ## 固定行 / 分组 / 树 / 明细
@@ -100,4 +107,7 @@
 | --- | --- |
 | `addEventListener(type, fn)` | 订阅，返回取消函数 |
 | `removeEventListener(type, fn)` | 取消订阅 |
+| `whenReady(): Promise<GridApi>` | 首次布局帧与 `gridReady` 完成后 resolve；Vue/React Hook 的 `ready` 基于它 |
+| `getState()` / `applyState(state, options?)` | 读取/恢复版本化全量视图状态；`emitEvents: false` 可静默恢复 |
+| `getDiagnostics()` | 返回版本、加载/虚拟 DOM/行列/选择/脏数据和最近结构化错误快照，不包含业务行数据 |
 | `destroy()` / `isDestroyed()` | 销毁 / 状态查询 |

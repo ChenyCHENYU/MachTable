@@ -1,6 +1,6 @@
 # React 接入
 
-`@agile-team/mach-table-react` 提供 `<RobotGrid>` 组件（并导出语义化别名 `<MachTable>`）与 React 适配器，要求 react/react-dom ≥ 18。
+`@agile-team/mach-table-react` 以 `<MachTable>` 为规范组件名，要求 React / React DOM ≥ 18。`RobotGrid` 在 0.x 期间保留为弃用别名。
 
 ## 安装
 
@@ -39,12 +39,30 @@ export function OrdersPage() {
 
 CSS 在应用入口引入一次；只有表格 JS 与 Core 随异步边界加载。类型可以继续使用 `import type`，编译后不会产生运行时代码。
 
+## 全局与路由默认值
+
+React 不注册全局组件，但可以用 `MachTableProvider` 统一配置。Provider 可嵌套，离表格最近的配置覆盖上层，组件 props 最终优先：
+
+```tsx
+import { MachTableProvider } from "@agile-team/mach-table-react";
+
+root.render(
+  <MachTableProvider defaults={{
+    size: "compact",
+    pagination: false,
+    defaultColDef: { sortable: true, resizable: true, filter: true }
+  }}>
+    <App />
+  </MachTableProvider>
+);
+```
+
 ## 基础用法
 
 ```tsx
 import { useRef, useState } from "react";
 import "@agile-team/mach-table-react/styles.css";
-import { RobotGrid, type GridApi, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, type GridApi, type ColDef } from "@agile-team/mach-table-react";
 
 interface Employee { id: string; name: string; salary: number }
 
@@ -60,7 +78,7 @@ export default function Page() {
 
   return (
     <div style={{ height: 600 }}>
-      <RobotGrid<Employee>
+      <MachTable<Employee>
         apiRef={apiRef}
         columnDefs={columnDefs}
         rowData={rows}
@@ -78,7 +96,7 @@ export default function Page() {
 
 ## Props
 
-`RobotGridReactProps<TData> = Omit<GridOptions<TData>, "className"> & { className?, gridClassName?, style?, apiRef? }`
+`MachTableReactProps<TData> = Omit<GridOptions<TData>, adapterOnlyProps> & { className?, gridClassName?, style?, apiRef? }`
 
 - **所有 GridOptions 项都是 props**（camelCase），完整清单见 [GridOptions](/api/grid-options)
 - 事件既可用 `onCellClicked` 等 props，也可 `api.addEventListener`
@@ -121,7 +139,7 @@ const columnDefs: ColDef<Employee>[] = [
 ```tsx
 import { reactDetailRenderer } from "@agile-team/mach-table-react";
 
-<RobotGrid
+<MachTable
   masterDetail
   detailRowHeight={280}
   detailRowRenderer={reactDetailRenderer(OrderDetailPanel)}
@@ -134,14 +152,14 @@ import { reactDetailRenderer } from "@agile-team/mach-table-react";
 ## useMachGrid Hook（推荐）
 
 ```tsx
-import { RobotGrid, useMachGrid } from "@agile-team/mach-table-react";
+import { MachTable, useMachGrid } from "@agile-team/mach-table-react";
 
 function Page() {
   const grid = useMachGrid<Employee>();
 
   return (
     <>
-      <RobotGrid<Employee> apiRef={grid.apiRef} columnDefs={defs} rowData={rows} rowSelection="multiple" />
+      <MachTable<Employee> apiRef={grid.apiRef} columnDefs={defs} rowData={rows} rowSelection="multiple" />
       <button disabled={!grid.api} onClick={() => grid.api?.undo()}>撤销</button>
     </>
   );
@@ -156,5 +174,5 @@ function Page() {
 
 ```tsx
 const [api, setApi] = useState<GridApi<Employee> | null>(null);
-<RobotGrid onGridReady={(e) => setApi(e.api)} ... />
+<MachTable onGridReady={(e) => setApi(e.api)} ... />
 ```

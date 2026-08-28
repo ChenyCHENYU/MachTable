@@ -34,10 +34,11 @@ MachTable 为后台管理、工业台账、财务报表、订单工单和低代�
 | --- | --- |
 | 大数据量稳定滚动 | 行/列双虚拟化、行池复用、rAF 合帧、变高行前缀和定位 |
 | Excel 式操作 | 框选、复制/剪切/粘贴、Delete、填充柄、撤销/重做 |
-| 企业级数据模型 | 排序、四类过滤、分页、无限数据源、树形、分组聚合、主从明细 |
+| 企业级数据模型 | 排序、四类过滤、分页、可恢复无限数据源、树形、分组聚合、主从明细 |
 | 复杂布局 | 左右固定列、多级表头、变高行、固定首末行、行列拖拽、行合并 |
 | 业务组件集成 | Vue/React 单元格与明细适配器、自定义编辑器、实例级组件注册表 |
-| 长期可维护 | TypeScript 全量类型、组合式 `GridFeature`、生命周期清理、错误事件 |
+| 长期可维护 | TypeScript 字段路径推导、版本化 `GridState`、组合式 `GridFeature`、稳定错误码与诊断快照 |
+| 复杂编辑流程 | 同步/异步校验、脏数据跟踪、批量保存、并发编辑安全确认、回滚与撤销/重做 |
 | 安全与治理 | 安全 Overlay 默认值、CSV 公式注入防护、原型污染防护、体积/覆盖率门禁 |
 
 ## 60 秒开始
@@ -167,6 +168,24 @@ createApp(App).use(AsyncMachTablePlugin).mount("#app");
 void preloadMachTable();
 ```
 
+全局默认配置只写一次，页面仍可用 props 覆盖；这不会让每个页面都同步打入表格代码：
+
+```ts
+createApp(App).use(AsyncMachTablePlugin, {
+  defaults: {
+    size: "compact",
+    pagination: false,
+    defaultColDef: { sortable: true, resizable: true, filter: true },
+    onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
+  },
+  asyncComponentOptions: {
+    delay: 120,
+    timeout: 15_000,
+    errorComponent: GridLoadError
+  }
+}).mount("#app");
+```
+
 注册后任意 Vue 页面直接使用：
 
 ```vue
@@ -188,6 +207,14 @@ export function Orders() {
 }
 ```
 
+跨页面统一默认值使用类型安全的 Provider，单表 props 优先：
+
+```tsx
+<MachTableProvider defaults={{ size: "compact", pagination: false }}>
+  <App />
+</MachTableProvider>
+```
+
 ## 功能全景
 
 | 数据与性能 | 交互与编辑 | 布局与呈现 | 工程与扩展 |
@@ -196,10 +223,10 @@ export function Orders() {
 | 客户端排序过滤 | 双击/单击/键盘编辑 | 多级分组表头 | TypeScript 类型 |
 | 服务端排序过滤 | 校验、自定义编辑器 | 列宽拖拽与自适应 | 组件注册表 |
 | 无限滚动数据源 | Undo / Redo | 行列拖拽 | `GridFeature` 插件 |
-| 分页与事务更新 | 框选与剪贴板 | 变高行与换行 | Schema 驱动 |
+| 分页与同步/异步事务 | 框选与剪贴板 | 变高行与换行 | Schema 驱动、类型化列助手 |
 | 树形与分组聚合 | 填充柄、右键菜单 | 行合并、固定行 | i18n、主题令牌 |
 | 主从明细 | Tooltip、状态栏 | 明暗主题与密度 | 状态持久化 |
-| CSV 导入导出 | 操作列预设 | 空态/加载态/水印 | 统一错误事件 |
+| CSV 导入导出 | 异步校验、保存与回滚 | 空态/加载态/水印 | 全量状态、诊断与稳定错误码 |
 
 ## 为框架适配，也为包体积负责
 
@@ -207,9 +234,9 @@ MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配
 
 | 包 | 用途 | gzip 预算 / 当前值 |
 | --- | --- | --- |
-| `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 66 KB |
-| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 6 KB / 约 2.9 KB（全部 ESM 适配代码） |
-| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 5 KB / 约 1.5 KB（适配代码） |
+| `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 73 KB |
+| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 6 KB / 约 3.7 KB（全部 ESM 适配代码） |
+| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 5 KB / 约 1.9 KB（适配代码） |
 
 Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
 
@@ -231,18 +258,18 @@ flowchart TB
   Services --> Render
 ```
 
-- 状态型能力使用明确生命周期的 Service。
-- 排序、过滤、布局和编解码等逻辑保持为纯函数或独立状态模型。
-- 业务扩展通过 `GridFeature` 和实例级组件完成，不依赖继承 `GridCore`。
+- 状态型能力使用明确生命周期的 class Service；它适合封装资源所有权、缓存和销毁边界。
+- 排序、过滤、布局、预设合并和编解码保持为纯函数；函数式并非被替代，而是用于无状态逻辑。
+- 业务扩展通过 `GridFeature` 与实例级组件组合完成，不建议继承 `GridCore`。这种“有状态用类、算法用函数、扩展用组合”的混合架构比全类或全函数更容易长期维护。
 - `GRID_OPTION_META` 是 Core、Vue 和 React 运行时配置的单一事实源。
 
 更多细节见[架构说明](./docs/advanced/architecture.md)。
 
 ## 企业级质量基线
 
-- Core、Vue、React 共 212 个单元测试。
-- Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 三套真实页面。
-- ESLint、TypeScript、覆盖率阈值、publint、gzip 预算、示例构建和文档构建统一进入 `pnpm verify`。
+- Core、Vue、React 共 220+ 个单元测试，并包含重复挂载/销毁的监听器泄漏检查。
+- Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 的键盘、编辑和过滤交互；Chromium 额外执行 10 万行 × 100 列性能预算。
+- ESLint、TypeScript、覆盖率阈值、publint、真实消费端类型检查、ESM/CJS exports、gzip 预算、示例与文档构建统一进入 `pnpm verify`。
 - Overlay 字符串默认按文本渲染；可信 HTML 必须显式开启 `allowUnsafeOverlayHtml`。
 - 所有框架渲染器、编辑器、Feature、全局监听器和异步数据源都有销毁/取消边界。
 - CSV 导出默认防公式注入，字段路径写入拒绝危险原型键。
@@ -274,7 +301,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前版本为 `0.5.0`。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前版本为 `0.9.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

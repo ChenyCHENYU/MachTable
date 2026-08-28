@@ -11,13 +11,23 @@ export function useMachTable<TData = any>(): UseMachTableReturn<TData> {
   const componentRef = ref<any>(null);
   const api = shallowRef<GridApi<TData> | null>(null);
   const ready = shallowRef(false);
+  let generation = 0;
 
   watch(
     componentRef,
     (comp) => {
+      const currentGeneration = ++generation;
       if (comp && typeof comp.getApi === "function") {
         api.value = comp.getApi();
-        ready.value = api.value != null;
+        ready.value = false;
+        const currentApi = api.value;
+        if (currentApi) {
+          void currentApi.whenReady().then(() => {
+            if (generation === currentGeneration && api.value === currentApi && !currentApi.isDestroyed()) {
+              ready.value = true;
+            }
+          });
+        }
       } else {
         api.value = null;
         ready.value = false;
@@ -27,6 +37,7 @@ export function useMachTable<TData = any>(): UseMachTableReturn<TData> {
   );
 
   onScopeDispose(() => {
+    generation++;
     componentRef.value = null;
     api.value = null;
     ready.value = false;

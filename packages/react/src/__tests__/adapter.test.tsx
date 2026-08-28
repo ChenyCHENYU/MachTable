@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GridApi } from "@agile-team/mach-table";
 import { RobotGrid } from "../RobotGrid";
 import { reactCellRenderer } from "../adapters";
-import DefaultMachTable, { createGrid, DEFAULT_LOCALE, type ColDef } from "../index";
+import DefaultMachTable, { createGrid, DEFAULT_LOCALE, MachTable, MachTableProvider, type ColDef } from "../index";
 import { useMachGrid } from "../useMachGrid";
 
 class ResizeObserverStub {
@@ -32,6 +32,29 @@ describe("React adapter", () => {
     expect(createGrid).toBeTypeOf("function");
     expect(DEFAULT_LOCALE.loading).toBeTruthy();
     expect(DefaultMachTable).toBe(RobotGrid);
+    expect(MachTable).toBe(RobotGrid);
+  });
+
+  it("merges provider defaults while keeping table props authoritative", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const defaults = {
+      theme: "dark" as const,
+      pagination: false,
+      defaultColDef: { sortable: false, resizable: false }
+    };
+
+    await act(async () => root.render(createElement(MachTableProvider, { defaults },
+      createElement(MachTable, {
+        theme: "light",
+        columnDefs: [{ field: "id" }],
+        rowData: [{ id: 1 }]
+      })
+    )));
+    expect(host.querySelector(".mach-root")?.classList.contains("mach-theme-dark")).toBe(false);
+    expect((host.querySelector(".mach-pagination") as HTMLElement).style.display).toBe("none");
+    await act(async () => root.unmount());
   });
 
   it("uses the latest event callback even when it is added after mount", async () => {

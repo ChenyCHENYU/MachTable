@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-Official Vue 3 adapter for MachTable. It provides `<MachTable>` / `<RobotGrid>`, `useMachTable`, Vue cell/detail renderer factories, reactive option updates and automatic lifecycle cleanup.
+Official Vue 3 adapter for MachTable 0.9. It provides `<MachTable>`, `useMachTable`, app/route defaults, async boundaries, Vue cell/detail renderer factories, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -79,14 +79,21 @@ createApp(App).use(AsyncMachTablePlugin).mount("#app");
 void preloadMachTable();
 ```
 
-After either global plugin is installed, pages can use `<MachTable>` or `<RobotGrid>` directly. Global component types are included for Volar and `vue-tsc`. A custom name and legacy alias policy are also supported:
+After either global plugin is installed, pages can use `<MachTable>` directly. Global component types are included for Volar and `vue-tsc`. A custom name, legacy alias policy and application defaults are supported:
 
 ```ts
 app.use(MachTablePlugin, {
   componentName: "BusinessTable",
-  registerRobotGridAlias: false
+  registerRobotGridAlias: false,
+  defaults: {
+    size: "compact",
+    pagination: false,
+    defaultColDef: { sortable: true, resizable: true, filter: true }
+  }
 });
 ```
+
+Layouts can refine defaults without wrapper components by calling `provideMachTableDefaults(...)`. The async plugin also accepts `asyncComponentOptions` with `loadingComponent`, `errorComponent`, `delay`, `timeout` and `onError`.
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `vue >= 3.2` remains a peer dependency supplied by the host application. Existing local imports remain fully supported.
 

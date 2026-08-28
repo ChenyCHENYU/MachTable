@@ -637,6 +637,11 @@ input.mach-select-all {
   box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
 }
 
+.mach-editor-validating {
+  cursor: progress;
+  opacity: 0.72;
+}
+
 .mach-footer {
   display: flex;
   flex-shrink: 0;

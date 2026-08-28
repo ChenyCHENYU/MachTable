@@ -111,6 +111,68 @@ describe("validate on edit", () => {
     expect(api.getNodeById("1")?.data?.score).toBe(50);
     api.destroy();
   });
+
+  it("awaits async validation and keeps invalid editors recoverable", async () => {
+    const host = createHost();
+    let resolveValidation: ((result: true | string) => void) | undefined;
+    const api = createGrid<Row>(host, {
+      columnDefs: [
+        {
+          field: "name",
+          editable: true,
+          validate: () => new Promise<true | string>((resolve) => {
+            resolveValidation = resolve;
+          })
+        }
+      ],
+      rowData: [{ id: "1", name: "before" }],
+      getRowId: (p) => p.data.id
+    });
+
+    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
+    input.value = "after";
+    const stopping = api.stopEditingAsync();
+    expect(input.getAttribute("aria-busy")).toBe("true");
+    expect(input.inert).toBe(true);
+
+    resolveValidation?.("Already exists");
+    await expect(stopping).resolves.toBe(false);
+    expect(api.getNodeById("1")?.data?.name).toBe("before");
+    expect(host.querySelector(".mach-editor-invalid")).toBe(input);
+    expect(input.inert).toBe(false);
+
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const secondStop = api.stopEditingAsync();
+    resolveValidation?.(true);
+    await expect(secondStop).resolves.toBe(true);
+    expect(api.getNodeById("1")?.data?.name).toBe("after");
+    expect(host.querySelector(".mach-editor-input")).toBeNull();
+    api.destroy();
+  });
+
+  it("cancels an in-flight async validation without applying stale results", async () => {
+    const host = createHost();
+    let resolveValidation: ((result: true) => void) | undefined;
+    const api = createGrid<Row>(host, {
+      columnDefs: [{
+        field: "name",
+        editable: true,
+        validate: () => new Promise<true>((resolve) => { resolveValidation = resolve; })
+      }],
+      rowData: [{ id: "1", name: "before" }],
+      getRowId: (p) => p.data.id
+    });
+
+    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    (host.querySelector(".mach-editor-input") as HTMLInputElement).value = "stale";
+    const validation = api.stopEditingAsync();
+    await expect(api.stopEditingAsync(true)).resolves.toBe(true);
+    resolveValidation?.(true);
+    await expect(validation).resolves.toBe(false);
+    expect(api.getNodeById("1")?.data?.name).toBe("before");
+    api.destroy();
+  });
 });
 
 describe("row span", () => {

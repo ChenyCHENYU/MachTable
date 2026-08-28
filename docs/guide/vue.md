@@ -1,6 +1,6 @@
 # Vue 3 接入
 
-`@agile-team/mach-table-vue` 提供 `<RobotGrid>` 组件（并导出语义化别名 `<MachTable>`）与 Vue 适配器，要求 vue ≥ 3.2。
+`@agile-team/mach-table-vue` 以 `<MachTable>` 为规范组件名，要求 Vue ≥ 3.2。旧名称 `<RobotGrid>` 在 0.x 期间保留为弃用别名，新代码请使用 `MachTable`。
 
 ## 安装
 
@@ -30,6 +30,21 @@ import App from "./App.vue";
 createApp(App).use(MachTablePlugin).mount("#app");
 ```
 
+推荐把跨页面一致的配置放进插件；单表 props 会覆盖全局值：
+
+```ts
+createApp(App).use(MachTablePlugin, {
+  defaults: {
+    size: "compact",
+    pagination: false,
+    defaultColDef: { sortable: true, resizable: true, filter: true },
+    onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
+  }
+}).mount("#app");
+```
+
+布局或路由还可在 `setup()` 中调用 `provideMachTableDefaults(...)` 叠加局部默认值，后代所有表格生效，不需要再包一层组件。
+
 默认全局名称已包含 Volar / `vue-tsc` 类型。需要统一业务命名时可以配置：
 
 ```ts
@@ -56,6 +71,24 @@ createApp(App).use(AsyncMachTablePlugin).mount("#app");
 void preloadMachTable();
 ```
 
+生产项目可配置异步加载/错误边界：
+
+```ts
+app.use(AsyncMachTablePlugin, {
+  defaults: { size: "compact" },
+  asyncComponentOptions: {
+    loadingComponent: GridLoading,
+    errorComponent: GridLoadError,
+    delay: 120,
+    timeout: 15_000,
+    onError(error, retry, fail, attempts) {
+      if (attempts <= 2) retry();
+      else fail();
+    }
+  }
+});
+```
+
 页面无需运行时 import 组件：
 
 ```vue
@@ -72,7 +105,7 @@ void preloadMachTable();
 <script setup lang="ts">
 import { ref } from "vue";
 import "@agile-team/mach-table-vue/styles.css";
-import { RobotGrid } from "@agile-team/mach-table-vue";
+import { MachTable } from "@agile-team/mach-table-vue";
 import type {
   CellValueChangedEvent,
   ColDef,
@@ -105,7 +138,7 @@ const onCellValueChanged = (event: CellValueChangedEvent<Order>) => {
 
 <template>
   <div style="height: 600px">
-    <RobotGrid
+    <MachTable
       ref="grid"
       :column-defs="columnDefs"
       :row-data="rowData"
@@ -128,7 +161,7 @@ const onCellValueChanged = (event: CellValueChangedEvent<Order>) => {
 **Emits**：`EVENT_TYPES` 中的全部事件以 camelCase 名 emit，模板中用 kebab-case 监听：
 
 ```vue
-<RobotGrid
+<MachTable
   @grid-ready="onReady"
   @cell-clicked="onCell"
   @selection-changed="onSel"
@@ -146,7 +179,7 @@ const onCellValueChanged = (event: CellValueChangedEvent<Order>) => {
 
 ```vue
 <script setup lang="ts">
-import { RobotGrid, useMachTable } from "@agile-team/mach-table-vue";
+import { MachTable, useMachTable } from "@agile-team/mach-table-vue";
 
 const mt = useMachTable<Order>();
 
@@ -156,7 +189,7 @@ function exportCsv() {
 </script>
 
 <template>
-  <RobotGrid :ref="mt.ref" :column-defs="defs" :row-data="rows" row-selection="multiple" />
+  <MachTable :ref="mt.ref" :column-defs="defs" :row-data="rows" row-selection="multiple" />
   <span v-if="mt.ready.value">共 {{ mt.api.value?.getTotalRowCount() }} 行</span>
 </template>
 ```
@@ -213,7 +246,7 @@ cellRenderer: vueCellRenderer(StatusBadge)
 import { vueDetailRenderer } from "@agile-team/mach-table-vue";
 import OrderDetailPanel from "./OrderDetailPanel.vue";
 
-<RobotGrid master-detail :detail-row-height="280"
+<MachTable master-detail :detail-row-height="280"
            :detail-row-renderer="vueDetailRenderer(OrderDetailPanel)" ... />
 ```
 

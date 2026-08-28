@@ -38,7 +38,7 @@ const cssVars = computed(() => ({
 
 <template>
   <n-config-provider :theme="isDark ? darkTheme : undefined">
-    <RobotGrid :style="cssVars" ... />
+    <MachTable :style="cssVars" ... />
   </n-config-provider>
 </template>
 ```
@@ -121,7 +121,7 @@ registerCellEditor("n-date", naiveEditor(NDatePicker, { type: "datetime" }));
 
 ```ts
 // 组件库内部：TableColumnDesc → MachTable ColDef 适配器
-import { RobotGrid, vueCellRenderer, type ColDef } from "@agile-team/mach-table-vue";
+import { MachTable, vueCellRenderer, type ColDef } from "@agile-team/mach-table-vue";
 
 function descToColDef(desc: TableColumnDesc): ColDef<any> {
   return {

@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-Official React 18+ adapter for MachTable. It provides `<MachTable>` / `<RobotGrid>`, `useMachGrid`, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup.
+Official React 18+ adapter for MachTable 0.9. It provides `<MachTable>`, `MachTableProvider`, `useMachGrid`, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -65,6 +65,22 @@ export function OrdersPage() {
 ```
 
 When the page itself is route-lazy, a normal named import inside that page already produces the same route-level split. Use `React.lazy` when the grid should be split independently from the page.
+
+## Application and route defaults
+
+Providers can be nested; the nearest defaults are merged and table props win:
+
+```tsx
+import { MachTableProvider } from "@agile-team/mach-table-react";
+
+<MachTableProvider defaults={{
+  size: "compact",
+  pagination: false,
+  defaultColDef: { sortable: true, resizable: true, filter: true }
+}}>
+  <App />
+</MachTableProvider>
+```
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `react >= 18` and `react-dom >= 18` remain peer dependencies supplied by the host application.
 

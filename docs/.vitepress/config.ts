@@ -62,6 +62,7 @@ export default defineConfig({
             { text: "分页 / 导入导出 / 打印 / 水印", link: "/recipes/pagination-io" },
             { text: "固定首末行", link: "/recipes/pinned-rows" },
             { text: "撤销 / 重做", link: "/recipes/undo-redo" },
+            { text: "全量状态与工作区", link: "/recipes/grid-state" },
             { text: "变高行与换行", link: "/recipes/variable-height" },
             { text: "列状态记忆", link: "/recipes/column-state" },
             { text: "Schema 驱动渲染", link: "/recipes/schema-driven" }
@@ -75,6 +76,7 @@ export default defineConfig({
             { text: "主题与密度", link: "/advanced/theming" },
             { text: "性能指南", link: "/advanced/performance" },
             { text: "国际化 i18n", link: "/advanced/i18n" },
+            { text: "可访问性与键盘", link: "/advanced/accessibility" },
             { text: "架构说明", link: "/advanced/architecture" },
             { text: "路线图与差距分析", link: "/advanced/roadmap" }
           ]

@@ -117,6 +117,12 @@ export class HeaderRenderer {
       for (const tree of this.paneTrees[pane]) appendCell(tree);
     }
 
+    if (!this.core.options.suppressHeaderFocus) {
+      this.leafCells.forEach((cell, index) => {
+        cell.el.tabIndex = index === 0 ? 0 : -1;
+      });
+    }
+
     this.applyLayout();
     this.refreshSortIndicators();
     this.refreshFilterIcons();
@@ -139,8 +145,8 @@ export class HeaderRenderer {
     else if (headerAlign === "right") cellEl.classList.add("mach-header-cell--right");
 
     if (!this.core.options.suppressHeaderFocus) {
-      cellEl.tabIndex = 0;
-      cellEl.addEventListener("mousedown", () => cellEl.focus({ preventScroll: true }));
+      cellEl.tabIndex = -1;
+      cellEl.addEventListener("mousedown", () => this.focusHeaderCell(column));
       cellEl.addEventListener("keydown", (e: KeyboardEvent) => this.onHeaderKeyDown(e, column));
     }
 
@@ -349,7 +355,29 @@ export class HeaderRenderer {
           if (to !== from) this.core.moveColumn(column.id, to);
         }
         return;
+      case !e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowLeft" || e.key === "ArrowRight"):
+        e.preventDefault(); {
+          const current = this.leafCells.findIndex((cell) => cell.column.id === column.id);
+          const next = e.key === "ArrowRight"
+            ? Math.min(this.leafCells.length - 1, current + 1)
+            : Math.max(0, current - 1);
+          if (current >= 0) this.focusHeaderCell(this.leafCells[next].column);
+        }
+        return;
+      case e.key === "Home" || e.key === "End":
+        e.preventDefault();
+        if (this.leafCells.length > 0) {
+          this.focusHeaderCell(e.key === "Home" ? this.leafCells[0].column : this.leafCells[this.leafCells.length - 1].column);
+        }
+        return;
     }
+  }
+
+  private focusHeaderCell(column: Column): void {
+    const target = this.leafCells.find((cell) => cell.column.id === column.id);
+    if (!target) return;
+    for (const cell of this.leafCells) cell.el.tabIndex = cell === target ? 0 : -1;
+    target.el.focus({ preventScroll: true });
   }
 
   refreshSortIndicators(): void {

@@ -151,8 +151,9 @@ Schema 字段：`field, title, type(string|number|date|select|boolean), width/mi
 
 ```ts
 import type {
-  GridApi, GridOptions, ColDef, ColDefGroup, ColDefOrGroup, ColumnState,
-  RowNode, GridEventMap, GridEventType, GridErrorEvent, CellClickEvent, CellValueChangedEvent,
+  GridApi, GridOptions, GridState, GridDiagnostics, GridChange,
+  ColDef, ColDefGroup, ColDefOrGroup, ColumnState,
+  RowNode, GridEventMap, GridEventType, GridErrorCode, GridErrorEvent, CellClickEvent, CellValueChangedEvent,
   RangeSelectionChangedEvent, GridDatasource, InfiniteGetRowsParams,
   RgLocale, GridSchema, ICellEditor, CellRendererFn, CellStyleRule,
   DetailRowRendererParams, GetRowHeightParams, StatusBarPanel,
@@ -162,11 +163,11 @@ import type {
 
 ## Vue 包附加导出
 
-`RobotGrid`（同时导出别名 `MachTable`）/ `RobotGridVueProps` / `vueCellRenderer` / `vueDetailRenderer` / `useMachTable`（组合式 API：`{ ref, api, ready }`）（+ core 的类型与 `createGrid`）。
+`MachTable` / `MachTableVueProps` / `MachTablePlugin` / `provideMachTableDefaults` / `useMachTableDefaults` / `vueCellRenderer` / `vueDetailRenderer` / `useMachTable`（`{ ref, api, ready }`）。异步子路径导出 `AsyncMachTablePlugin` / `createAsyncMachTable` / `preloadMachTable`。另重导出完整 Core；`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
 
 ## React 包附加导出
 
-`RobotGrid`（同时导出别名 `MachTable`）/ `RobotGridReactProps` / `reactCellRenderer` / `reactDetailRenderer` / `useMachGrid`（Hook：`{ apiRef, api }`）（+ core 的类型与 `createGrid`）。
+`MachTable` / `MachTableReactProps` / `MachTableProvider` / `useMachTableDefaults` / `reactCellRenderer` / `reactDetailRenderer` / `useMachGrid`（`{ apiRef, api, ready }`），并重导出完整 Core。`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
 
 ## 主题 CSS
 

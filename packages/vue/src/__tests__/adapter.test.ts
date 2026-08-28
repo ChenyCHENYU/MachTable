@@ -2,7 +2,7 @@ import { createApp, defineComponent, h, nextTick, onUnmounted, ref, type GlobalC
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RobotGrid } from "../RobotGrid";
 import { vueCellRenderer } from "../adapters";
-import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTablePlugin, type ColDef } from "../index";
+import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTable, MachTablePlugin, type ColDef } from "../index";
 import { AsyncMachTable, AsyncMachTablePlugin, preloadMachTable } from "../async";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
 
@@ -40,6 +40,27 @@ describe("Vue adapter", () => {
     expect(globallyTyped).toBe(RobotGrid);
     expect(app.component("MachTable")).toBe(RobotGrid);
     expect(app.component("RobotGrid")).toBe(RobotGrid);
+    expect(MachTable).toBe(RobotGrid);
+  });
+
+  it("applies plugin defaults and lets component props override them", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const app = createApp({
+      render: () => h(MachTable, {
+        theme: "light",
+        columnDefs: [{ field: "id" }],
+        rowData: [{ id: 1 }]
+      })
+    });
+    app.use(MachTablePlugin, {
+      defaults: { theme: "dark", pagination: false, defaultColDef: { sortable: false } }
+    });
+    app.mount(host);
+    await nextTick();
+    expect(host.querySelector(".mach-root")?.classList.contains("mach-theme-dark")).toBe(false);
+    expect((host.querySelector(".mach-pagination") as HTMLElement).style.display).toBe("none");
+    app.unmount();
   });
 
   it("supports a configurable async global registration and explicit preloading", async () => {
@@ -181,6 +202,7 @@ describe("Vue adapter", () => {
     app.mount(host);
     await nextTick();
     await nextTick();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
     expect(grid!.ready.value).toBe(true);
     expect(grid!.api.value?.getDisplayedRowCount()).toBe(1);
     app.unmount();

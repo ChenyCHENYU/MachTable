@@ -82,6 +82,7 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     indexOffset: userOptions.indexOffset ?? 0,
     applyRowDrag: userOptions.applyRowDrag ?? true,
     undoStackSize: finiteAtLeast(userOptions.undoStackSize, 100, 0, true),
+    asyncTransactionWaitMillis: finiteAtLeast(userOptions.asyncTransactionWaitMillis, 16, 0, true),
     pinnedTopRowData: Array.isArray(userOptions.pinnedTopRowData) ? userOptions.pinnedTopRowData : [],
     pinnedBottomRowData: Array.isArray(userOptions.pinnedBottomRowData) ? userOptions.pinnedBottomRowData : [],
     paginationEnabled:
@@ -117,10 +118,15 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
         : ["rowCount", "selectedRowCount", "rangeAggregate"],
     blockSize: finiteAtLeast(userOptions.blockSize, 100, 1, true),
     infiniteBufferRows: finiteAtLeast(userOptions.infiniteBufferRows, 40, 0, true),
+    datasourceRetryCount: finiteAtLeast(userOptions.datasourceRetryCount, 2, 0, true),
+    datasourceRetryDelay: finiteAtLeast(userOptions.datasourceRetryDelay, 300, 0, true),
     suppressCellFocus: userOptions.suppressCellFocus ?? false,
     suppressRowHoverHighlight: userOptions.suppressRowHoverHighlight ?? false,
     suppressNoRowsOverlay: userOptions.suppressNoRowsOverlay ?? false,
     suppressHeaderFocus: userOptions.suppressHeaderFocus ?? false,
+    ariaLabel: userOptions.ariaLabel ?? "MachTable data grid",
+    ariaLabelledBy: userOptions.ariaLabelledBy ?? "",
+    ariaDescribedBy: userOptions.ariaDescribedBy ?? "",
     loading: userOptions.loading ?? false,
     overlayNoRowsTemplate: userOptions.overlayNoRowsTemplate ?? "",
     overlayLoadingTemplate: userOptions.overlayLoadingTemplate ?? "",
@@ -140,6 +146,7 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
   if (userOptions.getRowHeight) resolved.getRowHeight = userOptions.getRowHeight;
   if (userOptions.tooltipComponent) resolved.tooltipComponent = userOptions.tooltipComponent;
   if (userOptions.getContextMenuItems) resolved.getContextMenuItems = userOptions.getContextMenuItems;
+  if (userOptions.initialState) resolved.initialState = userOptions.initialState;
 
   for (const key of Object.keys(userOptions) as (keyof GridOptions<TData>)[]) {
     if (key.startsWith("on") && typeof userOptions[key] === "function") {

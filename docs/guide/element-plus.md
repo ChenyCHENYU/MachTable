@@ -135,7 +135,7 @@ watch(visible, async (v) => {
 
 ## 5. 混用策略（渐进迁移）
 
-同页面可并存：旧 `el-table` 列表页不动，新需求/数据量超 1 千行的页面用 `RobotGrid`。列描述符映射助手：
+同页面可并存：旧 `el-table` 列表页不动，新需求/数据量超 1 千行的页面用 `MachTable`。列描述符映射助手：
 
 ```ts
 // el-table column → MachTable ColDef

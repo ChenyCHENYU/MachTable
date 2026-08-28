@@ -68,6 +68,15 @@ export class SelectionService {
     return [...this.selectedIds];
   }
 
+  restoreSelection(ids: readonly string[]): void {
+    const requested = new Set(ids);
+    const changes = this.core.rowModel
+      .getAllNodes()
+      .filter((node) => requested.has(node.id) && !node.isDetail && !node.isGroup)
+      .map((node) => ({ node, selected: true }));
+    this.applySelection(changes, true);
+  }
+
   onRowsRebuilt(preserveIds: boolean): void {
     if (!preserveIds) {
       this.selectedIds.clear();

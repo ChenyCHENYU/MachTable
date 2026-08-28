@@ -11,6 +11,7 @@ type ColumnLike = import("./column").Column;
 type RowModelContext = Pick<
   GridCore<any>,
   | "bodyRenderer"
+  | "changeTracker"
   | "columnModel"
   | "emit"
   | "getApi"
@@ -51,6 +52,7 @@ export class RowModel<TData = any> {
   private infiniteLoading = false;
   private infiniteSeq = 0;
   private infiniteAbort: AbortController | null = null;
+  private infiniteRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private infinitePendingResolve: (() => void) | null = null;
   private treeDepth = new WeakMap<RowNode<TData>, number>();
   private rowSequence = new WeakMap<RowNode<TData>, number>();
@@ -130,6 +132,7 @@ export class RowModel<TData = any> {
 
     return new Promise<void>((resolve) => {
       let settled = false;
+      let attempt = 0;
       this.infinitePendingResolve = resolve;
       const done = (reason?: unknown) => {
         if (settled) return;
@@ -146,47 +149,81 @@ export class RowModel<TData = any> {
         resolve();
       };
 
-      try {
-        const request = datasource.getRows({
-          startRow: start,
-          endRow: stop,
-          sortModel: this.core.columnModel.getSortModel(),
-          filterModel: this.getFilterModel(),
-          quickFilterText: this.quickFilter,
-          signal: controller.signal,
-          onSuccess: (rows, lastRow) => {
-            if (settled) return;
-            if (seq !== this.infiniteSeq || this.core.isDestroyed() || controller.signal.aborted) {
-              done();
-              return;
-            }
-            const received = rows ?? [];
-            if (typeof lastRow === "number" && lastRow >= 0) {
-              this.infiniteLastRow = lastRow;
-            } else if (received.length < stop - start) {
-              this.infiniteLastRow = start + received.length;
-            }
-            const wasEmpty = this.all.length === 0;
-            this.appendInfiniteRows(received);
-            done();
-            this.refreshPipeline();
-            this.core.bodyRenderer.onDataChanged();
-            if (wasEmpty) this.core.relayout();
-            this.core.headerRenderer.refreshSelectAllCheckbox();
-          },
-          fail: (reason) => done(reason ?? new Error("Datasource request failed"))
-        });
-        if (request && typeof (request as Promise<void>).catch === "function") {
-          void (request as Promise<void>).catch(done);
+      const runAttempt = () => {
+        if (settled || seq !== this.infiniteSeq || controller.signal.aborted || this.core.isDestroyed()) {
+          done();
+          return;
         }
-      } catch (error) {
-        done(error);
-      }
+        attempt++;
+        let attemptSettled = false;
+        const failAttempt = (reason?: unknown) => {
+          if (attemptSettled || settled) return;
+          attemptSettled = true;
+          if (seq !== this.infiniteSeq || controller.signal.aborted || this.core.isDestroyed()) {
+            done();
+            return;
+          }
+          if (attempt <= this.core.options.datasourceRetryCount) {
+            const delay = Math.min(
+              this.core.options.datasourceRetryDelay * 2 ** Math.max(0, attempt - 1),
+              30_000
+            );
+            this.infiniteRetryTimer = setTimeout(() => {
+              this.infiniteRetryTimer = null;
+              runAttempt();
+            }, delay);
+            return;
+          }
+          done(reason ?? new Error("Datasource request failed"));
+        };
+
+        try {
+          const request = datasource.getRows({
+            startRow: start,
+            endRow: stop,
+            sortModel: this.core.columnModel.getSortModel(),
+            filterModel: this.getFilterModel(),
+            quickFilterText: this.quickFilter,
+            signal: controller.signal,
+            onSuccess: (rows, lastRow) => {
+              if (attemptSettled || settled) return;
+              attemptSettled = true;
+              if (seq !== this.infiniteSeq || this.core.isDestroyed() || controller.signal.aborted) {
+                done();
+                return;
+              }
+              const received = rows ?? [];
+              if (typeof lastRow === "number" && lastRow >= 0) {
+                this.infiniteLastRow = lastRow;
+              } else if (received.length < stop - start) {
+                this.infiniteLastRow = start + received.length;
+              }
+              const wasEmpty = this.all.length === 0;
+              this.appendInfiniteRows(received);
+              done();
+              this.refreshPipeline();
+              this.core.bodyRenderer.onDataChanged();
+              if (wasEmpty) this.core.relayout();
+              this.core.headerRenderer.refreshSelectAllCheckbox();
+            },
+            fail: failAttempt
+          });
+          if (request && typeof (request as Promise<void>).catch === "function") {
+            void (request as Promise<void>).catch(failAttempt);
+          }
+        } catch (error) {
+          failAttempt(error);
+        }
+      };
+
+      runAttempt();
     });
   }
 
   private cancelInfiniteRequest(): void {
     this.infiniteSeq++;
+    if (this.infiniteRetryTimer != null) clearTimeout(this.infiniteRetryTimer);
+    this.infiniteRetryTimer = null;
     this.infiniteAbort?.abort();
     this.infiniteAbort = null;
     this.infiniteRequested = false;
@@ -247,6 +284,7 @@ export class RowModel<TData = any> {
   }
 
   setRowData(rows: TData[] | null | undefined): void {
+    this.core.changeTracker.clear();
     const getRowId = this.core.options.getRowId;
     const childrenKey = this.core.options.childrenKey;
     const next: RowNode<TData>[] = [];
@@ -316,9 +354,10 @@ export class RowModel<TData = any> {
     return this.getChildrenCount(id) > 0;
   }
 
-  applyTransaction(transaction: RowTransaction<TData>): void {
+  applyTransaction(transaction: RowTransaction<TData>, refresh = true): void {
     const getRowId = this.core.options.getRowId;
     const touched: RowNode<TData>[] = [];
+    const externallyReplacedIds: string[] = [];
 
     if (transaction.remove?.length) {
       const removeIds = new Set<string>();
@@ -349,6 +388,7 @@ export class RowModel<TData = any> {
       this.all = this.all.filter((node) => {
         const drop = removeIds.has(node.id) || (node.data != null && removeRefs.has(node.data));
         if (drop) {
+          externallyReplacedIds.push(node.id);
           this.nodesById.delete(node.id);
           this.childIds.delete(node.id);
         }
@@ -368,6 +408,7 @@ export class RowModel<TData = any> {
         }
         if (node) {
           node.data = data;
+          externallyReplacedIds.push(node.id);
           this.core.bodyRenderer.invalidateRowHeight(node);
           touched.push(node);
         }
@@ -398,10 +439,19 @@ export class RowModel<TData = any> {
       this.reindexAll();
     }
 
-    this.refreshPipeline();
-    for (const node of touched) {
-      if (node.rowIndex >= 0) this.core.bodyRenderer.refreshRows([node.rowIndex]);
+    if (refresh) {
+      this.refreshPipeline();
+      for (const node of touched) {
+        if (node.rowIndex >= 0) this.core.bodyRenderer.refreshRows([node.rowIndex]);
+      }
     }
+    this.core.changeTracker.clearRows(externallyReplacedIds);
+  }
+
+  applyTransactions(transactions: readonly RowTransaction<TData>[]): void {
+    if (transactions.length === 0) return;
+    for (const transaction of transactions) this.applyTransaction(transaction, false);
+    this.refreshPipeline();
   }
 
   private buildChildNodes(parent: RowNode<TData>, data: TData, depth: number): void {
@@ -609,6 +659,12 @@ export class RowModel<TData = any> {
     this.applyPagination();
     this.core.bodyRenderer.onDataChanged();
     this.emitPaginationChanged();
+  }
+
+  restorePagination(page: number, pageSize: number): void {
+    this.pageSize = Math.max(1, Math.round(pageSize) || 1);
+    this.core.options.paginationPageSize = this.pageSize;
+    this.page = Math.max(1, Math.round(page) || 1);
   }
 
   setPaginationEnabled(enabled: boolean): void {
@@ -844,6 +900,19 @@ export class RowModel<TData = any> {
 
   isRowExpanded(id: string): boolean {
     return this.expandedIds.has(id);
+  }
+
+  getExpandedRowIds(): string[] {
+    return [...this.expandedIds];
+  }
+
+  getExpandedGroupIds(): string[] {
+    return [...this.groupExpandedIds];
+  }
+
+  restoreExpansion(rowIds: readonly string[], groupIds: readonly string[]): void {
+    this.expandedIds = new Set(rowIds.filter((id) => this.nodesById.has(id)));
+    this.groupExpandedIds = new Set(groupIds);
   }
 
   expandRow(id: string): boolean {

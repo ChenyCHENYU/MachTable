@@ -114,15 +114,24 @@ export type {
   ActionButtonsConfig
 } from "./lib/presetRenderers";
 export { selectionColumn, indexColumn, dragColumn, actionsColumn } from "./lib/presetColumns";
+export { createColumnHelper, defineColumns } from "./lib/columnHelper";
+export type { ColumnHelper, FieldPath, FieldPathValue } from "./lib/columnHelper";
+export { createMachTablePreset, createEnterprisePreset, defineGridOptions } from "./lib/presets";
 export type { TooltipParams, ContextMenuParams, ContextMenuItem } from "./types/params";
 export type {
   GridApi,
   CsvExportParams,
   RowTransaction,
+  GridCellChange,
+  GridChange,
+  GridDiagnosticError,
+  GridDiagnostics,
+  SaveChangesHandler,
   ImportCsvOptions,
   PrintOptions
 } from "./types/api";
 export type { RowNode } from "./types/row";
+export type { GridState, GridStateSection, ApplyGridStateOptions } from "./types/state";
 export type {
   GridEventMap,
   GridEventType,
@@ -147,7 +156,9 @@ export type {
   RangeSelectionChangedEvent,
   GridCellRange,
   PaginationChangedEvent,
-  GridErrorEvent
+  GridErrorEvent,
+  GridErrorCode,
+  DirtyStateChangedEvent
 } from "./types/events";
 export { EVENT_TYPES } from "./types/events";
 export { Column } from "./services/column";

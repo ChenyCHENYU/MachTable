@@ -42,6 +42,7 @@ export class GridSkeleton {
     this.root.style.setProperty("--mach-header-h", `${options.headerHeight}px`);
     this.root.setAttribute("role", "grid");
     this.root.tabIndex = 0;
+    this.applyAriaLabels(options);
 
     this.headerEl = el("div", "mach-header");
     this.headerEl.setAttribute("role", "rowgroup");
@@ -118,6 +119,18 @@ export class GridSkeleton {
     this.applyTheme(options.theme);
   }
 
+  applyAriaLabels(options: Pick<ResolvedGridOptions, "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy">): void {
+    if (options.ariaLabelledBy) {
+      this.root.setAttribute("aria-labelledby", options.ariaLabelledBy);
+      this.root.removeAttribute("aria-label");
+    } else {
+      this.root.removeAttribute("aria-labelledby");
+      this.root.setAttribute("aria-label", options.ariaLabel);
+    }
+    if (options.ariaDescribedBy) this.root.setAttribute("aria-describedby", options.ariaDescribedBy);
+    else this.root.removeAttribute("aria-describedby");
+  }
+
   setHeaderRowCount(depth: number): void {
     this.headerDepth = depth;
     for (const pane of ["left", "center", "right"] as PaneType[]) {
@@ -137,6 +150,10 @@ export class GridSkeleton {
       }
     }
     this.applyHeaderHeight();
+  }
+
+  getHeaderRowCount(): number {
+    return this.headerDepth;
   }
 
   private applyHeaderHeight(): void {

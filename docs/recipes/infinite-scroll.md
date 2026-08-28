@@ -21,6 +21,8 @@ createGrid(host, {
   datasource,
   blockSize: 100,            // 每块请求行数
   infiniteBufferRows: 40,    // 距末尾 N 行预取
+  datasourceRetryCount: 2,   // 瞬时故障自动重试
+  datasourceRetryDelay: 300, // 300ms、600ms 后重试
   statusBar: true,           // 行数面板显示 "已加载 / 总数"
   getRowId: (p) => p.data.id
 });
@@ -29,6 +31,8 @@ createGrid(host, {
 - 提供了 `datasource` 即进入无限模式，`rowData` 被忽略
 - `lastRow` 可选：传非负总数时精确撑开滚动条；未传或传 `-1` 时按块继续请求，短块/空块自动判定结束
 - 每次请求携带 `AbortSignal`；重载、排序/过滤变化或销毁时旧请求会被取消，过期响应不会覆盖新数据
+- `fail(error)` 或 Promise reject 会按指数退避自动重试；只在次数耗尽后触发 `gridError / DATA_SOURCE_ERROR`
+- 重载、排序/过滤变化或销毁同时取消等待中的重试定时器
 - 当前采用顺序块加载；拖到远处时从已加载末尾继续补块，不会并发制造中间空洞
 
 ## 排序 / 过滤联动

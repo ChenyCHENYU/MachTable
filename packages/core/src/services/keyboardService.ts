@@ -273,6 +273,10 @@ export class KeyboardService {
         if (next) {
           body.setFocusedCell(next.rowIndex, next.column.id);
           this.core.editingService.start(next.rowIndex, next.column);
+        } else {
+          // Let the browser move to the previous/next control outside the grid.
+          // A composite grid must never trap keyboard-only users at its edges.
+          handled = false;
         }
         break;
       }
@@ -287,8 +291,8 @@ export class KeyboardService {
       return;
     }
 
-    if (row !== focus.rowIndex || cols[colIdx].id !== focus.colId) {
-      body.setFocusedCell(row, cols[colIdx].id);
+    if (row !== focus.rowIndex || cols[nextColIdx].id !== focus.colId) {
+      body.setFocusedCell(row, cols[nextColIdx].id);
     }
   };
 }

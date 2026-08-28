@@ -10,6 +10,7 @@ import type {
 import type { GridEventMap } from "./events";
 import type { GetRowIdParams } from "./params";
 import type { RowNode } from "./row";
+import type { GridState } from "./state";
 
 export interface ColumnStateStore {
   load(key: string): ColumnState[] | null | Promise<ColumnState[] | null>;
@@ -123,6 +124,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   aggFuncs?: Record<string, (values: any[]) => any>;
   components?: GridComponents;
   features?: readonly GridFeature<TData>[];
+  /** State restored atomically after columns and initial rows are available. */
+  initialState?: GridState;
   locale?: import("../lib/locale").RgLocale;
   singleClickEdit?: boolean;
   manualSorting?: boolean;
@@ -136,6 +139,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   indexOffset?: number;
   applyRowDrag?: boolean;
   undoStackSize?: number;
+  /** Milliseconds used to coalesce applyTransactionAsync calls. */
+  asyncTransactionWaitMillis?: number;
   getRowHeight?: (params: import("./params").GetRowHeightParams<TData>) => number;
   pinnedTopRowData?: TData[] | null;
   pinnedBottomRowData?: TData[] | null;
@@ -154,10 +159,20 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   datasource?: GridDatasource<TData>;
   blockSize?: number;
   infiniteBufferRows?: number;
+  /** Number of automatic retries after an infinite datasource request fails. */
+  datasourceRetryCount?: number;
+  /** Base retry delay in milliseconds. Retries use capped exponential backoff. */
+  datasourceRetryDelay?: number;
   suppressCellFocus?: boolean;
   suppressRowHoverHighlight?: boolean;
   suppressNoRowsOverlay?: boolean;
   suppressHeaderFocus?: boolean;
+  /** Accessible name applied to the element with role="grid"/"treegrid". */
+  ariaLabel?: string;
+  /** ID of an external element that labels the grid. Takes precedence over ariaLabel. */
+  ariaLabelledBy?: string;
+  /** ID of an external element that provides additional grid instructions. */
+  ariaDescribedBy?: string;
   loading?: boolean;
   overlayNoRowsTemplate?: OverlayTemplate;
   overlayLoadingTemplate?: OverlayTemplate;
@@ -192,6 +207,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   aggFuncs?: Record<string, (values: any[]) => any>;
   components?: GridComponents;
   features: readonly GridFeature<TData>[];
+  initialState?: GridState;
   locale: import("../lib/locale").RgLocale;
   singleClickEdit: boolean;
   manualSorting: boolean;
@@ -205,6 +221,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   indexOffset: number;
   applyRowDrag: boolean;
   undoStackSize: number;
+  asyncTransactionWaitMillis: number;
   getRowHeight?: (params: import("./params").GetRowHeightParams<TData>) => number;
   pinnedTopRowData: TData[];
   pinnedBottomRowData: TData[];
@@ -229,10 +246,15 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   datasource?: GridDatasource<TData>;
   blockSize: number;
   infiniteBufferRows: number;
+  datasourceRetryCount: number;
+  datasourceRetryDelay: number;
   suppressCellFocus: boolean;
   suppressRowHoverHighlight: boolean;
   suppressNoRowsOverlay: boolean;
   suppressHeaderFocus: boolean;
+  ariaLabel: string;
+  ariaLabelledBy: string;
+  ariaDescribedBy: string;
   loading: boolean;
   overlayNoRowsTemplate: OverlayTemplate;
   overlayLoadingTemplate: OverlayTemplate;

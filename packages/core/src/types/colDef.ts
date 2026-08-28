@@ -153,7 +153,10 @@ export interface ColDef<TData = any, TValue = any> {
   autoRowSpan?: boolean;
   colSpan?: (params: CellClassParams<TData, TValue>) => number;
   autoHeight?: boolean;
-  validate?: (newValue: TValue, params: ValueSetterParams<TData, TValue>) => string | true | null | undefined;
+  validate?: (
+    newValue: TValue,
+    params: ValueSetterParams<TData, TValue>
+  ) => string | true | null | undefined | Promise<string | true | null | undefined>;
   rowDrag?: boolean;
   valueGetter?: (params: ValueGetterParams<TData, TValue>) => TValue;
   valueSetter?: (params: ValueSetterParams<TData, TValue>) => boolean;

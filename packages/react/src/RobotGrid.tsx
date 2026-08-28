@@ -5,45 +5,93 @@ import {
   type CSSProperties,
   type MutableRefObject
 } from "react";
-import { createGrid, DIRECT_GRID_OPTION_KEYS, EVENT_TYPES } from "@agile-team/mach-table";
+import { createGrid, createMachTablePreset, GRID_OPTION_KEYS, EVENT_TYPES } from "@agile-team/mach-table";
 import type { GridApi, GridOptions } from "@agile-team/mach-table";
+import { useMachTableDefaults } from "./defaults";
 
-export type RobotGridReactProps<TData = any> = Omit<GridOptions<TData>, "className"> & {
+type AdapterOnlyGridOption = "className" | "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy";
+
+export type MachTableReactProps<TData = any> = Omit<GridOptions<TData>, AdapterOnlyGridOption> & {
   /** CSS class applied to the React host element. */
   className?: string;
   /** CSS class forwarded to MachTable's inner grid root. */
   gridClassName?: string;
+  gridAriaLabel?: string;
+  gridAriaLabelledBy?: string;
+  gridAriaDescribedBy?: string;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
   style?: CSSProperties;
   apiRef?: MutableRefObject<GridApi<TData> | null>;
 };
 
-const UPDATABLE_KEYS = DIRECT_GRID_OPTION_KEYS.filter((key) => key !== "className");
+function collectGridOptions<TData>(
+  props: MachTableReactProps<TData>,
+  defaults: Partial<GridOptions<TData>>
+): GridOptions<TData> {
+  const explicit: Record<string, unknown> = {};
+  for (const key of GRID_OPTION_KEYS) {
+    if (key === "className") continue;
+    const value = key === "ariaLabel"
+      ? props.gridAriaLabel
+      : key === "ariaLabelledBy"
+        ? props.gridAriaLabelledBy
+        : key === "ariaDescribedBy"
+          ? props.gridAriaDescribedBy
+          : props[key];
+    if (value !== undefined) explicit[key] = value;
+  }
+  if (props.gridClassName !== undefined) explicit.className = props.gridClassName;
+  return createMachTablePreset(defaults, explicit as Partial<GridOptions<TData>>);
+}
 
-export function RobotGrid<TData = any>(props: RobotGridReactProps<TData>) {
+export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
   const { className, style, apiRef } = props;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const gridApiRef = useRef<GridApi<TData> | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
+  const defaults = useMachTableDefaults<TData>();
+  const effectiveInputs = [
+    defaults,
+    ...GRID_OPTION_KEYS.map((key) => key === "className"
+      ? props.gridClassName
+      : key === "ariaLabel"
+        ? props.gridAriaLabel
+        : key === "ariaLabelledBy"
+          ? props.gridAriaLabelledBy
+          : key === "ariaDescribedBy"
+            ? props.gridAriaDescribedBy
+            : props[key])
+  ];
+  const effectiveCache = useRef<{ inputs: readonly unknown[]; options: GridOptions<TData> } | null>(null);
+  if (
+    !effectiveCache.current ||
+    effectiveCache.current.inputs.length !== effectiveInputs.length ||
+    effectiveInputs.some((value, index) => !Object.is(value, effectiveCache.current?.inputs[index]))
+  ) {
+    effectiveCache.current = { inputs: effectiveInputs, options: collectGridOptions(props, defaults) };
+  }
+  const effectiveOptions = effectiveCache.current.options;
+  const effectiveRef = useRef(effectiveOptions);
+  effectiveRef.current = effectiveOptions;
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
 
-    const initial = propsRef.current;
-    const options: Record<string, unknown> = {};
-    for (const key of Object.keys(initial) as string[]) {
-      if (key === "className" || key === "gridClassName" || key === "style" || key === "apiRef") continue;
-      if (key.startsWith("on")) continue;
-      options[key] = (initial as Record<string, unknown>)[key];
-    }
-    if (initial.gridClassName !== undefined) options.className = initial.gridClassName;
+    const options = { ...effectiveRef.current } as Record<string, unknown>;
     for (const eventType of EVENT_TYPES) {
       const handlerKey = `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
       options[handlerKey] = (event: unknown) => {
+        const defaultHandler = (effectiveRef.current as Record<string, unknown>)[handlerKey];
+        if (typeof defaultHandler === "function") (defaultHandler as (value: unknown) => void)(event);
         const latest = propsRef.current as Record<string, unknown>;
         const handler = latest[handlerKey];
-        if (typeof handler === "function") (handler as (event: unknown) => void)(event);
+        if (typeof handler === "function" && handler !== defaultHandler) {
+          (handler as (value: unknown) => void)(event);
+        }
       };
     }
 
@@ -64,43 +112,7 @@ export function RobotGrid<TData = any>(props: RobotGridReactProps<TData>) {
     };
   }, [apiRef]);
 
-  const rowDataReady = useRef(false);
-  useEffect(() => {
-    if (!rowDataReady.current) {
-      rowDataReady.current = true;
-      return;
-    }
-    gridApiRef.current?.setRowData(props.rowData);
-  }, [props.rowData]);
-
-  const columnDefsReady = useRef(false);
-  useEffect(() => {
-    if (!columnDefsReady.current) {
-      columnDefsReady.current = true;
-      return;
-    }
-    gridApiRef.current?.setColumnDefs(props.columnDefs);
-  }, [props.columnDefs]);
-
-  const quickFilterReady = useRef(false);
-  useEffect(() => {
-    if (!quickFilterReady.current) {
-      quickFilterReady.current = true;
-      return;
-    }
-    gridApiRef.current?.setQuickFilter(props.quickFilterText);
-  }, [props.quickFilterText]);
-
-  const gridClassNameReady = useRef(false);
-  useEffect(() => {
-    if (!gridClassNameReady.current) {
-      gridClassNameReady.current = true;
-      return;
-    }
-    gridApiRef.current?.updateOptions({ className: props.gridClassName });
-  }, [props.gridClassName]);
-
-  const optionValues = UPDATABLE_KEYS.map((key) => props[key]);
+  const optionValues = GRID_OPTION_KEYS.map((key) => effectiveOptions[key]);
   const previousOptionValues = useRef<readonly unknown[] | null>(null);
   useEffect(() => {
     const previous = previousOptionValues.current;
@@ -110,7 +122,8 @@ export function RobotGrid<TData = any>(props: RobotGridReactProps<TData>) {
     }
     const changed: Record<string, unknown> = {};
     optionValues.forEach((value, index) => {
-      if (!Object.is(value, previous[index])) changed[UPDATABLE_KEYS[index]] = value;
+      if (Object.is(value, previous[index])) return;
+      changed[GRID_OPTION_KEYS[index]] = value;
     });
     if (Object.keys(changed).length > 0) {
       gridApiRef.current?.updateOptions(changed as Partial<GridOptions<TData>>);
@@ -120,6 +133,14 @@ export function RobotGrid<TData = any>(props: RobotGridReactProps<TData>) {
   return createElement("div", {
     ref: hostRef,
     className: `mach-react-host ${className ?? ""}`.trim() || undefined,
-    style
+    style,
+    "aria-label": props["aria-label"],
+    "aria-labelledby": props["aria-labelledby"],
+    "aria-describedby": props["aria-describedby"]
   });
 }
+
+/** @deprecated Use MachTable. Kept as a source-compatible alias through 0.x. */
+export const RobotGrid = MachTable;
+/** @deprecated Use MachTableReactProps. */
+export type RobotGridReactProps<TData = any> = MachTableReactProps<TData>;

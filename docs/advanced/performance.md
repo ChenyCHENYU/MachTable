@@ -40,6 +40,16 @@ api.applyTransaction({ update: [changedRow] });   // 局部刷新
 // 而不是 rows[i] = x; api.setRowData(rows);       // 全量重建
 ```
 
+实时行情、设备遥测和 WebSocket 推送应使用异步事务合批：
+
+```ts
+await Promise.all(messages.map((row) =>
+  api.applyTransactionAsync({ update: [row] })
+));
+```
+
+默认 16ms 内的事务保持顺序执行，但过滤/排序/分组/布局管线只刷新一次。可用 `asyncTransactionWaitMillis` 调整窗口，或调用 `flushAsyncTransactions()` 立即提交。
+
 ## 渲染侧调优
 
 | 手段 | 说明 |
@@ -52,9 +62,9 @@ api.applyTransaction({ update: [changedRow] });   // 局部刷新
 
 ## 测量基准
 
-可复现基准见 `examples/bench`（`pnpm --filter bench-demo dev`）：1k/10k/100k 行 × 8/30/60 列，含状态/进度/操作预设列，自动滚动 3s 统计平均帧耗时与可见 DOM 计数。
+可复现基准见 `examples/bench`（`pnpm --filter bench-demo dev`）：1k/10k/100k 行 × 8/30/60/100 列，含状态/进度/操作预设列，自动滚动统计帧耗时与可见 DOM 计数。
 
-典型结果（Chrome，10 万行 × 8 列）：初次渲染 < 120ms，滚动帧耗 < 2ms（与行数无关），可见 DOM 单元格恒定 ~200。
+Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列：初次构建、1000 次异步更新和滚动后的 DOM 上限均有保守 CI 预算。绝对耗时受硬件、浏览器、renderer 与数据形态影响，请在目标设备用业务列模型复测，不把 README 数字当 SLA。
 
 ## 发布体积预算
 
@@ -63,7 +73,7 @@ api.applyTransaction({ update: [changedRow] });   // 局部刷新
 | 产物 | gzip 上限 |
 | --- | ---: |
 | `@agile-team/mach-table` ESM | 80 KB |
-| Vue / React 适配器 ESM | 各 5 KB |
+| Vue / React 适配器 ESM | 6 KB / 5 KB |
 | Core CSS | 6 KB |
 
 框架包把 Vue、React、ReactDOM 和 Core 声明为 external/peer dependency，因此 Vue 应用不会打入 React 适配代码，反之亦然。

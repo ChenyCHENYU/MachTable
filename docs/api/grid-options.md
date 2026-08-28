@@ -15,6 +15,10 @@
 | `datasource` | `GridDatasource` | — | 无限滚动数据源，见[配方](/recipes/infinite-scroll) |
 | `blockSize` | `number` | `100` | 无限滚动每块请求行数 |
 | `infiniteBufferRows` | `number` | `40` | 距已加载末尾 N 行时预取下一块 |
+| `datasourceRetryCount` | `number` | `2` | 数据源失败后的自动重试次数；`0` 关闭 |
+| `datasourceRetryDelay` | `number` | `300` | 首次重试基础延迟（ms），之后指数退避，最长 30 秒 |
+| `asyncTransactionWaitMillis` | `number` | `16` | `applyTransactionAsync` 合并时间窗；事务保持调用顺序，管线只刷新一次 |
+| `initialState` | `GridState` | — | 列、排序、过滤、分页、选择、展开等版本化首屏状态，列和初始行就绪后一次应用 |
 
 ## 尺寸与密度
 
@@ -124,6 +128,9 @@
 | `features` | `GridFeature[]` | `[]` | 实例级功能扩展；提供 setup/cleanup/destroy 生命周期，不需要修改 GridCore |
 | `suppressCellFocus` | `boolean` | `false` | 关闭单元格焦点（同时关闭键盘导航） |
 | `suppressHeaderFocus` | `boolean` | `false` | 关闭表头焦点环 |
+| `ariaLabel` | `string` | `"MachTable data grid"` | 内部 `role=grid/treegrid` 元素的可访问名称 |
+| `ariaLabelledBy` | `string` | `""` | 外部标签元素 id；配置后优先于 `ariaLabel` |
+| `ariaDescribedBy` | `string` | `""` | 外部操作说明元素 id |
 | 事件回调 | `onCellClicked`、`onGridError` 等 | — | 见 [事件](/api/events)；用户回调异常会被隔离并上报 |
 
 ## 类型速查

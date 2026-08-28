@@ -237,20 +237,16 @@ describe("column virtualization", () => {
 
     const row0 = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     const cells = Array.from(row0.querySelectorAll(".mach-cell")) as HTMLElement[];
-    const visible = cells.filter((c) => c.style.display !== "none");
-    const hidden = cells.filter((c) => c.style.display === "none");
-
-    expect(visible.length).toBeGreaterThan(0);
-    expect(visible.length).toBeLessThan(30);
-    expect(hidden.length).toBe(60 - visible.length);
-    expect(hidden.every((c) => c.style.display === "none")).toBe(true);
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells.length).toBeLessThan(30);
+    expect(cells.every((c) => c.style.display !== "none")).toBe(true);
 
     Object.defineProperty(viewport, "scrollLeft", { value: 3600, configurable: true });
     api.refreshLayout();
     const row0b = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     const cellsB = Array.from(row0b.querySelectorAll(".mach-cell")) as HTMLElement[];
-    const visibleB = cellsB.filter((c) => c.style.display !== "none");
-    const firstVisibleCol = visibleB[0].dataset.colId;
+    expect(cellsB.length).toBeLessThan(30);
+    const firstVisibleCol = cellsB[0].dataset.colId;
     expect(Number(firstVisibleCol?.slice(1))).toBeGreaterThanOrEqual(25);
     api.destroy();
   });

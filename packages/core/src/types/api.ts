@@ -1,7 +1,8 @@
 import type { ColDef, ColDefGroup, ColumnState, FilterModel, SortModel } from "./colDef";
-import type { GridEventMap, GridEventType } from "./events";
+import type { GridErrorCode, GridEventMap, GridEventType } from "./events";
 import type { GridOptions, RowSelectionMode } from "./options";
 import type { RowNode } from "./row";
+import type { ApplyGridStateOptions, GridState } from "./state";
 
 export interface CsvExportParams {
   includeHeader?: boolean;
@@ -33,13 +34,57 @@ export interface RowTransaction<TData = any> {
   update?: TData[];
 }
 
+export interface GridCellChange {
+  colId: string;
+  originalValue: unknown;
+  value: unknown;
+}
+
+export interface GridChange<TData = any> {
+  rowId: string;
+  data: TData;
+  cells: GridCellChange[];
+}
+
+export interface GridDiagnosticError {
+  code: GridErrorCode;
+  source: string;
+  message: string;
+  timestamp: number;
+  context?: Record<string, unknown>;
+}
+
+export interface GridDiagnostics {
+  gridId: number;
+  version: string;
+  destroyed: boolean;
+  infinite: boolean;
+  loading: boolean;
+  rowCount: number;
+  renderedRowCount: number;
+  columnCount: number;
+  selectedRowCount: number;
+  dirtyRowCount: number;
+  recentErrors: readonly GridDiagnosticError[];
+}
+
+export type SaveChangesHandler<TData = any> = (
+  changes: readonly GridChange<TData>[]
+) => void | Promise<void>;
+
 export interface ScrollToIndexPosition {
   position?: "top" | "bottom" | "middle" | "nearest";
 }
 
 export interface GridApi<TData = any> {
+  /** Resolves after the first layout frame and gridReady emission. */
+  whenReady(): Promise<GridApi<TData>>;
   setRowData(rows: TData[] | null | undefined): void;
   applyTransaction(transaction: RowTransaction<TData>): void;
+  /** Coalesces rapid transactions and refreshes the row pipeline once per batch. */
+  applyTransactionAsync(transaction: RowTransaction<TData>): Promise<void>;
+  /** Immediately applies transactions currently waiting in the async queue. */
+  flushAsyncTransactions(): void;
 
   getColumnDefs(): (ColDef<TData> | ColDefGroup<TData>)[] | null;
   setColumnDefs(colDefs: (ColDef<TData> | ColDefGroup<TData>)[] | null | undefined): void;
@@ -104,6 +149,12 @@ export interface GridApi<TData = any> {
   redo(): boolean;
   canUndo(): boolean;
   canRedo(): boolean;
+  getDirtyRowIds(): string[];
+  getChanges(): GridChange<TData>[];
+  markChangesSaved(rowIds?: readonly string[]): void;
+  /** Saves a stable change snapshot and safely preserves edits made while the request is in flight. */
+  saveChanges(handler: SaveChangesHandler<TData>, rowIds?: readonly string[]): Promise<GridChange<TData>[]>;
+  rollbackChanges(rowIds?: readonly string[]): boolean;
 
   setPinnedTopRowData(rows: TData[] | null): void;
   getPinnedTopRowData(): TData[];
@@ -135,11 +186,18 @@ export interface GridApi<TData = any> {
 
   startEditingCell(params: { rowIndex: number; colId: string; keyPress?: string }): boolean;
   stopEditing(cancel?: boolean): void;
+  /** Stops editing and resolves after synchronous or asynchronous validation. */
+  stopEditingAsync(cancel?: boolean): Promise<boolean>;
 
   refreshCells(): void;
   updateOptions(options: Partial<GridOptions<TData>>): void;
 
   getDataAsCsv(params?: CsvExportParams): string;
+
+  getState(): GridState;
+  applyState(state: GridState, options?: ApplyGridStateOptions): void;
+  /** Lightweight runtime snapshot suitable for support logs and health panels. */
+  getDiagnostics(): GridDiagnostics;
 
   setOverlay(type: "loading" | "noRows" | null): void;
   hideOverlays(): void;

@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const packages = ["core", "vue", "react"];
+
+function targets(value, output = []) {
+  if (typeof value === "string") output.push(value);
+  else if (value && typeof value === "object") Object.values(value).forEach((nested) => targets(nested, output));
+  return output;
+}
+
+for (const name of packages) {
+  const directory = resolve(root, "packages", name);
+  const manifest = JSON.parse(await readFile(resolve(directory, "package.json"), "utf8"));
+  for (const target of new Set(targets(manifest.exports))) {
+    await access(resolve(directory, target));
+  }
+}
+
+const require = createRequire(import.meta.url);
+const coreEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/index.js")));
+const coreCjs = require(resolve(root, "packages/core/dist/index.cjs"));
+const vueEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/index.js")));
+const reactEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/index.js")));
+
+for (const entry of [coreEsm, coreCjs]) {
+  assert.equal(typeof entry.createGrid, "function");
+  assert.equal(typeof entry.createColumnHelper, "function");
+  assert.equal(typeof entry.createEnterprisePreset, "function");
+}
+assert.equal(typeof vueEsm.MachTable, "object");
+assert.equal(typeof vueEsm.MachTablePlugin.install, "function");
+assert.equal(typeof vueEsm.provideMachTableDefaults, "function");
+assert.equal(typeof reactEsm.MachTable, "function");
+assert.equal(typeof reactEsm.MachTableProvider, "function");
+
+console.log("OK   package export maps, ESM/CJS runtime entries, and consumer declarations");

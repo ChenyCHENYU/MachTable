@@ -21,17 +21,17 @@ hero:
 features:
   - icon: ⚡
     title: 极致性能
-    details: 行/列双虚拟化、行池复用、前缀和变高定位、rAF 合帧滚动、预取值排序。内核零运行时依赖，当前完整包 gzip 约 65KB。
+    details: 行/列双虚拟化、行池复用、前缀和变高定位、rAF 合帧滚动、异步事务合批。内核零运行时依赖，并有 10 万行 × 100 列性能门禁。
   - icon: 🧩
     title: 全能交互
-    details: 选择（单/多/树形级联）、编辑（校验/撤销）、框选复制粘贴填充、分组聚合、树形、主从明细、无限滚动。
+    details: 选择、异步校验编辑、脏数据保存回滚、框选复制粘贴填充、分组聚合、树形、主从明细、可恢复无限滚动。
   - icon: 🎨
     title: 精致视觉
     details: CSS 变量主题（浅/深色）、三档密度、斑马纹、tabular-nums 数字对齐，两行代码桥接 Element Plus / Naive UI。
   - icon: 🛠
     title: 工程化
-    details: TypeScript 全量类型、列状态记忆、i18n、Schema 驱动渲染、CSV 防注入导出、changesets + CI 发布流。
-footer: MIT Licensed | MachTable v0.5.0
+    details: TypeScript 字段路径类型、版本化状态、稳定错误码与诊断、i18n、Schema、CSV 防注入、消费端契约与 CI 发布流。
+footer: MIT Licensed | MachTable v0.9.0
 ---
 
 ## 30 秒上手

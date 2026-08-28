@@ -73,6 +73,14 @@ const host = document.getElementById("host")!;
 const statEl = document.getElementById("stat")!;
 let api: GridApi<BenchRow> | null = null;
 
+interface BenchSnapshot {
+  api: GridApi<BenchRow>;
+  initMs: number;
+  rowCount: number;
+  colCount: number;
+  cellCount: number;
+}
+
 function rebuild(): void {
   const rowCount = Number((document.getElementById("rows") as HTMLSelectElement).value);
   const colCount = Number((document.getElementById("cols") as HTMLSelectElement).value);
@@ -90,6 +98,13 @@ function rebuild(): void {
   });
   const t1 = performance.now();
   updateStat(t1 - t0);
+  (window as typeof window & { __MACH_BENCH__?: BenchSnapshot }).__MACH_BENCH__ = {
+    api,
+    initMs: t1 - t0,
+    rowCount,
+    colCount,
+    cellCount: host.querySelectorAll(".mach-cell").length
+  };
 }
 
 function updateStat(initMs: number, scrollInfo?: string): void {

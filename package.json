@@ -1,6 +1,6 @@
 {
   "name": "mach-table",
-  "version": "0.5.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "description": "MachTable - high performance, framework-agnostic data grid (monorepo)",
@@ -35,7 +35,8 @@
     "docs:build": "vitepress build docs",
     "check:docs": "node scripts/check-doc-links.mjs",
     "check:size": "node scripts/check-size.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm lint:package && pnpm check:size && pnpm check:docs && pnpm build:examples && pnpm docs:build"
+    "check:exports": "tsc -p tests/consumer/tsconfig.json && node scripts/check-package-exports.mjs",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm lint:package && pnpm check:exports && pnpm check:size && pnpm check:docs && pnpm build:examples && pnpm docs:build"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.1",

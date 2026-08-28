@@ -1,22 +1,30 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type DefineComponent } from "vue";
 import {
   createGrid,
-  DIRECT_GRID_OPTION_KEYS,
+  createMachTablePreset,
   EVENT_TYPES,
   GRID_OPTION_KEYS,
   GRID_OPTION_META
 } from "@agile-team/mach-table";
 import type { GridApi, GridOptions } from "@agile-team/mach-table";
+import { useMachTableDefaults } from "./defaults";
 
-export type RobotGridVueProps<TData = any> = Omit<GridOptions<TData>, "className"> & {
+type AdapterOnlyGridOption = "className" | "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy";
+
+export type MachTableVueProps<TData = any> = Omit<GridOptions<TData>, AdapterOnlyGridOption> & {
   /** CSS class applied to the Vue host element. */
   className?: string;
   /** CSS class forwarded to MachTable's inner grid root. */
   gridClassName?: string;
+  /** Accessible name forwarded to MachTable's inner role=grid element. */
+  gridAriaLabel?: string;
+  gridAriaLabelledBy?: string;
+  gridAriaDescribedBy?: string;
 };
 
-const ADAPTER_OPTION_KEYS = GRID_OPTION_KEYS.filter((key) => key !== "className");
-const DIRECT_OPTION_KEYS = DIRECT_GRID_OPTION_KEYS.filter((key) => key !== "className");
+const ADAPTER_OPTION_KEYS = GRID_OPTION_KEYS.filter(
+  (key) => !["className", "ariaLabel", "ariaLabelledBy", "ariaDescribedBy"].includes(key)
+);
 
 const runtimeProps: Record<string, { type?: any; default: undefined }> = {};
 for (const key of ADAPTER_OPTION_KEYS) {
@@ -40,13 +48,16 @@ for (const key of ADAPTER_OPTION_KEYS) {
 }
 runtimeProps.className = { type: String, default: undefined };
 runtimeProps.gridClassName = { type: String, default: undefined };
+runtimeProps.gridAriaLabel = { type: String, default: undefined };
+runtimeProps.gridAriaLabelledBy = { type: String, default: undefined };
+runtimeProps.gridAriaDescribedBy = { type: String, default: undefined };
 
 function handlerNameOf(eventType: string): string {
   return "on" + eventType.charAt(0).toUpperCase() + eventType.slice(1);
 }
 
-const RobotGridImpl = defineComponent({
-  name: "RobotGrid",
+const MachTableImpl = defineComponent({
+  name: "MachTable",
   inheritAttrs: false,
   props: runtimeProps,
   emits: [...EVENT_TYPES] as unknown as string[],
@@ -54,17 +65,31 @@ const RobotGridImpl = defineComponent({
     const props = rawProps as Readonly<Record<string, any>>;
     const host = ref<HTMLDivElement | null>(null);
     let api: GridApi | null = null;
+    const defaults = useMachTableDefaults<any>();
+
+    const collectOptions = (): GridOptions<any> => {
+      const explicit: Record<string, unknown> = {};
+      for (const key of ADAPTER_OPTION_KEYS) {
+        const value = props[key];
+        if (value !== undefined) explicit[key] = value;
+      }
+      if (props.gridClassName !== undefined) explicit.className = props.gridClassName;
+      if (props.gridAriaLabel !== undefined) explicit.ariaLabel = props.gridAriaLabel;
+      if (props.gridAriaLabelledBy !== undefined) explicit.ariaLabelledBy = props.gridAriaLabelledBy;
+      if (props.gridAriaDescribedBy !== undefined) explicit.ariaDescribedBy = props.gridAriaDescribedBy;
+      return createMachTablePreset(defaults, explicit as Partial<GridOptions<any>>);
+    };
 
     onMounted(() => {
       if (!host.value) return;
-      const options: Record<string, unknown> = {};
-      for (const key of ADAPTER_OPTION_KEYS) {
-        const value = props[key];
-        if (value !== undefined) options[key] = value;
-      }
-      if (props.gridClassName !== undefined) options.className = props.gridClassName;
+      const options = collectOptions() as Record<string, unknown>;
       for (const type of EVENT_TYPES) {
-        options[handlerNameOf(type)] = (event: unknown) => emit(type, event);
+        const handlerName = handlerNameOf(type);
+        const defaultHandler = options[handlerName];
+        options[handlerName] = (event: unknown) => {
+          if (typeof defaultHandler === "function") (defaultHandler as (value: unknown) => void)(event);
+          emit(type, event);
+        };
       }
       api = createGrid(host.value, options as GridOptions<any>);
     });
@@ -74,18 +99,17 @@ const RobotGridImpl = defineComponent({
       api = null;
     });
 
-    watch(() => props.rowData, (value) => api?.setRowData(value));
-    watch(() => props.columnDefs, (value) => api?.setColumnDefs(value));
-    watch(() => props.quickFilterText, (value) => api?.setQuickFilter(value));
-    watch(() => props.gridClassName, (value) => api?.updateOptions({ className: value }));
-
     watch(
-      () => DIRECT_OPTION_KEYS.map((key) => props[key]),
+      () => {
+        const options = collectOptions() as Record<string, unknown>;
+        return [...GRID_OPTION_KEYS.map((key) => options[key])];
+      },
       (values, previous) => {
         if (!api) return;
         const changed: Record<string, unknown> = {};
         values.forEach((value, index) => {
-          if (!Object.is(value, previous[index])) changed[DIRECT_OPTION_KEYS[index]] = value;
+          if (Object.is(value, previous[index])) return;
+          changed[GRID_OPTION_KEYS[index]] = value;
         });
         if (Object.keys(changed).length > 0) api.updateOptions(changed as Partial<GridOptions<any>>);
       }
@@ -102,4 +126,8 @@ const RobotGridImpl = defineComponent({
   }
 });
 
-export const RobotGrid = RobotGridImpl as unknown as DefineComponent<RobotGridVueProps<any>>;
+export const MachTable = MachTableImpl as unknown as DefineComponent<MachTableVueProps<any>>;
+/** @deprecated Use MachTable. Kept as a source-compatible alias through 0.x. */
+export const RobotGrid = MachTable;
+/** @deprecated Use MachTableVueProps. */
+export type RobotGridVueProps<TData = any> = MachTableVueProps<TData>;

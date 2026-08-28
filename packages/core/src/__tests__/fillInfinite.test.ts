@@ -310,4 +310,50 @@ describe("infinite scroll datasource", () => {
     expect(capture.calls.length).toBe(callsBefore);
     api.destroy();
   });
+
+  it("retries transient datasource failures and reports only terminal failures", async () => {
+    const host = createHost(360);
+    const errors: unknown[] = [];
+    let attempts = 0;
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "id" }, { field: "name" }],
+      blockSize: 10,
+      datasourceRetryCount: 2,
+      datasourceRetryDelay: 1,
+      getRowId: (p) => p.data.id,
+      onGridError: (event) => errors.push(event.error),
+      datasource: {
+        getRows(params) {
+          attempts++;
+          if (attempts < 3) params.fail(new Error(`temporary-${attempts}`));
+          else params.onSuccess(makeRows(10), 10);
+        }
+      }
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(attempts).toBe(3);
+    expect(api.getDisplayedRowCount()).toBe(10);
+    expect(errors).toEqual([]);
+    api.destroy();
+  });
+
+  it("aborts a scheduled retry when the grid is destroyed", async () => {
+    const host = createHost(360);
+    let attempts = 0;
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "id" }],
+      datasourceRetryCount: 3,
+      datasourceRetryDelay: 10,
+      datasource: {
+        getRows(params) {
+          attempts++;
+          params.fail(new Error("offline"));
+        }
+      }
+    });
+    api.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(attempts).toBe(1);
+  });
 });

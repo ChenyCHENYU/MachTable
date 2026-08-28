@@ -1,5 +1,17 @@
 # @agile-team/mach-table-vue
 
+## 0.9.0
+
+### Minor Changes
+
+- Add application and route-scoped defaults through `MachTablePlugin` and `provideMachTableDefaults`, configurable async loading/error boundaries, accurate readiness, and canonical `MachTable` types.
+- Batch all reactive option changes into one atomic core update and retain the deprecated `RobotGrid` alias for 0.x compatibility.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.9.0
+
 ## 0.5.0
 
 ### Minor Changes

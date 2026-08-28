@@ -30,20 +30,20 @@ Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的
 Vue：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.5.0
+pnpm add @agile-team/mach-table-vue@^0.9.0
 ```
 
 React：
 
 ```bash
-pnpm add @agile-team/mach-table-react@^0.5.0
+pnpm add @agile-team/mach-table-react@^0.9.0
 ```
 
 npm / Yarn：
 
 ```bash
-npm install @agile-team/mach-table-vue@^0.5.0
-yarn add @agile-team/mach-table-vue@^0.5.0
+npm install @agile-team/mach-table-vue@^0.9.0
+yarn add @agile-team/mach-table-vue@^0.9.0
 ```
 
 三个 MachTable 包采用同版本联动。适配器会锁定匹配版本的 Core，业务项目只需升级适配器并提交 lockfile。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
@@ -102,14 +102,28 @@ import "@agile-team/mach-table-vue/styles.css";
 import App from "./App.vue";
 
 const app = createApp(App);
-app.use(AsyncMachTablePlugin);
+app.use(AsyncMachTablePlugin, {
+  defaults: {
+    size: "compact",
+    pagination: false,
+    defaultColDef: { minWidth: 100, sortable: true, resizable: true, filter: true },
+    onGridError: ({ code, error, source, context }) => {
+      telemetry.captureException(error, { tags: { code, source }, extra: context });
+    }
+  },
+  asyncComponentOptions: {
+    loadingComponent: GridLoading,
+    errorComponent: GridLoadError,
+    timeout: 15_000
+  }
+});
 app.mount("#app");
 
 // 可在权限菜单 hover 或 requestIdleCallback 中预取。
 void preloadMachTable();
 ```
 
-全局注入解决组件发现和代码加载问题；统一默认列、错误上报、审计字段等治理要求仍建议通过 `AppDataGrid` 业务封装落实。
+插件 `defaults` 解决大多数统一配置，路由布局可用 `provideMachTableDefaults` 继续叠加。只有需要固定审计字段、权限列或业务协议转换时才封装 `AppDataGrid`，避免为了重复默认值制造无意义包装层。
 
 ```vue
 <!-- components/AppDataGrid.vue -->
@@ -210,7 +224,7 @@ export function DeferredGrid() {
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, type ColDef, type GridOptions } from "@agile-team/mach-table-react";
+import { MachTable, MachTableProvider, type ColDef, type GridOptions } from "@agile-team/mach-table-react";
 
 type AppDataGridProps<TData> = {
   rows: TData[];
@@ -245,6 +259,19 @@ export function AppDataGrid<TData extends object>(props: AppDataGridProps<TData>
 
 列定义和对象型配置应使用 `useMemo` 保持引用稳定。组件支持 StrictMode，卸载会自动清理。命令式操作使用 [`useMachGrid`](/guide/react#usemachgrid-hook-推荐)。
 
+在应用或路由根部集中默认值；单表 props 会覆盖 Provider：
+
+```tsx
+<MachTableProvider defaults={{
+  size: "compact",
+  pagination: false,
+  defaultColDef: { sortable: true, resizable: true, filter: true },
+  onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
+}}>
+  <OrdersRoutes />
+</MachTableProvider>
+```
+
 ## 6. 稳定行 ID
 
 正式项目必须提供业务稳定且唯一的 `getRowId`：
@@ -268,11 +295,12 @@ getRowId: ({ data }) => data.id
 | --- | --- |
 | 接口返回全量新列表 | 更新 `rowData` / `api.setRowData(rows)` |
 | 单行或少量增删改 | `api.applyTransaction({ add, update, remove })` |
+| WebSocket / 高频流更新 | `await api.applyTransactionAsync(...)`；同一时间窗只刷新一次管线 |
 | 只重画展示内容 | `api.refreshCells()` |
 | 弹窗、Tab、折叠面板变为可见 | `api.refreshLayout()` |
 | 无限模式刷新 | `await api.reload()` |
 
-不要原地修改数组后期待框架自动识别。Vue 给 `rows.value` 新数组；React 更新 state 引用。频繁实时更新优先合并为批次事务。
+不要原地修改数组后期待框架自动识别。Vue 给 `rows.value` 新数组；React 更新 state 引用。高频实时更新使用 `applyTransactionAsync`，默认在 16ms 时间窗内按调用顺序合并；需要立即落地时调用 `flushAsyncTransactions()`。
 
 ## 8. 服务端数据
 
@@ -303,6 +331,17 @@ const datasource: GridDatasource<Order> = {
 
 `AbortSignal` 必须传给 HTTP 客户端。排序或过滤变化时旧请求会被取消，忽略信号会浪费网络并增加竞态风险。完整协议见[无限滚动](/recipes/infinite-scroll)。
 
+```ts
+const remoteDefaults = {
+  datasource,
+  blockSize: 100,
+  datasourceRetryCount: 2,
+  datasourceRetryDelay: 300
+};
+```
+
+请求失败后按基础延迟指数退避（最长 30 秒）；仅重试耗尽后发出 `DATA_SOURCE_ERROR`。`reload()`、排序/过滤变化和组件卸载都会取消当前请求及待执行重试。
+
 ## 9. 列状态持久化
 
 单机应用只需设置带版本的 key：
@@ -322,7 +361,49 @@ columnStateStore: {
 
 列结构发生不兼容变化时升级 key，例如 `orders-v1` → `orders-v2`，不要让旧状态污染新列结构。
 
-## 10. 安全要求
+## 10. 全量视图状态
+
+`columnStateKey` 只负责列偏好。需要保存工作台、页签或路由快照时使用版本化 `GridState`，它同时包含列、排序、过滤、快速搜索、分页、选择和展开状态：
+
+```ts
+const snapshot = api.getState();
+sessionStorage.setItem("orders-grid", JSON.stringify(snapshot));
+
+const restored = JSON.parse(sessionStorage.getItem("orders-grid") ?? "null");
+if (restored) api.applyState(restored, { emitEvents: false });
+```
+
+首屏也可直接传 `initialState`，避免先渲染默认视图再跳变。状态对象带 `version`；业务持久化层仍应给自己的 schema 加版本并在列模型破坏性变化时迁移或丢弃旧快照。
+
+## 11. 编辑、批量保存与并发安全
+
+列级 `validate` 可返回字符串或 Promise。异步校验期间编辑器进入 `aria-busy`，失败保持编辑态；取消或卸载后迟到的响应不会写入数据。
+
+```ts
+{
+  field: "orderNo",
+  editable: true,
+  validate: async (value) => await orderApi.exists(value)
+    ? "订单号已存在"
+    : true
+}
+```
+
+所有成功写值自动进入脏数据集合。保存接口成功后由 `saveChanges` 精确确认该次快照；若请求期间用户继续编辑，新修改会保留，并把已保存值作为新的比较基线：
+
+```ts
+await api.saveChanges(async (changes) => {
+  await orderApi.saveBatch(changes);
+});
+
+api.getDirtyRowIds();
+api.getChanges();
+api.rollbackChanges();
+```
+
+详见[编辑、校验与保存](/recipes/editing)。
+
+## 12. 安全要求
 
 - Overlay 字符串默认按文本渲染，推荐传入 `HTMLElement` 工厂。
 - 除非内容完全由代码静态控制，否则禁止启用 `allowUnsafeOverlayHtml`。
@@ -333,14 +414,14 @@ columnStateStore: {
 
 严格 CSP 项目应评估应用现有 style 策略。MachTable 使用外部 CSS，并根据布局写入必要的行内尺寸样式；若 CSP 禁止所有 `style-src-attr`，需要在企业安全基线中配置相应策略。
 
-## 11. 错误与监控
+## 13. 错误与监控
 
 统一接入 `onGridError`：
 
 ```ts
-onGridError: ({ error, source, context }) => {
+onGridError: ({ code, error, source, context }) => {
   telemetry.captureException(error, {
-    tags: { component: "MachTable", source },
+    tags: { component: "MachTable", code, source },
     extra: context
   });
 }
@@ -348,7 +429,9 @@ onGridError: ({ error, source, context }) => {
 
 MachTable 会隔离用户事件、renderer、formatter、Feature、数据源和销毁阶段异常。不要因为已有隔离就忽略监控；错误事件是生产环境发现业务插件缺陷的主要入口。
 
-## 12. 性能基线
+用户提交工单时可附加 `api.getDiagnostics()`：它只包含版本、行列/DOM 数量、加载与脏数据状态、最近 50 条结构化错误，不采集业务行内容。
+
+## 14. 性能基线
 
 - 列定义在 Vue 使用 `shallowRef`，React 使用 `useMemo`。
 - 纯展示优先 `valueFormatter`，不要为每个文本格创建 Vue/React root。
@@ -359,7 +442,7 @@ MachTable 会隔离用户事件、renderer、formatter、Feature、数据源和�
 
 详见[性能指南](/advanced/performance)。
 
-## 13. 测试建议
+## 15. 测试建议
 
 组件测试至少覆盖：
 
@@ -380,7 +463,7 @@ await expect(grid).toBeFocused();
 
 不要依赖虚拟列表中当前不存在的远端行 DOM。需要定位业务行时先调用 API 滚动到目标位置。
 
-## 14. 上线检查清单
+## 16. 上线检查清单
 
 - [ ] lockfile 中适配器只解析到一个匹配版本的 Core
 - [ ] 全局 CSS 只引入一次
@@ -389,6 +472,8 @@ await expect(grid).toBeFocused();
 - [ ] 容器在桌面、弹窗、Tab、全屏模式都有确定高度
 - [ ] 所有生产表格提供稳定 `getRowId`
 - [ ] 服务端数据源透传 `AbortSignal`
+- [ ] 复杂编辑页已覆盖异步校验、保存失败与回滚
+- [ ] 需要恢复工作区的页面已设计 `GridState` 版本迁移
 - [ ] `onGridError` 已接入监控
 - [ ] 自定义 renderer/editor/detail 均提供清理逻辑
 - [ ] 未对不可信内容开启 `allowUnsafeOverlayHtml`

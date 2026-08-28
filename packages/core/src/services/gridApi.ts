@@ -2,6 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { CsvExportParams, RowTransaction } from "../types/api";
 import type { GridApi, } from "../types/api";
 import type { GridOptions } from "../types/options";
+import type { ApplyGridStateOptions, GridState, GridStateSection } from "../types/state";
 import type { Column } from "./column";
 import { EVENT_TYPES } from "../types/events";
 import type { ColDefOrGroup, ColumnState, FilterModel, SortModel } from "../types/colDef";
@@ -12,10 +13,28 @@ import { escapeHtml } from "../lib/download";
 import { setByPath } from "../lib/path";
 import { formatCellValue } from "../render/cellContent";
 
+function cloneSnapshotData<T>(data: T): T {
+  try {
+    if (typeof structuredClone === "function") return structuredClone(data);
+  } catch {
+    // Rows containing functions or platform objects fall back to a shallow snapshot.
+  }
+  if (Array.isArray(data)) return [...data] as T;
+  if (data != null && typeof data === "object") return { ...data } as T;
+  return data;
+}
+
 export class GridApiImpl<TData = any> implements GridApi<TData> {
   private measureCanvas: HTMLCanvasElement | null = null;
+  private asyncTransactions: RowTransaction<TData>[] = [];
+  private asyncTransactionTimer: ReturnType<typeof setTimeout> | null = null;
+  private asyncTransactionResolvers: Array<() => void> = [];
 
   constructor(private core: GridCore<TData>) {}
+
+  whenReady(): Promise<import("../types/api").GridApi<TData>> {
+    return this.core.whenReady();
+  }
 
   setRowData(rows: TData[] | null | undefined): void {
     if (this.core.isDestroyed()) return;
@@ -29,6 +48,32 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (this.core.isDestroyed() || this.core.rowModel.isInfinite) return;
     this.core.rowModel.applyTransaction(transaction);
     this.core.bodyRenderer.onDataChanged();
+  }
+
+  applyTransactionAsync(transaction: RowTransaction<TData>): Promise<void> {
+    if (this.core.isDestroyed() || this.core.rowModel.isInfinite) return Promise.resolve();
+    this.asyncTransactions.push(transaction);
+    if (this.asyncTransactionTimer == null) {
+      this.asyncTransactionTimer = setTimeout(
+        () => this.flushAsyncTransactions(),
+        this.core.options.asyncTransactionWaitMillis
+      );
+    }
+    return new Promise((resolve) => this.asyncTransactionResolvers.push(resolve));
+  }
+
+  flushAsyncTransactions(): void {
+    if (this.asyncTransactionTimer != null) clearTimeout(this.asyncTransactionTimer);
+    this.asyncTransactionTimer = null;
+    const transactions = this.asyncTransactions;
+    const resolvers = this.asyncTransactionResolvers;
+    this.asyncTransactions = [];
+    this.asyncTransactionResolvers = [];
+    if (transactions.length > 0 && !this.core.isDestroyed() && !this.core.rowModel.isInfinite) {
+      this.core.rowModel.applyTransactions(transactions);
+      this.core.bodyRenderer.onDataChanged();
+    }
+    for (const resolve of resolvers) resolve();
   }
 
   getColumnDefs(): ColDefOrGroup<TData>[] | null {
@@ -366,6 +411,40 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     return this.core.undoService.canRedo();
   }
 
+  getDirtyRowIds(): string[] {
+    return this.core.changeTracker.getDirtyRowIds();
+  }
+
+  getChanges(): import("../types/api").GridChange<TData>[] {
+    return this.core.changeTracker.getChanges();
+  }
+
+  markChangesSaved(rowIds?: readonly string[]): void {
+    this.core.changeTracker.markSaved(rowIds);
+  }
+
+  async saveChanges(
+    handler: import("../types/api").SaveChangesHandler<TData>,
+    rowIds?: readonly string[]
+  ): Promise<import("../types/api").GridChange<TData>[]> {
+    const ids = rowIds ? new Set(rowIds) : null;
+    const snapshot = this.core.changeTracker.getChanges()
+      .filter((change) => !ids || ids.has(change.rowId))
+      .map((change) => ({
+        ...change,
+        data: cloneSnapshotData(change.data),
+        cells: change.cells.map((cell) => ({ ...cell }))
+      }));
+    if (snapshot.length === 0) return [];
+    await handler(snapshot);
+    if (!this.core.isDestroyed()) this.core.changeTracker.acknowledge(snapshot);
+    return snapshot;
+  }
+
+  rollbackChanges(rowIds?: readonly string[]): boolean {
+    return this.core.changeTracker.rollback(rowIds);
+  }
+
   setPinnedTopRowData(rows: TData[] | null): void {
     if (this.core.isDestroyed()) return;
     this.core.options.pinnedTopRowData = rows ?? [];
@@ -583,6 +662,10 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     this.core.editingService.stop(cancel ?? false);
   }
 
+  stopEditingAsync(cancel?: boolean): Promise<boolean> {
+    return this.core.editingService.stopAsync(cancel ?? false);
+  }
+
   refreshCells(): void {
     this.core.bodyRenderer.refreshAllCells();
     this.core.pinnedRowsRenderer.refresh();
@@ -601,8 +684,23 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     let needsRowRebuild = false;
     let needsStateLoad = false;
     let datasourceChanged = false;
+    let stateToApply: GridState | undefined;
     const prevColumnMenu = resolved.columnMenu;
     const prevUndoSize = resolved.undoStackSize;
+
+    if (Object.prototype.hasOwnProperty.call(options, "columnDefs") && options.columnDefs !== resolved.columnDefs) {
+      resolved.columnDefs = Array.isArray(options.columnDefs) ? options.columnDefs : [];
+      needsColumnRebuild = true;
+      needsRowRebuild = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, "rowData")) {
+      resolved.rowData = Array.isArray(options.rowData) ? options.rowData : [];
+      needsRowRebuild = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, "initialState") && options.initialState) {
+      resolved.initialState = options.initialState;
+      stateToApply = options.initialState;
+    }
 
     for (const eventType of EVENT_TYPES) {
       const key = `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}` as keyof GridOptions<TData>;
@@ -652,6 +750,9 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (options.undoStackSize != null && Number.isFinite(options.undoStackSize) && options.undoStackSize >= 0 && options.undoStackSize !== prevUndoSize) {
       resolved.undoStackSize = Math.floor(options.undoStackSize);
       this.core.undoService.trimToSize();
+    }
+    if (options.asyncTransactionWaitMillis != null && Number.isFinite(options.asyncTransactionWaitMillis) && options.asyncTransactionWaitMillis >= 0) {
+      resolved.asyncTransactionWaitMillis = Math.floor(options.asyncTransactionWaitMillis);
     }
     if (Object.prototype.hasOwnProperty.call(options, "getRowHeight")) {
       const changed = resolved.getRowHeight !== options.getRowHeight;
@@ -741,6 +842,20 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.suppressHeaderFocus = options.suppressHeaderFocus;
       needsHeaderRebuild = true;
     }
+    let ariaLabelsChanged = false;
+    if (Object.prototype.hasOwnProperty.call(options, "ariaLabel")) {
+      resolved.ariaLabel = options.ariaLabel ?? "MachTable data grid";
+      ariaLabelsChanged = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, "ariaLabelledBy")) {
+      resolved.ariaLabelledBy = options.ariaLabelledBy ?? "";
+      ariaLabelsChanged = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, "ariaDescribedBy")) {
+      resolved.ariaDescribedBy = options.ariaDescribedBy ?? "";
+      ariaLabelsChanged = true;
+    }
+    if (ariaLabelsChanged) this.core.skeleton.applyAriaLabels(resolved);
     if (Object.prototype.hasOwnProperty.call(options, "overlayNoRowsTemplate")) {
       resolved.overlayNoRowsTemplate = options.overlayNoRowsTemplate ?? "";
     }
@@ -760,6 +875,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       if (options.rowSelection === "none") this.deselectAll();
       needsHeaderRebuild = true;
       needsPoolRebuild = true;
+      this.core.refreshAriaState();
     }
     if (options.quickFilterText !== undefined) {
       this.setQuickFilter(options.quickFilterText);
@@ -785,6 +901,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.treeData = options.treeData;
       needsRowRebuild = true;
       needsColumnRebuild = true;
+      this.core.refreshAriaState();
     }
     if (options.childrenKey != null && options.childrenKey !== resolved.childrenKey) {
       resolved.childrenKey = options.childrenKey;
@@ -822,6 +939,12 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     }
     if (options.infiniteBufferRows != null && Number.isFinite(options.infiniteBufferRows) && options.infiniteBufferRows >= 0) {
       resolved.infiniteBufferRows = Math.floor(options.infiniteBufferRows);
+    }
+    if (options.datasourceRetryCount != null && Number.isFinite(options.datasourceRetryCount) && options.datasourceRetryCount >= 0) {
+      resolved.datasourceRetryCount = Math.floor(options.datasourceRetryCount);
+    }
+    if (options.datasourceRetryDelay != null && Number.isFinite(options.datasourceRetryDelay) && options.datasourceRetryDelay >= 0) {
+      resolved.datasourceRetryDelay = Math.floor(options.datasourceRetryDelay);
     }
     if (Object.prototype.hasOwnProperty.call(options, "datasource") && options.datasource !== resolved.datasource) {
       resolved.datasource = options.datasource;
@@ -878,6 +1001,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (needsPoolRebuild) this.core.bodyRenderer.rebuildPool();
     else if (needsCellRefresh) this.refreshCells();
     if (needsSummaryRefresh) this.core.summaryRenderer.refresh();
+    if (stateToApply) this.applyState(stateToApply);
     this.core.bodyRenderer.refreshOverlays();
   }
 
@@ -909,6 +1033,75 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
           })
         )
     }, params);
+  }
+
+  getState(): GridState {
+    return {
+      version: 1,
+      columns: this.getColumnState(),
+      sortModel: this.getSortModel(),
+      filterModel: this.getFilterModel(),
+      quickFilterText: this.getQuickFilter(),
+      pagination: {
+        enabled: this.paginationEnabled(),
+        page: this.getPage(),
+        pageSize: this.getPageSize()
+      },
+      selectedRowIds: this.getSelectedIds(),
+      expandedRowIds: this.core.rowModel.getExpandedRowIds(),
+      expandedGroupIds: this.core.rowModel.getExpandedGroupIds()
+    };
+  }
+
+  applyState(state: GridState, options: ApplyGridStateOptions = {}): void {
+    if (this.core.isDestroyed() || !state || state.version !== 1) return;
+    const all: readonly GridStateSection[] = ["columns", "sort", "filter", "pagination", "selection", "expansion"];
+    const sections = new Set(options.sections ?? all);
+    this.core.editingService.stop(true);
+
+    if (sections.has("columns")) this.core.columnModel.applyColumnState(state.columns ?? []);
+    if (sections.has("sort")) this.core.columnModel.applySortModel(state.sortModel ?? []);
+    if (sections.has("filter")) {
+      this.core.rowModel.setFilterModel(state.filterModel ?? {});
+      this.core.rowModel.setQuickFilter(state.quickFilterText);
+    }
+    if (sections.has("expansion")) {
+      this.core.rowModel.restoreExpansion(state.expandedRowIds ?? [], state.expandedGroupIds ?? []);
+    }
+    if (sections.has("pagination") && state.pagination) {
+      this.core.options.paginationEnabled = state.pagination.enabled && !this.core.rowModel.isInfinite;
+      this.core.rowModel.restorePagination(state.pagination.page, state.pagination.pageSize);
+      this.core.paginationBar.rebuild();
+    }
+
+    if (sections.has("columns")) this.core.onColumnsStructureChanged();
+    if (this.core.rowModel.isInfinite) {
+      void this.core.rowModel.onServerParamsChanged();
+    } else {
+      this.core.rowModel.refreshPipeline();
+      this.core.bodyRenderer.onDataChanged();
+    }
+    this.core.headerRenderer.refreshSortIndicators();
+    this.core.headerRenderer.refreshFilterIcons();
+    if (sections.has("selection")) this.core.selectionService.restoreSelection(state.selectedRowIds ?? []);
+    this.core.persistColumnState();
+
+    if (options.emitEvents !== false) {
+      if (sections.has("sort")) this.core.emit("sortChanged", { sortModel: this.getSortModel() });
+      if (sections.has("filter")) this.core.emit("filterChanged", { filterModel: this.getFilterModel() });
+      if (sections.has("pagination")) {
+        this.core.emit("paginationChanged", {
+          page: this.getPage(),
+          pageSize: this.getPageSize(),
+          pageCount: this.getPageCount(),
+          total: this.getTotalRowCount()
+        });
+      }
+    }
+  }
+
+  getDiagnostics(): import("../types/api").GridDiagnostics {
+    return this.core.getDiagnostics();
   }
 
   setOverlay(type: "loading" | "noRows" | null): void {
@@ -945,6 +1138,12 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
   }
 
   destroy(): void {
+    if (this.asyncTransactionTimer != null) clearTimeout(this.asyncTransactionTimer);
+    this.asyncTransactionTimer = null;
+    this.asyncTransactions = [];
+    const resolvers = this.asyncTransactionResolvers;
+    this.asyncTransactionResolvers = [];
+    for (const resolve of resolvers) resolve();
     this.core.destroy();
   }
 

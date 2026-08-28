@@ -69,6 +69,21 @@
 - 修正后重新输入即清除错误态
 - `null` / `undefined` / `true` 均视为通过
 
+校验也可返回 Promise，适合唯一性、库存、权限等服务端规则：
+
+```ts
+{
+  field: "code",
+  editable: true,
+  validate: async (value) => {
+    const available = await api.checkCode(value);
+    return available ? true : "编码已存在";
+  }
+}
+```
+
+异步校验期间编辑器进入 `aria-busy` 且禁止重复提交；校验失败恢复焦点，取消编辑或组件卸载会让迟到结果失效。命令式流程使用 `await gridApi.stopEditingAsync()`。
+
 ## 自定义编辑器
 
 实现 `ICellEditor` 接口即可，返回 `{ el, getValue, focus?, destroy? }`：
@@ -116,3 +131,22 @@ onCellValueChanged: (e) => {
 ## 与撤销联动
 
 每次成功写值自动入撤销栈；`api.undo()` 可回滚（含批量操作整体回滚），详见[撤销/重做](/recipes/undo-redo)。
+
+## 脏数据、批量保存与回滚
+
+成功写值同时进入变更跟踪，无需业务层另建一份 diff：
+
+```ts
+api.getDirtyRowIds();
+api.getChanges();
+
+try {
+  await api.saveChanges((changes) => orderApi.saveBatch(changes));
+} catch (error) {
+  // 保存失败不会清理 dirty 集合，可重试或让用户回滚。
+}
+
+api.rollbackChanges([rowId]);
+```
+
+`saveChanges` 先固定本次快照。若网络请求期间用户把同一格继续从 B 改为 C，服务端确认 B 后，本地仍保留 `B → C` 的待保存变更，不会把新编辑错误地标成已保存。

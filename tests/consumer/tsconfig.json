@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@agile-team/mach-table": ["../../packages/core/dist/index.d.ts"],
+      "@agile-team/mach-table-vue": ["../../packages/vue/dist/index.d.ts"],
+      "@agile-team/mach-table-react": ["../../packages/react/dist/index.d.ts"]
+    },
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": ["*.ts", "*.tsx"]
+}

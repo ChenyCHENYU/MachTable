@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-Enterprise-grade, framework-independent TypeScript data grid. Zero runtime dependencies, virtualized rows and columns, editing, selection, grouping, tree data, master-detail, infinite loading and composable extensions.
+Enterprise-grade, framework-independent TypeScript data grid. Zero runtime dependencies, virtualized rows and columns, async validation, change tracking, versioned state, resilient infinite loading and composable extensions.
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -25,6 +25,18 @@ const api = createGrid(document.querySelector("#grid")!, {
 
 // Required for native integrations when the host is removed.
 api.destroy();
+```
+
+Complex business workflows use first-class APIs instead of adapter-specific glue:
+
+```ts
+const state = api.getState();
+await api.saveChanges((changes) => orderApi.save(changes));
+api.rollbackChanges();
+console.info(api.getDiagnostics());
+
+await api.applyTransactionAsync({ update: realtimeRows });
+api.applyState(state);
 ```
 
 For framework applications use the official adapters:

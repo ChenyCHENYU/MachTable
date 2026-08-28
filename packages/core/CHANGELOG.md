@@ -1,5 +1,15 @@
 # @agile-team/mach-table
 
+## 0.9.0
+
+### Minor Changes
+
+- Add versioned full-grid state capture/restore, typed column helpers, reusable enterprise presets, readiness promises, stable diagnostics/error codes, and atomic runtime option updates.
+- Add row and column virtualization hardening, ordered async transaction batching, datasource retry with cancellation, lifecycle leak checks, and 100k-row/100-column performance gates.
+- Add async edit validation plus dirty-row tracking, rollback, save snapshots, and safe acknowledgement of edits made while a save is in flight.
+- Complete grid/treegrid ARIA metadata, active-descendant focus, header/body keyboard navigation, editable-cell Tab escape, and cross-browser interaction coverage.
+- Add package export/consumer type gates and canonical `MachTable` APIs while retaining deprecated `RobotGrid` aliases throughout 0.x.
+
 ## 0.5.0
 
 ### Minor Changes

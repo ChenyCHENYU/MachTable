@@ -13,6 +13,7 @@ import { ContextMenuService } from "../services/contextMenuService";
 import { TooltipService } from "../services/tooltipService";
 import { WatermarkService } from "../services/watermarkService";
 import { UndoRedoService } from "../services/undoRedoService";
+import { ChangeTrackingService } from "../services/changeTrackingService";
 import { GridApiImpl } from "../services/gridApi";
 import { GridSkeleton } from "../render/skeleton";
 import { HeaderRenderer } from "../render/headerRenderer";
@@ -33,12 +34,13 @@ import { validateColumnDefs } from "../lib/validateDefs";
 import { toTsv, parseTsv, writeClipboard } from "../lib/clipboard";
 import { formatCellValueWith } from "../render/cellContent";
 import { DEFAULT_LOCALE, type RgLocale, type RgLocaleKey } from "../lib/locale";
+import packageJson from "../../package.json";
 import type { ResolvedGridOptions } from "../types/options";
-import type { GridApi } from "../types/api";
+import type { GridApi, GridDiagnosticError, GridDiagnostics } from "../types/api";
 import type { GridFeature, GridFeatureContext, GridOptions } from "../types/options";
 import type { Column } from "../services/column";
 import type { RowNode } from "../types/row";
-import type { GridEventMap, GridEventType } from "../types/events";
+import type { GridErrorCode, GridEventMap, GridEventType } from "../types/events";
 import type {
   CellEditorFactory,
   CellRendererFn,
@@ -70,6 +72,7 @@ export class GridCore<TData = any> {
   readonly keyboardService: KeyboardService;
   readonly editingService: EditingService;
   readonly undoService: UndoRedoService;
+  readonly changeTracker: ChangeTrackingService<TData>;
   readonly filterPopup: FilterPopupService;
   readonly columnMenu: ColumnMenuService;
   readonly contextMenuService: ContextMenuService;
@@ -84,10 +87,19 @@ export class GridCore<TData = any> {
   private destroyed = false;
   private autoIdCounter = 0;
   private readyRafId = 0;
+  private readySettled = false;
+  private readonly readyPromise: Promise<GridApi<TData>>;
+  private readonly resolveReady: (api: GridApi<TData>) => void;
   private lastColumnLayoutSignature = "";
   private activeFeatures = new Map<string, { feature: GridFeature<TData>; cleanup?: () => void }>();
+  private recentErrors: GridDiagnosticError[] = [];
 
   constructor(container: HTMLElement, options: GridOptions<TData>) {
+    let settleReady!: (api: GridApi<TData>) => void;
+    this.readyPromise = new Promise((resolve) => {
+      settleReady = resolve;
+    });
+    this.resolveReady = settleReady;
     this.gridId = ++gridUid;
     ensureBuiltinRenderers();
     this.options = resolveOptions(options);
@@ -117,8 +129,10 @@ export class GridCore<TData = any> {
     this.summaryRenderer = new SummaryRenderer(this as GridCore<any>);
     this.statusBarService = new StatusBarService(this as GridCore<any>);
     this.api = new GridApiImpl<TData>(this as GridCore<TData>);
+    this.changeTracker = new ChangeTrackingService<TData>(this as GridCore<TData>);
 
     try {
+      this.changeTracker.init();
       this.skeleton.init(container, this.options);
       this.watermarkService.init();
       this.bodyRenderer.init();
@@ -130,6 +144,7 @@ export class GridCore<TData = any> {
       this.pinnedRowsRenderer.init();
 
       this.columnModel.setColumnDefs(this.options.columnDefs);
+      this.refreshAriaState();
       this.validateDefs(this.options.columnDefs);
       this.checkWarnings();
       this.loadPersistedColumnState();
@@ -139,6 +154,7 @@ export class GridCore<TData = any> {
       } else {
         this.rowModel.setRowData(this.options.rowData);
       }
+      if (this.options.initialState) this.api.applyState(this.options.initialState, { emitEvents: false });
       this.relayout();
       this.pinnedRowsRenderer.setData(this.options.pinnedTopRowData, this.options.pinnedBottomRowData);
       this.setFeatures(this.options.features);
@@ -146,6 +162,7 @@ export class GridCore<TData = any> {
       this.readyRafId = requestAnimationFrame(() => {
         this.readyRafId = 0;
         if (!this.destroyed) this.emit("gridReady", {});
+        this.settleReady();
       });
     } catch (error) {
       this.reportError(error, "grid.constructor");
@@ -156,6 +173,16 @@ export class GridCore<TData = any> {
 
   getApi(): GridApi<TData> {
     return this.api;
+  }
+
+  whenReady(): Promise<GridApi<TData>> {
+    return this.readyPromise;
+  }
+
+  private settleReady(): void {
+    if (this.readySettled) return;
+    this.readySettled = true;
+    this.resolveReady(this.api);
   }
 
   resolveCellRenderer(name: string): CellRendererFn | undefined {
@@ -464,9 +491,50 @@ export class GridCore<TData = any> {
   }
 
   reportError(error: unknown, source: string, context?: Record<string, unknown>): void {
-    console.error(`[mach-table] ${source} error`, error);
+    const code = this.errorCodeFor(source, error);
+    const message = error instanceof Error ? error.message : String(error);
+    this.recentErrors.push({ code, source, message, timestamp: Date.now(), ...(context ? { context } : {}) });
+    if (this.recentErrors.length > 50) this.recentErrors.splice(0, this.recentErrors.length - 50);
+    console.error(`[mach-table] ${code} (${source})`, error);
     if (this.destroyed) return;
-    this.emit("gridError", { error, source, context });
+    this.emit("gridError", { code, error, source, context });
+  }
+
+  private errorCodeFor(source: string, error: unknown): GridErrorCode {
+    if (source.startsWith("datasource")) return "DATA_SOURCE_ERROR";
+    const message = error instanceof Error ? error.message : String(error);
+    if (source === "getRowId" || message.includes("Duplicate row id")) return "DATA_INTEGRITY_ERROR";
+    if (source === "validate") return "VALIDATION_ERROR";
+    if (
+      source.toLowerCase().includes("renderer") ||
+      source === "valueFormatter" ||
+      source === "cellStyle" ||
+      source === "cellClass"
+    ) return "RENDERER_ERROR";
+    if (source.toLowerCase().includes("editor") || source === "editable") return "EDITOR_ERROR";
+    if (source.startsWith("feature.")) return "FEATURE_ERROR";
+    if (source.startsWith("columnState.")) return "STATE_ERROR";
+    if (source.startsWith("eventBus.") || source.startsWith("eventHandler.")) return "EVENT_HANDLER_ERROR";
+    return "GRID_ERROR";
+  }
+
+  getDiagnostics(): GridDiagnostics {
+    return {
+      gridId: this.gridId,
+      version: packageJson.version,
+      destroyed: this.destroyed,
+      infinite: this.rowModel.isInfinite,
+      loading: this.rowModel.isLoadingInfinite() || this.options.loading,
+      rowCount: this.rowModel.getDisplayTotalCount(),
+      renderedRowCount: this.skeleton.bodyEl.querySelectorAll(".mach-row[data-index]").length,
+      columnCount: this.columnModel.getColumns().length,
+      selectedRowCount: this.selectionService.getSelectedNodes().length,
+      dirtyRowCount: this.changeTracker.getDirtyRowIds().length,
+      recentErrors: this.recentErrors.map((entry) => ({
+        ...entry,
+        ...(entry.context ? { context: { ...entry.context } } : {})
+      }))
+    };
   }
 
   cycleSort(column: Column, additive: boolean): void {
@@ -645,6 +713,7 @@ export class GridCore<TData = any> {
 
   relayout(): void {
     if (this.destroyed) return;
+    this.refreshAriaState();
     this.columnModel.computeLayout(this.skeleton.measureViewportWidth());
     const widthSignature = this.columnModel.getOrderedVisible()
       .map((column) => `${column.id}:${column.currentWidth}`)
@@ -658,6 +727,20 @@ export class GridCore<TData = any> {
     this.bodyRenderer.relayout();
     this.pinnedRowsRenderer.applyLayout();
     this.summaryRenderer.refresh();
+  }
+
+  refreshAriaState(): void {
+    if (!this.skeleton.root) return;
+    const treeGrid = this.options.treeData || this.columnModel.getRowGroupColumns().length > 0;
+    this.skeleton.root.setAttribute("role", treeGrid ? "treegrid" : "grid");
+    if (this.options.rowSelection === "multiple") {
+      this.skeleton.root.setAttribute("aria-multiselectable", "true");
+    } else {
+      this.skeleton.root.removeAttribute("aria-multiselectable");
+    }
+    const editable = this.columnModel.getOrderedVisible().some((column) => Boolean(column.colDef.editable));
+    if (editable) this.skeleton.root.removeAttribute("aria-readonly");
+    else this.skeleton.root.setAttribute("aria-readonly", "true");
   }
 
   relayoutColumns(invalidateRowHeights = true): void {
@@ -677,6 +760,7 @@ export class GridCore<TData = any> {
     this.destroyed = true;
     if (this.readyRafId) cancelAnimationFrame(this.readyRafId);
     this.readyRafId = 0;
+    this.settleReady();
     const safely = (source: string, fn: () => void): void => {
       try {
         fn();
@@ -686,6 +770,7 @@ export class GridCore<TData = any> {
     };
     safely("grid event", () => this.emit("gridDestroyed", {}));
     safely("features", () => this.destroyFeatures());
+    safely("changeTracker", () => this.changeTracker.destroy());
     safely("rowModel", () => this.rowModel.destroy());
     safely("editingService", () => this.editingService.destroy());
     safely("keyboardService", () => this.keyboardService.destroy());

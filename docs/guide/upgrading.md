@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。三个包固定版本联动：
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.5.0
+pnpm up @agile-team/mach-table-vue@^0.9.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,20 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.5 → 0.9
+
+0.9 保留既有 API，并把 `MachTable` 设为规范组件名。`RobotGrid` 和对应 Props 类型仍可用，但已标注 deprecated，建议在 1.0 前完成替换。
+
+新增能力均为 opt-in 或兼容默认值：
+
+- Vue 插件支持 `defaults`，并新增 `provideMachTableDefaults`；异步插件支持加载/错误组件、超时和重试回调。
+- React 新增 `MachTableProvider`；默认组件导出仍支持 `React.lazy`。
+- `validate` 可返回 Promise；命令式调用可改为 `await api.stopEditingAsync()`。
+- 新增 `GridState`、脏数据/保存/回滚、异步事务、数据源重试、诊断快照和稳定错误码。
+- Tree/group 角色现在使用 `treegrid`；若 E2E 写死 `getByRole("grid")`，请按实际模式改成 `grid` 或 `treegrid`。
+
+`onGridError` 载荷新增必填 `code` 字段，不影响只解构旧字段的代码。监控聚合建议从易变的 `source` 迁移到稳定 `code`。
 
 ## 0.4 → 0.5
 

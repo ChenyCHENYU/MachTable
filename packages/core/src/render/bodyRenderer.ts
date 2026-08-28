@@ -44,6 +44,7 @@ interface RowSlot {
   kind: "master" | "detail";
   rows: Partial<Record<PaneType, HTMLElement>>;
   cells: Partial<Record<PaneType, HTMLElement[]>>;
+  cellColIds: Partial<Record<PaneType, string[]>>;
   detailRow?: HTMLElement;
 }
 
@@ -227,7 +228,7 @@ export class BodyRenderer {
       if (pane === "center") container.style.width = `${centerWidth}px`;
     }
 
-    sk.root.setAttribute("aria-rowcount", String(rowCount + 1));
+    sk.root.setAttribute("aria-rowcount", String(rowCount + sk.getHeaderRowCount()));
   }
 
   invalidateRowHeight(node: RowNode<any>): void {
@@ -318,6 +319,10 @@ export class BodyRenderer {
     }
     const visible = Math.ceil(viewport.clientHeight / Math.max(1, minRowHeight));
     const needed = visible + this.core.options.rowBuffer * 2 + 1;
+    const colWindowChanged = this.computeColWindow();
+    if (colWindowChanged) {
+      for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
+    }
     if (needed > this.poolSize) this.growPool(needed);
     this.applyCellLayout();
     this.updateRange(true);
@@ -326,7 +331,7 @@ export class BodyRenderer {
 
   private growPool(needed: number): void {
     while (this.poolSize < needed) {
-      const slot: RowSlot = { index: -1, nodeId: "", kind: "master", rows: {}, cells: {} };
+      const slot: RowSlot = { index: -1, nodeId: "", kind: "master", rows: {}, cells: {}, cellColIds: {} };
       const sk = this.core.skeleton;
       for (const pane of PANES) {
         const cols = this.core.columnModel.getPaneColumns(pane);
@@ -335,26 +340,11 @@ export class BodyRenderer {
         row.style.height = `${this.core.options.rowHeight}px`;
         row.setAttribute("role", "row");
         row.style.display = "none";
-        const cells: HTMLElement[] = [];
-        for (const col of cols) {
-          const cell = el("div", "mach-cell");
-          cell.dataset.colId = col.id;
-          cell.setAttribute("role", "gridcell");
-          if (col.hasCheckbox) {
-            const input = document.createElement("input");
-            input.type = this.core.options.rowSelection === "single" ? "radio" : "checkbox";
-            input.className = "mach-row-checkbox";
-            if (input.type === "radio") input.name = `mach-radio-${this.core.gridId}`;
-            input.setAttribute("aria-label", "select row");
-            cell.appendChild(input);
-            cell.classList.add("mach-cell--selection");
-          }
-          row.appendChild(cell);
-          cells.push(cell);
-        }
         sk.rowContainers[pane].appendChild(row);
         slot.rows[pane] = row;
-        slot.cells[pane] = cells;
+        slot.cells[pane] = [];
+        slot.cellColIds[pane] = [];
+        this.reconcilePaneCells(slot, pane);
       }
       if (this.core.options.masterDetail) {
         const detailRow = el("div", "mach-row mach-detail-row");
@@ -367,6 +357,55 @@ export class BodyRenderer {
       this.pool.push(slot);
       this.poolSize++;
     }
+  }
+
+  private activePaneColumns(pane: PaneType): Column[] {
+    const cols = this.core.columnModel.getPaneColumns(pane);
+    if (pane !== "center" || cols.length <= 20 || this.core.columnModel.hasColSpan()) return cols;
+    return cols.slice(this.colFirst, this.colLastExcl);
+  }
+
+  private createCell(column: Column): HTMLElement {
+    const cell = el("div", "mach-cell");
+    cell.dataset.colId = column.id;
+    cell.setAttribute("role", "gridcell");
+    if (column.hasCheckbox) {
+      const input = document.createElement("input");
+      input.type = this.core.options.rowSelection === "single" ? "radio" : "checkbox";
+      input.className = "mach-row-checkbox";
+      if (input.type === "radio") input.name = `mach-radio-${this.core.gridId}`;
+      input.setAttribute("aria-label", "select row");
+      cell.appendChild(input);
+      cell.classList.add("mach-cell--selection");
+    }
+    return cell;
+  }
+
+  private reconcilePaneCells(slot: RowSlot, pane: PaneType): void {
+    const row = slot.rows[pane];
+    if (!row) return;
+    const columns = this.activePaneColumns(pane);
+    const existingCells = slot.cells[pane] ?? [];
+    const existingIds = slot.cellColIds[pane] ?? [];
+    if (existingIds.length === columns.length && existingIds.every((id, index) => id === columns[index].id)) return;
+
+    const byId = new Map<string, HTMLElement>();
+    existingIds.forEach((id, index) => byId.set(id, existingCells[index]));
+    const nextCells: HTMLElement[] = [];
+    const nextIds: string[] = [];
+    for (const column of columns) {
+      const cell = byId.get(column.id) ?? this.createCell(column);
+      byId.delete(column.id);
+      row.appendChild(cell);
+      nextCells.push(cell);
+      nextIds.push(column.id);
+    }
+    for (const cell of byId.values()) {
+      cleanupCellContent(this.core, cell);
+      cell.remove();
+    }
+    slot.cells[pane] = nextCells;
+    slot.cellColIds[pane] = nextIds;
   }
 
   rebuildPool(): void {
@@ -392,11 +431,15 @@ export class BodyRenderer {
       this.core.options.masterDetail ||
       this.core.options.getRowHeight != null ||
       this.hasAnyAutoHeight;
-    let globalColOffset = 0;
     for (const pane of PANES) {
-      const cols = this.core.columnModel.getPaneColumns(pane);
+      const allPaneCols = this.core.columnModel.getPaneColumns(pane);
+      const cols = this.activePaneColumns(pane);
       let x = 0;
       const lefts: number[] = [];
+      if (pane === "center" && cols.length > 0) {
+        const first = allPaneCols.indexOf(cols[0]);
+        for (let i = 0; i < first; i++) x += allPaneCols[i].currentWidth;
+      }
       for (const col of cols) {
         lefts.push(x);
         x += col.currentWidth;
@@ -411,7 +454,7 @@ export class BodyRenderer {
         for (let i = 0; i < cols.length && i < cells.length; i++) {
           cells[i].style.width = `${cols[i].currentWidth}px`;
           cells[i].style.left = `${lefts[i]}px`;
-          cells[i].setAttribute("aria-colindex", String(globalColOffset + i + 1));
+          cells[i].setAttribute("aria-colindex", String(this.core.columnModel.getFlatIndex(cols[i].id) + 1));
         }
       }
       if (this.core.options.masterDetail) {
@@ -419,7 +462,6 @@ export class BodyRenderer {
           slot.detailRow?.style.setProperty("--mach-detail-h", `${this.core.options.detailRowHeight}px`);
         }
       }
-      globalColOffset += cols.length;
     }
   }
 
@@ -467,6 +509,10 @@ export class BodyRenderer {
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     const buffer = this.core.options.rowBuffer;
     const colWindowChanged = this.computeColWindow();
+    if (colWindowChanged) {
+      for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
+      this.applyCellLayout();
+    }
 
     if (rowCount === 0) {
       for (const slot of this.pool) this.hideSlot(slot);
@@ -509,6 +555,9 @@ export class BodyRenderer {
   }
 
   private hideSlot(slot: RowSlot): void {
+    if (this.focusedCell?.rowIndex === slot.index) {
+      this.core.skeleton.root.removeAttribute("aria-activedescendant");
+    }
     slot.index = -1;
     slot.nodeId = "";
     slot.kind = "master";
@@ -545,7 +594,7 @@ export class BodyRenderer {
         detailRow.style.transform = `translateY(${y}px)`;
         detailRow.style.height = `${h}px`;
         detailRow.dataset.index = String(index);
-        detailRow.setAttribute("aria-rowindex", String(index + 2));
+        detailRow.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
         this.renderDetailContent(detailRow, node);
       }
       return;
@@ -553,6 +602,20 @@ export class BodyRenderer {
 
     slot.kind = "master";
     if (slot.detailRow) slot.detailRow.style.display = "none";
+
+    const isTreeRow = this.core.rowModel.isTree;
+    const isGroupRow = node.isGroup === true;
+    const hasTreeChildren = isTreeRow && this.core.rowModel.hasChildren(node.id);
+    const isExpandable = isGroupRow || hasTreeChildren ||
+      (this.core.options.masterDetail && this.core.rowModel.isRowExpandable(node));
+    const expanded = isGroupRow
+      ? this.core.rowModel.isGroupExpanded(node.id)
+      : this.core.rowModel.isRowExpanded(node.id);
+    const level = isGroupRow
+      ? (node.groupLevel ?? 0) + 1
+      : isTreeRow
+        ? this.core.rowModel.getTreeDepth(node) + 1
+        : null;
 
     for (const pane of PANES) {
       const row = slot.rows[pane];
@@ -562,11 +625,15 @@ export class BodyRenderer {
       row.style.height = `${h}px`;
       row.dataset.index = String(index);
       row.dataset.id = node.id;
-      row.setAttribute("aria-rowindex", String(index + 2));
+      row.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
       row.classList.toggle("mach-row--selected", node.selected);
       row.classList.toggle("mach-row--hover", this.hoverIndex === index && !this.core.options.suppressRowHoverHighlight);
       row.classList.toggle("mach-row--odd", index % 2 === 1);
       row.setAttribute("aria-selected", node.selected ? "true" : "false");
+      if (isExpandable) row.setAttribute("aria-expanded", expanded ? "true" : "false");
+      else row.removeAttribute("aria-expanded");
+      if (level != null) row.setAttribute("aria-level", String(level));
+      else row.removeAttribute("aria-level");
 
       this.renderPaneCells(slot, node, pane);
     }
@@ -577,7 +644,7 @@ export class BodyRenderer {
   }
 
   private renderPaneCells(slot: RowSlot, node: RowNode<any>, pane: PaneType): void {
-    const cols = this.core.columnModel.getPaneColumns(pane);
+    const cols = this.activePaneColumns(pane);
     const cells = slot.cells[pane];
     if (!cells) return;
     const index = slot.index;
@@ -588,32 +655,28 @@ export class BodyRenderer {
       const col = cols[i];
       const cell = cells[i];
 
-      if (pane === "center") {
-        const windowHidden = i < this.colFirst || i >= this.colLastExcl;
-        if (windowHidden && !hasColSpan) {
-          cleanupCellContent(this.core, cell);
-          if (cell.style.display !== "none") cell.style.display = "none";
-          continue;
-        }
-      }
-
       if (hasColSpan && coverage > 0) {
         coverage--;
         cleanupCellContent(this.core, cell);
+        cell.setAttribute("aria-hidden", "true");
         if (cell.style.display !== "none") cell.style.display = "none";
         continue;
       }
 
       if (cell.style.display === "none") cell.style.display = "";
+      cell.removeAttribute("aria-hidden");
 
       if (hasColSpan) {
         const span = this.resolveColSpan(node, col, index, cols.length - i);
         if (span > 1) {
           coverage = span - 1;
           this.applySpanWidth(cell, cols, i, span);
-        } else if (cell.style.width !== `${col.currentWidth}px`) {
-          cell.style.width = `${col.currentWidth}px`;
+        } else {
+          cell.removeAttribute("aria-colspan");
+          if (cell.style.width !== `${col.currentWidth}px`) cell.style.width = `${col.currentWidth}px`;
         }
+      } else {
+        cell.removeAttribute("aria-colspan");
       }
 
       if (this.core.editingService.isEditing(index, col.id)) continue;
@@ -646,6 +709,7 @@ export class BodyRenderer {
     let w = 0;
     for (let i = start; i < start + span && i < cols.length; i++) w += cols[i].currentWidth;
     cell.style.width = `${w}px`;
+    cell.setAttribute("aria-colspan", String(span));
   }
 
   private renderDetailContent(row: HTMLElement, node: RowNode<any>): void {
@@ -688,6 +752,9 @@ export class BodyRenderer {
 
   private renderCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
     cleanupCellContent(this.core, cell);
+    cell.setAttribute("aria-readonly", this.core.editingService.isEditable(node, column) ? "false" : "true");
+    cell.removeAttribute("aria-expanded");
+    cell.removeAttribute("aria-level");
     if (node.isGroup) {
       this.renderGroupCell(cell, node, column);
       return;
@@ -756,6 +823,8 @@ export class BodyRenderer {
     wrap.appendChild(indent);
     if (hasChildren) {
       const expanded = this.core.rowModel.isRowExpanded(node.id);
+      cell.setAttribute("aria-expanded", expanded ? "true" : "false");
+      cell.setAttribute("aria-level", String(depth + 1));
       const toggle = el("span", `mach-detail-toggle${expanded ? " mach-detail-toggle--open" : ""}`);
       toggle.textContent = "▶";
       wrap.appendChild(toggle);
@@ -778,6 +847,7 @@ export class BodyRenderer {
     if (cell.style.height !== "") cell.style.height = "";
     if (cell.style.zIndex !== "") cell.style.zIndex = "";
     if (cell.style.display === "none") cell.style.display = "";
+    cell.removeAttribute("aria-rowspan");
   }
 
   private applyCellSpanStyle(cell: HTMLElement, node: RowNode<any>, column: Column): void {
@@ -794,14 +864,17 @@ export class BodyRenderer {
     const value = spans[idx];
     if (value === -1) {
       cell.style.display = "none";
+      cell.setAttribute("aria-hidden", "true");
       return;
     }
     if (cell.style.display === "none") cell.style.display = "";
+    cell.removeAttribute("aria-hidden");
     if (value > 1) {
       const end = Math.min(idx + value, this.positions.length - 1);
       const height = this.positions[end] - this.positions[idx];
       cell.style.height = `${height > 0 ? height : value * this.core.options.rowHeight}px`;
       cell.style.zIndex = "1";
+      cell.setAttribute("aria-rowspan", String(value));
     } else {
       this.resetSpanStyle(cell);
     }
@@ -826,6 +899,8 @@ export class BodyRenderer {
     }
     const labelCol = this.core.columnModel.getGroupLabelColumn();
     if (labelCol && column.id === labelCol.id) {
+      cell.setAttribute("aria-expanded", this.core.rowModel.isGroupExpanded(node.id) ? "true" : "false");
+      cell.setAttribute("aria-level", String((node.groupLevel ?? 0) + 1));
       const wrap = el("span", "mach-group-label");
       wrap.style.paddingLeft = `${(node.groupLevel ?? 0) * 16}px`;
       const toggle = el("span", `mach-detail-toggle${this.core.rowModel.isGroupExpanded(node.id) ? " mach-detail-toggle--open" : ""}`);
@@ -875,6 +950,7 @@ export class BodyRenderer {
         this.renderPaneCells(slot, node, pane);
       }
     }
+    this.applyFocusClass();
     this.flushFlash();
   }
 
@@ -894,6 +970,7 @@ export class BodyRenderer {
         this.renderPaneCells(slot, node, pane);
       }
     }
+    this.applyFocusClass();
     this.flushFlash();
   }
 
@@ -928,8 +1005,7 @@ export class BodyRenderer {
     const column = this.core.columnModel.getColumn(colId);
     if (!column) return null;
     const pane = this.paneForColumn(column);
-    const cols = this.core.columnModel.getPaneColumns(pane);
-    const colIdx = cols.indexOf(column);
+    const colIdx = this.pool[rowIndex % Math.max(1, this.poolSize)]?.cellColIds[pane]?.indexOf(column.id) ?? -1;
     if (colIdx < 0) return null;
     const slot = this.pool[rowIndex % this.poolSize];
     if (!slot || slot.index !== rowIndex || slot.kind !== "master") return null;
@@ -1401,13 +1477,23 @@ export class BodyRenderer {
   private applyFocusClass(): void {
     if (!this.focusedCell) return;
     const cell = this.getCellElement(this.focusedCell.rowIndex, this.focusedCell.colId);
-    if (cell) cell.classList.add("mach-cell--focus");
+    if (cell) {
+      const colIndex = Math.max(0, this.core.columnModel.getFlatIndex(this.focusedCell.colId));
+      cell.id = `mach-grid-${this.core.gridId}-r${this.focusedCell.rowIndex}-c${colIndex}`;
+      cell.classList.add("mach-cell--focus");
+      this.core.skeleton.root.setAttribute("aria-activedescendant", cell.id);
+    }
   }
 
   private clearFocusClass(): void {
-    if (!this.focusedCell) return;
-    const cell = this.getCellElement(this.focusedCell.rowIndex, this.focusedCell.colId);
-    if (cell) cell.classList.remove("mach-cell--focus");
+    if (this.focusedCell) {
+      const cell = this.getCellElement(this.focusedCell.rowIndex, this.focusedCell.colId);
+      if (cell) {
+        cell.classList.remove("mach-cell--focus");
+        cell.removeAttribute("id");
+      }
+    }
+    this.core.skeleton.root.removeAttribute("aria-activedescendant");
   }
 
   private ensureFocusedCellVisible(): void {

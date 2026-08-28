@@ -27,8 +27,18 @@ onGridReady: (e) => { /* grid 可交互，e.api 即命令接口 */ }
 用户 formatter/renderer/getter/setter、数据源、持久化存储或事件回调抛错时触发；错误会被隔离，表格继续完成当前刷新或销毁流程。
 
 ```ts
-{ type: "gridError", error: unknown, source: string, context?: Record<string, unknown> }
+{
+  type: "gridError",
+  code: "DATA_SOURCE_ERROR" | "DATA_INTEGRITY_ERROR" | "VALIDATION_ERROR" |
+        "RENDERER_ERROR" | "EDITOR_ERROR" | "FEATURE_ERROR" | "STATE_ERROR" |
+        "EVENT_HANDLER_ERROR" | "GRID_ERROR",
+  error: unknown,
+  source: string,
+  context?: Record<string, unknown>
+}
 ```
+
+业务监控应优先按稳定 `code` 聚合，`source` 用于更细粒度定位。
 
 ## 单元格 / 行
 
@@ -73,6 +83,7 @@ onGridReady: (e) => { /* grid 可交互，e.api 即命令接口 */ }
 | `cellEditingStarted` | `{ rowIndex, colId, rowNode }` | 编辑器挂载 |
 | `cellEditingStopped` | `{ rowIndex, colId, rowNode, oldValue, newValue }` | 编辑结束（取消时 newValue = oldValue） |
 | `cellValueChanged` | `{ oldValue, newValue, rowNode, rowIndex, column, colDef, data }` | 值落库。编辑/粘贴/填充/清除/剪切/**undo/redo** 统一经此事件 |
+| `dirtyStateChanged` | `{ dirtyRowIds }` | 脏数据集合变化、保存确认或回滚后触发 |
 
 ## 范围与拖拽
 
@@ -115,5 +126,5 @@ const off = api.addEventListener("rangeSelectionChanged", (e) => {
 off(); // 取消订阅
 
 // 方式三：Vue 模板（kebab-case）
-<RobotGrid @cell-value-changed="onChanged" @detail-toggled="onDetail" />
+<MachTable @cell-value-changed="onChanged" @detail-toggled="onDetail" />
 ```
