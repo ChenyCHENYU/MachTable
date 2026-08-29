@@ -89,6 +89,8 @@ export type {
   GridOptionValueKind
 } from "./core/gridOptionMetadata";
 export { describeFilter } from "./lib/filterSummary";
+export { validateGridOptions } from "./lib/validateOptions";
+export type { GridValidationCode, GridValidationIssue } from "./lib/validateOptions";
 export { buildColDefsFromSchema } from "./lib/schema";
 export type { GridSchema, GridSchemaField, GridSchemaGroup, GridSchemaFieldType, SchemaSelectOption } from "./lib/schema";
 export {

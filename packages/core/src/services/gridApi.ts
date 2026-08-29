@@ -698,6 +698,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   updateOptions(options: Partial<GridOptions<TData>>): void {
     if (this.core.isDestroyed()) return;
+    this.core.checkWarnings(options);
     const resolved = this.core.options;
     let needsRelayout = false;
     let needsCellRefresh = false;

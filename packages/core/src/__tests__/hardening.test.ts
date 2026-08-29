@@ -166,6 +166,41 @@ describe("extension boundaries", () => {
     expect(secondCleanup).toHaveBeenCalledOnce();
   });
 
+  it("automatically releases feature events, DOM listeners, timers and requests", () => {
+    vi.useFakeTimers();
+    const gridEvent = vi.fn();
+    const domEvent = vi.fn();
+    const timer = vi.fn();
+    let controller: AbortController | null = null;
+    const feature: GridFeature = {
+      key: "managed",
+      setup: (context) => {
+        context.addEventListener("modelUpdated", gridEvent);
+        context.addManagedDomListener(window, "managed-test", domEvent);
+        context.setManagedTimeout(timer, 50);
+        controller = context.createAbortController();
+      }
+    };
+    const api = createGrid(host(), {
+      columnDefs: [{ field: "id" }],
+      rowData: [{ id: 1 }],
+      pagination: false,
+      features: [feature]
+    });
+    window.dispatchEvent(new Event("managed-test"));
+    expect(domEvent).toHaveBeenCalledOnce();
+    api.updateOptions({ features: [] });
+    expect(controller!.signal.aborted).toBe(true);
+    window.dispatchEvent(new Event("managed-test"));
+    vi.advanceTimersByTime(100);
+    expect(domEvent).toHaveBeenCalledOnce();
+    expect(timer).not.toHaveBeenCalled();
+    api.setRowData([{ id: 2 }]);
+    expect(gridEvent).not.toHaveBeenCalled();
+    api.destroy();
+    vi.useRealTimers();
+  });
+
   it("updates the inner grid class without replacing the grid", () => {
     const gridHost = host();
     const api = createGrid(gridHost, {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { createGrid } from "../index";
+import { createGrid, validateGridOptions } from "../index";
 import type { GridApi, ColDef } from "../index";
 
 interface Row {
@@ -167,5 +167,45 @@ describe("status bar with pagination", () => {
     expect(api.getDisplayedRowCount()).toBe(20);
     expect(bar.textContent).toContain("共 45 行");
     api.destroy();
+  });
+});
+
+describe("grid option validation", () => {
+  it("suggests misspelled options and reports unsafe combinations", () => {
+    expect(validateGridOptions({ rowHight: 40 } as any)).toEqual([
+      expect.objectContaining({ code: "UNKNOWN_OPTION", option: "rowHight", suggestion: "rowHeight" })
+    ]);
+    const issues = validateGridOptions({
+      datasource: { getRows: vi.fn() },
+      pagination: { mode: "server", total: -1 }
+    });
+    expect(issues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      "OPTION_CONFLICT",
+      "MISSING_STABLE_ROW_ID",
+      "INVALID_OPTION_VALUE"
+    ]));
+  });
+
+  it("warns once for dynamic JavaScript mistakes and respects suppressWarnings", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const api = createGrid(createHost(), {
+      columnDefs: [{ field: "id" }],
+      rowData: rows,
+      rowHight: 40
+    } as any);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("rowHeight"));
+    api.updateOptions({ rowHight: 50 } as any);
+    expect(warning.mock.calls.filter(([message]) => String(message).includes("UNKNOWN_OPTION"))).toHaveLength(1);
+    api.destroy();
+
+    warning.mockClear();
+    const quiet = createGrid(createHost(), {
+      columnDefs: [{ field: "id" }],
+      rowData: rows,
+      rowHight: 40,
+      suppressWarnings: true
+    } as any);
+    expect(warning).not.toHaveBeenCalled();
+    quiet.destroy();
   });
 });

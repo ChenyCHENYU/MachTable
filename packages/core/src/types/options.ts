@@ -31,6 +31,16 @@ export interface GridFeatureContext<TData = any> {
     type: K,
     listener: (event: GridEventMap<TData>[K]) => void
   ): () => void;
+  /** Registers cleanup even when setup later throws or the feature is hot-replaced. */
+  onCleanup(cleanup: () => void): void;
+  addManagedDomListener(
+    target: EventTarget,
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions
+  ): () => void;
+  setManagedTimeout(handler: () => void, delayMs: number): ReturnType<typeof setTimeout>;
+  createAbortController(): AbortController;
   reportError(error: unknown, source: string, context?: Record<string, unknown>): void;
 }
 

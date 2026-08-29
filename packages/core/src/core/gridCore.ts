@@ -31,6 +31,7 @@ import {
   getCellRenderer
 } from "../lib/componentRegistry";
 import { validateColumnDefs } from "../lib/validateDefs";
+import { validateGridOptions } from "../lib/validateOptions";
 import { toTsv, parseTsv, writeClipboard } from "../lib/clipboard";
 import { formatCellValueWith } from "../render/cellContent";
 import { DEFAULT_LOCALE, type RgLocale, type RgLocaleKey } from "../lib/locale";
@@ -91,7 +92,7 @@ export class GridCore<TData = any> {
   private readonly readyPromise: Promise<GridApi<TData>>;
   private readonly resolveReady: (api: GridApi<TData>) => void;
   private lastColumnLayoutSignature = "";
-  private activeFeatures = new Map<string, { feature: GridFeature<TData>; cleanup?: () => void }>();
+  private activeFeatures = new Map<string, { feature: GridFeature<TData>; cleanups: Array<() => void> }>();
   private recentErrors: GridDiagnosticError[] = [];
 
   constructor(container: HTMLElement, options: GridOptions<TData>) {
@@ -147,7 +148,7 @@ export class GridCore<TData = any> {
       this.columnModel.setColumnDefs(this.options.columnDefs);
       this.refreshAriaState();
       this.validateDefs(this.options.columnDefs);
-      this.checkWarnings();
+      this.checkWarnings(options);
       this.loadPersistedColumnState();
       this.headerRenderer.build();
       if (this.options.datasource) {
@@ -206,13 +207,6 @@ export class GridCore<TData = any> {
   setFeatures(features: readonly GridFeature<TData>[] | null | undefined): void {
     this.destroyFeatures();
     if (this.destroyed) return;
-    const context: GridFeatureContext<TData> = {
-      api: this.api,
-      root: this.skeleton.root,
-      getOptions: () => this.options,
-      addEventListener: (type, listener) => this.eventBus.on(type, listener),
-      reportError: (error, source, details) => this.reportError(error, `feature.${source}`, details)
-    };
 
     for (const feature of features ?? []) {
       const key = typeof feature?.key === "string" ? feature.key.trim() : "";
@@ -224,13 +218,49 @@ export class GridCore<TData = any> {
         this.reportError(new Error(`Duplicate GridFeature key: ${key}`), "feature.setup", { key });
         continue;
       }
+      const cleanups: Array<() => void> = [];
+      const manage = (cleanup: () => void): (() => void) => {
+        let active = true;
+        const once = () => {
+          if (!active) return;
+          active = false;
+          cleanup();
+        };
+        cleanups.push(once);
+        return once;
+      };
+      const context: GridFeatureContext<TData> = {
+        api: this.api,
+        root: this.skeleton.root,
+        getOptions: () => this.options,
+        addEventListener: (type, listener) => manage(this.eventBus.on(type, listener)),
+        onCleanup: (cleanup) => { manage(cleanup); },
+        addManagedDomListener: (target, type, listener, listenerOptions) => {
+          target.addEventListener(type, listener, listenerOptions);
+          return manage(() => target.removeEventListener(type, listener, listenerOptions));
+        },
+        setManagedTimeout: (handler, delayMs) => {
+          const id = setTimeout(handler, Math.max(0, delayMs));
+          manage(() => clearTimeout(id));
+          return id;
+        },
+        createAbortController: () => {
+          const controller = new AbortController();
+          manage(() => controller.abort());
+          return controller;
+        },
+        reportError: (error, source, details) => this.reportError(error, `feature.${source}`, details)
+      };
       try {
         const cleanup = feature.setup(context);
-        this.activeFeatures.set(key, {
-          feature,
-          ...(typeof cleanup === "function" ? { cleanup } : {})
-        });
+        if (typeof cleanup === "function") manage(cleanup);
+        this.activeFeatures.set(key, { feature, cleanups });
       } catch (error) {
+        for (const cleanup of cleanups.reverse()) {
+          try { cleanup(); } catch (cleanupError) {
+            this.reportError(cleanupError, "feature.cleanup", { key });
+          }
+        }
         this.reportError(error, "feature.setup", { key });
       }
     }
@@ -240,10 +270,12 @@ export class GridCore<TData = any> {
     const entries = [...this.activeFeatures.entries()].reverse();
     this.activeFeatures.clear();
     for (const [key, active] of entries) {
-      try {
-        active.cleanup?.();
-      } catch (error) {
-        this.reportError(error, "feature.cleanup", { key });
+      for (const cleanup of active.cleanups.reverse()) {
+        try {
+          cleanup();
+        } catch (error) {
+          this.reportError(error, "feature.cleanup", { key });
+        }
       }
       try {
         active.feature.destroy?.();
@@ -680,14 +712,19 @@ export class GridCore<TData = any> {
   private lastValidatedDefs: unknown = null;
   private issuedWarningSignatures = new Set<string>();
 
-  checkWarnings(): void {
+  checkWarnings(inputOptions?: Partial<GridOptions<any>> | Record<string, unknown>): void {
     if (this.options.suppressWarnings || this.destroyed) return;
+    if (inputOptions) {
+      for (const issue of validateGridOptions(inputOptions)) {
+        const signature = `${issue.code}:${issue.option ?? ""}:${issue.message}`;
+        if (this.issuedWarningSignatures.has(signature)) continue;
+        this.issuedWarningSignatures.add(signature);
+        console.warn(`[mach-table:${issue.code}] ${issue.message}`);
+      }
+    }
     if (this.options.treeData) {
       if (this.columnModel.getRowGroupColumns().length > 0) {
         console.warn("[mach-table] treeData 与 rowGroup 不支持同时启用，行分组已被忽略");
-      }
-      if (this.options.masterDetail) {
-        console.warn("[mach-table] treeData 与 masterDetail 不支持同时启用，主从明细已被忽略");
       }
     }
   }
