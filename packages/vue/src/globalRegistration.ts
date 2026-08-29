@@ -1,5 +1,5 @@
 import type { App, Component } from "vue";
-import type { MachTable } from "./RobotGrid";
+import type { MachTable } from "./MachTable";
 import { createMachTableConfigRef, MACH_TABLE_CONFIG_KEY, MACH_TABLE_DEFAULTS_KEY } from "./defaults";
 import type { MachTableRuntimeConfig } from "./configuration";
 

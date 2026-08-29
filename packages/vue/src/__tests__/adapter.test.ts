@@ -1,6 +1,6 @@
 import { createApp, defineComponent, h, nextTick, onUnmounted, ref, shallowRef, type GlobalComponents } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RobotGrid } from "../RobotGrid";
+import { RobotGrid } from "../MachTable";
 import { vueCellRenderer } from "../adapters";
 import { createElementPlusEditors, vueCellEditor } from "../editors";
 import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTable, MachTablePlugin, type ColDef } from "../index";
@@ -243,7 +243,7 @@ describe("Vue adapter", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const app = createApp(defineComponent({
-      render: () => h(RobotGrid, {
+      render: () => h(MachTable, {
         id: "orders-grid",
         "aria-label": "orders",
         columnDefs: [{ field: "id" }],
@@ -265,7 +265,7 @@ describe("Vue adapter", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const app = createApp(defineComponent({
-      setup: () => () => h(RobotGrid, {
+      setup: () => () => h(MachTable, {
         columnDefs: [{ field: "id" }],
         rowData: rows.value,
         theme: theme.value,
@@ -294,7 +294,7 @@ describe("Vue adapter", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const app = createApp({
-      render: () => h(RobotGrid, {
+      render: () => h(MachTable, {
         columnDefs: [{ field: "id", cellRenderer: vueCellRenderer(Cell) }],
         rowData: [{ id: 1 }],
         pagination: false
@@ -385,7 +385,7 @@ describe("Vue adapter", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const app = createApp(defineComponent({
-      setup: () => () => h(RobotGrid, {
+      setup: () => () => h(MachTable, {
         columnDefs: [{ field: "id" }],
         rowData: [{ id: 1 }],
         pagination: false,
@@ -417,7 +417,7 @@ describe("Vue adapter", () => {
     const app = createApp(defineComponent({
       setup() {
         grid = useMachTable<{ id: number }>();
-        return () => h(RobotGrid, {
+        return () => h(MachTable, {
           ref: grid!.ref,
           columnDefs: [{ field: "id" }],
           rowData: [{ id: 1 }],
@@ -445,7 +445,7 @@ describe("Vue adapter", () => {
       setup() {
         grid = useMachTable();
         editing = useMachTableEditing(grid, { guardBeforeUnload: true });
-        return () => h(RobotGrid, {
+        return () => h(MachTable, {
           ref: grid!.ref,
           columnDefs: [{ field: "name", editable: true }],
           rowData: [{ id: "1", name: "one" }, { id: "2", name: "two" }],

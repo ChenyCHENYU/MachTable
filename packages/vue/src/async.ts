@@ -5,7 +5,7 @@ import { registerGlobalMachTable, type MachTablePluginOptions } from "./globalRe
  * Starts loading the Vue adapter ahead of first render. The browser and bundler
  * cache the promise, so calling this on route hover is safe and idempotent.
  */
-export const preloadMachTable = () => import("./RobotGrid").then(({ MachTable }) => MachTable);
+export const preloadMachTable = () => import("./MachTable").then(({ MachTable }) => MachTable);
 
 export interface AsyncMachTableOptions {
   loadingComponent?: Component;

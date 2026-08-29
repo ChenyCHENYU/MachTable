@@ -1,7 +1,7 @@
-import { MachTable, RobotGrid } from "./RobotGrid";
+import { MachTable, RobotGrid } from "./MachTable";
 
 export { MachTable, RobotGrid };
-export type { MachTableReactProps, RobotGridReactProps } from "./RobotGrid";
+export type { MachTableReactProps, RobotGridReactProps } from "./MachTable";
 export { useMachGrid } from "./useMachGrid";
 export type { UseMachGridReturn } from "./useMachGrid";
 export { MachTableProvider, useMachTableDefaults } from "./defaults";

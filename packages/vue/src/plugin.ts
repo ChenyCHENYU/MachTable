@@ -1,5 +1,5 @@
 import type { App } from "vue";
-import { MachTable } from "./RobotGrid";
+import { MachTable } from "./MachTable";
 import { registerGlobalMachTable, type MachTablePluginOptions } from "./globalRegistration";
 
 export const MachTablePlugin = {

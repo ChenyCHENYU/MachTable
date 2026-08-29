@@ -1,8 +1,8 @@
-import { MachTable, RobotGrid } from "./RobotGrid";
+import { MachTable, RobotGrid } from "./MachTable";
 import { MachTablePlugin } from "./plugin";
 
 export { MachTable, RobotGrid };
-export type { MachTableVueProps, RobotGridVueProps } from "./RobotGrid";
+export type { MachTableVueProps, RobotGridVueProps } from "./MachTable";
 export {
   vueCellEditorSlot,
   vueCellRenderer,

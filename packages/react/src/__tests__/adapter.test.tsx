@@ -2,7 +2,7 @@ import { act, createElement, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GridApi } from "@agile-team/mach-table";
-import { RobotGrid } from "../RobotGrid";
+import { RobotGrid } from "../MachTable";
 import { reactCellRenderer } from "../adapters";
 import DefaultMachTable, { createGrid, DEFAULT_LOCALE, MachTable, MachTableProvider, type ColDef } from "../index";
 import { useMachGrid } from "../useMachGrid";
@@ -66,10 +66,10 @@ describe("React adapter", () => {
     const base = { columnDefs: [{ field: "name" }], rowData: [{ name: "Ada" }], pagination: false };
 
     await act(async () => {
-      root.render(createElement(RobotGrid, { ...base, onCellClicked: first }));
+      root.render(createElement(MachTable, { ...base, onCellClicked: first }));
     });
     await act(async () => {
-      root.render(createElement(RobotGrid, { ...base, onCellClicked: latest }));
+      root.render(createElement(MachTable, { ...base, onCellClicked: latest }));
     });
     host.querySelector<HTMLElement>(".mach-cell[data-col-id='name']")?.click();
     expect(first).not.toHaveBeenCalled();
@@ -86,9 +86,9 @@ describe("React adapter", () => {
     const second = { current: null as GridApi | null };
     const props = { columnDefs: [{ field: "id" }], rowData: [{ id: 1 }], pagination: false };
 
-    await act(async () => root.render(createElement(RobotGrid, { ...props, apiRef: first })));
+    await act(async () => root.render(createElement(MachTable, { ...props, apiRef: first })));
     expect(first.current).not.toBeNull();
-    await act(async () => root.render(createElement(RobotGrid, { ...props, apiRef: second })));
+    await act(async () => root.render(createElement(MachTable, { ...props, apiRef: second })));
     expect(first.current).toBeNull();
     expect(second.current).not.toBeNull();
     await act(async () => root.unmount());
@@ -110,7 +110,7 @@ describe("React adapter", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(createElement(RobotGrid, {
+      root.render(createElement(MachTable, {
         columnDefs: [{ field: "id", cellRenderer: reactCellRenderer(Cell) }],
         rowData: [{ id: 1 }],
         pagination: false
@@ -134,11 +134,11 @@ describe("React adapter", () => {
       gridClassName: "before"
     };
 
-    await act(async () => root.render(createElement(RobotGrid, base)));
+    await act(async () => root.render(createElement(MachTable, base)));
     const gridRoot = host.querySelector(".mach-root")!;
     expect(gridRoot.classList.contains("before")).toBe(true);
 
-    await act(async () => root.render(createElement(RobotGrid, {
+    await act(async () => root.render(createElement(MachTable, {
       ...base,
       gridClassName: "after",
       datasource: { getRows },
@@ -160,7 +160,7 @@ describe("React adapter", () => {
     function Harness() {
       const grid = useMachGrid();
       observedApi = grid.api;
-      return createElement(RobotGrid, {
+      return createElement(MachTable, {
         apiRef: grid.apiRef,
         columnDefs: [{ field: "id" }],
         rowData: [{ id: 1 }],
