@@ -8,7 +8,8 @@
     "paths": {
       "@agile-team/mach-table": ["packages/core/src/index.ts"],
       "@agile-team/mach-table-vue": ["packages/vue/src/index.ts"],
-      "@agile-team/mach-table-react": ["packages/react/src/index.ts"]
+      "@agile-team/mach-table-react": ["packages/react/src/index.ts"],
+      "@agile-team/mach-table-xlsx": ["packages/xlsx/src/index.ts"]
     },
     "strict": true,
     "noUnusedLocals": true,

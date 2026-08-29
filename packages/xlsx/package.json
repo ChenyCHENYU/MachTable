@@ -1,0 +1,36 @@
+{
+  "name": "@agile-team/mach-table-xlsx",
+  "version": "0.13.0",
+  "description": "Optional, engine-agnostic XLSX import and export extension for MachTable",
+  "keywords": ["data-grid", "xlsx", "excel", "import", "export", "typescript"],
+  "author": "Agile Team",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://github.com/ChenyCHENYU/MachTable#readme",
+  "bugs": { "url": "https://github.com/ChenyCHENYU/MachTable/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChenyCHENYU/MachTable.git",
+    "directory": "packages/xlsx"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": { "node": ">=18.0.0" },
+  "publishConfig": { "access": "public" },
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": { "@agile-team/mach-table": "workspace:*" }
+}

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const packageDirectories = ["packages/core", "packages/vue", "packages/react"];
+const packageDirectories = ["packages/core", "packages/vue", "packages/react", "packages/xlsx"];
 const expectedMetadata = "SEE LICENSE IN LICENSE";
 const expectedTitle = "MachTable Source-Available License 1.0";
 const failures = [];
@@ -58,7 +58,8 @@ const surfaces = [
   ["docs/guide/overview.md", /\| 许可 \| MIT \|/i],
   ["packages/core/README.md", /^MIT ©/im],
   ["packages/vue/README.md", /^MIT ©/im],
-  ["packages/react/README.md", /^MIT ©/im]
+  ["packages/react/README.md", /^MIT ©/im],
+  ["packages/xlsx/README.md", /^MIT ©/im]
 ];
 
 for (const [relativePath, forbidden] of surfaces) {

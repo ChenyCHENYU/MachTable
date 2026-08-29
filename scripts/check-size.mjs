@@ -12,8 +12,9 @@ const vueEsmFiles = (await readdir(new URL("../packages/vue/dist/", import.meta.
 
 const budgets = [
   ["Core ESM", ["packages/core/dist/index.js"], 80 * 1024],
-  ["Vue ESM artifacts", vueEsmFiles, 8 * 1024],
+  ["Vue ESM artifacts", vueEsmFiles, 10 * 1024],
   ["React adapter ESM", ["packages/react/dist/index.js"], 5 * 1024],
+  ["Optional XLSX bridge", ["packages/xlsx/dist/index.js"], 3 * 1024],
   ["Core CSS", ["packages/core/styles/mach-table.css"], 6 * 1024]
 ];
 
@@ -44,6 +45,14 @@ const consumerBudgets = [
       globalThis.__machTableWorkflows = [useMachTableEditing, useMachTableQuery];
     `,
     limit: 5 * 1024
+  },
+  {
+    label: "Vue optional editors",
+    source: `
+      import { vueCellEditor, createElementPlusEditors } from "./packages/vue/dist/editors.js";
+      globalThis.__machTableEditors = [vueCellEditor, createElementPlusEditors];
+    `,
+    limit: 3 * 1024
   }
 ];
 

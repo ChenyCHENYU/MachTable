@@ -156,6 +156,12 @@ importers:
         specifier: ^3.5.13
         version: 3.5.41(typescript@5.9.3)
 
+  packages/xlsx:
+    dependencies:
+      '@agile-team/mach-table':
+        specifier: workspace:*
+        version: link:../core
+
 packages:
 
   '@algolia/abtesting@1.23.0':

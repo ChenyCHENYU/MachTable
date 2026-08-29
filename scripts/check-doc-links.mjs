@@ -9,7 +9,8 @@ const inputs = [
   join(projectRoot, "SECURITY.md"),
   join(projectRoot, "packages", "core", "README.md"),
   join(projectRoot, "packages", "vue", "README.md"),
-  join(projectRoot, "packages", "react", "README.md")
+  join(projectRoot, "packages", "react", "README.md"),
+  join(projectRoot, "packages", "xlsx", "README.md")
 ];
 
 function collectMarkdown(directory) {

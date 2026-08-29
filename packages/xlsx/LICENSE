@@ -1,0 +1,110 @@
+MachTable Source-Available License 1.0
+
+Copyright (c) 2026 ChenyCHENYU (Agile Team). All rights reserved.
+
+IMPORTANT: The source code is publicly visible for review, but it is not
+open-source software as defined by the Open Source Initiative. Except for the
+limited inspection permission below, no permission is granted unless the
+copyright holder gives you prior written authorization.
+
+1. Definitions
+
+"Software" means MachTable and all source code, object code, packages,
+documentation, examples, designs, assets, and other materials distributed with
+this license.
+
+"Licensor" means ChenyCHENYU (Agile Team), the copyright holder of the
+Software.
+
+"Written Authorization" means a durable written permission issued directly by
+the Licensor that identifies the licensee and the permitted scope, purpose,
+environment, term, and any other applicable conditions.
+
+2. Limited Inspection Permission
+
+You may view the Software on the repository hosting service solely to inspect
+and evaluate it, to link to its public repository, to discuss it, and to submit
+good-faith issue reports. This limited permission does not include permission
+to use, run, build, compile, copy, download for reuse, install, integrate,
+modify, create derivative works from, deploy, distribute, sublicense, sell,
+lease, provide as a service, or otherwise exploit the Software.
+
+3. Authorization Required
+
+Any use beyond Section 2 requires the Licensor's prior Written Authorization.
+This requirement applies to personal, educational, research, governmental,
+non-profit, internal, evaluation, testing, development, staging, production,
+and commercial use. Possession of a copy, cloning the repository, downloading
+an npm package, receiving the Software from another person, or submitting a
+contribution does not grant any additional rights.
+
+The Licensor may grant separate commercial or non-commercial terms in a
+written agreement. If such an agreement conflicts with this license, that
+agreement controls only for the licensee and scope identified in it.
+
+4. Restrictions
+
+Without prior Written Authorization, you must not, directly or indirectly:
+
+a. use, execute, build, compile, install, test, or integrate the Software;
+b. copy, reproduce, modify, adapt, translate, or create derivative works;
+c. publish, distribute, sublicense, sell, rent, lease, transfer, host, or make
+   the Software available to any third party;
+d. use the Software to provide a hosted, managed, consulting, outsourcing,
+   software-as-a-service, or other service;
+e. remove or alter copyright, authorization, trademark, attribution, or other
+   proprietary notices; or
+f. represent the Software as open source or represent that you have received
+   authorization when you have not.
+
+5. Contributions
+
+Submitting a patch, pull request, code, documentation, design, or other
+material to the project does not authorize you to use the Software. Unless a
+separate written contributor agreement applies, by intentionally submitting a
+contribution you represent that you have the right to submit it and grant the
+Licensor a perpetual, worldwide, irrevocable, transferable, sublicensable,
+royalty-free license to use, reproduce, modify, create derivative works from,
+distribute, license, and relicense that contribution as part of the Software.
+
+6. Ownership and Trademarks
+
+The Software is licensed, not sold. The Licensor and applicable contributors
+retain all right, title, and interest in the Software. No trademark, service
+mark, trade name, logo, or branding rights are granted by this license.
+
+7. Termination
+
+Any permission granted under this license terminates automatically upon breach.
+On termination, you must immediately stop all use and destroy all copies in
+your possession or control, except where retention is required by law. Sections
+4 through 9 survive termination.
+
+8. Disclaimer
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS PROVIDED "AS IS" AND
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND
+NON-INFRINGEMENT.
+
+9. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR AND CONTRIBUTORS WILL NOT
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+CONSEQUENTIAL, OR OTHER DAMAGES, OR FOR LOSS OF DATA, PROFITS, REVENUE,
+GOODWILL, OR BUSINESS INTERRUPTION, ARISING FROM OR RELATED TO THE SOFTWARE OR
+THIS LICENSE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+10. Contact and Authorization
+
+See LICENSING.md in the repository for the authorization request process. No
+request, discussion, issue, payment, or contribution constitutes authorization
+unless and until the Licensor issues explicit Written Authorization.
+
+中文说明（仅为阅读便利；如有冲突，以英文条款为准）
+
+本项目源代码公开可查看，但不是 OSI 定义下的开源软件。除查看、链接、
+讨论和善意提交问题外，任何个人、教育、研究、公益、政府、内部、测试、
+开发、生产或商业用途，均须事先取得作者明确的书面授权。未经授权，不得
+运行、构建、复制、修改、集成、部署、分发、转授权、销售、出租、托管或
+以服务形式提供本软件。公开仓库、克隆代码或下载 npm 包不代表获得授权。
