@@ -10,7 +10,7 @@ for (const example of examples) {
   test(`${example.name} renders and supports keyboard focus`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(example.url);
+    await page.goto(example.url, { waitUntil: "domcontentloaded" });
     await expect(page).toHaveTitle(example.title);
     const grid = page.getByRole("grid").first();
     await expect(grid).toBeVisible();
@@ -23,7 +23,7 @@ for (const example of examples) {
   test(`${example.name} supports keyboard navigation, editing and filter lifecycle`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(example.url);
+    await page.goto(example.url, { waitUntil: "domcontentloaded" });
     const grid = page.getByRole("grid").first();
     await expect(grid).toHaveAttribute("aria-label", /.+/);
 
