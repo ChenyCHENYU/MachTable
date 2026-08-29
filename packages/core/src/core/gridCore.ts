@@ -51,6 +51,8 @@ import type {
   ColDefGroup
 } from "../types/colDef";
 
+const DATA_SOURCE_ERROR_PREFIXES = ["datasource", "treeData"] as const;
+
 type ColumnStateLike = ColumnState;
 
 let gridUid = 0;
@@ -537,7 +539,7 @@ export class GridCore<TData = any> {
   }
 
   private errorCodeFor(source: string, error: unknown): GridErrorCode {
-    if (source.startsWith("datasource") || source.startsWith("treeData")) return "DATA_SOURCE_ERROR";
+    if (DATA_SOURCE_ERROR_PREFIXES.some((prefix) => source.startsWith(prefix))) return "DATA_SOURCE_ERROR";
     const message = error instanceof Error ? error.message : String(error);
     if (source === "getRowId" || message.includes("Duplicate row id")) return "DATA_INTEGRITY_ERROR";
     if (source === "validate") return "VALIDATION_ERROR";
