@@ -88,7 +88,7 @@ api.resetColumnState();            // 重置为 columnDefs 初始状态（并持
 `columnMenu: true` 开启两种入口：
 
 1. 每列表头 ⋯ 按钮：升/降序、固定左/右、自适应列宽、隐藏此列、全部列显隐清单、重置全部、全部自适应
-2. `api.openColumnPanel()`：独立面板（工具栏"列设置"按钮常用），默认锚定表格右上角
+2. `api.openColumnWorkbench()`：可搜索的独立列工作台（工具栏“列设置”按钮常用），默认锚定表格右上角；`openColumnPanel()` 只作为 0.x 兼容别名保留
 
 面板文案走 i18n。
 

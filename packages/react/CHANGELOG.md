@@ -5,7 +5,8 @@
 ### Minor Changes
 
 - Re-export the 0.13 Core column workbench, lazy tree loading contracts and events through the React single-package entry.
-- Keep Provider/table overrides and StrictMode lifecycle behavior compatible with 0.10.
+- Keep Provider/table overrides and StrictMode lifecycle behavior compatible with existing 0.x consumers.
+- Rename internal adapter modules and primary tests to the canonical `MachTable` name while retaining the documented `RobotGrid` compatibility export.
 
 ### Patch Changes
 

@@ -7,6 +7,7 @@
 - Add a lifecycle-safe `vueCellEditor()` factory and zero-dependency `createElementPlusEditors()` bridge through the tree-shakable `./editors` entry with optional host app context.
 - Complete remote query empty/error overlay bindings while retaining cancellation, retries and cross-page/query-wide selection.
 - Re-export the 0.13 Core workbench and lazy-tree APIs and events.
+- Rename internal adapter modules and primary tests to the canonical `MachTable` name while retaining the documented `RobotGrid` compatibility export.
 
 ### Patch Changes
 

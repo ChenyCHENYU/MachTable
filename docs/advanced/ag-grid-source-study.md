@@ -54,7 +54,7 @@ AG Community 的 [`InfiniteCache`](https://github.com/ag-grid/ag-grid/blob/b51ca
 - 未知总数的虚拟尾部与最终 rowCount 收敛；
 - 可观察的块状态。
 
-MachTable 当前 `datasource` 是可靠的顺序追加模型，已有 AbortSignal、乱序隔离、重试和预取，但不是随机访问块缓存。`useMachTableQuery` 则很好地覆盖普通 B 端分页。二者不能包装成“完整 Remote Row Model”。0.11 的核心架构任务仍是独立 `RemoteBlockStore`，而不是继续给 `RowModel` 增加条件分支。
+MachTable 当前 `datasource` 是可靠的顺序追加模型，已有 AbortSignal、乱序隔离、重试和预取，但不是随机访问块缓存。`useMachTableQuery` 则很好地覆盖普通 B 端分页。二者不能包装成“完整 Remote Row Model”。如真实项目需要随机块访问，0.13 之后应单独设计 `RemoteBlockStore`，而不是继续给 `RowModel` 增加条件分支。
 
 ### 5. SSRM 的难点是层级 Store，不是一个 getRows
 
@@ -99,7 +99,7 @@ MachTable 已有版本化 `GridState`，本次又把列布局本地存储升级�
 
 | 维度 | AG Grid 36.1 | MachTable 当前 | 判断 |
 | --- | --- | --- | --- |
-| 普通 Vue 列表接入 | 仍需模块/主题/GridOptions 组合 | 单包、单配置文件、`app.use(MachTable, config)`、原生 slots | MachTable 更轻、更符合现有项目约定 |
+| 普通 Vue 列表接入 | 仍需模块/主题/GridOptions 组合 | 单包、单配置文件、`app.use(MachTablePlugin, config)`、原生 slots | MachTable 更轻、更符合现有项目约定 |
 | 配置可控性 | 全局选项、模块、丰富校验 | app → route → preset → table 分层，且 `explainOption()` 可追溯 | MachTable 的来源解释更直观；校验深度落后 |
 | 编辑事务 | 成熟单元格/整行与批处理 API | 原子整行草稿、异步跨字段校验、dirty diff、部分保存、回滚 | MachTable 更贴近当前 B 端保存流程；高级批量审阅仍缺 |
 | 平面远程列表 | 成熟分页与 Infinite Cache | 受控分页很顺滑；顺序无限加载，不是随机块缓存 | 常规页面 MachTable 更简单；任意跳转/滚动 AG 更强 |

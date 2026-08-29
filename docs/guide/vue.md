@@ -18,7 +18,7 @@ pnpm add @agile-team/mach-table-vue
 
 ### 全局同步注入
 
-大量页面都使用表格时，在应用入口注册一次，任意模板即可直接使用 `<MachTable>` / `<RobotGrid>`：
+大量页面都使用表格时，在应用入口注册一次，任意模板即可直接使用 `<MachTable>`。旧项目仍可使用 0.x 兼容别名 `<RobotGrid>`，新代码不再推荐该名称：
 
 ```ts
 // main.ts
