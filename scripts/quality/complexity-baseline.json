@@ -20,7 +20,7 @@
     "packages/core/src/render/bodyRenderer.ts::Method 'renderGroupCell'": [26],
     "packages/core/src/render/bodyRenderer.ts::Method 'fillHorizontal'": [21],
     "packages/core/src/render/bodyRenderer.ts::Method 'fillValuesInner'": [24],
-    "packages/core/src/render/bodyRenderer.ts::Method 'onBodyClick'": [33],
+    "packages/core/src/render/bodyRenderer.ts::Method 'onBodyClick'": [28],
     "packages/core/src/render/cellContent.ts::Function 'renderCellContent'": [17],
     "packages/core/src/render/cellContent.ts::Function 'applyCellClasses'": [18],
     "packages/core/src/render/headerRenderer.ts::Method 'createLeafCell'": [24],

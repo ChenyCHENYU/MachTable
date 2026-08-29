@@ -202,7 +202,9 @@ const OPTIONAL_OPTION_KEYS = [
   "tooltipComponent",
   "getContextMenuItems",
   "initialState",
-  "rowEditValidator"
+  "rowEditValidator",
+  "isTreeRowExpandable",
+  "loadTreeChildren"
 ] as const;
 
 function copyOptionalOptions<TData>(

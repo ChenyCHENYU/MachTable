@@ -70,6 +70,8 @@ export const GRID_OPTION_META = {
   summaryMethod: { kind: "function", update: "options" },
   treeData: { kind: "boolean", update: "options" },
   childrenKey: { kind: "string", update: "options" },
+  isTreeRowExpandable: { kind: "function", update: "options" },
+  loadTreeChildren: { kind: "function", update: "options" },
   autoCheckedChildren: { kind: "boolean", update: "options" },
   defaultExpandAll: { kind: "boolean", update: "options" },
   indexOffset: { kind: "number", update: "options" },

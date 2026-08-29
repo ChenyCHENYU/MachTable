@@ -112,6 +112,13 @@ export interface DetailRowRendererParams<TData = any> {
   api: import("./api").GridApi<TData>;
 }
 
+export interface TreeDataLoadParams<TData = any> {
+  data: TData;
+  node: RowNode<TData>;
+  api: import("./api").GridApi<TData>;
+  signal: AbortSignal;
+}
+
 export interface PaginationConfig {
   /** `server` displays the supplied page as-is and uses `total` for navigation. */
   mode?: "client" | "server";
@@ -202,6 +209,10 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   summaryMethod?: (params: { colId: string; column: import("../services/column").Column<any>; values: any[] }) => string;
   treeData?: boolean;
   childrenKey?: string;
+  /** Marks rows that can load children even when `childrenKey` is currently empty. */
+  isTreeRowExpandable?: (params: Omit<TreeDataLoadParams<TData>, "signal">) => boolean;
+  /** Loads children once on first expansion; use the API retry/force methods to reload. */
+  loadTreeChildren?: (params: TreeDataLoadParams<TData>) => Promise<readonly TData[]>;
   autoCheckedChildren?: boolean;
   defaultExpandAll?: boolean;
   indexOffset?: number;
@@ -292,6 +303,8 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   summaryMethod?: (params: { colId: string; column: import("../services/column").Column<any>; values: any[] }) => string;
   treeData: boolean;
   childrenKey: string;
+  isTreeRowExpandable?: (params: Omit<TreeDataLoadParams<TData>, "signal">) => boolean;
+  loadTreeChildren?: (params: TreeDataLoadParams<TData>) => Promise<readonly TData[]>;
   autoCheckedChildren: boolean;
   defaultExpandAll: boolean;
   indexOffset: number;

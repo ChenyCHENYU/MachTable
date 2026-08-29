@@ -859,17 +859,23 @@ export class BodyRenderer {
   }
 
   private renderTreeCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
-    const hasChildren = this.core.rowModel.hasChildren(node.id);
+    const expandable = this.core.rowModel.isRowExpandable(node);
     const depth = this.getNodeDepth(node);
     const indent = el("span", "mach-tree-indent");
     indent.style.width = `${depth * 16}px`;
     const wrap = el("span", "mach-tree-cell");
     wrap.appendChild(indent);
-    if (hasChildren) {
+    if (expandable) {
       const expanded = this.core.rowModel.isRowExpanded(node.id);
       cell.setAttribute("aria-expanded", expanded ? "true" : "false");
       cell.setAttribute("aria-level", String(depth + 1));
-      const toggle = el("span", `mach-detail-toggle${expanded ? " mach-detail-toggle--open" : ""}`);
+      const stateClass = node.treeLoading
+        ? " mach-detail-toggle--loading"
+        : node.treeLoadError
+          ? " mach-detail-toggle--error"
+          : "";
+      const toggle = el("span", `mach-detail-toggle${expanded ? " mach-detail-toggle--open" : ""}${stateClass}`);
+      if (node.treeLoadError) toggle.title = "Retry loading children";
       toggle.textContent = "▶";
       wrap.appendChild(toggle);
     } else {
@@ -1641,16 +1647,7 @@ export class BodyRenderer {
 
     const target = e.target as HTMLElement;
 
-    if (this.core.rowModel.isTree) {
-      const treeCol = this.getTreeColumn();
-      if (treeCol && cellEl?.dataset.colId === treeCol.id && target.closest(".mach-detail-toggle")) {
-        if (this.core.rowModel.hasChildren(node.id)) {
-          this.focusGridRoot();
-          this.core.rowModel.toggleDetail(node.id);
-          return;
-        }
-      }
-    }
+    if (this.handleTreeToggleClick(target, node, cellEl)) return;
 
     const colId = cellEl?.dataset.colId ?? "";
     const column = colId ? this.core.columnModel.getColumn(colId) : undefined;
@@ -1693,6 +1690,16 @@ export class BodyRenderer {
       this.core.editingService.start(index, column);
     }
   };
+
+  private handleTreeToggleClick(target: HTMLElement, node: RowNode<any>, cell: HTMLElement | null): boolean {
+    if (!this.core.rowModel.isTree || !target.closest(".mach-detail-toggle")) return false;
+    const treeColumn = this.getTreeColumn();
+    if (!treeColumn || cell?.dataset.colId !== treeColumn.id || !this.core.rowModel.isRowExpandable(node)) return false;
+    this.focusGridRoot();
+    if (node.treeLoadError) void this.core.rowModel.loadTreeChildren(node.id, true).catch(() => undefined);
+    else this.core.rowModel.toggleDetail(node.id);
+    return true;
+  }
 
   private firstCheckboxColId(): string {
     for (const col of this.core.columnModel.getOrderedVisible()) {

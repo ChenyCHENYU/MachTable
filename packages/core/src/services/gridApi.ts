@@ -388,6 +388,19 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     this.core.rowModel.collapseAllDetails();
   }
 
+  loadTreeChildren(rowId: string, options: { force?: boolean } = {}): Promise<readonly TData[]> {
+    if (this.core.isDestroyed()) return Promise.resolve([]);
+    return this.core.rowModel.loadTreeChildren(rowId, options.force === true);
+  }
+
+  retryTreeChildren(rowId: string): Promise<readonly TData[]> {
+    return this.loadTreeChildren(rowId, { force: true });
+  }
+
+  isTreeRowLoading(rowId: string): boolean {
+    return !this.core.isDestroyed() && this.core.rowModel.isTreeRowLoading(rowId);
+  }
+
   toggleRowGroup(groupId: string): boolean {
     if (this.core.isDestroyed()) return false;
     return this.core.rowModel.toggleGroup(groupId);
@@ -535,8 +548,30 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
   }
 
   openColumnPanel(anchor?: HTMLElement): void {
+    this.openColumnWorkbench(anchor);
+  }
+
+  openColumnWorkbench(anchor?: HTMLElement): void {
     if (this.core.isDestroyed()) return;
     this.core.columnMenu.openStandalone(anchor);
+  }
+
+  closeColumnWorkbench(): void {
+    this.core.columnMenu.close();
+  }
+
+  getColumnWorkbenchItems(): import("../types/api").ColumnWorkbenchItem[] {
+    return this.core.columnModel.getColumns()
+      .filter((column) => !column.isDetailToggle)
+      .map((column) => ({
+        colId: column.id,
+        label: column.colDef.headerName ?? column.colDef.field ?? column.id,
+        visible: !column.hide,
+        pinned: column.pinned,
+        width: column.currentWidth || column.manualWidth || column.colDef.width || 0,
+        movable: column.movable,
+        hideable: !column.hasCheckbox
+      }));
   }
 
   refreshLayout(): void {
@@ -1107,6 +1142,14 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (options.childrenKey != null && options.childrenKey !== resolved.childrenKey) {
       resolved.childrenKey = options.childrenKey;
       effects.needsRowRebuild = true;
+    }
+    if (hasOwnOption(options, "isTreeRowExpandable")) {
+      resolved.isTreeRowExpandable = options.isTreeRowExpandable;
+      effects.needsCellRefresh = true;
+    }
+    if (hasOwnOption(options, "loadTreeChildren")) {
+      resolved.loadTreeChildren = options.loadTreeChildren;
+      effects.needsCellRefresh = true;
     }
   }
 

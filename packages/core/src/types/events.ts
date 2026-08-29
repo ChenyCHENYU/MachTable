@@ -25,6 +25,8 @@ export const EVENT_TYPES = [
   "rowEditingStarted",
   "rowEditingStopped",
   "detailToggled",
+  "treeChildrenLoaded",
+  "treeChildrenLoadFailed",
   "rowDragEnd",
   "rangeSelectionChanged",
   "paginationChanged",
@@ -192,6 +194,20 @@ export interface DetailToggledEvent<TData = any> extends GridEventBase<TData> {
   expanded: boolean;
 }
 
+export interface TreeChildrenLoadedEvent<TData = any> extends GridEventBase<TData> {
+  type: "treeChildrenLoaded";
+  rowId: string;
+  rowNode: RowNode<TData>;
+  children: readonly TData[];
+}
+
+export interface TreeChildrenLoadFailedEvent<TData = any> extends GridEventBase<TData> {
+  type: "treeChildrenLoadFailed";
+  rowId: string;
+  rowNode: RowNode<TData>;
+  error: unknown;
+}
+
 export interface GridCellRange {
   row1: number;
   row2: number;
@@ -257,6 +273,8 @@ export interface GridEventMap<TData = any> {
   rowEditingStarted: RowEditingStartedEvent<TData>;
   rowEditingStopped: RowEditingStoppedEvent<TData>;
   detailToggled: DetailToggledEvent<TData>;
+  treeChildrenLoaded: TreeChildrenLoadedEvent<TData>;
+  treeChildrenLoadFailed: TreeChildrenLoadFailedEvent<TData>;
   rowDragEnd: RowDragEndEvent<TData>;
   rangeSelectionChanged: RangeSelectionChangedEvent<TData>;
   paginationChanged: PaginationChangedEvent<TData>;

@@ -54,6 +54,16 @@ export interface GridDiagnosticError {
   context?: Record<string, unknown>;
 }
 
+export interface ColumnWorkbenchItem {
+  colId: string;
+  label: string;
+  visible: boolean;
+  pinned: "left" | "right" | null;
+  width: number;
+  movable: boolean;
+  hideable: boolean;
+}
+
 export interface GridDiagnostics {
   gridId: number;
   version: string;
@@ -143,6 +153,11 @@ export interface GridApi<TData = any> {
   expandAllDetails(): void;
   collapseAllDetails(): void;
 
+  /** Loads and caches lazy tree children. Concurrent calls for one row are deduplicated. */
+  loadTreeChildren(rowId: string, options?: { force?: boolean }): Promise<readonly TData[]>;
+  retryTreeChildren(rowId: string): Promise<readonly TData[]>;
+  isTreeRowLoading(rowId: string): boolean;
+
   toggleRowGroup(groupId: string): boolean;
   isGroupExpanded(groupId: string): boolean;
   expandAllGroups(): void;
@@ -174,6 +189,11 @@ export interface GridApi<TData = any> {
   clearRangeSelection(): void;
   copyRangeToClipboard(): Promise<boolean>;
 
+  /** Opens the built-in searchable column workbench. */
+  openColumnWorkbench(anchor?: HTMLElement): void;
+  closeColumnWorkbench(): void;
+  getColumnWorkbenchItems(): ColumnWorkbenchItem[];
+  /** @deprecated Use openColumnWorkbench. Kept during the 0.x compatibility window. */
   openColumnPanel(anchor?: HTMLElement): void;
 
   refreshLayout(): void;

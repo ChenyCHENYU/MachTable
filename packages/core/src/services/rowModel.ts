@@ -56,6 +56,8 @@ export class RowModel<TData = any> {
   private infinitePendingResolve: (() => void) | null = null;
   private treeDepth = new WeakMap<RowNode<TData>, number>();
   private rowSequence = new WeakMap<RowNode<TData>, number>();
+  private treeLoadControllers = new Map<string, AbortController>();
+  private treeLoadPromises = new Map<string, Promise<readonly TData[]>>();
 
   constructor(private core: RowModelContext) {}
 
@@ -281,9 +283,11 @@ export class RowModel<TData = any> {
 
   destroy(): void {
     this.cancelInfiniteRequest();
+    this.cancelTreeLoads();
   }
 
   setRowData(rows: TData[] | null | undefined): void {
+    this.cancelTreeLoads();
     this.core.changeTracker.clear();
     const getRowId = this.core.options.getRowId;
     const childrenKey = this.core.options.childrenKey;
@@ -300,7 +304,14 @@ export class RowModel<TData = any> {
         this.core.reportError(new Error(`Duplicate row id: ${id}`), "rowData", { rowId: id, index });
         return null;
       }
-      const node: RowNode<TData> = { id, data, rowIndex: -1, selected: false };
+      const children = this.isTree ? readChildren(data, childrenKey) : undefined;
+      const node: RowNode<TData> = {
+        id,
+        data,
+        rowIndex: -1,
+        selected: false,
+        treeChildrenLoaded: Array.isArray(children)
+      };
       this.treeDepth.set(node, depth);
       next.push(node);
       byId.set(id, node);
@@ -311,7 +322,6 @@ export class RowModel<TData = any> {
       } else {
         roots.push(node);
       }
-      const children = this.isTree ? readChildren(data, childrenKey) : undefined;
       if (this.isTree && Array.isArray(children)) {
         for (const child of children) {
           if (child != null) buildNode(child as TData, depth + 1, id);
@@ -352,6 +362,126 @@ export class RowModel<TData = any> {
 
   hasChildren(id: string): boolean {
     return this.getChildrenCount(id) > 0;
+  }
+
+  isTreeRowLoading(id: string): boolean {
+    return this.nodesById.get(id)?.treeLoading === true;
+  }
+
+  private cancelTreeLoads(): void {
+    for (const controller of this.treeLoadControllers.values()) controller.abort();
+    this.treeLoadControllers.clear();
+    this.treeLoadPromises.clear();
+  }
+
+  loadTreeChildren(id: string, force = false): Promise<readonly TData[]> {
+    const node = this.nodesById.get(id);
+    const loader = this.core.options.loadTreeChildren;
+    if (!this.isTree || !node?.data || !loader) return Promise.resolve([]);
+    if (!force && node.treeChildrenLoaded) {
+      return Promise.resolve(this.getChildrenIds(id).flatMap((childId) => {
+        const data = this.nodesById.get(childId)?.data;
+        return data == null ? [] : [data];
+      }));
+    }
+    const pending = this.treeLoadPromises.get(id);
+    if (pending && !force) return pending;
+    this.treeLoadControllers.get(id)?.abort();
+    const controller = new AbortController();
+    this.treeLoadControllers.set(id, controller);
+    node.treeLoading = true;
+    node.treeLoadError = undefined;
+    this.core.bodyRenderer.onDataChanged();
+
+    const request = Promise.resolve().then(() => loader({
+      data: node.data!,
+      node,
+      api: this.core.getApi(),
+      signal: controller.signal
+    })).then((children) => {
+      if (controller.signal.aborted || this.core.isDestroyed()) return [];
+      if (!Array.isArray(children)) {
+        throw new TypeError("[MachTable] loadTreeChildren must resolve to an array.");
+      }
+      this.replaceTreeChildren(node, children as readonly TData[]);
+      node.treeChildrenLoaded = true;
+      node.treeLoadError = undefined;
+      this.core.emit("treeChildrenLoaded", { rowId: id, rowNode: node, children });
+      return children;
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted || (error as { name?: string })?.name === "AbortError") return [];
+      node.treeLoadError = error;
+      node.treeChildrenLoaded = false;
+      this.core.reportError(error, "treeData.loadChildren", { rowId: id });
+      this.core.emit("treeChildrenLoadFailed", { rowId: id, rowNode: node, error });
+      throw error;
+    }).finally(() => {
+      if (this.treeLoadControllers.get(id) === controller) {
+        this.treeLoadControllers.delete(id);
+        this.treeLoadPromises.delete(id);
+        node.treeLoading = false;
+        this.core.bodyRenderer.onDataChanged();
+      }
+    });
+    this.treeLoadPromises.set(id, request);
+    return request;
+  }
+
+  private replaceTreeChildren(parent: RowNode<TData>, children: readonly TData[]): void {
+    const removed = new Set<string>();
+    const stack = [...this.getChildrenIds(parent.id)];
+    while (stack.length > 0) {
+      const childId = stack.pop()!;
+      if (removed.has(childId)) continue;
+      removed.add(childId);
+      stack.push(...this.getChildrenIds(childId));
+    }
+    this.validateTreeChildren(children, removed);
+    for (const childId of removed) {
+      this.treeLoadControllers.get(childId)?.abort();
+      this.treeLoadControllers.delete(childId);
+      this.treeLoadPromises.delete(childId);
+      this.childIds.delete(childId);
+      this.nodesById.delete(childId);
+      this.expandedIds.delete(childId);
+    }
+    this.childIds.delete(parent.id);
+    const depth = this.getTreeDepth(parent) + 1;
+    for (const child of children) {
+      if (child != null) this.buildChildNodes(parent, child, depth);
+    }
+    this.reindexAll();
+    this.core.selectionService.onRowsRebuilt(this.core.options.getRowId != null);
+    this.refreshPipeline();
+    this.core.bodyRenderer.onDataChanged();
+  }
+
+  private validateTreeChildren(children: readonly TData[], replacedIds: ReadonlySet<string>): void {
+    const getRowId = this.core.options.getRowId;
+    const reserved = getRowId
+      ? new Set([...this.nodesById.keys()].filter((id) => !replacedIds.has(id)))
+      : null;
+    const seenObjects = new WeakSet<object>();
+    const stack = [...children];
+    let index = 0;
+    while (stack.length > 0) {
+      const data = stack.pop()!;
+      if (data == null) continue;
+      if (typeof data === "object") {
+        if (seenObjects.has(data)) throw new TypeError("[MachTable] Lazy tree children contain a cyclic object graph.");
+        seenObjects.add(data);
+      }
+      if (getRowId && reserved) {
+        const id = getRowId({ data, index: index++, api: this.core.getApi() });
+        if (typeof id !== "string" || id.length === 0) {
+          throw new TypeError("[MachTable] getRowId must return a non-empty string for lazy tree children.");
+        }
+        if (reserved.has(id)) throw new Error(`Duplicate row id: ${id}`);
+        reserved.add(id);
+      }
+      const nested = readChildren(data, this.core.options.childrenKey);
+      if (nested) stack.push(...nested as TData[]);
+    }
   }
 
   applyTransaction(transaction: RowTransaction<TData>, refresh = true): void {
@@ -460,18 +590,19 @@ export class RowModel<TData = any> {
       this.core.reportError(new Error(`Duplicate row id: ${id}`), "transaction.add", { rowId: id });
       return;
     }
+    const children = readChildren(data, this.core.options.childrenKey);
     const child: RowNode<TData> = {
       id,
       data,
       rowIndex: -1,
-      selected: false
+      selected: false,
+      treeChildrenLoaded: Array.isArray(children)
     };
     this.nodesById.set(id, child);
     this.treeDepth.set(child, depth);
     const list = this.childIds.get(parent.id) ?? [];
     list.push(child.id);
     this.childIds.set(parent.id, list);
-    const children = readChildren(data, this.core.options.childrenKey);
     if (!children) return;
     for (const nested of children) {
       if (nested != null) this.buildChildNodes(child, nested as TData, depth + 1);
@@ -901,7 +1032,19 @@ export class RowModel<TData = any> {
   }
 
   isRowExpandable(node: RowNode<TData>): boolean {
-    if (this.isTree) return this.hasChildren(node.id);
+    if (this.isTree) {
+      if (this.hasChildren(node.id)) return true;
+      if (node.treeLoading) return true;
+      if (node.treeChildrenLoaded || !node.data || !this.core.options.loadTreeChildren) return false;
+      const checkTree = this.core.options.isTreeRowExpandable;
+      if (!checkTree) return false;
+      try {
+        return checkTree({ data: node.data, node, api: this.core.getApi() });
+      } catch (error) {
+        this.core.reportError(error, "isTreeRowExpandable", { rowId: node.id });
+        return false;
+      }
+    }
     if (!this.core.options.masterDetail) return false;
     const check = this.core.options.isRowExpandable;
     if (check) {
@@ -946,13 +1089,16 @@ export class RowModel<TData = any> {
 
   private setDetailExpanded(id: string, expanded: boolean): boolean {
     const node = this.nodesById.get(id);
-    if (!node || !this.isRowExpandable(node)) return expanded;
+    if (!node || (expanded && !this.isRowExpandable(node))) return false;
     if (expanded === this.expandedIds.has(id)) return expanded;
     if (expanded) this.expandedIds.add(id);
     else this.expandedIds.delete(id);
     this.refreshPipeline();
     this.core.bodyRenderer.onDataChanged();
     this.core.emit("detailToggled", { rowId: id, rowNode: node, expanded });
+    if (expanded && this.isTree && !this.hasChildren(id) && !node.treeLoading) {
+      void this.loadTreeChildren(id).catch(() => undefined);
+    }
     return expanded;
   }
 

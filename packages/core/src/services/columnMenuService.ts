@@ -11,6 +11,7 @@ export class ColumnMenuService {
   private panel: HTMLElement | null = null;
   private openColId: string | null = null;
   private standaloneAnchor: HTMLElement | null = null;
+  private searchText = "";
 
   constructor(private core: ColumnMenuContext) {}
 
@@ -70,7 +71,11 @@ export class ColumnMenuService {
   private open(column: Column | null, anchor: HTMLElement): void {
     const api = this.core.getApi();
     const panel = el("div", "mach-filter-panel mach-column-panel");
-    panel.setAttribute("role", "menu");
+    panel.setAttribute("role", column ? "menu" : "dialog");
+    if (!column) {
+      panel.setAttribute("aria-modal", "false");
+      panel.setAttribute("aria-label", this.core.getLocaleText("columnSettings"));
+    }
 
     const title = el("div", "mach-column-panel-title");
     title.textContent = column
@@ -138,23 +143,22 @@ export class ColumnMenuService {
     listTitle.textContent = this.core.getLocaleText("columnVisibility");
     panel.appendChild(listTitle);
 
-    const list = el("div", "mach-column-panel-list");
-    for (const col of this.core.columnModel.getColumns()) {
-      if (col.isDetailToggle) continue;
-      const label = el("label", "mach-filter-set-item");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = !col.hide;
-      cb.disabled = col.hasCheckbox;
-      cb.addEventListener("change", () => {
-        api.setColumnVisibility(col.id, cb.checked);
-        this.rebuildListStates();
+    if (!column) {
+      const search = document.createElement("input");
+      search.type = "search";
+      search.className = "mach-column-workbench-search";
+      search.placeholder = this.core.getLocaleText("search");
+      search.setAttribute("aria-label", this.core.getLocaleText("search"));
+      search.value = this.searchText;
+      search.addEventListener("input", () => {
+        this.searchText = search.value.trim().toLocaleLowerCase();
+        this.renderColumnList(list, true);
       });
-      const span = el("span");
-      span.textContent = col.colDef.headerName ?? col.colDef.field ?? col.id;
-      label.append(cb, span);
-      list.appendChild(label);
+      panel.appendChild(search);
     }
+
+    const list = el("div", "mach-column-panel-list");
+    this.renderColumnList(list, !column);
     panel.appendChild(list);
 
     const footer = el("div", "mach-filter-footer");
@@ -195,13 +199,77 @@ export class ColumnMenuService {
 
   private rebuildListStates(): void {
     if (!this.panel) return;
-    const items = this.panel.querySelectorAll<HTMLLabelElement>(".mach-column-panel-list .mach-filter-set-item");
-    const cols = this.core.columnModel.getColumns().filter((c) => !c.isDetailToggle);
-    items.forEach((item, i) => {
-      const col = cols[i];
-      if (!col) return;
-      const cb = item.querySelector<HTMLInputElement>("input");
-      if (cb && !cb.disabled) cb.checked = !col.hide;
+    const list = this.panel.querySelector<HTMLElement>(".mach-column-panel-list");
+    if (list) this.renderColumnList(list, this.openColId === "__standalone__");
+  }
+
+  private renderColumnList(list: HTMLElement, workbench: boolean): void {
+    const api = this.core.getApi();
+    list.replaceChildren();
+    const columns = this.core.columnModel.getColumns().filter((candidate) => {
+      if (candidate.isDetailToggle) return false;
+      if (!workbench || !this.searchText) return true;
+      const label = candidate.colDef.headerName ?? candidate.colDef.field ?? candidate.id;
+      return `${label} ${candidate.id}`.toLocaleLowerCase().includes(this.searchText);
     });
+    for (const col of columns) {
+      const row = el("div", workbench ? "mach-column-workbench-item" : "mach-filter-set-item");
+      const label = el("label", "mach-column-workbench-label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = !col.hide;
+      checkbox.disabled = col.hasCheckbox;
+      checkbox.addEventListener("change", () => {
+        api.setColumnVisibility(col.id, checkbox.checked);
+        this.rebuildListStates();
+      });
+      const text = el("span", "mach-column-workbench-name");
+      text.textContent = col.colDef.headerName ?? col.colDef.field ?? col.id;
+      text.title = `${text.textContent} (${col.id})`;
+      label.append(checkbox, text);
+      row.appendChild(label);
+
+      if (workbench) {
+        const pin = document.createElement("select");
+        pin.className = "mach-column-workbench-pin";
+        pin.setAttribute("aria-label", `${text.textContent} ${this.core.getLocaleText("clearPin")}`);
+        for (const [value, caption] of [
+          ["", this.core.getLocaleText("clearPin")],
+          ["left", this.core.getLocaleText("pinLeft")],
+          ["right", this.core.getLocaleText("pinRight")]
+        ] as const) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = caption;
+          pin.appendChild(option);
+        }
+        pin.value = col.pinned ?? "";
+        pin.addEventListener("change", () => {
+          api.setColumnPinned(col.id, pin.value === "left" || pin.value === "right" ? pin.value : null);
+          this.rebuildListStates();
+        });
+        row.appendChild(pin);
+
+        const siblings = this.core.columnModel.getColumns().filter((candidate) =>
+          !candidate.hide &&
+          candidate.parentGroup === col.parentGroup &&
+          (col.parentGroup != null || candidate.pinned === col.pinned)
+        );
+        const position = siblings.indexOf(col);
+        const move = (caption: string, next: number, disabled: boolean) => {
+          const button = el("button", "mach-column-workbench-move") as HTMLButtonElement;
+          button.type = "button";
+          button.textContent = caption;
+          button.disabled = disabled || col.hide || !col.movable;
+          button.addEventListener("click", () => {
+            api.moveColumn(col.id, next);
+            this.rebuildListStates();
+          });
+          return button;
+        };
+        row.append(move("↑", position - 1, position <= 0), move("↓", position + 1, position < 0 || position >= siblings.length - 1));
+      }
+      list.appendChild(row);
+    }
   }
 }

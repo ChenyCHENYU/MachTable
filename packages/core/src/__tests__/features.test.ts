@@ -8,6 +8,7 @@ interface Row {
   name: string;
   score?: number;
   dept?: string;
+  hasChildren?: boolean;
   children?: Row[];
 }
 
@@ -525,6 +526,124 @@ describe("tree data", () => {
     expect(api.getRowNode(3)?.data?.name).toBe("y");
     api.destroy();
   });
+
+  it("loads lazy children once, deduplicates requests and exposes loading state", async () => {
+    const host = createHost();
+    let resolveRequest!: (rows: readonly Row[]) => void;
+    const loadTreeChildren = vi.fn(() => new Promise<readonly Row[]>((resolve) => { resolveRequest = resolve; }));
+    const loaded = vi.fn();
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "name" }],
+      rowData: [{ id: "parent", name: "Parent", hasChildren: true }],
+      treeData: true,
+      getRowId: ({ data }) => data.id,
+      isTreeRowExpandable: ({ data }) => data.hasChildren === true,
+      loadTreeChildren,
+      onTreeChildrenLoaded: loaded
+    });
+
+    expect(api.expandRow("parent")).toBe(true);
+    expect(api.isTreeRowLoading("parent")).toBe(true);
+    const duplicate = api.loadTreeChildren("parent");
+    await Promise.resolve();
+    expect(loadTreeChildren).toHaveBeenCalledTimes(1);
+    resolveRequest([{ id: "child", name: "Child" }]);
+    await duplicate;
+
+    expect(api.isTreeRowLoading("parent")).toBe(false);
+    expect(api.getDisplayedRowCount()).toBe(2);
+    expect(api.getNodeById("child")?.data?.name).toBe("Child");
+    expect(loaded).toHaveBeenCalledTimes(1);
+    await api.loadTreeChildren("parent");
+    expect(loadTreeChildren).toHaveBeenCalledTimes(1);
+    api.destroy();
+  });
+
+  it("surfaces lazy tree failures and supports an atomic retry", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const host = createHost();
+    const failure = new Error("offline");
+    const loadTreeChildren = vi.fn()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce([{ id: "child", name: "Recovered" }]);
+    const failed = vi.fn();
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "name" }],
+      rowData: [{ id: "parent", name: "Parent", hasChildren: true }],
+      treeData: true,
+      getRowId: ({ data }) => data.id,
+      isTreeRowExpandable: ({ data }) => data.hasChildren === true,
+      loadTreeChildren,
+      onTreeChildrenLoadFailed: failed
+    });
+
+    await expect(api.loadTreeChildren("parent")).rejects.toBe(failure);
+    expect(api.getNodeById("parent")?.treeLoadError).toBe(failure);
+    expect(failed).toHaveBeenCalledTimes(1);
+    await api.retryTreeChildren("parent");
+    expect(api.getNodeById("parent")?.treeLoadError).toBeUndefined();
+    expect(api.getNodeById("child")?.data?.name).toBe("Recovered");
+    api.destroy();
+    consoleError.mockRestore();
+  });
+
+  it("keeps the previous lazy subtree when replacement IDs are invalid", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const host = createHost();
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "name" }],
+      rowData: [
+        { id: "parent", name: "Parent", children: [{ id: "old", name: "Old child" }] },
+        { id: "reserved", name: "Reserved root" }
+      ],
+      treeData: true,
+      getRowId: ({ data }) => data.id,
+      isTreeRowExpandable: ({ data }) => data.id === "parent",
+      loadTreeChildren: async () => [{ id: "reserved", name: "Duplicate" }]
+    });
+
+    await expect(api.retryTreeChildren("parent")).rejects.toThrow("Duplicate row id: reserved");
+    expect(api.getNodeById("old")?.data?.name).toBe("Old child");
+    expect(api.getNodeById("reserved")?.data?.name).toBe("Reserved root");
+    api.destroy();
+    consoleError.mockRestore();
+  });
+
+  it("treats an explicit empty children array as an already loaded leaf", async () => {
+    const loadTreeChildren = vi.fn(async () => [{ id: "unexpected", name: "Unexpected" }]);
+    const api = createGrid<Row>(createHost(), {
+      columnDefs: [{ field: "name" }],
+      rowData: [{ id: "leaf", name: "Leaf", hasChildren: true, children: [] }],
+      treeData: true,
+      getRowId: ({ data }) => data.id,
+      isTreeRowExpandable: ({ data }) => data.hasChildren === true,
+      loadTreeChildren
+    });
+
+    expect(api.expandRow("leaf")).toBe(false);
+    await expect(api.loadTreeChildren("leaf")).resolves.toEqual([]);
+    expect(loadTreeChildren).not.toHaveBeenCalled();
+    api.destroy();
+  });
+
+  it("rejects cyclic lazy children before mutating a generated-id tree", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const child: { name: string; children?: unknown[] } = { name: "Cycle" };
+    child.children = [child];
+    const api = createGrid<{ name: string; hasChildren?: boolean; children?: unknown[] }>(createHost(), {
+      columnDefs: [{ field: "name" }],
+      rowData: [{ name: "Parent", hasChildren: true }],
+      treeData: true,
+      isTreeRowExpandable: ({ data }) => data.hasChildren === true,
+      loadTreeChildren: async () => [child]
+    });
+    const parentId = api.getRowNode(0)!.id;
+
+    await expect(api.loadTreeChildren(parentId)).rejects.toThrow("cyclic object graph");
+    expect(api.getDisplayedRowCount()).toBe(1);
+    api.destroy();
+    consoleError.mockRestore();
+  });
 });
 
 describe("locale", () => {
@@ -543,6 +662,36 @@ describe("locale", () => {
     const options = Array.from(panel.querySelectorAll("option")).map((o) => o.textContent);
     expect(options).toContain("Contains");
     expect(panel.querySelector(".mach-filter-btn-apply")?.textContent).toBe("Apply");
+    api.destroy();
+  });
+});
+
+describe("column workbench", () => {
+  it("searches, pins, reorders and closes through the public API", () => {
+    const host = createHost();
+    const api = createGrid<Row>(host, {
+      columnDefs: [
+        { field: "name", headerName: "Name" },
+        { field: "score", headerName: "Score" },
+        { field: "dept", headerName: "Department" }
+      ],
+      rowData: [{ id: "1", name: "A", score: 1, dept: "R&D" }]
+    });
+    expect(api.getColumnWorkbenchItems().map((item) => item.label)).toEqual(["Name", "Score", "Department"]);
+
+    api.openColumnWorkbench();
+    const panel = document.querySelector<HTMLElement>('.mach-column-panel[role="dialog"]')!;
+    const search = panel.querySelector<HTMLInputElement>(".mach-column-workbench-search")!;
+    search.value = "score";
+    search.dispatchEvent(new Event("input"));
+    expect(panel.querySelectorAll(".mach-column-workbench-item")).toHaveLength(1);
+
+    const pin = panel.querySelector<HTMLSelectElement>(".mach-column-workbench-pin")!;
+    pin.value = "right";
+    pin.dispatchEvent(new Event("change"));
+    expect(api.getColumnWorkbenchItems().find((item) => item.colId === "score")?.pinned).toBe("right");
+    api.closeColumnWorkbench();
+    expect(document.querySelector(".mach-column-panel")).toBeNull();
     api.destroy();
   });
 });

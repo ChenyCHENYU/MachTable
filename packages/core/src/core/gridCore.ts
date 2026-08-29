@@ -537,7 +537,7 @@ export class GridCore<TData = any> {
   }
 
   private errorCodeFor(source: string, error: unknown): GridErrorCode {
-    if (source.startsWith("datasource")) return "DATA_SOURCE_ERROR";
+    if (source.startsWith("datasource") || source.startsWith("treeData")) return "DATA_SOURCE_ERROR";
     const message = error instanceof Error ? error.message : String(error);
     if (source === "getRowId" || message.includes("Duplicate row id")) return "DATA_INTEGRITY_ERROR";
     if (source === "validate") return "VALIDATION_ERROR";
