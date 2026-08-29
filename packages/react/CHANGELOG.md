@@ -10,6 +10,7 @@
 
 ### Patch Changes
 
+- Align npm author metadata with the package license and authorization documentation.
 - Updated dependencies
   - @agile-team/mach-table@0.13.0
 

@@ -355,6 +355,8 @@ pnpm test:e2e
 
 ## License
 
+Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
+
 MachTable 从 `0.9.1` 起采用 [MachTable Source-Available License 1.0](./LICENSE)：源码公开可查看，但不是 OSI 定义下的开源软件。任何安装、运行、测试、修改、集成、部署、分发或商业使用均须事先取得作者书面授权。申请流程见[授权说明](./LICENSING.md)。
 
 历史上已按 MIT 文本公开的版本保留其当时的授权事实；旧版许可不延伸到 `0.9.1` 及后续版本。

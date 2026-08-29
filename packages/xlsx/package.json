@@ -3,7 +3,7 @@
   "version": "0.13.0",
   "description": "Optional, engine-agnostic XLSX import and export extension for MachTable",
   "keywords": ["data-grid", "xlsx", "excel", "import", "export", "typescript"],
-  "author": "Agile Team",
+  "author": "ChenyCHENYU (Agile Team)",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/ChenyCHENYU/MachTable#readme",
   "bugs": { "url": "https://github.com/ChenyCHENYU/MachTable/issues" },

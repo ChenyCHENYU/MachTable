@@ -9,6 +9,10 @@
 - Add public workbench, lazy-tree and data-source error contracts while retaining the 0.x `openColumnPanel` compatibility alias.
 - Consolidate the completed 0.10—0.13 product route without freezing the 1.0 API.
 
+### Patch Changes
+
+- Align npm author metadata with the copyright holder named in the package license: ChenyCHENYU (Agile Team).
+
 ## 0.10.0
 
 ### Minor Changes

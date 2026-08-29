@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "MachTable - high performance, framework-agnostic data grid (monorepo)",
-  "author": "Agile Team",
+  "author": "ChenyCHENYU (Agile Team)",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/ChenyCHENYU/MachTable#readme",
   "bugs": {

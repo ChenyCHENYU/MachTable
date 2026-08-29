@@ -23,4 +23,4 @@ The extension reuses Core CSV selection, header, formula-protection and safe imp
 
 Documentation: [XLSX guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/xlsx.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md)
 
-This package and MachTable are source-available. Any use requires prior written authorization; see the repository `LICENSE` and `LICENSING.md`.
+Source-available © ChenyCHENYU (Agile Team). Any use requires prior written authorization. See the [license](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) and [authorization process](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md).
