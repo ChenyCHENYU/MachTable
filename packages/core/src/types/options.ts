@@ -103,6 +103,12 @@ export interface DetailRowRendererParams<TData = any> {
 }
 
 export interface PaginationConfig {
+  /** `server` displays the supplied page as-is and uses `total` for navigation. */
+  mode?: "client" | "server";
+  /** Controlled current page for server mode. */
+  page?: number;
+  /** Total rows across all server pages. */
+  total?: number;
   pageSize?: number;
   pageSizeOptions?: number[];
   showTotal?: boolean;
@@ -265,6 +271,9 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   pinnedTopRowData: TData[];
   pinnedBottomRowData: TData[];
   paginationEnabled: boolean;
+  paginationMode: "client" | "server";
+  paginationPage: number;
+  paginationTotal: number;
   paginationPageSize: number;
   paginationPageSizeOptions: number[];
   paginationShowTotal: boolean;

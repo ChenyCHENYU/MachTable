@@ -813,6 +813,13 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
         this.core.rowModel.setPaginationEnabled(target);
       }
       if (typeof cfg === "object" && cfg) {
+        resolved.paginationMode = cfg.mode === "server" ? "server" : "client";
+        if (cfg.page != null && Number.isFinite(cfg.page)) {
+          resolved.paginationPage = Math.max(1, Math.floor(cfg.page));
+        }
+        if (cfg.total != null && Number.isFinite(cfg.total)) {
+          resolved.paginationTotal = Math.max(0, Math.floor(cfg.total));
+        }
         if (cfg.pageSize != null) resolved.paginationPageSize = cfg.pageSize;
         if (cfg.pageSizeOptions != null) resolved.paginationPageSizeOptions = cfg.pageSizeOptions;
         if (cfg.showTotal != null) resolved.paginationShowTotal = cfg.showTotal;

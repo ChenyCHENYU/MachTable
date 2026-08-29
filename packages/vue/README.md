@@ -102,6 +102,8 @@ Layouts can reactively refine defaults and presets with `provideMachTableConfig(
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `vue >= 3.2` remains a peer dependency supplied by the host application. Existing local imports remain fully supported.
 
+Remote B-side lists can bind `useMachTableQuery()` directly. It owns controlled server pagination, sorting/filtering requests, AbortSignal cancellation, stale-response protection, retry state and cross-page selection without exposing `gridApi` to ordinary pages.
+
 ## Cell and full-row editing
 
 Core helpers are re-exported, so no second package import is needed:

@@ -14,6 +14,14 @@ export {
 } from "./adapters";
 export { useMachTable } from "./useMachTable";
 export type { UseMachTableReturn } from "./useMachTable";
+export { useMachTableQuery } from "./useMachTableQuery";
+export type {
+  MachTablePageRequest,
+  MachTablePageResult,
+  MachTableQuerySource,
+  UseMachTableQueryOptions,
+  UseMachTableQueryReturn
+} from "./useMachTableQuery";
 export type { VueCellRendererProps } from "./adapters";
 export type { VueCellEditorSlotProps } from "./adapters";
 export { applyVueSlots, createVueSlotEnhancer } from "./slots";

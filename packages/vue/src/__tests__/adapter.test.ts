@@ -5,6 +5,7 @@ import { vueCellRenderer } from "../adapters";
 import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTable, MachTablePlugin, type ColDef } from "../index";
 import { AsyncMachTable, AsyncMachTablePlugin, preloadMachTable } from "../async";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
+import { useMachTableQuery, type UseMachTableQueryReturn } from "../useMachTableQuery";
 import { defineMachTableConfig, provideMachTableConfig } from "../index";
 
 class ResizeObserverStub {
@@ -345,5 +346,72 @@ describe("Vue adapter", () => {
     app.unmount();
     await nextTick();
     expect(grid!.ready.value).toBe(false);
+  });
+
+  it("cancels stale remote queries and ignores late responses", async () => {
+    const query = ref({ keyword: "first" });
+    const pending: Array<{
+      signal: AbortSignal;
+      resolve: (value: { rows: { id: string }[]; total: number }) => void;
+    }> = [];
+    const request = vi.fn((params: any) => new Promise<{ rows: { id: string }[]; total: number }>((resolve) => {
+      pending.push({ signal: params.signal, resolve });
+    }));
+    let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup() {
+        remote = useMachTableQuery({ request, query, rowKey: "id" });
+        return () => h("div");
+      }
+    }));
+    app.mount(host);
+    expect(request).toHaveBeenCalledOnce();
+    query.value = { keyword: "second" };
+    await nextTick();
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(pending[0].signal.aborted).toBe(true);
+
+    pending[1].resolve({ rows: [{ id: "new" }], total: 1 });
+    await Promise.resolve();
+    await nextTick();
+    expect(remote!.rows.value).toEqual([{ id: "new" }]);
+    pending[0].resolve({ rows: [{ id: "stale" }], total: 1 });
+    await Promise.resolve();
+    expect(remote!.rows.value).toEqual([{ id: "new" }]);
+    app.unmount();
+  });
+
+  it("drives server pagination and preserves selected rows across pages", async () => {
+    const requests: Array<{ page: number; resolve: (value: any) => void }> = [];
+    let remote: UseMachTableQueryReturn<{ id: string; name: string }> | null = null;
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup() {
+        remote = useMachTableQuery({
+          query: {},
+          rowKey: "id",
+          selectionScope: "preserve",
+          request: (params) => new Promise((resolve) => requests.push({ page: params.page, resolve }))
+        });
+        return () => h("div");
+      }
+    }));
+    app.mount(host);
+    requests[0].resolve({ rows: [{ id: "1", name: "one" }], total: 21 });
+    await Promise.resolve();
+    await nextTick();
+    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
+    expect(remote!.selectedKeys.value).toEqual(["1"]);
+
+    remote!.gridProps.value.onPaginationChanged?.({ page: 2, pageSize: 20 } as any);
+    expect(requests[1].page).toBe(2);
+    requests[1].resolve({ rows: [{ id: "2", name: "two" }], total: 21 });
+    await Promise.resolve();
+    await nextTick();
+    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
+    expect(remote!.selectedKeys.value).toEqual(["1", "2"]);
+    expect(remote!.selectedRows.value.map((row) => row.name)).toEqual(["one", "two"]);
+    app.unmount();
   });
 });

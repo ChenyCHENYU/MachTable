@@ -143,6 +143,7 @@ export class GridCore<TData = any> {
       this.statusBarService.init();
       this.pinnedRowsRenderer.init();
 
+      this.rowModel.restorePagination(this.options.paginationPage, this.options.paginationPageSize);
       this.columnModel.setColumnDefs(this.options.columnDefs);
       this.refreshAriaState();
       this.validateDefs(this.options.columnDefs);

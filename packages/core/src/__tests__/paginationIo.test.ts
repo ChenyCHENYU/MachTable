@@ -172,6 +172,28 @@ describe("pagination", () => {
     api.destroy();
   });
 
+  it("supports controlled server pages without slicing the supplied rows", () => {
+    const listener = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const api = createGrid(host, {
+      columnDefs: [{ field: "id" }],
+      rowData: [{ id: 21 }, { id: 22 }],
+      pagination: { mode: "server", page: 3, pageSize: 10, total: 42 },
+      onPaginationChanged: listener
+    });
+    expect(api.getDisplayedRowCount()).toBe(2);
+    expect(api.getPage()).toBe(3);
+    expect(api.getPageCount()).toBe(5);
+    expect(api.getTotalRowCount()).toBe(42);
+    api.setPage(4);
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ page: 4, total: 42 }));
+    api.updateOptions({ pagination: { mode: "server", page: 4, pageSize: 10, total: 33 } });
+    expect(api.getPage()).toBe(4);
+    expect(api.getPageCount()).toBe(4);
+    api.destroy();
+  });
+
   it("auto-disabled in infinite mode", async () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

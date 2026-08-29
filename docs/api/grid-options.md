@@ -19,6 +19,7 @@
 | `datasourceRetryDelay` | `number` | `300` | 首次重试基础延迟（ms），之后指数退避，最长 30 秒 |
 | `asyncTransactionWaitMillis` | `number` | `16` | `applyTransactionAsync` 合并时间窗；事务保持调用顺序，管线只刷新一次 |
 | `initialState` | `GridState` | — | 列、排序、过滤、分页、选择、展开等版本化首屏状态，列和初始行就绪后一次应用 |
+| `pagination.mode` | `"client" \| "server"` | `"client"` | server 模式按传入页面原样展示，不二次切片；配合 `page`、`pageSize`、`total`，见[远程查询](/recipes/remote-query) |
 
 ## 尺寸与密度
 

@@ -46,6 +46,7 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     : [10, 20, 50, 100];
   if (!pageSizeOptions.includes(pageSize)) pageSizeOptions.push(pageSize);
   pageSizeOptions.sort((a, b) => a - b);
+  const paginationConfig = typeof userOptions.pagination === "object" ? userOptions.pagination : undefined;
 
   const resolved: ResolvedGridOptions<TData> = {
     columnDefs: Array.isArray(userOptions.columnDefs) ? userOptions.columnDefs : [],
@@ -94,6 +95,9 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     pinnedBottomRowData: Array.isArray(userOptions.pinnedBottomRowData) ? userOptions.pinnedBottomRowData : [],
     paginationEnabled:
       userOptions.pagination !== false && userOptions.datasource == null ? true : false,
+    paginationMode: paginationConfig?.mode === "server" ? "server" : "client",
+    paginationPage: finiteAtLeast(paginationConfig?.page, 1, 1, true),
+    paginationTotal: finiteAtLeast(paginationConfig?.total, 0, 0, true),
     paginationPageSize: pageSize,
     paginationPageSizeOptions: pageSizeOptions,
     paginationShowTotal:

@@ -173,3 +173,5 @@ tableRef.value?.explainOption("pagination");
 ```
 
 这能回答“为什么这张表是 50 条一页”“是谁关闭了过滤”等企业项目中很常见的问题。
+
+远程 B 端列表不要把请求逻辑塞进全局配置；使用 [`useMachTableQuery`](/recipes/remote-query) 把页面查询、分页、竞态取消和跨页选择组合起来。

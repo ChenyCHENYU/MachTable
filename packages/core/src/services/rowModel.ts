@@ -604,9 +604,17 @@ export class RowModel<TData = any> {
       return;
     }
     const size = this.effectivePageSize();
-    const pageCount = Math.max(1, Math.ceil(this.pipelineRows.length / size));
+    const pageCount = this.getPageCount();
     if (this.page > pageCount) this.page = pageCount;
     if (this.page < 1) this.page = 1;
+    this.core.options.paginationPage = this.page;
+    if (this.core.options.paginationMode === "server") {
+      this.pipelineRows.forEach((node, index) => {
+        node.rowIndex = index;
+      });
+      this.displayed = this.pipelineRows;
+      return;
+    }
     const start = (this.page - 1) * size;
     const slice = this.pipelineRows.slice(start, start + size);
     slice.forEach((node, index) => {
@@ -625,12 +633,16 @@ export class RowModel<TData = any> {
   }
 
   getTotalRowCount(): number {
-    return this.isInfinite ? this.getDisplayTotalCount() : this.pipelineRows.length;
+    if (this.isInfinite) return this.getDisplayTotalCount();
+    if (this.paginationActive && this.core.options.paginationMode === "server") {
+      return this.core.options.paginationTotal;
+    }
+    return this.pipelineRows.length;
   }
 
   getPageCount(): number {
     if (!this.paginationActive) return 1;
-    return Math.max(1, Math.ceil(this.pipelineRows.length / this.effectivePageSize()));
+    return Math.max(1, Math.ceil(this.getTotalRowCount() / this.effectivePageSize()));
   }
 
   getPipelineRows(): RowNode<TData>[] {
@@ -643,6 +655,7 @@ export class RowModel<TData = any> {
     const next = Math.max(1, Math.min(Math.round(page) || 1, pageCount));
     if (next === this.page) return;
     this.page = next;
+    this.core.options.paginationPage = next;
     this.applyPagination();
     this.core.bodyRenderer.onDataChanged();
     this.core.bodyRenderer.scrollToIndex(0, "top");
@@ -656,6 +669,7 @@ export class RowModel<TData = any> {
     this.core.options.paginationPageSize = next;
     this.pageSize = next;
     this.page = Math.floor(firstVisible / next) + 1;
+    this.core.options.paginationPage = this.page;
     this.applyPagination();
     this.core.bodyRenderer.onDataChanged();
     this.emitPaginationChanged();
@@ -665,6 +679,7 @@ export class RowModel<TData = any> {
     this.pageSize = Math.max(1, Math.round(pageSize) || 1);
     this.core.options.paginationPageSize = this.pageSize;
     this.page = Math.max(1, Math.round(page) || 1);
+    this.core.options.paginationPage = this.page;
   }
 
   setPaginationEnabled(enabled: boolean): void {
@@ -678,7 +693,9 @@ export class RowModel<TData = any> {
 
   onPaginationOptionsChanged(): void {
     if (!this.paginationActive) return;
-    this.page = 1;
+    this.page = this.core.options.paginationMode === "server"
+      ? this.core.options.paginationPage
+      : 1;
     this.applyPagination();
     this.core.bodyRenderer.onDataChanged();
     this.emitPaginationChanged();

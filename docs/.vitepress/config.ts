@@ -54,6 +54,7 @@ export default defineConfig({
           text: "场景配方",
           items: [
             { text: "行选择", link: "/recipes/selection" },
+            { text: "远程查询与跨页选择", link: "/recipes/remote-query" },
             { text: "操作列与状态列", link: "/recipes/action-columns" },
             { text: "单元格与整行编辑", link: "/recipes/editing" },
             { text: "框选 / 复制 / 填充", link: "/recipes/clipboard" },
