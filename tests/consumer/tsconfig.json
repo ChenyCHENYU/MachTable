@@ -5,6 +5,7 @@
     "paths": {
       "@agile-team/mach-table": ["../../packages/core/dist/index.d.ts"],
       "@agile-team/mach-table-vue": ["../../packages/vue/dist/index.d.ts"],
+      "@agile-team/mach-table-vue/workflows": ["../../packages/vue/dist/workflows.d.ts"],
       "@agile-team/mach-table-react": ["../../packages/react/dist/index.d.ts"]
     },
     "jsx": "react-jsx",

@@ -52,6 +52,16 @@
         "default": "./dist/async.cjs"
       }
     },
+    "./workflows": {
+      "import": {
+        "types": "./dist/workflows.d.ts",
+        "default": "./dist/workflows.js"
+      },
+      "require": {
+        "types": "./dist/workflows.d.cts",
+        "default": "./dist/workflows.cjs"
+      }
+    },
     "./styles.css": {
       "types": "./dist/mach-table.css.d.ts",
       "default": "./dist/mach-table.css"

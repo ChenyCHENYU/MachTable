@@ -25,6 +25,8 @@ const require = createRequire(import.meta.url);
 const coreEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/index.js")));
 const coreCjs = require(resolve(root, "packages/core/dist/index.cjs"));
 const vueEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/index.js")));
+const vueWorkflowsEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/workflows.js")));
+const vueWorkflowsCjs = require(resolve(root, "packages/vue/dist/workflows.cjs"));
 const reactEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/index.js")));
 
 for (const entry of [coreEsm, coreCjs]) {
@@ -35,6 +37,10 @@ for (const entry of [coreEsm, coreCjs]) {
 assert.equal(typeof vueEsm.MachTable, "object");
 assert.equal(typeof vueEsm.MachTablePlugin.install, "function");
 assert.equal(typeof vueEsm.provideMachTableDefaults, "function");
+for (const entry of [vueWorkflowsEsm, vueWorkflowsCjs]) {
+  assert.equal(typeof entry.useMachTableEditing, "function");
+  assert.equal(typeof entry.useMachTableQuery, "function");
+}
 assert.equal(typeof reactEsm.MachTable, "function");
 assert.equal(typeof reactEsm.MachTableProvider, "function");
 

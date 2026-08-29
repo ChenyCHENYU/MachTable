@@ -6,6 +6,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
+  minify: true,
   target: "es2020",
   external: ["react", "react-dom", "@agile-team/mach-table"],
   outExtension({ format }) {

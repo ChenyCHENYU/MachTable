@@ -213,6 +213,9 @@ api.rollbackChanges([rowId]);
 Vue 页面推荐直接使用响应式控制器：
 
 ```ts
+import { useMachTable } from "@agile-team/mach-table-vue";
+import { useMachTableEditing } from "@agile-team/mach-table-vue/workflows";
+
 const grid = useMachTable<Order>();
 const edit = useMachTableEditing(grid, {
   guardBeforeUnload: true,

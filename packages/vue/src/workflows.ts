@@ -1,0 +1,21 @@
+/**
+ * Optional B-side workflow entry.
+ *
+ * Importing from `@agile-team/mach-table-vue/workflows` lets bundlers avoid
+ * evaluating the component/plugin entry when a module only needs composables.
+ * The root entry keeps re-exporting these APIs for backwards compatibility.
+ */
+export { useMachTableEditing } from "./useMachTableEditing";
+export type {
+  UseMachTableEditingOptions,
+  UseMachTableEditingReturn
+} from "./useMachTableEditing";
+export { useMachTableQuery } from "./useMachTableQuery";
+export type {
+  MachTablePageRequest,
+  MachTablePageResult,
+  MachTableQuerySource,
+  MachTableRemoteSelectionState,
+  UseMachTableQueryOptions,
+  UseMachTableQueryReturn
+} from "./useMachTableQuery";

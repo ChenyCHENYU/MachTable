@@ -7,11 +7,8 @@
 ```vue
 <script setup lang="ts">
 import { reactive } from "vue";
-import {
-  selectionColumn,
-  useMachTableQuery,
-  type ColDef
-} from "@agile-team/mach-table-vue";
+import { selectionColumn, type ColDef } from "@agile-team/mach-table-vue";
+import { useMachTableQuery } from "@agile-team/mach-table-vue/workflows";
 
 interface Order {
   orderId: string;
