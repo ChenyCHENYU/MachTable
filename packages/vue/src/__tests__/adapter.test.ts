@@ -219,6 +219,75 @@ describe("Vue adapter", () => {
     expect(cleanup).toHaveBeenCalledTimes(mounted.mock.calls.length);
   });
 
+  it("maps native Vue cell, header, editor and overlay slots without renderer factories", async () => {
+    const rows = ref([{ id: 1, name: "before" }]);
+    const loading = ref(true);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const app = createApp(defineComponent({
+      setup: () => () => h(MachTable, {
+        columnDefs: [{ field: "name", editable: true }],
+        rowData: rows.value,
+        loading: loading.value,
+        pagination: false
+      }, {
+        "cell-name": (props: any) => h("strong", { class: "slot-cell" }, props.value),
+        "header-name": () => h("span", { class: "slot-header" }, "业务名称"),
+        "editor-name": (props: any) => h("input", {
+          class: "slot-editor",
+          value: props.value,
+          onInput: (event: Event) => props.setValue((event.target as HTMLInputElement).value)
+        }),
+        loading: () => h("span", { class: "slot-loading" }, "正在读取")
+      })
+    }));
+    app.use(MachTablePlugin);
+    app.mount(host);
+    await nextTick();
+    expect(host.querySelector(".slot-header")?.textContent).toBe("业务名称");
+    expect(host.querySelector(".slot-loading")?.textContent).toBe("正在读取");
+
+    loading.value = false;
+    await nextTick();
+    const cell = host.querySelector<HTMLElement>(".mach-cell[data-col-id='name']")!;
+    expect(cell.querySelector(".slot-cell")?.textContent).toBe("before");
+    cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const input = cell.querySelector<HTMLInputElement>(".slot-editor")!;
+    input.value = "after";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(rows.value[0].name).toBe("after");
+    app.unmount();
+  });
+
+  it("unmounts Vue overlay slots when an overlay is replaced", async () => {
+    const cleanup = vi.fn();
+    const loading = ref(true);
+    const Overlay = defineComponent({
+      setup() {
+        onUnmounted(cleanup);
+        return () => h("span", "loading");
+      }
+    });
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const app = createApp(defineComponent({
+      setup: () => () => h(MachTable, {
+        columnDefs: [{ field: "id" }],
+        rowData: [{ id: 1 }],
+        loading: loading.value,
+        pagination: false
+      }, { loading: () => h(Overlay) })
+    }));
+    app.use(MachTablePlugin);
+    app.mount(host);
+    await nextTick();
+    loading.value = false;
+    await nextTick();
+    expect(cleanup).toHaveBeenCalledOnce();
+    app.unmount();
+  });
+
   it("reactively forwards structural options, datasource and inner grid class", async () => {
     const datasource = ref<any>(undefined);
     const gridClassName = ref("before");

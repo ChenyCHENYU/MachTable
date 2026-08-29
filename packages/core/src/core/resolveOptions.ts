@@ -55,6 +55,7 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     rowHeight: finiteAtLeast(userOptions.rowHeight, preset.rowHeight, 1),
     headerHeight: finiteAtLeast(userOptions.headerHeight, preset.headerHeight, 1),
     rowBuffer: finiteAtLeast(userOptions.rowBuffer, 8, 0, true),
+    columnLayout: userOptions.columnLayout === "fit" ? "fit" : "normal",
     rowSelection: userOptions.rowSelection === "single" || userOptions.rowSelection === "multiple"
       ? userOptions.rowSelection
       : "none",

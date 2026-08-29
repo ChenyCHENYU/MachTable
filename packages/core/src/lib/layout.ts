@@ -61,3 +61,53 @@ export function computeColumnWidths(cols: WidthInput[], availableWidth: number):
 
   return widths;
 }
+
+/** Fits columns into a viewport while honoring every min/max bound. */
+export function fitColumnWidths(cols: WidthInput[], availableWidth: number): number[] {
+  const widths = cols.map((column) => clampWidth(column.width ?? DEFAULT_COLUMN_WIDTH, column));
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0 || cols.length === 0) return widths;
+
+  const active = new Set(cols.map((_column, index) => index));
+  let remainingWidth = availableWidth;
+  for (let pass = 0; pass < cols.length + 1 && active.size > 0; pass++) {
+    let weightTotal = 0;
+    for (const index of active) weightTotal += Math.max(1, widths[index]);
+    if (weightTotal <= 0) break;
+
+    let constrained = false;
+    for (const index of [...active]) {
+      const target = remainingWidth * (Math.max(1, widths[index]) / weightTotal);
+      const fitted = clampWidth(target, cols[index]);
+      const min = cols[index].minWidth ?? DEFAULT_MIN_WIDTH;
+      const max = cols[index].maxWidth ?? Number.MAX_SAFE_INTEGER;
+      if (target < min || target > max) {
+        widths[index] = fitted;
+        remainingWidth -= fitted;
+        active.delete(index);
+        constrained = true;
+      }
+    }
+    if (!constrained) {
+      for (const index of active) {
+        widths[index] = clampWidth(
+          remainingWidth * (Math.max(1, widths[index]) / weightTotal),
+          cols[index]
+        );
+      }
+      break;
+    }
+    remainingWidth = Math.max(0, remainingWidth);
+  }
+
+  const drift = availableWidth - widths.reduce((sum, width) => sum + width, 0);
+  if (Math.abs(drift) > 0.01) {
+    for (let index = widths.length - 1; index >= 0; index--) {
+      const candidate = clampWidth(widths[index] + drift, cols[index]);
+      if (Math.abs(candidate - widths[index]) > 0.01) {
+        widths[index] = candidate;
+        break;
+      }
+    }
+  }
+  return widths;
+}

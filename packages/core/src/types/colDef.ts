@@ -131,6 +131,8 @@ export interface ColDef<TData = any, TValue = any> {
   minWidth?: number;
   maxWidth?: number;
   flex?: number;
+  /** Excludes the column from `columnLayout: "fit"` scaling. */
+  suppressSizeToFit?: boolean;
   hide?: boolean;
   pinned?: PinnedDirection | boolean;
   sortable?: boolean;

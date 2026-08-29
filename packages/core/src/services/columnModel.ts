@@ -12,7 +12,7 @@ import type {
 } from "../types/colDef";
 import { isColDefGroup } from "../types/colDef";
 import { mergeColDef } from "../core/resolveOptions";
-import { computeColumnWidths, clampWidth, DEFAULT_COLUMN_WIDTH } from "../lib/layout";
+import { computeColumnWidths, fitColumnWidths, clampWidth, DEFAULT_COLUMN_WIDTH } from "../lib/layout";
 
 export type PaneType = "left" | "center" | "right";
 
@@ -185,11 +185,24 @@ export class ColumnModel {
       pinnedTotal += c.currentWidth;
     }
 
-    const centerInputs = this.center.map((c) => this.widthInputOf(c));
     const available = Math.max(0, viewportWidth - pinnedTotal);
-    const widths = computeColumnWidths(centerInputs, available);
-    this.center.forEach((c, i) => {
-      c.currentWidth = widths[i];
+    const scalable = this.center.filter((column) => !column.colDef.suppressSizeToFit);
+    const fixed = this.center.filter((column) => column.colDef.suppressSizeToFit);
+    let fixedTotal = 0;
+    for (const column of fixed) {
+      column.currentWidth = clampWidth(
+        column.manualWidth ?? column.colDef.width ?? DEFAULT_COLUMN_WIDTH,
+        this.widthInputOf(column)
+      );
+      fixedTotal += column.currentWidth;
+    }
+    const scalableInputs = scalable.map((column) => this.widthInputOf(column));
+    const scalableWidth = Math.max(0, available - fixedTotal);
+    const widths = this.core.options.columnLayout === "fit"
+      ? fitColumnWidths(scalableInputs, scalableWidth)
+      : computeColumnWidths(scalableInputs, scalableWidth);
+    scalable.forEach((column, index) => {
+      column.currentWidth = widths[index];
     });
   }
 

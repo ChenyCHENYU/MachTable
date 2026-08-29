@@ -3,10 +3,21 @@ import { MachTablePlugin } from "./plugin";
 
 export { MachTable, RobotGrid };
 export type { MachTableVueProps, RobotGridVueProps } from "./RobotGrid";
-export { vueCellRenderer, vueDetailRenderer } from "./adapters";
+export {
+  vueCellEditorSlot,
+  vueCellRenderer,
+  vueCellSlotRenderer,
+  vueDetailRenderer,
+  vueDetailSlotRenderer,
+  vueHeaderSlotRenderer,
+  vueOverlaySlot
+} from "./adapters";
 export { useMachTable } from "./useMachTable";
 export type { UseMachTableReturn } from "./useMachTable";
 export type { VueCellRendererProps } from "./adapters";
+export type { VueCellEditorSlotProps } from "./adapters";
+export { applyVueSlots, createVueSlotEnhancer } from "./slots";
+export type { MachTableVueSlots } from "./slots";
 export { MachTablePlugin } from "./plugin";
 export type { MachTablePluginOptions } from "./plugin";
 export {

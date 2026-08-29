@@ -30,6 +30,7 @@
 | `headerHeight` | `number` | 按密度 | 单层表头高度 px（多级表头自动 × 层数） |
 | `getRowHeight` | `(p: GetRowHeightParams) => number` | — | 变高行回调，见[配方](/recipes/variable-height)。无限模式未加载行使用固定 `rowHeight` |
 | `rowBuffer` | `number` | `8` | 视口上下各预渲染的行数 |
+| `columnLayout` | `"normal" \| "fit"` | `"normal"` | `fit` 使用 ResizeObserver 持续填满容器，无需在 grid-ready/resize 中手调 `sizeColumnsToFit` |
 | `className` | `string` | `""` | 追加到根元素的类名（如 `mach-theme-dark`、主题桥接类） |
 
 ## 视觉

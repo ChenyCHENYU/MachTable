@@ -734,6 +734,10 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.rowBuffer = Math.floor(options.rowBuffer);
       needsRelayout = true;
     }
+    if (options.columnLayout != null && options.columnLayout !== resolved.columnLayout) {
+      resolved.columnLayout = options.columnLayout === "fit" ? "fit" : "normal";
+      needsRelayout = true;
+    }
     if (options.multiSort != null) resolved.multiSort = options.multiSort;
     if (options.detailRowHeight != null && Number.isFinite(options.detailRowHeight) && options.detailRowHeight > 0 && options.detailRowHeight !== resolved.detailRowHeight) {
       resolved.detailRowHeight = options.detailRowHeight;

@@ -26,6 +26,7 @@ export class GridSkeleton {
   private currentOverlay: "loading" | "noRows" | null = null;
   private currentOverlayContent: OverlayTemplate | null = null;
   private currentOverlayAllowsHtml = false;
+  private overlayCleanup: (() => void) | null = null;
   private customClassTokens: string[] = [];
   private resizeObserver: ResizeObserver | null = null;
   private headerDepth = 1;
@@ -252,9 +253,10 @@ export class GridSkeleton {
     this.currentOverlay = type;
     this.currentOverlayContent = content;
     this.currentOverlayAllowsHtml = allowUnsafeHtml;
+    this.cleanupOverlayContent();
     this.overlayContent.replaceChildren();
 
-    let resolved: string | HTMLElement;
+    let resolved: import("../types/options").OverlayContent;
     try {
       resolved = typeof content === "function" ? content() : content;
     } catch (error) {
@@ -262,7 +264,10 @@ export class GridSkeleton {
       resolved = "";
     }
 
-    if (resolved instanceof HTMLElement) {
+    if (typeof resolved === "object" && resolved != null && "el" in resolved) {
+      this.overlayContent.appendChild(resolved.el);
+      this.overlayCleanup = resolved.destroy ?? null;
+    } else if (resolved instanceof HTMLElement) {
       this.overlayContent.appendChild(resolved);
     } else if (resolved && allowUnsafeHtml) {
       this.overlayContent.innerHTML = resolved;
@@ -283,6 +288,7 @@ export class GridSkeleton {
     this.currentOverlayContent = null;
     this.currentOverlayAllowsHtml = false;
     this.overlayWrapper.style.display = "none";
+    this.cleanupOverlayContent();
     this.overlayContent.replaceChildren();
     this.root.setAttribute("aria-busy", "false");
   }
@@ -304,7 +310,19 @@ export class GridSkeleton {
     this.themeUnsub = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.cleanupOverlayContent();
     this.root.remove();
+  }
+
+  private cleanupOverlayContent(): void {
+    if (!this.overlayCleanup) return;
+    const cleanup = this.overlayCleanup;
+    this.overlayCleanup = null;
+    try {
+      cleanup();
+    } catch (error) {
+      this.core.reportError(error, "overlayTemplate.destroy");
+    }
   }
 
 }

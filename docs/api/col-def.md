@@ -22,6 +22,7 @@
 | `width` | `number` | `150` | 固定宽度 px |
 | `minWidth` / `maxWidth` | `number` | `80` / — | 拖拽与自适应的边界 |
 | `flex` | `number` | `0` | 弹性权重：容器有多余空间时按权重分配 |
+| `suppressSizeToFit` | `boolean` | `false` | 在 `columnLayout: "fit"` 下保持本列宽度；选择、序号、拖拽和操作列模板默认开启 |
 | `pinned` | `"left" \| "right" \| boolean` | — | 固定列；`true` 等价 `"left"` |
 | `hide` | `boolean` | `false` | 初始隐藏 |
 
@@ -48,7 +49,7 @@
 | `cellStyle` | `CSSObject \| (p) => CSSObject` | 动态行内样式（条件标红等；变更自动清理旧值） |
 | `tooltipValueGetter` | `(p) => string \| null` | 覆盖默认 title（默认为格式化文本） |
 | `wrapText` | `boolean` | 单元格自动换行（配合 `getRowHeight`） |
-| `type` | `string` | `"index"` 序号列 / `"rightAligned"` 右对齐（数值列默认右对齐 + tabular-nums） |
+| `type` | `string \| string[]` | 从全局 `columnTypes` 解析一个或多个语义类型；从左到右合并，当前列字段最终覆盖 |
 
 ## 编辑
 

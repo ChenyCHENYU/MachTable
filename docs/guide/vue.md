@@ -205,6 +205,35 @@ function exportCsv() {
 
 在 `<script setup>` 内调用 `vueCellRenderer` / `vueDetailRenderer` 工厂时会**自动捕获宿主 appContext**：单元格与明细内的 naive / EP 组件可继承 `ConfigProvider` 提供的主题、国际化等注入（也可通过第二参数 `{ appContext }` 显式指定）。这让 naive-ui 集成章节所述的上下文限制不再存在。
 
+## Vue 原生插槽
+
+常用页面不必再手写 renderer 工厂。列以 `colId`（未配置时为 `field`）匹配 `#cell-*`、`#header-*` 和 `#editor-*`；点路径会转换为短横线。
+
+```vue
+<MachTable :column-defs="columns" :row-data="rows" :loading="loading">
+  <template #header-status>订单状态</template>
+
+  <template #cell-status="{ value }">
+    <ElTag :type="value === 'done' ? 'success' : 'warning'">{{ value }}</ElTag>
+  </template>
+
+  <template #editor-amount="{ value, setValue, commit, cancel }">
+    <ElInputNumber
+      :model-value="value"
+      @update:model-value="setValue"
+      @keyup.enter="commit"
+      @keyup.esc="cancel"
+    />
+  </template>
+
+  <template #loading><AppTableSkeleton /></template>
+  <template #empty><AppEmpty description="暂无订单" /></template>
+  <template #detail="{ data }"><OrderDetail :order="data" /></template>
+</MachTable>
+```
+
+通用 `#cell` / `#header` / `#editor` 会作用于所有列；操作列 `colId: "op"` 还可使用 `#actions`。插槽组件继承应用 `appContext`，并在虚拟行复用、覆盖层替换和表格销毁时自动卸载。
+
 `mt.ref` 绑定组件、挂载后 `mt.api` 自动可用、卸载自动置空；`mt.ready` 便于做加载态。
 
 ## 响应式更新语义

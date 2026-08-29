@@ -38,6 +38,7 @@ export const GRID_OPTION_META = {
   rowHeight: { kind: "number", update: "options" },
   headerHeight: { kind: "number", update: "options" },
   rowBuffer: { kind: "number", update: "options" },
+  columnLayout: { kind: "string", update: "options" },
   rowSelection: { kind: "string", update: "options" },
   multiSort: { kind: "boolean", update: "options" },
   size: { kind: "string", update: "options" },

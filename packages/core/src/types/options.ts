@@ -45,7 +45,8 @@ export interface GridFeature<TData = any> {
  * Safe overlay content. Strings render as text unless
  * `allowUnsafeOverlayHtml` is explicitly enabled.
  */
-export type OverlayTemplate = string | HTMLElement | (() => string | HTMLElement);
+export type OverlayContent = string | HTMLElement | import("./params").ICellRendererResult;
+export type OverlayTemplate = OverlayContent | (() => OverlayContent);
 
 export type StatusBarPanel = "rowCount" | "selectedRowCount" | "rangeAggregate";
 
@@ -74,6 +75,7 @@ export type EventHandlers<TData = any> = {
 
 export type RowSelectionMode = "none" | "single" | "multiple";
 export type GridSize = "compact" | "normal" | "large";
+export type ColumnLayoutMode = "normal" | "fit";
 export type ThemeMode = "light" | "dark" | "auto";
 export type GridEditType = "cell" | "fullRow";
 export type EditableIndicator = "hover" | "always" | "none";
@@ -126,6 +128,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   rowHeight?: number;
   headerHeight?: number;
   rowBuffer?: number;
+  /** `fit` continuously fills the container without grid-ready glue code. */
+  columnLayout?: ColumnLayoutMode;
   rowSelection?: RowSelectionMode;
   multiSort?: boolean;
   size?: GridSize;
@@ -218,6 +222,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   rowHeight: number;
   headerHeight: number;
   rowBuffer: number;
+  columnLayout: ColumnLayoutMode;
   rowSelection: RowSelectionMode;
   multiSort: boolean;
   size: GridSize;

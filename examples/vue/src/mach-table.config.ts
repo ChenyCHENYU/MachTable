@@ -16,6 +16,7 @@ export const machTableConfig = defineMachTableConfig({
   defaults: {
     size: "compact",
     theme: "auto",
+    columnLayout: "fit",
     stripedRows: true,
     columnMenu: true,
     pagination: {

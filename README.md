@@ -180,6 +180,7 @@ import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-t
 export default defineMachTableConfig({
   defaults: {
     size: "compact",
+    columnLayout: "fit",
     pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] },
     defaultColDef: { sortable: true, resizable: true, filter: true },
     onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })

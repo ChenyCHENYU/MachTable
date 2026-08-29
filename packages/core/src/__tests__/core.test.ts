@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultComparator } from "../lib/compare";
-import { computeColumnWidths } from "../lib/layout";
+import { computeColumnWidths, fitColumnWidths } from "../lib/layout";
 import { getByPath, setByPath } from "../lib/path";
 import { csvEscape, buildCsv } from "../lib/csv";
 import { EventBus } from "../core/eventBus";
@@ -72,6 +72,21 @@ describe("computeColumnWidths", () => {
   it("does not shrink below total when space is insufficient", () => {
     const widths = computeColumnWidths([{ width: 300 }, { width: 400 }], 200);
     expect(widths).toEqual([300, 400]);
+  });
+});
+
+describe("fitColumnWidths", () => {
+  it("grows and shrinks columns to the target width", () => {
+    expect(fitColumnWidths([{ width: 100 }, { width: 200 }], 600)).toEqual([200, 400]);
+    expect(fitColumnWidths([{ width: 100 }, { width: 200 }], 150)).toEqual([80, 80]);
+  });
+
+  it("redistributes space after min and max constraints", () => {
+    const widths = fitColumnWidths(
+      [{ width: 100, maxWidth: 120 }, { width: 100, minWidth: 100 }],
+      320
+    );
+    expect(widths).toEqual([120, 200]);
   });
 });
 

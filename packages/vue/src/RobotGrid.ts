@@ -1,4 +1,4 @@
-import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type DefineComponent } from "vue";
+import { defineComponent, getCurrentInstance, h, onBeforeUnmount, onMounted, ref, watch, type DefineComponent } from "vue";
 import {
   createGrid,
   EVENT_TYPES,
@@ -13,6 +13,7 @@ import {
   type MachTablePresetSelection,
   type ResolvedMachTableGridOptions
 } from "./configuration";
+import { createVueSlotEnhancer } from "./slots";
 
 type AdapterOnlyGridOption = "className" | "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy";
 
@@ -69,11 +70,12 @@ const MachTableImpl = defineComponent({
   inheritAttrs: false,
   props: runtimeProps,
   emits: [...EVENT_TYPES] as unknown as string[],
-  setup(rawProps, { expose, attrs, emit }) {
+  setup(rawProps, { expose, attrs, emit, slots }) {
     const props = rawProps as Readonly<Record<string, any>>;
     const host = ref<HTMLDivElement | null>(null);
     let api: GridApi | null = null;
     const config = useMachTableConfig();
+    const enhanceVueSlots = createVueSlotEnhancer<any>(slots, getCurrentInstance()?.appContext);
     let lastResolution: ResolvedMachTableGridOptions<any> | null = null;
     const reportedWarnings = new Set<string>();
 
@@ -87,7 +89,7 @@ const MachTableImpl = defineComponent({
       if (props.gridAriaLabel !== undefined) explicit.ariaLabel = props.gridAriaLabel;
       if (props.gridAriaLabelledBy !== undefined) explicit.ariaLabelledBy = props.gridAriaLabelledBy;
       if (props.gridAriaDescribedBy !== undefined) explicit.ariaDescribedBy = props.gridAriaDescribedBy;
-      lastResolution = resolveMachTableGridOptions(
+      const resolution = resolveMachTableGridOptions(
         config.value,
         props.preset as MachTablePresetSelection | undefined,
         explicit as Partial<GridOptions<any>>,
@@ -99,6 +101,21 @@ const MachTableImpl = defineComponent({
           else console.warn(warning.message);
         }
       );
+      const enhancedOptions = enhanceVueSlots(resolution.options);
+      lastResolution = {
+        options: enhancedOptions,
+        explain: (key) => {
+          if (key === "columnDefs" && enhancedOptions.columnDefs !== resolution.options.columnDefs) {
+            return {
+              key,
+              value: enhancedOptions.columnDefs,
+              source: "Vue slots",
+              layers: [...resolution.explain(key).layers, { name: "Vue slots", value: enhancedOptions.columnDefs }]
+            };
+          }
+          return resolution.explain(key);
+        }
+      };
       return lastResolution.options;
     };
 

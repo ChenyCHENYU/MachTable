@@ -2,7 +2,13 @@ import type { ColDef } from "../types/colDef";
 import type { ActionButtonsConfig, RowActionsConfig } from "./presetRenderers";
 import { createActionButtonsRenderer, createRowActionsRenderer } from "./presetRenderers";
 
-const NO_INTERACT = { sortable: false, resizable: false, movable: false, filter: false } as const;
+const NO_INTERACT = {
+  sortable: false,
+  resizable: false,
+  movable: false,
+  filter: false,
+  suppressSizeToFit: true
+} as const;
 
 export function selectionColumn<TData = any>(overrides: Partial<ColDef<TData>> = {}): ColDef<TData> {
   return {

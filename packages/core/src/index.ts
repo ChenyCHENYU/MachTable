@@ -5,7 +5,7 @@ export { GridCore } from "./core/gridCore";
 export { EventBus } from "./core/eventBus";
 export { defaultComparator } from "./lib/compare";
 export { getByPath, setByPath, isSafePath } from "./lib/path";
-export { computeColumnWidths } from "./lib/layout";
+export { computeColumnWidths, fitColumnWidths } from "./lib/layout";
 export type { WidthInput } from "./lib/layout";
 
 export type {
@@ -57,6 +57,7 @@ export type {
   EventHandlers,
   RowSelectionMode,
   GridSize,
+  ColumnLayoutMode,
   ThemeMode,
   GridEditType,
   EditableIndicator,
@@ -66,6 +67,7 @@ export type {
   GridComponents,
   GridFeature,
   GridFeatureContext,
+  OverlayContent,
   OverlayTemplate,
   ColumnStateStore,
   StatusBarPanel,
