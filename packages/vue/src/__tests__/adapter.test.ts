@@ -2,6 +2,7 @@ import { createApp, defineComponent, h, nextTick, onUnmounted, ref, shallowRef, 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RobotGrid } from "../RobotGrid";
 import { vueCellRenderer } from "../adapters";
+import { createElementPlusEditors, vueCellEditor } from "../editors";
 import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTable, MachTablePlugin, type ColDef } from "../index";
 import { AsyncMachTable, AsyncMachTablePlugin, preloadMachTable } from "../async";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
@@ -37,6 +38,52 @@ describe("Vue adapter", () => {
     expect(column.field).toBe("id");
     expect(createGrid).toBeTypeOf("function");
     expect(DEFAULT_LOCALE.loading).toBeTruthy();
+  });
+
+  it("adapts v-model components into lifecycle-safe cell editors", async () => {
+    const Input = defineComponent({
+      props: { modelValue: String },
+      emits: ["update:modelValue"],
+      setup(props, { emit }) {
+        return () => h("input", {
+          class: "vue-model-editor",
+          value: props.modelValue,
+          onInput: (event: Event) => emit("update:modelValue", (event.target as HTMLInputElement).value)
+        });
+      }
+    });
+    const factory = vueCellEditor(Input, {
+      className: "business-editor",
+      props: { style: "color: rgb(255, 0, 0)" }
+    });
+    const editor = factory({ value: "before" } as any);
+    document.body.appendChild(editor.el);
+    await nextTick();
+    const input = editor.el.querySelector<HTMLInputElement>("input")!;
+    input.value = "after";
+    input.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect(editor.getValue()).toBe("after");
+    expect(editor.el.classList.contains("business-editor")).toBe(true);
+    expect(input.style.width).toBe("100%");
+    expect(input.style.color).toBe("rgb(255, 0, 0)");
+    editor.focus?.();
+    expect(document.activeElement).toBe(input);
+    editor.destroy?.();
+  });
+
+  it("creates optional Element Plus editor presets without importing Element Plus", () => {
+    const Control = defineComponent({ render: () => h("input") });
+    const editors = createElementPlusEditors({
+      input: Control,
+      inputNumber: Control,
+      select: Control,
+      datePicker: Control
+    });
+    expect(editors.input).toBeTypeOf("function");
+    expect(editors.number).toBeTypeOf("function");
+    expect(editors.select).toBeTypeOf("function");
+    expect(editors.date).toBeTypeOf("function");
   });
 
   it("registers typed global components through app.use", () => {
@@ -619,6 +666,8 @@ describe("Vue adapter", () => {
 
     await remote!.reload();
     expect(remote!.error.value).toEqual(expect.objectContaining({ message: "offline" }));
+    const errorOverlay = remote!.gridProps.value.overlayNoRowsTemplate as () => string;
+    expect(errorOverlay()).toContain("Remote request failed");
     await remote!.retry();
     expect(remote!.error.value).toBeInstanceOf(TypeError);
     await remote!.reload({ resetPage: true });

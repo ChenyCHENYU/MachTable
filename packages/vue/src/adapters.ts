@@ -2,6 +2,7 @@ import {
   createApp,
   h,
   render,
+  renderSlot,
   getCurrentInstance,
   shallowReactive,
   type AppContext,
@@ -57,13 +58,26 @@ function mountSlot(
   slot: Slot,
   props: () => Record<string, any>,
   host: HTMLElement,
-  appContext?: AppContext
+  appContext?: AppContext,
+  defer = true
 ): () => void {
-  const Root = { name: "MachTableSlot", setup: () => () => slot(props()) };
+  const Root = {
+    name: "MachTableSlot",
+    setup: () => () => renderSlot({ default: slot }, "default", props())
+  };
   const vnode = h(Root);
   if (appContext) vnode.appContext = appContext;
-  render(vnode, host);
-  return () => render(null, host);
+  let disposed = false;
+  const mount = () => {
+    if (disposed) return;
+    render(vnode, host);
+  };
+  if (defer) queueMicrotask(mount);
+  else mount();
+  return () => {
+    disposed = true;
+    render(null, host);
+  };
 }
 
 export function vueCellRenderer<TData = any, TValue = any>(
@@ -161,7 +175,7 @@ export function vueCellEditorSlot<TData = any, TValue = any>(
       commit: () => params.api.stopEditing(false),
       cancel: () => params.api.stopEditing(true)
     });
-    const unmount = mountSlot(slot, slotProps as () => Record<string, any>, host, appContext);
+    const unmount = mountSlot(slot, slotProps as () => Record<string, any>, host, appContext, false);
     return {
       el: host,
       getValue: () => state.value,

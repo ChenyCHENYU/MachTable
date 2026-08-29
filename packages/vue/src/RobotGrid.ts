@@ -52,7 +52,7 @@ for (const key of ADAPTER_OPTION_KEYS) {
               : kind === "string"
                 ? String
                 : undefined;
-  runtimeProps[key] = { ...(type ? { type } : {}), default: undefined };
+  runtimeProps[key] = { type, default: undefined };
 }
 runtimeProps.className = { type: String, default: undefined };
 runtimeProps.gridClassName = { type: String, default: undefined };
@@ -164,8 +164,7 @@ const MachTableImpl = defineComponent({
     return () => h("div", {
       ...attrs,
       ref: host,
-      class: ["mach-vue-host", props.className, attrs.class].filter(Boolean),
-      style: attrs.style
+      class: ["mach-vue-host", props.className, attrs.class]
     });
   }
 });

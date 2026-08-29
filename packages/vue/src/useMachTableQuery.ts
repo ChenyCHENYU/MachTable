@@ -16,6 +16,8 @@ import {
   type FilterModel,
   type GridApi,
   type GridOptions,
+  type OverlayContent,
+  type OverlayTemplate,
   type PaginationChangedEvent,
   type SelectionChangedEvent,
   type SortChangedEvent,
@@ -62,6 +64,9 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   /** Defaults true: a different business/filter query cannot inherit stale selections. */
   clearSelectionOnQueryChange?: boolean;
   quickFilterText?: Ref<string | null>;
+  /** Replaces the no-rows layer while the latest request is in an error state. */
+  errorOverlay?(context: { error: unknown; retry(): Promise<void> }): OverlayContent;
+  emptyOverlay?: OverlayTemplate;
   onSuccess?(result: MachTablePageResult<TData>): void;
   onError?(error: unknown): void;
 }
@@ -226,8 +231,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     requestGeneration: number
   ): void => {
     if (isStaleRequest(activeController, requestGeneration) || isAbortError(requestError)) return;
-    error.value = requestError;
-    options.onError?.(requestError);
+    error.value = requestError ?? new Error();
+    options.onError?.(error.value);
   };
 
   const load = async (): Promise<void> => {
@@ -341,6 +346,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     manualSorting: true,
     manualFiltering: true,
     quickFilterText: quickFilterText.value,
+    overlayNoRowsTemplate: error.value
+      ? () => options.errorOverlay?.({ error: error.value, retry: load }) ?? "Remote request failed. Please retry."
+      : options.emptyOverlay,
     pagination: {
       mode: "server",
       page: page.value,
