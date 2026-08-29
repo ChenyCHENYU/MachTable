@@ -75,7 +75,9 @@ export type {
   GridDatasource,
   InfiniteGetRowsParams,
   PaginationConfig,
-  WatermarkConfig
+  WatermarkConfig,
+  ActionPolicy,
+  ActionPolicyContext
 } from "./types/options";
 export { GRID_SIZE_PRESETS } from "./core/resolveOptions";
 export type { GridSizePreset } from "./core/resolveOptions";
@@ -127,6 +129,20 @@ export { selectionColumn, indexColumn, dragColumn, actionsColumn, rowActionsColu
 export { createColumnHelper, defineColumns } from "./lib/columnHelper";
 export type { ColumnHelper, FieldPath, FieldPathValue } from "./lib/columnHelper";
 export { createMachTablePreset, createEnterprisePreset, defineMachTablePreset, defineGridOptions } from "./lib/presets";
+export {
+  createBusinessColumnTypes,
+  createCachedDictionary,
+  createDictionaryRenderer
+} from "./lib/businessColumns";
+export type {
+  BusinessColumnType,
+  BusinessColumnTypeOptions,
+  CachedDictionary,
+  CachedDictionaryOptions,
+  DictionaryEntry,
+  DictionaryKey,
+  DictionaryRendererOptions
+} from "./lib/businessColumns";
 export type { TooltipParams, ContextMenuParams, ContextMenuItem } from "./types/params";
 export type {
   GridApi,

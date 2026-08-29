@@ -152,6 +152,7 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
   if (userOptions.columnStateStore) resolved.columnStateStore = userOptions.columnStateStore;
   if (userOptions.aggFuncs) resolved.aggFuncs = userOptions.aggFuncs;
   if (userOptions.components) resolved.components = userOptions.components;
+  if (userOptions.actionPolicy) resolved.actionPolicy = userOptions.actionPolicy;
   if (userOptions.summaryMethod) resolved.summaryMethod = userOptions.summaryMethod;
   if (userOptions.datasource) resolved.datasource = userOptions.datasource;
   if (userOptions.getRowHeight) resolved.getRowHeight = userOptions.getRowHeight;

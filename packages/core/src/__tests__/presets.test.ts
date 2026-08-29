@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createGrid, createStatusTagRenderer, createActionButtonsRenderer } from "../index";
 import type { GridApi } from "../index";
 
@@ -174,6 +174,41 @@ describe("preset renderers", () => {
     expect(buttons.length).toBe(1);
     buttons[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(seen).toEqual(["row-context"]);
+    api.destroy();
+  });
+
+  it("centralises action permission, confirmation and error handling", async () => {
+    const onDelete = vi.fn();
+    const onError = vi.fn();
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [{
+        colId: "op",
+        cellRenderer: createActionButtonsRenderer<Row>({
+          overflow: "inline",
+          actions: [
+            { id: "secret", label: "Secret", permission: "secret.read", onClick: vi.fn() },
+            { id: "delete", label: "Delete", permission: "order.delete", confirm: "确认删除？", onClick: onDelete },
+            { id: "broken", label: "Broken", onClick: () => { throw new Error("failed"); } }
+          ]
+        })
+      }],
+      rowData: rows,
+      actionPolicy: {
+        canAccess: ({ permissions }) => !permissions.includes("secret.read"),
+        confirm: async ({ actionId, message }) => actionId === "delete" && message === "确认删除？",
+        onError
+      }
+    });
+    const buttons = cellAt(host, 0, "op").querySelectorAll<HTMLButtonElement>("button");
+    expect([...buttons].map((button) => button.textContent)).toEqual(["Delete", "Broken"]);
+    buttons[0].click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onDelete).toHaveBeenCalledOnce();
+    buttons[1].click();
+    await Promise.resolve();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ actionId: "broken" }));
     api.destroy();
   });
 });

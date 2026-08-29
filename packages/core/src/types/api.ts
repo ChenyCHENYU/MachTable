@@ -79,6 +79,10 @@ export interface ScrollToIndexPosition {
 export interface GridApi<TData = any> {
   /** Resolves after the first layout frame and gridReady emission. */
   whenReady(): Promise<GridApi<TData>>;
+  /** Reads the currently resolved value after application, preset and table overrides. */
+  getGridOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K];
+  /** Typed shorthand for updating one runtime option. */
+  setGridOption<K extends keyof GridOptions<TData>>(key: K, value: GridOptions<TData>[K]): void;
   setRowData(rows: TData[] | null | undefined): void;
   applyTransaction(transaction: RowTransaction<TData>): void;
   /** Coalesces rapid transactions and refreshes the row pipeline once per batch. */

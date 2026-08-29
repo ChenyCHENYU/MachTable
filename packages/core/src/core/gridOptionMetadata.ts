@@ -56,6 +56,7 @@ export const GRID_OPTION_META = {
   columnStateStore: { kind: "object", update: "options" },
   aggFuncs: { kind: "object", update: "options" },
   components: { kind: "object", update: "options" },
+  actionPolicy: { kind: "object", update: "options" },
   features: { kind: "array", update: "options" },
   initialState: { kind: "object", update: "options" },
   locale: { kind: "object", update: "options" },

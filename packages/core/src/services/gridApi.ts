@@ -684,6 +684,14 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     this.core.summaryRenderer.refresh();
   }
 
+  getGridOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K] {
+    return (this.core.options as unknown as GridOptions<TData>)[key];
+  }
+
+  setGridOption<K extends keyof GridOptions<TData>>(key: K, value: GridOptions<TData>[K]): void {
+    this.updateOptions({ [key]: value } as Pick<GridOptions<TData>, K>);
+  }
+
   updateOptions(options: Partial<GridOptions<TData>>): void {
     if (this.core.isDestroyed()) return;
     const resolved = this.core.options;
@@ -962,6 +970,10 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     }
     if (Object.prototype.hasOwnProperty.call(options, "components")) {
       resolved.components = options.components;
+      needsCellRefresh = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, "actionPolicy")) {
+      resolved.actionPolicy = options.actionPolicy;
       needsCellRefresh = true;
     }
     if (Object.prototype.hasOwnProperty.call(options, "features")) {

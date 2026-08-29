@@ -1,5 +1,6 @@
 import type { CellRendererParams } from "../types/params";
 import type { CellRendererFn } from "../types/colDef";
+import type { ActionPolicyContext } from "../types/options";
 
 export type TagVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
@@ -103,6 +104,8 @@ export type ActionVariant = "default" | "primary" | "warning" | "success" | "dan
 export type ActionOverflowMode = "menu" | "drawer" | "inline";
 
 export interface ActionItem<TData = any> {
+  /** Stable identifier used by permission, telemetry and error policies. */
+  id?: string;
   icon?: string;
   label?: string;
   title?: string;
@@ -112,6 +115,10 @@ export interface ActionItem<TData = any> {
   show?: (params: CellRendererParams<TData>) => boolean;
   disabled?: boolean | ((params: CellRendererParams<TData>) => boolean);
   loading?: boolean | ((params: CellRendererParams<TData>) => boolean);
+  /** One or more UI permissions. Access is resolved by GridOptions.actionPolicy. */
+  permission?: string | readonly string[];
+  /** Ask for confirmation before running. A string becomes the confirmation message. */
+  confirm?: boolean | string | ((params: CellRendererParams<TData>) => boolean | string | Promise<boolean | string>);
   onClick: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
 }
 
@@ -131,6 +138,9 @@ export interface RowActionsConfig<TData = any> extends Omit<ActionButtonsConfig<
   edit?: boolean;
   extraActions?: ActionItem<TData>[];
   labels?: Partial<Record<"view" | "edit" | "delete" | "save" | "cancel", string>>;
+  permissions?: Partial<Record<"view" | "edit" | "delete", string | readonly string[]>>;
+  /** Defaults to the translated delete label when true. */
+  confirmDelete?: boolean | string | ((params: CellRendererParams<TData>) => boolean | string | Promise<boolean | string>);
 }
 
 let openActionSurface: HTMLElement | null = null;
@@ -274,11 +284,57 @@ function actionVariant(action: ActionItem): ActionVariant {
   return action.danger ? "danger" : (action.variant ?? "default");
 }
 
+function actionPermissions<TData>(action: ActionItem<TData>): readonly string[] {
+  if (!action.permission) return [];
+  return typeof action.permission === "string" ? [action.permission] : action.permission;
+}
+
+function actionContext<TData>(
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>,
+  message?: string
+): ActionPolicyContext<TData> {
+  return {
+    ...(action.id ? { actionId: action.id } : {}),
+    permissions: actionPermissions(action),
+    ...(message ? { message } : {}),
+    params
+  };
+}
+
+function reportActionError<TData>(
+  error: unknown,
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>
+): void {
+  const policy = params.api.getGridOption("actionPolicy");
+  try {
+    if (policy?.onError) policy.onError(error, actionContext(action, params));
+    else console.error("[mach-table] action handler failed", error);
+  } catch (policyError) {
+    console.error("[mach-table] action error policy failed", policyError, error);
+  }
+}
+
+function canAccessAction<TData>(action: ActionItem<TData>, params: CellRendererParams<TData>): boolean {
+  const permissions = actionPermissions(action);
+  if (permissions.length === 0) return true;
+  const policy = params.api.getGridOption("actionPolicy");
+  if (!policy?.canAccess) return true;
+  try {
+    return policy.canAccess(actionContext(action, params));
+  } catch (error) {
+    reportActionError(error, action, params);
+    return false;
+  }
+}
+
 export function createActionButtonsRenderer<TData = any>(config: ActionButtonsConfig<TData>): CellRendererFn {
   const max = Math.max(0, config.max ?? 3);
   const overflowMode = config.overflow ?? "menu";
   return (params: CellRendererParams<TData>) => {
     const visible = config.actions.filter((action) => {
+      if (!canAccessAction(action, params)) return false;
       if (!action.show) return true;
       try { return action.show(params); } catch { return false; }
     });
@@ -291,22 +347,28 @@ export function createActionButtonsRenderer<TData = any>(config: ActionButtonsCo
 
     const run = (action: ActionItem<TData>, button: HTMLButtonElement): void => {
       if (resolveActionFlag(action.disabled, params)) return;
-      let result: unknown;
-      try {
-        result = action.onClick(params);
-      } catch (error) {
-        console.error("[mach-table] action handler failed", error);
-        return;
-      }
-      if (result && typeof (result as PromiseLike<unknown>).then === "function") {
-        button.disabled = true;
-        button.classList.add("mach-action-btn--loading");
-        void Promise.resolve(result).catch((error) => console.error("[mach-table] async action handler failed", error)).finally(() => {
-          if (!button.isConnected) return;
-          button.disabled = false;
-          button.classList.remove("mach-action-btn--loading");
-        });
-      }
+      button.disabled = true;
+      button.classList.add("mach-action-btn--loading");
+      const execute = async (): Promise<void> => {
+        if (action.confirm != null && action.confirm !== false) {
+          const request = typeof action.confirm === "function" ? await action.confirm(params) : action.confirm;
+          if (request === false) return;
+          const message = typeof request === "string" ? request : (action.label ?? action.title ?? "Confirm action");
+          const policy = params.api.getGridOption("actionPolicy");
+          const approved = policy?.confirm
+            ? await policy.confirm(actionContext(action, params, message))
+            : typeof window !== "undefined" && typeof window.confirm === "function"
+              ? window.confirm(message)
+              : false;
+          if (!approved) return;
+        }
+        await action.onClick(params);
+      };
+      void execute().catch((error) => reportActionError(error, action, params)).finally(() => {
+        if (!button.isConnected) return;
+        button.disabled = resolveActionFlag(action.disabled, params) || resolveActionFlag(action.loading, params);
+        button.classList.toggle("mach-action-btn--loading", resolveActionFlag(action.loading, params));
+      });
     };
 
     for (const action of shown) {
@@ -395,11 +457,33 @@ export function createRowActionsRenderer<TData = any>(config: RowActionsConfig<T
     }
 
     const actions: ActionItem<TData>[] = [];
-    if (config.onView) actions.push({ icon: "view", title: labels.view, variant: "primary", onClick: config.onView });
+    if (config.onView) actions.push({
+      id: "view",
+      icon: "view",
+      title: labels.view,
+      variant: "primary",
+      ...(config.permissions?.view ? { permission: config.permissions.view } : {}),
+      onClick: config.onView
+    });
     if (config.edit !== false) {
-      actions.push({ icon: "edit", title: labels.edit, variant: "warning", onClick: () => { params.api.startEditingRow(params.rowIndex); } });
+      actions.push({
+        id: "edit",
+        icon: "edit",
+        title: labels.edit,
+        variant: "warning",
+        ...(config.permissions?.edit ? { permission: config.permissions.edit } : {}),
+        onClick: () => { params.api.startEditingRow(params.rowIndex); }
+      });
     }
-    if (config.onDelete) actions.push({ icon: "delete", title: labels.delete, variant: "danger", onClick: config.onDelete });
+    if (config.onDelete) actions.push({
+      id: "delete",
+      icon: "delete",
+      title: labels.delete,
+      variant: "danger",
+      ...(config.permissions?.delete ? { permission: config.permissions.delete } : {}),
+      ...(config.confirmDelete ? { confirm: config.confirmDelete === true ? labels.delete : config.confirmDelete } : {}),
+      onClick: config.onDelete
+    });
     actions.push(...(config.extraActions ?? []));
     return createActionButtonsRenderer<TData>({
       actions,

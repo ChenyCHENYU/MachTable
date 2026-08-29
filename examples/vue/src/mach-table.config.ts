@@ -1,8 +1,19 @@
 import {
+  createBusinessColumnTypes,
   defineMachTableConfig,
   defineMachTablePreset,
   LOCALE_EN
 } from "@agile-team/mach-table-vue";
+
+const businessColumnTypes = createBusinessColumnTypes({
+  locale: "zh-CN",
+  currency: "CNY",
+  timeZone: "Asia/Shanghai",
+  emptyText: "—"
+});
+
+// Demo fallback. Production projects should delegate to their permission store.
+const hasPermission = (_permission: string): boolean => true;
 
 /**
  * MachTable application control center.
@@ -35,6 +46,14 @@ export const machTableConfig = defineMachTableConfig({
     /** Replace with telemetry/Sentry integration in a production application. */
     onGridError: ({ code, error, source }) => {
       console.error("[business-grid]", code, source, error);
+    },
+    /** All action columns share the same permission/confirmation/error rules. */
+    actionPolicy: {
+      canAccess: ({ permissions }) => permissions.every(hasPermission),
+      confirm: ({ message }) => Promise.resolve(window.confirm(message ?? "确认执行此操作？")),
+      onError: (error, { actionId }) => {
+        console.error("[business-action]", actionId, error);
+      }
     }
   },
 
@@ -69,16 +88,7 @@ export const machTableConfig = defineMachTableConfig({
 
   /** Semantic column types remove formatter/editor boilerplate from pages. */
   columnTypes: {
-    money: {
-      align: "right",
-      filter: "number",
-      cellEditor: "number",
-      valueFormatter: ({ value }) => value == null ? "" : `¥${Number(value).toLocaleString()}`
-    },
-    status: {
-      filter: "set",
-      cellRenderer: "statusTag"
-    },
+    ...businessColumnTypes,
     readonly: {
       editable: false
     }

@@ -1254,6 +1254,16 @@ input.mach-select-all {
   animation: mach-spin 0.8s linear infinite;
 }
 
+.mach-dictionary-value--loading {
+  color: var(--mach-header-fg);
+  opacity: 0.72;
+}
+
+.mach-dictionary-value--error {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
 .mach-action-btn--icon {
   padding: 0;
   width: 24px;

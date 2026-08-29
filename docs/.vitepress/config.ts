@@ -55,6 +55,7 @@ export default defineConfig({
           items: [
             { text: "行选择", link: "/recipes/selection" },
             { text: "远程查询与跨页选择", link: "/recipes/remote-query" },
+            { text: "业务字段、字典与权限", link: "/recipes/business-columns" },
             { text: "操作列与状态列", link: "/recipes/action-columns" },
             { text: "单元格与整行编辑", link: "/recipes/editing" },
             { text: "框选 / 复制 / 填充", link: "/recipes/clipboard" },

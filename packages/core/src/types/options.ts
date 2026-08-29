@@ -8,7 +8,7 @@ import type {
   SortModel
 } from "./colDef";
 import type { GridEventMap } from "./events";
-import type { GetRowIdParams } from "./params";
+import type { CellRendererParams, GetRowIdParams } from "./params";
 import type { RowNode } from "./row";
 import type { GridState } from "./state";
 
@@ -124,6 +124,24 @@ export interface WatermarkConfig {
   angle?: number;
 }
 
+export interface ActionPolicyContext<TData = any> {
+  /** Stable business action identifier, for example `order.delete`. */
+  actionId?: string;
+  permissions: readonly string[];
+  message?: string;
+  params: CellRendererParams<TData>;
+}
+
+/**
+ * Application-wide UI action policy. This centralises permission, confirmation
+ * and error handling while the backend remains the final security boundary.
+ */
+export interface ActionPolicy<TData = any> {
+  canAccess?(context: ActionPolicyContext<TData>): boolean;
+  confirm?(context: ActionPolicyContext<TData>): boolean | Promise<boolean>;
+  onError?(error: unknown, context: ActionPolicyContext<TData>): void;
+}
+
 export interface GridOptions<TData = any> extends EventHandlers<TData> {
   columnDefs?: (ColDef<TData> | ColDefGroup<TData>)[] | null;
   rowData?: TData[] | null;
@@ -153,6 +171,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   columnStateStore?: ColumnStateStore;
   aggFuncs?: Record<string, (values: any[]) => any>;
   components?: GridComponents;
+  /** Shared policy consumed by action column helpers. */
+  actionPolicy?: ActionPolicy<TData>;
   features?: readonly GridFeature<TData>[];
   /** State restored atomically after columns and initial rows are available. */
   initialState?: GridState;
@@ -246,6 +266,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   columnStateStore?: ColumnStateStore;
   aggFuncs?: Record<string, (values: any[]) => any>;
   components?: GridComponents;
+  actionPolicy?: ActionPolicy<TData>;
   features: readonly GridFeature<TData>[];
   initialState?: GridState;
   locale: import("../lib/locale").RgLocale;
