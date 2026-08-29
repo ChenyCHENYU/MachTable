@@ -1,7 +1,7 @@
 import type { App, Component } from "vue";
-import type { GridOptions } from "@agile-team/mach-table";
 import type { MachTable } from "./RobotGrid";
-import { MACH_TABLE_DEFAULTS_KEY } from "./defaults";
+import { createMachTableConfigRef, MACH_TABLE_CONFIG_KEY, MACH_TABLE_DEFAULTS_KEY } from "./defaults";
+import type { MachTableRuntimeConfig } from "./configuration";
 
 declare module "vue" {
   export interface GlobalComponents {
@@ -10,13 +10,11 @@ declare module "vue" {
   }
 }
 
-export interface MachTablePluginOptions {
+export interface MachTablePluginOptions extends MachTableRuntimeConfig {
   /** Global component name. Defaults to `MachTable`. */
   componentName?: string;
   /** Also register the backwards-compatible `RobotGrid` name. Defaults to true. */
   registerRobotGridAlias?: boolean;
-  /** Application-wide defaults. Component props override these values. */
-  defaults?: Partial<GridOptions<any>>;
 }
 
 export function registerGlobalMachTable(
@@ -30,7 +28,9 @@ export function registerGlobalMachTable(
   }
 
   const names = new Set([componentName]);
-  app.provide(MACH_TABLE_DEFAULTS_KEY, options.defaults ?? {});
+  const config = createMachTableConfigRef(options);
+  app.provide(MACH_TABLE_CONFIG_KEY, config);
+  app.provide(MACH_TABLE_DEFAULTS_KEY, config.value.defaults ?? {});
   if (options.registerRobotGridAlias !== false) names.add("RobotGrid");
 
   for (const name of names) {

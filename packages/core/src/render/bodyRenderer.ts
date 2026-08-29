@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { PaneType } from "../services/columnModel";
 import type { Column } from "../services/column";
+import { hasColumnType } from "../core/resolveOptions";
 import type { RowNode } from "../types/row";
 import { RangeSelectionModel, type NormalizedRange } from "../services/rangeSelectionModel";
 import { RowDragController } from "../services/rowDragController";
@@ -794,7 +795,7 @@ export class BodyRenderer {
       this.resetSpanStyle(cell);
       return;
     }
-    if (column.colDef.type === "index" && !node.isDetail) {
+    if (hasColumnType(column.colDef, "index") && !node.isDetail) {
       cell.textContent = String(this.core.rowModel.getRowSeq(node) + this.core.options.indexOffset);
       if (cell.className !== "mach-cell mach-cell--index") cell.className = "mach-cell mach-cell--index";
       this.applyCellSpanStyle(cell, node, column);
@@ -852,7 +853,7 @@ export class BodyRenderer {
     if (this.treeColumnCache !== undefined) return this.treeColumnCache;
     this.treeColumnCache =
       this.core.columnModel.getOrderedVisible().find(
-        (c) => !c.hasCheckbox && !c.isDetailToggle && !c.colDef.rowDrag && c.colDef.type !== "index"
+        (c) => !c.hasCheckbox && !c.isDetailToggle && !c.colDef.rowDrag && !hasColumnType(c.colDef, "index")
       ) ?? null;
     return this.treeColumnCache;
   }

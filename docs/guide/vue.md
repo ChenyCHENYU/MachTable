@@ -30,20 +30,27 @@ import App from "./App.vue";
 createApp(App).use(MachTablePlugin).mount("#app");
 ```
 
-推荐把跨页面一致的配置放进插件；单表 props 会覆盖全局值：
+推荐把跨页面一致的配置放进独立的 `src/config/mach-table.config.ts`；应用入口只保留一行安装，单表 props 仍会覆盖全局值：
 
 ```ts
-createApp(App).use(MachTablePlugin, {
+// src/config/mach-table.config.ts
+import { defineMachTableConfig } from "@agile-team/mach-table-vue";
+
+export default defineMachTableConfig({
   defaults: {
     size: "compact",
     pagination: false,
     defaultColDef: { sortable: true, resizable: true, filter: true },
     onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
   }
-}).mount("#app");
+});
+
+// main.ts
+import machTableConfig from "@/config/mach-table.config";
+createApp(App).use(MachTablePlugin, machTableConfig).mount("#app");
 ```
 
-布局或路由还可在 `setup()` 中调用 `provideMachTableDefaults(...)` 叠加局部默认值，后代所有表格生效，不需要再包一层组件。
+命名预设、语义列类型、动态路由配置、覆盖优先级和配置诊断见[配置中心与覆盖规则](/guide/configuration)。布局或路由可调用 `provideMachTableConfig(...)`，只覆盖默认值时也可继续使用 `provideMachTableDefaults(...)`。
 
 默认全局名称已包含 Volar / `vue-tsc` 类型。需要统一业务命名时可以配置：
 

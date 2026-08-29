@@ -124,7 +124,7 @@ export type {
 export { selectionColumn, indexColumn, dragColumn, actionsColumn, rowActionsColumn } from "./lib/presetColumns";
 export { createColumnHelper, defineColumns } from "./lib/columnHelper";
 export type { ColumnHelper, FieldPath, FieldPathValue } from "./lib/columnHelper";
-export { createMachTablePreset, createEnterprisePreset, defineGridOptions } from "./lib/presets";
+export { createMachTablePreset, createEnterprisePreset, defineMachTablePreset, defineGridOptions } from "./lib/presets";
 export type { TooltipParams, ContextMenuParams, ContextMenuItem } from "./types/params";
 export type {
   GridApi,

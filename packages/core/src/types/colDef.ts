@@ -165,7 +165,8 @@ export interface ColDef<TData = any, TValue = any> {
   cellRendererParams?: Record<string, any>;
   cellClass?: CellClassRule;
   comparator?: (valueA: any, valueB: any, nodeA: RowNode<TData>, nodeB: RowNode<TData>) => number;
-  type?: string;
+  /** Named column type(s), resolved left-to-right before this column definition. */
+  type?: string | readonly string[];
   initialSort?: SortDirection;
   onCellClick?: (event: CellClickEvent<TData, TValue>) => void;
   onCellDoubleClick?: (event: CellDoubleClickEvent<TData, TValue>) => void;

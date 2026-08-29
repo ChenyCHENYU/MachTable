@@ -33,6 +33,7 @@ export const GRID_OPTION_META = {
   columnDefs: { kind: "array", update: "columnDefs" },
   rowData: { kind: "array", update: "rowData" },
   defaultColDef: { kind: "object", update: "options" },
+  columnTypes: { kind: "object", update: "options" },
   getRowId: { kind: "function", update: "options" },
   rowHeight: { kind: "number", update: "options" },
   headerHeight: { kind: "number", update: "options" },

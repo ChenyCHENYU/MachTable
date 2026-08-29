@@ -272,6 +272,51 @@ describe("enterprise DX helpers and change tracking", () => {
     expect(preset.defaultColDef).toEqual(expect.objectContaining({ filter: true, minWidth: 120 }));
   });
 
+  it("merges semantic preset objects and composes event handlers", () => {
+    const appReady = vi.fn();
+    const routeReady = vi.fn();
+    const preset = createMachTablePreset<any>(
+      {
+        pagination: { pageSize: 20, pageSizeOptions: [20, 50], showTotal: true },
+        statusBar: { panels: ["rowCount"] },
+        columnTypes: { money: { align: "right", filter: "number" } },
+        onGridReady: appReady
+      },
+      {
+        pagination: { pageSize: 50 },
+        columnTypes: { status: { filter: "set" }, money: { editable: true } },
+        onGridReady: routeReady
+      }
+    );
+    expect(preset.pagination).toEqual({ pageSize: 50, pageSizeOptions: [20, 50], showTotal: true });
+    expect(preset.statusBar).toEqual({ panels: ["rowCount"] });
+    expect(preset.columnTypes).toEqual({
+      money: { align: "right", filter: "number", editable: true },
+      status: { filter: "set" }
+    });
+    preset.onGridReady?.({ api: {} as any, type: "gridReady" });
+    expect(appReady).toHaveBeenCalledOnce();
+    expect(routeReady).toHaveBeenCalledOnce();
+  });
+
+  it("applies named column types before local column overrides", () => {
+    const api = createGrid<Row>(createHost(), {
+      columnTypes: {
+        numeric: { align: "right", filter: "number", editable: true },
+        readonly: { editable: false }
+      },
+      columnDefs: [{ field: "qty", type: ["numeric", "readonly"], editable: true }],
+      rowData: rows,
+      pagination: false
+    });
+    const column = api.getColumnDefs()?.[0] as ColDef<Row>;
+    expect(column.type).toEqual(["numeric", "readonly"]);
+    const rendered = document.querySelector<HTMLElement>(".mach-cell[data-col-id='qty']");
+    expect(rendered?.classList.contains("mach-cell--right")).toBe(true);
+    expect(api.startEditingCell({ rowIndex: 0, colId: "qty" })).toBe(true);
+    api.destroy();
+  });
+
   it("tracks, rolls back and marks edited rows as saved", async () => {
     const host = createHost();
     const data = rows.map((row) => ({ ...row }));

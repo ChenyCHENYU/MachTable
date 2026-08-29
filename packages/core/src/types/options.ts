@@ -120,6 +120,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   columnDefs?: (ColDef<TData> | ColDefGroup<TData>)[] | null;
   rowData?: TData[] | null;
   defaultColDef?: Partial<ColDef<TData>>;
+  /** Reusable semantic column definitions referenced through `colDef.type`. */
+  columnTypes?: Readonly<Record<string, Partial<ColDef<TData>>>>;
   getRowId?: (params: GetRowIdParams<TData>) => string;
   rowHeight?: number;
   headerHeight?: number;
@@ -211,6 +213,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   columnDefs: (ColDef<TData> | ColDefGroup<TData>)[];
   rowData: TData[];
   defaultColDef: Partial<ColDef<TData>>;
+  columnTypes: Readonly<Record<string, Partial<ColDef<TData>>>>;
   getRowId?: (params: GetRowIdParams<TData>) => string;
   rowHeight: number;
   headerHeight: number;

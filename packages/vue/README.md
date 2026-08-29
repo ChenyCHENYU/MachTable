@@ -79,21 +79,26 @@ createApp(App).use(AsyncMachTablePlugin).mount("#app");
 void preloadMachTable();
 ```
 
-After either global plugin is installed, pages can use `<MachTable>` directly. Global component types are included for Volar and `vue-tsc`. A custom name, legacy alias policy and application defaults are supported:
+After either global plugin is installed, pages can use `<MachTable>` directly. Keep conventions in a dedicated `mach-table.config.ts`, then install it with one clean line:
 
 ```ts
-app.use(MachTablePlugin, {
-  componentName: "BusinessTable",
-  registerRobotGridAlias: false,
+// mach-table.config.ts
+import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-vue";
+export default defineMachTableConfig({
   defaults: {
     size: "compact",
-    pagination: false,
+    pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] },
     defaultColDef: { sortable: true, resizable: true, filter: true }
-  }
+  },
+  defaultPreset: "list",
+  presets: { list: defineMachTablePreset({ stripedRows: true }) }
 });
+
+// main.ts
+app.use(MachTablePlugin, machTableConfig);
 ```
 
-Layouts can refine defaults without wrapper components by calling `provideMachTableDefaults(...)`. The async plugin also accepts `asyncComponentOptions` with `loadingComponent`, `errorComponent`, `delay`, `timeout` and `onError`.
+Layouts can reactively refine defaults and presets with `provideMachTableConfig(...)`; direct table props always win. `provideMachTableDefaults(...)` remains as a smaller compatibility API. The async plugin also accepts `asyncComponentOptions` with `loadingComponent`, `errorComponent`, `delay`, `timeout` and `onError`.
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `vue >= 3.2` remains a peer dependency supplied by the host application. Existing local imports remain fully supported.
 

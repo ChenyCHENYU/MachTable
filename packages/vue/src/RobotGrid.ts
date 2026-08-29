@@ -1,17 +1,24 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type DefineComponent } from "vue";
 import {
   createGrid,
-  createMachTablePreset,
   EVENT_TYPES,
   GRID_OPTION_KEYS,
   GRID_OPTION_META
 } from "@agile-team/mach-table";
 import type { GridApi, GridOptions } from "@agile-team/mach-table";
-import { useMachTableDefaults } from "./defaults";
+import { useMachTableConfig } from "./defaults";
+import {
+  resolveMachTableGridOptions,
+  type MachTableOptionExplanation,
+  type MachTablePresetSelection,
+  type ResolvedMachTableGridOptions
+} from "./configuration";
 
 type AdapterOnlyGridOption = "className" | "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy";
 
 export type MachTableVueProps<TData = any> = Omit<GridOptions<TData>, AdapterOnlyGridOption> & {
+  /** Named application preset(s). Explicit table props still win. */
+  preset?: MachTablePresetSelection;
   /** CSS class applied to the Vue host element. */
   className?: string;
   /** CSS class forwarded to MachTable's inner grid root. */
@@ -51,6 +58,7 @@ runtimeProps.gridClassName = { type: String, default: undefined };
 runtimeProps.gridAriaLabel = { type: String, default: undefined };
 runtimeProps.gridAriaLabelledBy = { type: String, default: undefined };
 runtimeProps.gridAriaDescribedBy = { type: String, default: undefined };
+runtimeProps.preset = { type: [String, Array, Boolean], default: undefined };
 
 function handlerNameOf(eventType: string): string {
   return "on" + eventType.charAt(0).toUpperCase() + eventType.slice(1);
@@ -65,7 +73,9 @@ const MachTableImpl = defineComponent({
     const props = rawProps as Readonly<Record<string, any>>;
     const host = ref<HTMLDivElement | null>(null);
     let api: GridApi | null = null;
-    const defaults = useMachTableDefaults<any>();
+    const config = useMachTableConfig();
+    let lastResolution: ResolvedMachTableGridOptions<any> | null = null;
+    const reportedWarnings = new Set<string>();
 
     const collectOptions = (): GridOptions<any> => {
       const explicit: Record<string, unknown> = {};
@@ -77,7 +87,19 @@ const MachTableImpl = defineComponent({
       if (props.gridAriaLabel !== undefined) explicit.ariaLabel = props.gridAriaLabel;
       if (props.gridAriaLabelledBy !== undefined) explicit.ariaLabelledBy = props.gridAriaLabelledBy;
       if (props.gridAriaDescribedBy !== undefined) explicit.ariaDescribedBy = props.gridAriaDescribedBy;
-      return createMachTablePreset(defaults, explicit as Partial<GridOptions<any>>);
+      lastResolution = resolveMachTableGridOptions(
+        config.value,
+        props.preset as MachTablePresetSelection | undefined,
+        explicit as Partial<GridOptions<any>>,
+        (warning) => {
+          const key = `${warning.code}:${warning.preset ?? ""}`;
+          if (reportedWarnings.has(key)) return;
+          reportedWarnings.add(key);
+          if (config.value.onConfigWarning) config.value.onConfigWarning(warning);
+          else console.warn(warning.message);
+        }
+      );
+      return lastResolution.options;
     };
 
     onMounted(() => {
@@ -115,7 +137,12 @@ const MachTableImpl = defineComponent({
       }
     );
 
-    expose({ getApi: (): GridApi | null => api });
+    expose({
+      getApi: (): GridApi | null => api,
+      getResolvedConfig: (): GridOptions<any> => lastResolution?.options ?? collectOptions(),
+      explainOption: (key: keyof GridOptions<any> | string): MachTableOptionExplanation =>
+        (lastResolution ?? resolveMachTableGridOptions(config.value, props.preset, {})).explain(key)
+    });
 
     return () => h("div", {
       ...attrs,

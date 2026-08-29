@@ -20,6 +20,7 @@ export default defineConfig({
             { text: "概述", link: "/guide/overview" },
             { text: "快速开始", link: "/guide/getting-started" },
             { text: "企业级项目接入", link: "/guide/enterprise-integration" },
+            { text: "配置中心与覆盖规则", link: "/guide/configuration" },
             { text: "React 接入", link: "/guide/react" },
             { text: "Vue 3 接入", link: "/guide/vue" },
             { text: "SSR / Nuxt / Next", link: "/guide/ssr" },

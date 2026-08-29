@@ -171,23 +171,36 @@ createApp(App).use(AsyncMachTablePlugin).mount("#app");
 void preloadMachTable();
 ```
 
-全局默认配置只写一次，页面仍可用 props 覆盖；这不会让每个页面都同步打入表格代码：
+建议把全局约定单独放进配置文件，入口只保留一行，页面仍可用 props 覆盖：
 
 ```ts
-createApp(App).use(AsyncMachTablePlugin, {
+// src/config/mach-table.config.ts
+import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-vue";
+
+export default defineMachTableConfig({
   defaults: {
     size: "compact",
-    pagination: false,
+    pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] },
     defaultColDef: { sortable: true, resizable: true, filter: true },
     onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
   },
-  asyncComponentOptions: {
-    delay: 120,
-    timeout: 15_000,
-    errorComponent: GridLoadError
+  defaultPreset: "list",
+  presets: {
+    list: defineMachTablePreset({ stripedRows: true, columnMenu: true }),
+    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+  },
+  columnTypes: {
+    money: { align: "right", filter: "number", cellEditor: "number" },
+    status: { filter: "set", cellRenderer: "statusTag" }
   }
-}).mount("#app");
+});
+
+// main.ts
+import machTableConfig from "@/config/mach-table.config";
+createApp(App).use(AsyncMachTablePlugin, machTableConfig).mount("#app");
 ```
+
+路由或布局还可通过响应式 `provideMachTableConfig(...)` 叠加局部约定；命名预设、覆盖顺序与配置来源诊断见[配置中心](./docs/guide/configuration.md)。
 
 注册后任意 Vue 页面直接使用：
 

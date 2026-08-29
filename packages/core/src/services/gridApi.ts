@@ -911,6 +911,10 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.defaultColDef = { ...DEFAULT_COL_DEF, ...options.defaultColDef };
       needsColumnRebuild = true;
     }
+    if (Object.prototype.hasOwnProperty.call(options, "columnTypes") && options.columnTypes !== resolved.columnTypes) {
+      resolved.columnTypes = options.columnTypes ?? {};
+      needsColumnRebuild = true;
+    }
     if (Object.prototype.hasOwnProperty.call(options, "getRowId") && options.getRowId !== resolved.getRowId) {
       resolved.getRowId = options.getRowId;
       needsRowRebuild = true;

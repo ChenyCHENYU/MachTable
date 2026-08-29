@@ -51,6 +51,7 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     columnDefs: Array.isArray(userOptions.columnDefs) ? userOptions.columnDefs : [],
     rowData: Array.isArray(userOptions.rowData) ? userOptions.rowData : [],
     defaultColDef: { ...DEFAULT_COL_DEF, ...(userOptions.defaultColDef ?? {}) },
+    columnTypes: userOptions.columnTypes ?? {},
     rowHeight: finiteAtLeast(userOptions.rowHeight, preset.rowHeight, 1),
     headerHeight: finiteAtLeast(userOptions.headerHeight, preset.headerHeight, 1),
     rowBuffer: finiteAtLeast(userOptions.rowBuffer, 8, 0, true),
@@ -163,6 +164,24 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
   return resolved;
 }
 
-export function mergeColDef<TData>(colDef: ColDef<TData>, defaults: Partial<ColDef<TData>>): ColDef<TData> {
-  return { ...defaults, ...colDef } as ColDef<TData>;
+export function columnTypeNames(type: ColDef["type"]): readonly string[] {
+  if (Array.isArray(type)) return type.filter((name): name is string => typeof name === "string" && name.length > 0);
+  return typeof type === "string" && type.length > 0 ? [type] : [];
+}
+
+export function hasColumnType(colDef: Pick<ColDef, "type">, name: string): boolean {
+  return columnTypeNames(colDef.type).includes(name);
+}
+
+export function mergeColDef<TData>(
+  colDef: ColDef<TData>,
+  defaults: Partial<ColDef<TData>>,
+  columnTypes: Readonly<Record<string, Partial<ColDef<TData>>>> = {}
+): ColDef<TData> {
+  const typedDefaults: Partial<ColDef<TData>> = {};
+  for (const name of columnTypeNames(colDef.type)) {
+    const definition = columnTypes[name];
+    if (definition) Object.assign(typedDefaults, definition);
+  }
+  return { ...defaults, ...typedDefaults, ...colDef } as ColDef<TData>;
 }

@@ -5,6 +5,7 @@ import { vueCellRenderer } from "../adapters";
 import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTable, MachTablePlugin, type ColDef } from "../index";
 import { AsyncMachTable, AsyncMachTablePlugin, preloadMachTable } from "../async";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
+import { defineMachTableConfig, provideMachTableConfig } from "../index";
 
 class ResizeObserverStub {
   observe(): void {}
@@ -60,6 +61,73 @@ describe("Vue adapter", () => {
     await nextTick();
     expect(host.querySelector(".mach-root")?.classList.contains("mach-theme-dark")).toBe(false);
     expect((host.querySelector(".mach-pagination") as HTMLElement).style.display).toBe("none");
+    app.unmount();
+  });
+
+  it("loads a dedicated config with named presets and exposes option provenance", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const table = ref<any>(null);
+    const config = defineMachTableConfig({
+      defaults: {
+        size: "compact",
+        pagination: { pageSize: 20, pageSizeOptions: [20, 50] },
+        defaultColDef: { sortable: false }
+      },
+      defaultPreset: "list",
+      presets: {
+        list: { stripedRows: true, pagination: { pageSize: 50 } },
+        editable: { editType: "fullRow", defaultColDef: { editable: true } }
+      }
+    });
+    const app = createApp({
+      render: () => h(MachTable, {
+        ref: table,
+        preset: ["list", "editable"],
+        columnDefs: [{ field: "id" }],
+        rowData: [{ id: 1 }],
+        size: "large"
+      })
+    });
+    app.use(MachTablePlugin, config);
+    app.mount(host);
+    await nextTick();
+
+    const resolved = table.value.getResolvedConfig();
+    expect(resolved.size).toBe("large");
+    expect(resolved.stripedRows).toBe(true);
+    expect(resolved.pagination).toEqual({ pageSize: 50, pageSizeOptions: [20, 50] });
+    expect(resolved.defaultColDef).toEqual({ sortable: false, editable: true });
+    expect(table.value.explainOption("size")).toEqual(expect.objectContaining({ source: "table props", value: "large" }));
+    expect(table.value.explainOption("editType")).toEqual(expect.objectContaining({ source: "preset:editable" }));
+    app.unmount();
+  });
+
+  it("reacts to route-scoped configuration sources", async () => {
+    const theme = ref<"light" | "dark">("light");
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const Child = defineComponent({
+      setup: () => () => h(MachTable, {
+        columnDefs: [{ field: "id" }],
+        rowData: [{ id: 1 }],
+        pagination: false
+      })
+    });
+    const Route = defineComponent({
+      setup() {
+        provideMachTableConfig(() => ({ defaults: { theme: theme.value } }));
+        return () => h(Child);
+      }
+    });
+    const app = createApp(Route);
+    app.use(MachTablePlugin);
+    app.mount(host);
+    await nextTick();
+    expect(host.querySelector(".mach-root")?.classList.contains("mach-theme-dark")).toBe(false);
+    theme.value = "dark";
+    await nextTick();
+    expect(host.querySelector(".mach-root")?.classList.contains("mach-theme-dark")).toBe(true);
     app.unmount();
   });
 

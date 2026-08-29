@@ -93,16 +93,13 @@ import "@agile-team/mach-table-react/styles.css";
 | 大部分页面使用表格 | `app.use(MachTablePlugin)` | 启动后任意模板直接使用 |
 | 大型中后台、低代码平台 | `app.use(AsyncMachTablePlugin)` | 全局可用，同时首次渲染才加载 Core |
 
-大型平台入口示例：
+大型平台建议把配置单独维护，入口只负责安装。完整字段和覆盖规则见[配置中心](/guide/configuration)。
 
 ```ts
-import { createApp } from "vue";
-import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
+// src/config/mach-table.config.ts
+import { defineMachTableConfig } from "@agile-team/mach-table-vue";
 
-const app = createApp(App);
-app.use(AsyncMachTablePlugin, {
+export default defineMachTableConfig({
   defaults: {
     size: "compact",
     pagination: false,
@@ -110,20 +107,27 @@ app.use(AsyncMachTablePlugin, {
     onGridError: ({ code, error, source, context }) => {
       telemetry.captureException(error, { tags: { code, source }, extra: context });
     }
-  },
-  asyncComponentOptions: {
-    loadingComponent: GridLoading,
-    errorComponent: GridLoadError,
-    timeout: 15_000
   }
 });
+```
+
+```ts
+// main.ts
+import { createApp } from "vue";
+import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
+import "@agile-team/mach-table-vue/styles.css";
+import App from "./App.vue";
+import machTableConfig from "@/config/mach-table.config";
+
+const app = createApp(App);
+app.use(AsyncMachTablePlugin, machTableConfig);
 app.mount("#app");
 
 // 可在权限菜单 hover 或 requestIdleCallback 中预取。
 void preloadMachTable();
 ```
 
-插件 `defaults` 解决大多数统一配置，路由布局可用 `provideMachTableDefaults` 继续叠加。只有需要固定审计字段、权限列或业务协议转换时才封装 `AppDataGrid`，避免为了重复默认值制造无意义包装层。
+配置中心解决大多数统一配置，路由布局可用响应式 `provideMachTableConfig` 继续叠加。只有需要固定审计字段、权限列或业务协议转换时才封装 `AppDataGrid`，避免为了重复默认值制造无意义包装层。
 
 ```vue
 <!-- components/AppDataGrid.vue -->

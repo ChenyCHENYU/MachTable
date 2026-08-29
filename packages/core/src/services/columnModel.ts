@@ -58,7 +58,7 @@ export class ColumnModel {
         let suffix = 2;
         while (usedIds.has(uniqueId)) uniqueId = `${id}_${suffix++}`;
         usedIds.add(uniqueId);
-        const column = new Column(uniqueId, mergeColDef(colDef, defaults));
+        const column = new Column(uniqueId, mergeColDef(colDef, defaults, this.core.options.columnTypes));
         column.parentGroup = parent;
         column.level = level;
         const p = prev.get(uniqueId);

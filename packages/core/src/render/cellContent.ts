@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { RowNode } from "../types/row";
 import type { Column } from "../services/column";
+import { hasColumnType } from "../core/resolveOptions";
 import type { CellClassParams, CellRendererParams, ICellRendererResult } from "../types/params";
 import { getCellRuntimeState, peekCellRuntimeState } from "./runtimeState";
 
@@ -193,13 +194,12 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
 export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
   const value = core.getCellValue(node, column);
   const classes = ["mach-cell"];
-  const defType = column.colDef.type;
   const align = column.colDef.align;
   if (align === "center") {
     classes.push("mach-cell--center");
   } else if (align === "right") {
     classes.push("mach-cell--right");
-  } else if (defType === "rightAligned" || defType === "numericColumn" || (typeof value === "number" && value != null)) {
+  } else if (hasColumnType(column.colDef, "rightAligned") || hasColumnType(column.colDef, "numericColumn") || (typeof value === "number" && value != null)) {
     classes.push("mach-cell--num");
   }
 
