@@ -42,6 +42,10 @@ export interface MachTablePageResult<TData> {
   total: number;
 }
 
+export type MachTableRemoteSelectionState =
+  | { mode: "explicit"; selectedKeys: string[] }
+  | { mode: "allMatching"; excludedKeys: string[] };
+
 export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown>> {
   request(params: MachTablePageRequest<TQuery>): Promise<MachTablePageResult<TData>>;
   query: MachTableQuerySource<TQuery>;
@@ -53,7 +57,10 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   immediate?: boolean;
   debounceMs?: number;
   keepPreviousData?: boolean;
-  selectionScope?: "page" | "preserve";
+  /** `query` additionally enables compact select-all-matching rules. */
+  selectionScope?: "page" | "preserve" | "query";
+  /** Defaults true: a different business/filter query cannot inherit stale selections. */
+  clearSelectionOnQueryChange?: boolean;
   quickFilterText?: Ref<string | null>;
   onSuccess?(result: MachTablePageResult<TData>): void;
   onError?(error: unknown): void;
@@ -70,6 +77,7 @@ export interface UseMachTableQueryReturn<TData> {
   filterModel: ShallowRef<FilterModel>;
   selectedKeys: Ref<string[]>;
   selectedRows: ShallowRef<TData[]>;
+  selectionState: ComputedRef<MachTableRemoteSelectionState>;
   gridProps: ComputedRef<GridOptions<TData>>;
   bindings: ComputedRef<GridOptions<TData>>;
   reload(options?: { resetPage?: boolean }): Promise<void>;
@@ -77,6 +85,9 @@ export interface UseMachTableQueryReturn<TData> {
   reset(): Promise<void>;
   abort(): void;
   clearSelection(): void;
+  /** Selects the complete server query without downloading every row ID. */
+  selectAllMatching(): void;
+  applySelectionState(state: MachTableRemoteSelectionState): void;
 }
 
 function readSource<T>(source: MachTableQuerySource<T>): T {
@@ -114,9 +125,12 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const selectedKeys = ref<string[]>([]);
   const selectedRows = shallowRef<TData[]>([]);
   const selectedIds = new Set<string>();
+  const excludedIds = new Set<string>();
   const selectedById = new Map<string, TData>();
   const quickFilterText = options.quickFilterText ?? ref<string | null>(null);
   const selectionScope = options.selectionScope ?? "preserve";
+  const allMatching = ref(false);
+  const selectionRevision = ref(0);
   const pageSizes = [...new Set((options.pageSizeOptions ?? [10, 20, 50, 100]).map((value) => normalizePositive(value, 0)).filter(Boolean))];
   if (!pageSizes.includes(pageSize.value)) pageSizes.push(pageSize.value);
   pageSizes.sort((a, b) => a - b);
@@ -126,6 +140,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   let generation = 0;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let suppressGridEvents = false;
+  let suppressSelectionEvents = false;
+  let updatingSelectedRefs = false;
 
   const rowId = (row: TData): string => {
     const value = typeof options.rowKey === "function"
@@ -138,17 +154,30 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   };
 
   const updateSelectedRefs = (): void => {
-    selectedKeys.value = [...selectedIds];
-    selectedRows.value = [...selectedIds].flatMap((id) => {
+    updatingSelectedRefs = true;
+    selectedKeys.value = allMatching.value ? [] : [...selectedIds];
+    updatingSelectedRefs = false;
+    const ids = allMatching.value ? [...selectedById.keys()] : [...selectedIds];
+    selectedRows.value = ids.flatMap((id) => {
       const row = selectedById.get(id);
-      return row === undefined ? [] : [row];
+      return row === undefined || excludedIds.has(id) ? [] : [row];
     });
+    selectionRevision.value++;
   };
+
+  const isSelectedId = (id: string): boolean => allMatching.value
+    ? !excludedIds.has(id)
+    : selectedIds.has(id);
 
   const syncVisibleSelection = (): void => {
     if (!api || api.isDestroyed()) return;
-    const selected = rows.value.filter((row) => selectedIds.has(rowId(row)));
-    if (selected.length > 0) api.setSelection(selected, false);
+    const selected = rows.value.filter((row) => isSelectedId(rowId(row)));
+    suppressSelectionEvents = true;
+    try {
+      api.setSelection(selected, true);
+    } finally {
+      suppressSelectionEvents = false;
+    }
   };
 
   const abort = (): void => {
@@ -191,8 +220,10 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       total.value = Math.floor(result.total);
       for (const row of rows.value) {
         const id = rowId(row);
-        if (selectedIds.has(id)) selectedById.set(id, row);
+        if (isSelectedId(id)) selectedById.set(id, row);
+        else selectedById.delete(id);
       }
+      updateSelectedRefs();
       options.onSuccess?.(result);
       await nextTick();
       syncVisibleSelection();
@@ -244,10 +275,25 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const onFilterChanged = (event: FilterChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
     filterModel.value = { ...event.filterModel };
+    if (options.clearSelectionOnQueryChange !== false) clearSelection();
     scheduleLoad(true);
   };
   const onSelectionChanged = (event: SelectionChangedEvent<TData>): void => {
+    if (suppressSelectionEvents) return;
     const visibleIds = new Set(rows.value.map(rowId));
+    const nextVisibleIds = new Set(event.selectedRows.map(rowId));
+    if (allMatching.value) {
+      for (const id of visibleIds) {
+        if (nextVisibleIds.has(id)) excludedIds.delete(id);
+        else {
+          excludedIds.add(id);
+          selectedById.delete(id);
+        }
+      }
+      for (const row of event.selectedRows) selectedById.set(rowId(row), row);
+      updateSelectedRefs();
+      return;
+    }
     if (selectionScope === "page") {
       selectedIds.clear();
       selectedById.clear();
@@ -296,6 +342,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     page.value = 1;
     sortModel.value = [];
     filterModel.value = {};
+    clearSelection();
     suppressGridEvents = true;
     try {
       api?.setSortModel(null);
@@ -306,19 +353,64 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     await load();
   };
   const clearSelection = (): void => {
+    allMatching.value = false;
     selectedIds.clear();
+    excludedIds.clear();
     selectedById.clear();
     updateSelectedRefs();
-    api?.deselectAll();
+    suppressSelectionEvents = true;
+    try { api?.deselectAll(); } finally { suppressSelectionEvents = false; }
   };
+  const selectAllMatching = (): void => {
+    allMatching.value = true;
+    selectedIds.clear();
+    excludedIds.clear();
+    selectedById.clear();
+    for (const row of rows.value) selectedById.set(rowId(row), row);
+    updateSelectedRefs();
+    syncVisibleSelection();
+  };
+  const applySelectionState = (state: MachTableRemoteSelectionState): void => {
+    selectedIds.clear();
+    excludedIds.clear();
+    selectedById.clear();
+    allMatching.value = state.mode === "allMatching";
+    const ids = state.mode === "allMatching" ? state.excludedKeys : state.selectedKeys;
+    for (const id of ids.map(String)) {
+      if (state.mode === "allMatching") excludedIds.add(id);
+      else selectedIds.add(id);
+    }
+    for (const row of rows.value) {
+      const id = rowId(row);
+      if (isSelectedId(id)) selectedById.set(id, row);
+    }
+    updateSelectedRefs();
+    syncVisibleSelection();
+  };
+
+  const selectionState = computed<MachTableRemoteSelectionState>(() => {
+    void selectionRevision.value;
+    return allMatching.value
+      ? { mode: "allMatching", excludedKeys: [...excludedIds] }
+      : { mode: "explicit", selectedKeys: [...selectedIds] };
+  });
 
   watch(
     () => readSource(options.query),
-    () => scheduleLoad(true),
+    () => {
+      if (options.clearSelectionOnQueryChange !== false) clearSelection();
+      scheduleLoad(true);
+    },
     { deep: true, immediate: options.immediate !== false }
   );
-  watch(quickFilterText, () => scheduleLoad(true));
+  watch(quickFilterText, () => {
+    if (options.clearSelectionOnQueryChange !== false) clearSelection();
+    scheduleLoad(true);
+  });
   watch(selectedKeys, (keys) => {
+    if (updatingSelectedRefs) return;
+    allMatching.value = false;
+    excludedIds.clear();
     const wanted = new Set(keys.map(String));
     selectedIds.clear();
     for (const id of wanted) selectedIds.add(id);
@@ -330,7 +422,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       if (wanted.has(id)) selectedById.set(id, row);
     }
     syncVisibleSelection();
-  }, { deep: true });
+    updateSelectedRefs();
+  }, { deep: true, flush: "sync" });
 
   onScopeDispose(() => {
     abort();
@@ -348,12 +441,15 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     filterModel,
     selectedKeys,
     selectedRows,
+    selectionState,
     gridProps,
     bindings: gridProps,
     reload,
     retry: load,
     reset,
     abort,
-    clearSelection
+    clearSelection,
+    selectAllMatching,
+    applySelectionState
   };
 }

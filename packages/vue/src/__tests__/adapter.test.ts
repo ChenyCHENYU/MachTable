@@ -452,4 +452,37 @@ describe("Vue adapter", () => {
     expect(remote!.selectedRows.value.map((row) => row.name)).toEqual(["one", "two"]);
     app.unmount();
   });
+
+  it("represents select-all matching as compact server rules", async () => {
+    const requests: Array<{ page: number; resolve: (value: any) => void }> = [];
+    let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup() {
+        remote = useMachTableQuery({
+          query: {},
+          rowKey: "id",
+          selectionScope: "query",
+          request: (params) => new Promise((resolve) => requests.push({ page: params.page, resolve }))
+        });
+        return () => h("div");
+      }
+    }));
+    app.mount(host);
+    requests[0].resolve({ rows: [{ id: "1" }, { id: "2" }], total: 1_000_000 });
+    await Promise.resolve();
+    await nextTick();
+    remote!.selectAllMatching();
+    expect(remote!.selectionState.value).toEqual({ mode: "allMatching", excludedKeys: [] });
+    expect(remote!.selectedKeys.value).toEqual([]);
+
+    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: [{ id: "2" }] } as any);
+    expect(remote!.selectionState.value).toEqual({ mode: "allMatching", excludedKeys: ["1"] });
+    expect(remote!.selectedRows.value).toEqual([{ id: "2" }]);
+
+    remote!.applySelectionState({ mode: "explicit", selectedKeys: ["1"] });
+    expect(remote!.selectionState.value).toEqual({ mode: "explicit", selectedKeys: ["1"] });
+    expect(remote!.selectedKeys.value).toEqual(["1"]);
+    app.unmount();
+  });
 });

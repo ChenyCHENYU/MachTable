@@ -110,7 +110,24 @@ table.selectedRows.value; // 已加载过的对应业务对象
 table.clearSelection();
 ```
 
-设置 `"page"` 时，翻页后的新选择会替换上一页选择。百万级“服务端全选”需要后端查询令牌和排除列表，不应把所有 ID 下载到浏览器；该协议属于后续独立能力。
+设置 `"page"` 时，翻页后的新选择会替换上一页选择。百万级“全选当前查询”使用紧凑规则，不会把所有 ID 下载到浏览器：
+
+```ts
+const table = useMachTableQuery({
+  // ...
+  selectionScope: "query"
+});
+
+table.selectAllMatching();
+table.selectionState.value;
+// { mode: "allMatching", excludedKeys: [] }
+
+// 用户取消两行后：
+// { mode: "allMatching", excludedKeys: ["id-7", "id-19"] }
+await orderApi.batchAction({ query, selection: table.selectionState.value });
+```
+
+普通跨页选择使用 `{ mode: "explicit", selectedKeys }`。`applySelectionState()` 可恢复两种状态。业务查询、列过滤或快速过滤变化时默认清空选择，避免把旧查询的规则误用于新数据；确有跨查询保留需求时可设 `clearSelectionOnQueryChange: false`。服务端必须再次按当前用户权限解析查询，不能信任前端提交的 ID 或规则。
 
 ## Core 的受控服务端分页
 

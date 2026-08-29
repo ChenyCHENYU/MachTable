@@ -24,6 +24,7 @@ export type {
   MachTablePageRequest,
   MachTablePageResult,
   MachTableQuerySource,
+  MachTableRemoteSelectionState,
   UseMachTableQueryOptions,
   UseMachTableQueryReturn
 } from "./useMachTableQuery";

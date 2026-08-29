@@ -104,6 +104,8 @@ The adapter installs the matching `@agile-team/mach-table` core automatically an
 
 Remote B-side lists can bind `useMachTableQuery()` directly. It owns controlled server pagination, sorting/filtering requests, AbortSignal cancellation, stale-response protection, retry state and cross-page selection without exposing `gridApi` to ordinary pages.
 
+Million-row batch actions use `selectionScope: "query"` and compact `allMatching + excludedKeys` rules, so clients never download every matching row ID.
+
 ## Cell and full-row editing
 
 Core helpers are re-exported, so no second package import is needed:
