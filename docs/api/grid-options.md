@@ -67,6 +67,9 @@
 
 | 属性 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
+| `editType` | `"cell" \| "fullRow"` | `"cell"` | 单元格就地编辑，或整行暂存后统一校验/提交；见[编辑配方](/recipes/editing) |
+| `editableIndicator` | `"hover" \| "always" \| "none"` | `"hover"` | 单元格模式下铅笔入口的显示策略；不影响双击和键盘编辑 |
+| `rowEditValidator` | `(params) => result \| Promise<result>` | — | 整行跨字段校验；`params.values` 按 colId 提供草稿，返回字符串或 colId→错误映射 |
 | `singleClickEdit` | `boolean` | `false` | 单击进入编辑（可被列级 `singleClickEdit` 覆盖） |
 | `undoStackSize` | `number` | `100` | 撤销栈深度；`0` 关闭撤销，见[配方](/recipes/undo-redo) |
 

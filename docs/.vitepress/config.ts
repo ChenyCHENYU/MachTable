@@ -53,7 +53,7 @@ export default defineConfig({
           items: [
             { text: "行选择", link: "/recipes/selection" },
             { text: "操作列与状态列", link: "/recipes/action-columns" },
-            { text: "单元格编辑与校验", link: "/recipes/editing" },
+            { text: "单元格与整行编辑", link: "/recipes/editing" },
             { text: "框选 / 复制 / 填充", link: "/recipes/clipboard" },
             { text: "排序与过滤", link: "/recipes/sorting-filtering" },
             { text: "行分组 / 树形数据", link: "/recipes/grouping-tree" },

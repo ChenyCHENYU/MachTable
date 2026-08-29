@@ -63,8 +63,11 @@
 | 方法 | 说明 |
 | --- | --- |
 | `startEditingCell({ rowIndex, colId, keyPress? })` | 编程式进入编辑（返回是否成功） |
+| `startEditingRow(rowIndex)` | 暂存式整行编辑；所有可编辑格挂载编辑器，返回是否成功 |
+| `isRowEditing(rowIndex?)` | 查询当前是否有整行编辑，或指定显示行是否正在编辑 |
 | `stopEditing(cancel?)` | 结束编辑；兼容同步调用。异步校验时不阻塞调用栈 |
 | `stopEditingAsync(cancel?): Promise<boolean>` | 等待同步/异步校验；成功结束返回 `true`，校验失败保持编辑并返回 `false` |
+| `stopEditingRow(cancel?): Promise<boolean>` | 整行提交/取消；提交时全部校验通过后统一写值，并形成一个 undo 批次 |
 | `getDirtyRowIds()` / `getChanges()` | 查询尚未确认保存的行和逐单元格原值/当前值 |
 | `saveChanges(handler, rowIds?)` | 把稳定快照交给异步保存函数；成功后只确认该快照，保留请求期间产生的新编辑 |
 | `markChangesSaved(rowIds?)` | 业务已自行保存时手动确认 |

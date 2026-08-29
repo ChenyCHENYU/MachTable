@@ -75,6 +75,24 @@ export type EventHandlers<TData = any> = {
 export type RowSelectionMode = "none" | "single" | "multiple";
 export type GridSize = "compact" | "normal" | "large";
 export type ThemeMode = "light" | "dark" | "auto";
+export type GridEditType = "cell" | "fullRow";
+export type EditableIndicator = "hover" | "always" | "none";
+
+export interface RowEditValidationParams<TData = any> {
+  data: TData;
+  node: RowNode<TData>;
+  /** Draft values keyed by colId, including unchanged editable cells. */
+  values: Readonly<Record<string, unknown>>;
+  changes: readonly import("./events").RowEditChange[];
+  api: import("./api").GridApi<TData>;
+}
+
+export type RowEditValidationResult =
+  | true
+  | null
+  | undefined
+  | string
+  | Readonly<Record<string, string>>;
 
 export interface DetailRowRendererParams<TData = any> {
   data: TData | null;
@@ -127,6 +145,14 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   /** State restored atomically after columns and initial rows are available. */
   initialState?: GridState;
   locale?: import("../lib/locale").RgLocale;
+  /** Cell editing is isolated; fullRow stages every editable cell and commits them together. */
+  editType?: GridEditType;
+  /** Visibility of the subtle pencil affordance on editable cells. */
+  editableIndicator?: EditableIndicator;
+  /** Cross-field full-row validation. Return a message or a colId -> message map. */
+  rowEditValidator?: (
+    params: RowEditValidationParams<TData>
+  ) => RowEditValidationResult | Promise<RowEditValidationResult>;
   singleClickEdit?: boolean;
   manualSorting?: boolean;
   manualFiltering?: boolean;
@@ -209,6 +235,11 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   features: readonly GridFeature<TData>[];
   initialState?: GridState;
   locale: import("../lib/locale").RgLocale;
+  editType: GridEditType;
+  editableIndicator: EditableIndicator;
+  rowEditValidator?: (
+    params: RowEditValidationParams<TData>
+  ) => RowEditValidationResult | Promise<RowEditValidationResult>;
   singleClickEdit: boolean;
   manualSorting: boolean;
   manualFiltering: boolean;

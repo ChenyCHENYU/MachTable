@@ -389,6 +389,30 @@ if (restored) api.applyState(restored, { emitEvents: false });
 }
 ```
 
+录入型页面优先明确选择编辑模型：单字段快速修改使用默认 `editType: "cell"`，当前格自带对勾/取消；表单式业务使用 `editType: "fullRow"` 与 `rowActionsColumn`，整行草稿在所有字段校验通过前不会写入原数据：
+
+```ts
+import { rowActionsColumn } from "@agile-team/mach-table-vue"; // React 包同名导出
+
+const options = {
+  editType: "fullRow" as const,
+  columnDefs: [
+    { field: "customer", editable: true },
+    { field: "amount", editable: true, cellEditor: "number", validate: validateAmount },
+    rowActionsColumn({
+      onView: ({ data }) => router.push(`/orders/${data.id}`),
+      onDelete: ({ data }) => deleteOrder(data),
+      overflow: "drawer",
+      extraActions: businessActions
+    })
+  ]
+};
+```
+
+整行提交形成一个撤销批次，Escape/取消立即丢弃草稿。操作列还支持 `overflow: "menu" | "drawer" | "inline"`；没有查看/编辑/删除的业务表直接使用 `actionsColumn({ actions })`，不会注入默认动作。
+
+涉及日期区间、额度联动、字段组合唯一性等规则时使用 `rowEditValidator({ values, changes, data })`。它支持 Promise，并可返回 `{ [colId]: message }` 把错误定位到一个或多个具体编辑器。
+
 所有成功写值自动进入脏数据集合。保存接口成功后由 `saveChanges` 精确确认该次快照；若请求期间用户继续编辑，新修改会保留，并把已保存值作为新的比较基线：
 
 ```ts

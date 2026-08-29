@@ -58,6 +58,10 @@ export type {
   RowSelectionMode,
   GridSize,
   ThemeMode,
+  GridEditType,
+  EditableIndicator,
+  RowEditValidationParams,
+  RowEditValidationResult,
   DetailRowRendererParams,
   GridComponents,
   GridFeature,
@@ -102,6 +106,7 @@ export {
   createStatusTagRenderer,
   createProgressBarRenderer,
   createActionButtonsRenderer,
+  createRowActionsRenderer,
   linkRenderer,
   resolveTagVariant,
   registerBuiltinRenderers
@@ -111,9 +116,12 @@ export type {
   StatusTagConfig,
   ProgressConfig,
   ActionItem,
-  ActionButtonsConfig
+  ActionButtonsConfig,
+  RowActionsConfig,
+  ActionVariant,
+  ActionOverflowMode
 } from "./lib/presetRenderers";
-export { selectionColumn, indexColumn, dragColumn, actionsColumn } from "./lib/presetColumns";
+export { selectionColumn, indexColumn, dragColumn, actionsColumn, rowActionsColumn } from "./lib/presetColumns";
 export { createColumnHelper, defineColumns } from "./lib/columnHelper";
 export type { ColumnHelper, FieldPath, FieldPathValue } from "./lib/columnHelper";
 export { createMachTablePreset, createEnterprisePreset, defineGridOptions } from "./lib/presets";
@@ -150,6 +158,9 @@ export type {
   CellValueChangedEvent,
   CellEditingStartedEvent,
   CellEditingStoppedEvent,
+  RowEditingStartedEvent,
+  RowEditingStoppedEvent,
+  RowEditChange,
   ModelUpdatedEvent,
   DetailToggledEvent,
   RowDragEndEvent,

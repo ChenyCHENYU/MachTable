@@ -71,6 +71,11 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     columnMenu: userOptions.columnMenu ?? false,
     columnStateKey: userOptions.columnStateKey ?? null,
     locale: userOptions.locale ?? {},
+    editType: userOptions.editType === "fullRow" ? "fullRow" : "cell",
+    editableIndicator:
+      userOptions.editableIndicator === "always" || userOptions.editableIndicator === "none"
+        ? userOptions.editableIndicator
+        : "hover",
     singleClickEdit: userOptions.singleClickEdit ?? false,
     manualSorting: userOptions.manualSorting ?? false,
     manualFiltering: userOptions.manualFiltering ?? false,
@@ -147,6 +152,7 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
   if (userOptions.tooltipComponent) resolved.tooltipComponent = userOptions.tooltipComponent;
   if (userOptions.getContextMenuItems) resolved.getContextMenuItems = userOptions.getContextMenuItems;
   if (userOptions.initialState) resolved.initialState = userOptions.initialState;
+  if (userOptions.rowEditValidator) resolved.rowEditValidator = userOptions.rowEditValidator;
 
   for (const key of Object.keys(userOptions) as (keyof GridOptions<TData>)[]) {
     if (key.startsWith("on") && typeof userOptions[key] === "function") {

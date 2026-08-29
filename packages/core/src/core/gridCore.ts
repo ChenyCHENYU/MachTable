@@ -333,21 +333,24 @@ export class GridCore<TData = any> {
       return false;
     }
 
-    if (changed) {
-      this.bodyRenderer.invalidateRowHeight(node);
-      this.bodyRenderer.queueFlash([node.rowIndex], [column.id]);
-      this.emit("cellValueChanged", {
-        oldValue,
-        newValue,
-        rowNode: node,
-        rowIndex: node.rowIndex,
-        column,
-        colDef,
-        data: node.data!
-      });
-      this.undoService.record({ nodeId: node.id, columnId: column.id, oldValue, newValue });
-    }
+    if (changed) this.notifyCellValueChanged(node, column, oldValue, newValue);
     return changed;
+  }
+
+  /** Emits the shared value-change side effects after a caller has written data transactionally. */
+  notifyCellValueChanged(node: RowNode<any>, column: Column, oldValue: any, newValue: any): void {
+    this.bodyRenderer.invalidateRowHeight(node);
+    this.bodyRenderer.queueFlash([node.rowIndex], [column.id]);
+    this.emit("cellValueChanged", {
+      oldValue,
+      newValue,
+      rowNode: node,
+      rowIndex: node.rowIndex,
+      column,
+      colDef: column.colDef,
+      data: node.data!
+    });
+    this.undoService.record({ nodeId: node.id, columnId: column.id, oldValue, newValue });
   }
 
   buildRangeTsv(range: { r1: number; c1: number; r2: number; c2: number }): string {

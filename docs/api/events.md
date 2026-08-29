@@ -82,6 +82,8 @@ onGridReady: (e) => { /* grid 可交互，e.api 即命令接口 */ }
 | --- | --- | --- |
 | `cellEditingStarted` | `{ rowIndex, colId, rowNode }` | 编辑器挂载 |
 | `cellEditingStopped` | `{ rowIndex, colId, rowNode, oldValue, newValue }` | 编辑结束（取消时 newValue = oldValue） |
+| `rowEditingStarted` | `{ rowIndex, rowNode, data }` | 整行草稿编辑开始 |
+| `rowEditingStopped` | `{ rowIndex, rowNode, data, cancelled, changes }` | 整行提交或取消；changes 为成功提交的列级差异 |
 | `cellValueChanged` | `{ oldValue, newValue, rowNode, rowIndex, column, colDef, data }` | 值落库。编辑/粘贴/填充/清除/剪切/**undo/redo** 统一经此事件 |
 | `dirtyStateChanged` | `{ dirtyRowIds }` | 脏数据集合变化、保存确认或回滚后触发 |
 

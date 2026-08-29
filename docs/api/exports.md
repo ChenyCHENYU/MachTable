@@ -71,7 +71,8 @@ columnDefs: [
   selectionColumn(),                       // 左固定复选框列（46px，无排序/调宽/换位）
   indexColumn(),                           // 左固定序号列（60px）
   { field: "name", headerName: "名称", flex: 1 },
-  actionsColumn({ actions: [...] })        // 右固定操作列（宽度按按钮数自动估算）
+  actionsColumn({ actions: [...] }),       // 完全自定义操作列
+  rowActionsColumn({ onView, onDelete })   // 整行编辑时自动切换对勾/取消
 ]
 ```
 
@@ -83,7 +84,8 @@ columnDefs: [
 | --- | --- |
 | `createStatusTagRenderer({ variantMap?, labelMap? })` | 状态徽章工厂：内置中英文常见值 → 语义色映射，支持自定义映射与文案覆写 |
 | `createProgressBarRenderer({ showValue?, unit?, color? })` | 进度条工厂（0-100 clamp） |
-| `createActionButtonsRenderer({ actions, max? })` | 操作列按钮组工厂：内置 10 个图标名、danger 态、`show` 条件显示、超出 `max` 折叠 ⋯ 菜单 |
+| `createActionButtonsRenderer({ actions, max?, overflow? })` | 任意操作按钮组；支持语义色、条件显示/禁用/加载、异步动作和 menu/drawer/inline 三种布局 |
+| `createRowActionsRenderer(config)` / `rowActionsColumn(config)` | 查看/编辑/删除/更多的高频行操作预设；整行编辑时自动切换保存/取消 |
 | `linkRenderer` | 链接样式渲染器（即 `link` 注册名） |
 | `resolveTagVariant(value, variantMap?)` | 值 → 语义变体的判定纯函数 |
 | 类型：`TagVariant` `StatusTagConfig` `ProgressConfig` `ActionItem` `ActionButtonsConfig` | |

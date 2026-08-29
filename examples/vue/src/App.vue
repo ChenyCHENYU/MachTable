@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import type { ColDef } from "@agile-team/mach-table-vue";
+import { rowActionsColumn, type ColDef } from "@agile-team/mach-table-vue";
 
 interface Order {
   id: string;
@@ -38,7 +38,19 @@ const columnDefs: ColDef<Order>[] = [
     type: "rightAligned",
     valueFormatter: (p) => `¥${Number(p.value).toLocaleString()}`
   },
-  { field: "region", headerName: "区域", width: 110, filter: "set" }
+  { field: "region", headerName: "区域", width: 110, filter: "set" },
+  rowActionsColumn<Order>({
+    max: 3,
+    overflow: "drawer",
+    drawerTitle: "订单操作",
+    onView: ({ data }) => window.alert(`查看 ${data.id}`),
+    onDelete: ({ data }) => { rowData.value = rowData.value.filter((row) => row.id !== data.id); },
+    extraActions: [
+      { icon: "copy", label: "复制订单", onClick: ({ data }) => navigator.clipboard?.writeText(data.id) },
+      { icon: "download", label: "导出订单", onClick: ({ data }) => console.log("export", data.id) }
+    ],
+    labels: { view: "查看", edit: "编辑", delete: "删除", save: "保存", cancel: "取消" }
+  })
 ];
 </script>
 
@@ -55,6 +67,7 @@ const columnDefs: ColDef<Order>[] = [
         :column-defs="columnDefs"
         :row-data="rowData"
         :row-selection="'multiple'"
+        edit-type="fullRow"
         :get-row-id="(p: any) => p.data.id"
         @selection-changed="(e: any) => (selectedCount = e.selectedRows.length)"
         @cell-value-changed="(e: any) => console.log('cell changed', e.colDef.field, e.newValue)"

@@ -97,6 +97,28 @@ Layouts can refine defaults without wrapper components by calling `provideMachTa
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `vue >= 3.2` remains a peer dependency supplied by the host application. Existing local imports remain fully supported.
 
+## Cell and full-row editing
+
+Core helpers are re-exported, so no second package import is needed:
+
+```vue
+<script setup lang="ts">
+import { rowActionsColumn } from "@agile-team/mach-table-vue";
+
+const columns = [
+  { field: "name", editable: true },
+  { field: "age", editable: true, cellEditor: "number" },
+  rowActionsColumn({ onView, onDelete, overflow: "drawer" })
+];
+</script>
+
+<template>
+  <MachTable edit-type="fullRow" :column-defs="columns" :row-data="rows" />
+</template>
+```
+
+Cell mode is the default and provides a pencil plus inline confirm/cancel controls. Set `editable-indicator="always"`, `"hover"` or `"none"` to control the affordance.
+
 Documentation: [Vue guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/vue.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [Element Plus](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/element-plus.md) · [Naive UI](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/naive-ui.md)
 
 MIT © Agile Team

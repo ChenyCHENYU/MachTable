@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-Enterprise-grade, framework-independent TypeScript data grid. Zero runtime dependencies, virtualized rows and columns, async validation, change tracking, versioned state, resilient infinite loading and composable extensions.
+Enterprise-grade, framework-independent TypeScript data grid. Zero runtime dependencies, virtualized rows and columns, polished cell/full-row editing, async validation, action columns, change tracking, versioned state and resilient infinite loading.
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -38,6 +38,23 @@ console.info(api.getDiagnostics());
 await api.applyTransactionAsync({ update: realtimeRows });
 api.applyState(state);
 ```
+
+Polished editing and row actions are built in rather than adapter-specific:
+
+```ts
+import { rowActionsColumn } from "@agile-team/mach-table";
+
+const options = {
+  editType: "fullRow" as const,
+  columnDefs: [
+    { field: "name", editable: true },
+    { field: "age", editable: true, cellEditor: "number" },
+    rowActionsColumn({ onView, onDelete, overflow: "drawer" })
+  ]
+};
+```
+
+Cell mode remains the default and renders a subtle pencil plus inline confirm/cancel controls. Use `editableIndicator: "always" | "hover" | "none"` to match the page density.
 
 For framework applications use the official adapters:
 

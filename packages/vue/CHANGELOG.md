@@ -6,6 +6,7 @@
 
 - Add application and route-scoped defaults through `MachTablePlugin` and `provideMachTableDefaults`, configurable async loading/error boundaries, accurate readiness, and canonical `MachTable` types.
 - Batch all reactive option changes into one atomic core update and retain the deprecated `RobotGrid` alias for 0.x compatibility.
+- Re-export full-row editing and action-column helpers; support reactive `editType` and `editableIndicator` props without adapter glue.
 
 ### Patch Changes
 

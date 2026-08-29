@@ -658,12 +658,24 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     return this.core.editingService.start(params.rowIndex, column, params.keyPress ?? null);
   }
 
+  startEditingRow(rowIndex: number): boolean {
+    return this.core.editingService.startRow(rowIndex);
+  }
+
+  isRowEditing(rowIndex?: number): boolean {
+    return this.core.editingService.isRowEditing(rowIndex);
+  }
+
   stopEditing(cancel?: boolean): void {
     this.core.editingService.stop(cancel ?? false);
   }
 
   stopEditingAsync(cancel?: boolean): Promise<boolean> {
     return this.core.editingService.stopAsync(cancel ?? false);
+  }
+
+  stopEditingRow(cancel?: boolean): Promise<boolean> {
+    return this.core.editingService.stopRowAsync(cancel ?? false);
   }
 
   refreshCells(): void {
@@ -727,6 +739,21 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.detailRowHeight = options.detailRowHeight;
       this.core.bodyRenderer.applyContainerSizes();
       this.core.bodyRenderer.updateRange(true);
+    }
+    if (options.editType != null && options.editType !== resolved.editType) {
+      this.core.editingService.stop(true);
+      resolved.editType = options.editType === "fullRow" ? "fullRow" : "cell";
+      needsCellRefresh = true;
+    }
+    if (options.editableIndicator != null && options.editableIndicator !== resolved.editableIndicator) {
+      resolved.editableIndicator =
+        options.editableIndicator === "always" || options.editableIndicator === "none"
+          ? options.editableIndicator
+          : "hover";
+      needsCellRefresh = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, "rowEditValidator")) {
+      resolved.rowEditValidator = options.rowEditValidator;
     }
     if (options.singleClickEdit != null) resolved.singleClickEdit = options.singleClickEdit;
     if (options.manualSorting != null) resolved.manualSorting = options.manualSorting;

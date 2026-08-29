@@ -8,7 +8,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=core&color=3178c6" alt="npm core version" /></a>
+  <img src="https://img.shields.io/badge/source-0.9.0-2563eb" alt="Source version 0.9.0" />
+  <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e" alt="MIT License" /></a>
   <img src="https://img.shields.io/badge/core%20dependencies-0-14b8a6" alt="Zero core runtime dependencies" />
@@ -38,7 +39,8 @@ MachTable 为后台管理、工业台账、财务报表、订单工单和低代�
 | 复杂布局 | 左右固定列、多级表头、变高行、固定首末行、行列拖拽、行合并 |
 | 业务组件集成 | Vue/React 单元格与明细适配器、自定义编辑器、实例级组件注册表 |
 | 长期可维护 | TypeScript 字段路径推导、版本化 `GridState`、组合式 `GridFeature`、稳定错误码与诊断快照 |
-| 复杂编辑流程 | 同步/异步校验、脏数据跟踪、批量保存、并发编辑安全确认、回滚与撤销/重做 |
+| 复杂编辑流程 | 精致单元格就地编辑、原子化整行编辑、同步/异步校验、脏数据、保存与回滚 |
+| 操作列 | 查看/编辑/删除图标、整行对勾/取消、任意业务动作、菜单/抽屉/全部展开 |
 | 安全与治理 | 安全 Overlay 默认值、CSV 公式注入防护、原型污染防护、体积/覆盖率门禁 |
 
 ## 60 秒开始
@@ -220,13 +222,13 @@ export function Orders() {
 | 数据与性能 | 交互与编辑 | 布局与呈现 | 工程与扩展 |
 | --- | --- | --- | --- |
 | 行/列虚拟化 | 单/多选、Ctrl/Shift | 左右固定列 | Vue 3 / React 18+ |
-| 客户端排序过滤 | 双击/单击/键盘编辑 | 多级分组表头 | TypeScript 类型 |
-| 服务端排序过滤 | 校验、自定义编辑器 | 列宽拖拽与自适应 | 组件注册表 |
+| 客户端排序过滤 | 单元格/整行编辑 | 多级分组表头 | TypeScript 类型 |
+| 服务端排序过滤 | 原子校验、自定义编辑器 | 列宽拖拽与自适应 | 组件注册表 |
 | 无限滚动数据源 | Undo / Redo | 行列拖拽 | `GridFeature` 插件 |
 | 分页与同步/异步事务 | 框选与剪贴板 | 变高行与换行 | Schema 驱动、类型化列助手 |
 | 树形与分组聚合 | 填充柄、右键菜单 | 行合并、固定行 | i18n、主题令牌 |
 | 主从明细 | Tooltip、状态栏 | 明暗主题与密度 | 状态持久化 |
-| CSV 导入导出 | 异步校验、保存与回滚 | 空态/加载态/水印 | 全量状态、诊断与稳定错误码 |
+| CSV 导入导出 | 图标操作列、菜单/抽屉 | 空态/加载态/水印 | 全量状态、诊断与稳定错误码 |
 
 ## 为框架适配，也为包体积负责
 
@@ -267,7 +269,7 @@ flowchart TB
 
 ## 企业级质量基线
 
-- Core、Vue、React 共 220+ 个单元测试，并包含重复挂载/销毁的监听器泄漏检查。
+- Core、Vue、React 共 230+ 个单元测试，并包含重复挂载/销毁的监听器泄漏检查。
 - Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 的键盘、编辑和过滤交互；Chromium 额外执行 10 万行 × 100 列性能预算。
 - ESLint、TypeScript、覆盖率阈值、publint、真实消费端类型检查、ESM/CJS exports、gzip 预算、示例与文档构建统一进入 `pnpm verify`。
 - Overlay 字符串默认按文本渲染；可信 HTML 必须显式开启 `allowUnsafeOverlayHtml`。

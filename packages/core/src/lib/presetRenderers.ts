@@ -74,10 +74,10 @@ export function createProgressBarRenderer(config: ProgressConfig = {}): CellRend
 
 export function linkRenderer(params: CellRendererParams): string | HTMLElement {
   if (params.value == null || params.value === "") return "";
-  const a = document.createElement("span");
-  a.className = "mach-link";
-  a.textContent = params.formatted || String(params.value);
-  return a;
+  const link = document.createElement("span");
+  link.className = "mach-link";
+  link.textContent = params.formatted || String(params.value);
+  return link;
 }
 
 const ICON_PATHS: Record<string, string> = {
@@ -90,123 +90,278 @@ const ICON_PATHS: Record<string, string> = {
   close: '<path d="M3.5 3.5l9 9m0-9l-9 9"/>',
   check: '<path d="M2.5 8.5l3.5 3.5 7.5-8"/>',
   plus: '<path d="M8 2.5v11M2.5 8h11"/>',
-  search: '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/>'
+  search: '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/>',
+  more: '<circle cx="3" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r=".9" fill="currentColor" stroke="none"/>'
 };
 
 function iconSvg(name: string, size = 14): string {
   const path = ICON_PATHS[name] ?? "";
-  return `<svg viewBox="0 0 16 16" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  return `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 }
+
+export type ActionVariant = "default" | "primary" | "warning" | "success" | "danger";
+export type ActionOverflowMode = "menu" | "drawer" | "inline";
 
 export interface ActionItem<TData = any> {
   icon?: string;
   label?: string;
   title?: string;
+  /** Backwards-compatible shorthand for variant="danger". */
   danger?: boolean;
+  variant?: ActionVariant;
   show?: (params: CellRendererParams<TData>) => boolean;
-  onClick: (params: CellRendererParams<TData>) => void;
+  disabled?: boolean | ((params: CellRendererParams<TData>) => boolean);
+  loading?: boolean | ((params: CellRendererParams<TData>) => boolean);
+  onClick: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
 }
 
-export interface ActionButtonsConfig {
-  actions: ActionItem[];
+export interface ActionButtonsConfig<TData = any> {
+  actions: ActionItem<TData>[];
   max?: number;
+  /** menu is compact, drawer suits touch/complex actions, inline never renders an ellipsis. */
+  overflow?: ActionOverflowMode;
+  moreLabel?: string;
+  drawerTitle?: string;
 }
 
-let openActionMenu: HTMLElement | null = null;
+export interface RowActionsConfig<TData = any> extends Omit<ActionButtonsConfig<TData>, "actions"> {
+  onView?: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
+  onDelete?: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
+  /** Set false when this table has no full-row edit workflow. */
+  edit?: boolean;
+  extraActions?: ActionItem<TData>[];
+  labels?: Partial<Record<"view" | "edit" | "delete" | "save" | "cancel", string>>;
+}
+
+let openActionSurface: HTMLElement | null = null;
 let openActionAnchor: HTMLElement | null = null;
 
-function closeActionMenu(): void {
-  openActionMenu?.remove();
-  openActionMenu = null;
+function closeActionSurface(restoreFocus = false): void {
+  openActionSurface?.remove();
+  openActionSurface = null;
+  if (openActionAnchor) {
+    openActionAnchor.setAttribute("aria-expanded", "false");
+    if (restoreFocus && openActionAnchor.isConnected) openActionAnchor.focus({ preventScroll: true });
+  }
   openActionAnchor = null;
-  document.removeEventListener("mousedown", onActionMenuOutside, true);
+  document.removeEventListener("mousedown", onActionSurfaceOutside, true);
+  document.removeEventListener("keydown", onActionSurfaceKeyDown, true);
 }
 
-function onActionMenuOutside(e: MouseEvent): void {
-  if (openActionMenu && !openActionMenu.contains(e.target as Node)) closeActionMenu();
+function onActionSurfaceOutside(event: MouseEvent): void {
+  if (
+    openActionSurface &&
+    !openActionSurface.contains(event.target as Node) &&
+    !openActionAnchor?.contains(event.target as Node)
+  ) closeActionSurface();
 }
 
-function showActionMenu(anchor: HTMLElement, items: Array<{ label: string; danger?: boolean; pick: () => void }>): void {
-  closeActionMenu();
+function onActionSurfaceKeyDown(event: KeyboardEvent): void {
+  if (!openActionSurface) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeActionSurface(true);
+    return;
+  }
+  const buttons = [...openActionSurface.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+  if (buttons.length === 0) return;
+  if (event.key === "Tab") {
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if ((!event.shiftKey && current === buttons.length - 1) || (event.shiftKey && current <= 0)) {
+      event.preventDefault();
+      buttons[event.shiftKey ? buttons.length - 1 : 0].focus();
+    }
+    return;
+  }
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  event.preventDefault();
+  const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+  const delta = event.key === "ArrowDown" ? 1 : -1;
+  buttons[(current + delta + buttons.length) % buttons.length].focus();
+}
+
+interface SurfaceItem {
+  label: string;
+  icon?: string;
+  variant?: ActionVariant;
+  disabled?: boolean;
+  pick: (button: HTMLButtonElement) => void;
+}
+
+function makeSurfaceButton(item: SurfaceItem, className: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  if (item.variant && item.variant !== "default") button.classList.add(`${className}--${item.variant}`);
+  button.disabled = item.disabled === true;
+  if (item.icon && ICON_PATHS[item.icon]) button.innerHTML = `${iconSvg(item.icon, 16)}<span>${item.label}</span>`;
+  else button.textContent = item.label;
+  button.addEventListener("click", () => item.pick(button));
+  return button;
+}
+
+function showActionMenu(anchor: HTMLElement, items: SurfaceItem[]): void {
+  closeActionSurface();
   const menu = document.createElement("div");
-  menu.className = "mach-context-menu";
+  menu.className = "mach-context-menu mach-action-menu";
+  menu.setAttribute("role", "menu");
   for (const item of items) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "mach-context-menu-item";
-    if (item.danger) btn.classList.add("mach-context-menu-item--danger");
-    btn.textContent = item.label;
-    btn.addEventListener("click", () => {
-      closeActionMenu();
-      item.pick();
-    });
-    menu.appendChild(btn);
+    const button = makeSurfaceButton(item, "mach-context-menu-item");
+    button.setAttribute("role", "menuitem");
+    menu.appendChild(button);
   }
   document.body.appendChild(menu);
   const rect = anchor.getBoundingClientRect();
   const menuRect = menu.getBoundingClientRect();
   menu.style.left = `${Math.min(Math.max(8, rect.left), window.innerWidth - menuRect.width - 8)}px`;
   menu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - menuRect.height - 8)}px`;
-  openActionMenu = menu;
+  openActionSurface = menu;
   openActionAnchor = anchor;
-  document.addEventListener("mousedown", onActionMenuOutside, true);
+  anchor.setAttribute("aria-expanded", "true");
+  document.addEventListener("mousedown", onActionSurfaceOutside, true);
+  document.addEventListener("keydown", onActionSurfaceKeyDown, true);
+  menu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
 }
 
-export function createActionButtonsRenderer(config: ActionButtonsConfig): CellRendererFn {
-  const max = config.max ?? 3;
-  return (params: CellRendererParams) => {
+function showActionDrawer(anchor: HTMLElement, title: string, items: SurfaceItem[]): void {
+  closeActionSurface();
+  const backdrop = document.createElement("div");
+  backdrop.className = "mach-action-drawer-backdrop";
+  const drawer = document.createElement("section");
+  drawer.className = "mach-action-drawer";
+  drawer.setAttribute("role", "dialog");
+  drawer.setAttribute("aria-modal", "true");
+  drawer.setAttribute("aria-label", title);
+  const header = document.createElement("header");
+  header.className = "mach-action-drawer__header";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "mach-action-drawer__close";
+  close.setAttribute("aria-label", "Close");
+  close.title = "Close";
+  close.innerHTML = iconSvg("close", 16);
+  close.addEventListener("click", () => closeActionSurface(true));
+  header.append(heading, close);
+  const body = document.createElement("div");
+  body.className = "mach-action-drawer__body";
+  for (const item of items) body.appendChild(makeSurfaceButton(item, "mach-action-drawer__item"));
+  drawer.append(header, body);
+  backdrop.appendChild(drawer);
+  backdrop.addEventListener("mousedown", (event) => {
+    if (event.target === backdrop) closeActionSurface(true);
+  });
+  document.body.appendChild(backdrop);
+  openActionSurface = backdrop;
+  openActionAnchor = anchor;
+  anchor.setAttribute("aria-expanded", "true");
+  document.addEventListener("keydown", onActionSurfaceKeyDown, true);
+  drawer.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+}
+
+function resolveActionFlag<TData>(
+  flag: boolean | ((params: CellRendererParams<TData>) => boolean) | undefined,
+  params: CellRendererParams<TData>
+): boolean {
+  if (typeof flag === "function") {
+    try { return flag(params); } catch { return false; }
+  }
+  return flag === true;
+}
+
+function actionVariant(action: ActionItem): ActionVariant {
+  return action.danger ? "danger" : (action.variant ?? "default");
+}
+
+export function createActionButtonsRenderer<TData = any>(config: ActionButtonsConfig<TData>): CellRendererFn {
+  const max = Math.max(0, config.max ?? 3);
+  const overflowMode = config.overflow ?? "menu";
+  return (params: CellRendererParams<TData>) => {
     const visible = config.actions.filter((action) => {
       if (!action.show) return true;
-      try {
-        return action.show(params);
-      } catch {
-        return false;
-      }
+      try { return action.show(params); } catch { return false; }
     });
     if (visible.length === 0) return "";
 
     const wrap = document.createElement("div");
     wrap.className = "mach-actions";
+    const shown = overflowMode === "inline" ? visible : visible.slice(0, max);
+    const overflow = overflowMode === "inline" ? [] : visible.slice(max);
 
-    const shown = visible.slice(0, max);
-    const overflow = visible.slice(max);
+    const run = (action: ActionItem<TData>, button: HTMLButtonElement): void => {
+      if (resolveActionFlag(action.disabled, params)) return;
+      let result: unknown;
+      try {
+        result = action.onClick(params);
+      } catch (error) {
+        console.error("[mach-table] action handler failed", error);
+        return;
+      }
+      if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+        button.disabled = true;
+        button.classList.add("mach-action-btn--loading");
+        void Promise.resolve(result).catch((error) => console.error("[mach-table] async action handler failed", error)).finally(() => {
+          if (!button.isConnected) return;
+          button.disabled = false;
+          button.classList.remove("mach-action-btn--loading");
+        });
+      }
+    };
 
     for (const action of shown) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "mach-action-btn";
-      if (action.danger) btn.classList.add("mach-action-btn--danger");
-      const title = action.title ?? action.label ?? "";
-      if (title) btn.title = title;
-      if (action.icon && ICON_PATHS[action.icon]) {
-        btn.innerHTML = iconSvg(action.icon);
-        btn.classList.add("mach-action-btn--icon");
-      } else {
-        btn.textContent = action.label ?? title;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mach-action-btn";
+      const variant = actionVariant(action);
+      if (variant !== "default") button.classList.add(`mach-action-btn--${variant}`);
+      const title = action.title ?? action.label ?? "Action";
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.disabled = resolveActionFlag(action.disabled, params);
+      if (resolveActionFlag(action.loading, params)) {
+        button.disabled = true;
+        button.classList.add("mach-action-btn--loading");
       }
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        action.onClick(params);
+      if (action.icon && ICON_PATHS[action.icon]) {
+        button.innerHTML = iconSvg(action.icon);
+        button.classList.add("mach-action-btn--icon");
+      } else {
+        button.textContent = action.label ?? title;
+      }
+      button.addEventListener("mousedown", (event) => event.stopPropagation());
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        run(action, button);
       });
-      wrap.appendChild(btn);
+      wrap.appendChild(button);
     }
 
     if (overflow.length > 0) {
       const more = document.createElement("button");
       more.type = "button";
       more.className = "mach-action-btn mach-action-btn--icon";
-      more.title = "more";
-      more.textContent = "⋯";
-      more.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showActionMenu(
-          more,
-          overflow.map((action) => ({
-            label: action.label ?? action.title ?? "",
-            danger: action.danger,
-            pick: () => action.onClick(params)
-          }))
-        );
+      const moreLabel = config.moreLabel ?? "More actions";
+      more.title = moreLabel;
+      more.setAttribute("aria-label", moreLabel);
+      more.setAttribute("aria-haspopup", overflowMode === "drawer" ? "dialog" : "menu");
+      more.setAttribute("aria-expanded", "false");
+      more.innerHTML = `${iconSvg("more", 16)}<span class="mach-sr-only">⋯</span>`;
+      more.addEventListener("mousedown", (event) => event.stopPropagation());
+      more.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const items = overflow.map((action): SurfaceItem => ({
+          label: action.label ?? action.title ?? "Action",
+          icon: action.icon,
+          variant: actionVariant(action),
+          disabled: resolveActionFlag(action.disabled, params) || resolveActionFlag(action.loading, params),
+          pick: (button) => {
+            closeActionSurface();
+            run(action, button);
+          }
+        }));
+        if (overflowMode === "drawer") showActionDrawer(more, config.drawerTitle ?? moreLabel, items);
+        else showActionMenu(more, items);
       });
       wrap.appendChild(more);
     }
@@ -214,9 +369,45 @@ export function createActionButtonsRenderer(config: ActionButtonsConfig): CellRe
     return {
       el: wrap,
       destroy: () => {
-        if (openActionAnchor && wrap.contains(openActionAnchor)) closeActionMenu();
+        if (openActionAnchor && wrap.contains(openActionAnchor)) closeActionSurface();
       }
     };
+  };
+}
+
+export function createRowActionsRenderer<TData = any>(config: RowActionsConfig<TData> = {}): CellRendererFn {
+  return (params: CellRendererParams<TData>) => {
+    const labels = {
+      view: config.labels?.view ?? "View",
+      edit: config.labels?.edit ?? "Edit row",
+      delete: config.labels?.delete ?? "Delete",
+      save: config.labels?.save ?? "Save row",
+      cancel: config.labels?.cancel ?? "Cancel row edit"
+    };
+    if (params.api.isRowEditing(params.rowIndex)) {
+      return createActionButtonsRenderer<TData>({
+        actions: [
+          { icon: "check", title: labels.save, variant: "primary", onClick: () => params.api.stopEditingRow(false).then(() => undefined) },
+          { icon: "close", title: labels.cancel, onClick: () => params.api.stopEditingRow(true).then(() => undefined) }
+        ],
+        overflow: "inline"
+      })(params);
+    }
+
+    const actions: ActionItem<TData>[] = [];
+    if (config.onView) actions.push({ icon: "view", title: labels.view, variant: "primary", onClick: config.onView });
+    if (config.edit !== false) {
+      actions.push({ icon: "edit", title: labels.edit, variant: "warning", onClick: () => { params.api.startEditingRow(params.rowIndex); } });
+    }
+    if (config.onDelete) actions.push({ icon: "delete", title: labels.delete, variant: "danger", onClick: config.onDelete });
+    actions.push(...(config.extraActions ?? []));
+    return createActionButtonsRenderer<TData>({
+      actions,
+      max: config.max,
+      overflow: config.overflow ?? "drawer",
+      moreLabel: config.moreLabel,
+      drawerTitle: config.drawerTitle
+    })(params);
   };
 }
 

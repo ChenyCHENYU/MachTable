@@ -84,6 +84,22 @@ import { MachTableProvider } from "@agile-team/mach-table-react";
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `react >= 18` and `react-dom >= 18` remain peer dependencies supplied by the host application.
 
+## Cell and full-row editing
+
+```tsx
+import { MachTable, rowActionsColumn } from "@agile-team/mach-table-react";
+
+const columns = [
+  { field: "name", editable: true },
+  { field: "age", editable: true, cellEditor: "number" },
+  rowActionsColumn({ onView, onDelete, overflow: "drawer" })
+];
+
+<MachTable editType="fullRow" columnDefs={columns} rowData={rows} />;
+```
+
+Cell mode is the default and provides a pencil plus inline confirm/cancel controls. Use `editableIndicator="always" | "hover" | "none"` to match the page density.
+
 Documentation: [React guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/react.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [Next.js / SSR](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/ssr.md)
 
 MIT © Agile Team

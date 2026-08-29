@@ -115,7 +115,10 @@ export class BodyRenderer {
     for (const slot of this.pool) {
       if (slot.detailRow) this.cleanupDetail(slot.detailRow);
       for (const pane of PANES) {
-        for (const cell of slot.cells[pane] ?? []) cleanupCellContent(this.core, cell);
+        for (const cell of slot.cells[pane] ?? []) {
+          if (slot.index >= 0) this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
+          cleanupCellContent(this.core, cell);
+        }
       }
     }
     this.fillHandleEl?.remove();
@@ -401,6 +404,7 @@ export class BodyRenderer {
       nextIds.push(column.id);
     }
     for (const cell of byId.values()) {
+      if (slot.index >= 0) this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
       cleanupCellContent(this.core, cell);
       cell.remove();
     }
@@ -555,6 +559,7 @@ export class BodyRenderer {
   }
 
   private hideSlot(slot: RowSlot): void {
+    this.releaseSlotEditors(slot);
     if (this.focusedCell?.rowIndex === slot.index) {
       this.core.skeleton.root.removeAttribute("aria-activedescendant");
     }
@@ -572,6 +577,7 @@ export class BodyRenderer {
   }
 
   private assignSlot(slot: RowSlot, index: number): void {
+    if (slot.index >= 0 && slot.index !== index) this.releaseSlotEditors(slot);
     const node = this.core.rowModel.getDisplayedRow(index);
     if (!node) {
       this.hideSlot(slot);
@@ -650,6 +656,7 @@ export class BodyRenderer {
     const index = slot.index;
     const hasColSpan = pane === "center" && this.core.columnModel.hasColSpan();
     let coverage = 0;
+    slot.rows[pane]?.classList.toggle("mach-row--editing", this.core.editingService.isRowEditing(index));
 
     for (let i = 0; i < cols.length; i++) {
       const col = cols[i];
@@ -679,7 +686,7 @@ export class BodyRenderer {
         cell.removeAttribute("aria-colspan");
       }
 
-      if (this.core.editingService.isEditing(index, col.id)) continue;
+      if (this.core.editingService.renderEditor(index, node, col, cell)) continue;
       this.renderCell(cell, node, col);
       this.applyRangeClass(cell, index, col);
     }
@@ -801,6 +808,42 @@ export class BodyRenderer {
     applyCellClasses(this.core, cell, node, column);
     applyCellStyle(this.core, cell, node, column);
     this.applyCellSpanStyle(cell, node, column);
+    this.appendEditableIndicator(cell, node, column);
+  }
+
+  private appendEditableIndicator(cell: HTMLElement, node: RowNode<any>, column: Column): void {
+    if (
+      this.core.options.editType !== "cell" ||
+      this.core.options.editableIndicator === "none" ||
+      !this.core.editingService.isEditable(node, column)
+    ) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `mach-cell-edit-trigger mach-cell-edit-trigger--${this.core.options.editableIndicator}`;
+    button.tabIndex = -1;
+    button.title = "Edit cell";
+    button.setAttribute("aria-label", "Edit cell");
+    button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10.8 2.7 2.5 2.5L5.5 13H3v-2.5z"/><path d="m9.5 4 2.5 2.5"/></svg>';
+    button.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.setFocusedCell(node.rowIndex, column.id);
+      this.core.editingService.start(node.rowIndex, column);
+    });
+    cell.appendChild(button);
+  }
+
+  private releaseSlotEditors(slot: RowSlot): void {
+    if (slot.index < 0) return;
+    for (const pane of PANES) {
+      for (const cell of slot.cells[pane] ?? []) {
+        this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
+      }
+    }
   }
 
   private treeColumnCache: Column | null | undefined;
@@ -1711,7 +1754,7 @@ export class BodyRenderer {
   };
 
   private onMouseDown = (e: MouseEvent): void => {
-    if (this.core.editingService.isEditing()) {
+    if (this.core.editingService.isCellEditing()) {
       this.core.editingService.stop(false);
     }
     if (this.core.options.enableRangeSelection && e.button === 0) {

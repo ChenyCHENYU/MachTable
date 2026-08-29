@@ -1,4 +1,4 @@
-# 单元格编辑与校验
+# 单元格与整行编辑
 
 ## 进入编辑的方式
 
@@ -10,6 +10,63 @@
 | 编程式 | `api.startEditingCell({ rowIndex: 0, colId: "name" })` |
 
 结束：Enter/Tab/点击他处（保存）；Escape（取消）；`api.stopEditing(cancel?)`。
+
+可编辑格默认在 hover / 键盘聚焦时显示轻量铅笔入口。进入编辑后，当前格呈现输入框和就地的对勾/取消按钮；对勾与 Enter 走同一条校验提交链路，取消与 Escape 都不会写值：
+
+```ts
+const options = {
+  editableIndicator: "hover" // "always" | "none"
+};
+```
+
+`hover` 保持浏览态干净，`always` 适合录入型页面，`none` 适合完全依赖双击、键盘或外部按钮的场景。
+
+## 整行编辑
+
+整行编辑不是连续触发多个单元格提交。它会暂存该行所有可编辑值，全部校验通过后再事务式写入，并把这一批改动作为一个 undo 批次；任意字段校验失败或 `valueSetter` 拒绝时，已尝试的字段会回滚，不发送部分 `cellValueChanged`，整行继续保持编辑。
+
+```ts
+import { rowActionsColumn } from "@agile-team/mach-table";
+
+const options = {
+  editType: "fullRow",
+  columnDefs: [
+    { field: "name", editable: true },
+    { field: "age", editable: true, cellEditor: "number" },
+    { field: "department", editable: true, cellEditor: "select",
+      cellEditorParams: { values: ["技术部", "人事部"] } },
+    rowActionsColumn({
+      onView: ({ data }) => openDetail(data),
+      onDelete: ({ data }) => confirmDelete(data),
+      labels: { view: "查看", edit: "编辑", delete: "删除", save: "保存", cancel: "取消" }
+    })
+  ]
+};
+```
+
+浏览态操作列显示查看、编辑、删除等业务动作；点击编辑后，整行可编辑格切为输入框，操作列只保留对勾和取消。此时 Enter 提交整行、Escape 取消整行、Tab / Shift+Tab 在该行编辑器间循环。
+
+也可完全由业务按钮控制：
+
+```ts
+api.startEditingRow(rowIndex);
+api.isRowEditing(rowIndex);
+await api.stopEditingRow(false); // 校验并保存草稿到行数据
+await api.stopEditingRow(true);  // 丢弃整行草稿
+```
+
+同一表格同一时刻只允许一个编辑会话，避免多行草稿、排序过滤和虚拟滚动之间出现隐式冲突。横向或纵向虚拟滚动会保存整行草稿并在单元格重新出现时恢复编辑器。
+
+跨字段规则使用 `rowEditValidator`。`values` 以 `colId` 为键包含全部可编辑草稿；返回普通字符串会定位到首个变更格，返回 `{ [colId]: message }` 可同时精确标红多个字段：
+
+```ts
+rowEditValidator: async ({ values, data }) => {
+  if (new Date(String(values.startAt)) > new Date(String(values.endAt))) {
+    return { startAt: "开始时间不能晚于结束时间", endAt: "请调整时间范围" };
+  }
+  return await permissionApi.canEdit(data.id) ? true : "当前记录已被锁定";
+}
+```
 
 ## 内置编辑器
 
@@ -114,13 +171,15 @@ registerCellEditor("qtyEditor", myEditor);
 
 ## 键盘流
 
-`Tab` / `Shift+Tab` 在可编辑格之间横向跳转（自动滚动到可见），Enter 确认后下一行同列可编辑格——Excel 式连续录入无需碰鼠标。
+单元格模式下，`Tab` / `Shift+Tab` 在可编辑格之间跳转；Enter 确认，Escape 取消。整行模式下，Tab 在当前行编辑器间循环，Enter 提交整行，Escape 取消整行。
 
 ## 事件
 
 ```ts
 onCellEditingStarted: (e) => console.log("开始", e.colId),
 onCellEditingStopped: (e) => console.log("结束", e.oldValue, e.newValue),
+onRowEditingStarted: (e) => console.log("开始编辑行", e.rowIndex),
+onRowEditingStopped: (e) => console.log("整行结束", e.cancelled, e.changes),
 onCellValueChanged: (e) => {
   // 编辑/粘贴/填充/清除/撤销 统一入口
   api.autoSizeColumn(e.colDef.colId ?? "");

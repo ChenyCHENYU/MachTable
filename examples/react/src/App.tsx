@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import {
-  RobotGrid,
+  MachTable,
   reactCellRenderer,
   type GridApi,
   type ColDef,
@@ -67,11 +67,12 @@ export default function App() {
         <span style={{ color: "#64748b" }}>选中 {selectedCount} 行 {clicked && `· 点击了 ${clicked}`}</span>
       </div>
       <div style={{ height: "70vh", minHeight: 400 }}>
-        <RobotGrid<Employee>
+        <MachTable<Employee>
           apiRef={apiRef}
           columnDefs={columnDefs}
           rowData={rowData}
           rowSelection="multiple"
+          editableIndicator="always"
           getRowId={(p) => p.data.id}
           onSelectionChanged={(e) => setSelectedCount(e.selectedRows.length)}
           onCellClicked={(e: CellClickEvent<Employee>) => setClicked(`${e.colDef.field}:${e.value}`)}

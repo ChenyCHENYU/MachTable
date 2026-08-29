@@ -185,9 +185,15 @@ export interface GridApi<TData = any> {
   print(options?: PrintOptions): boolean;
 
   startEditingCell(params: { rowIndex: number; colId: string; keyPress?: string }): boolean;
+  /** Starts staged editing for every editable cell in one displayed row. */
+  startEditingRow(rowIndex: number): boolean;
+  /** Returns whether any row, or the requested displayed row, is in full-row edit mode. */
+  isRowEditing(rowIndex?: number): boolean;
   stopEditing(cancel?: boolean): void;
   /** Stops editing and resolves after synchronous or asynchronous validation. */
   stopEditingAsync(cancel?: boolean): Promise<boolean>;
+  /** Explicit full-row counterpart; aliases stopEditingAsync when a row is active. */
+  stopEditingRow(cancel?: boolean): Promise<boolean>;
 
   refreshCells(): void;
   updateOptions(options: Partial<GridOptions<TData>>): void;

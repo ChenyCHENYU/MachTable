@@ -1182,6 +1182,18 @@ input.mach-select-all {
   gap: 2px;
 }
 
+.mach-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 .mach-action-btn {
   display: inline-flex;
   align-items: center;
@@ -1208,6 +1220,40 @@ input.mach-select-all {
   color: var(--mach-danger);
 }
 
+.mach-action-btn--primary {
+  color: var(--mach-primary);
+}
+
+.mach-action-btn--warning {
+  color: var(--mach-warning);
+}
+
+.mach-action-btn--success,
+.mach-edit-control--confirm {
+  color: var(--mach-success);
+}
+
+.mach-action-btn--danger {
+  color: var(--mach-danger);
+}
+
+.mach-action-btn:focus-visible,
+.mach-edit-control:focus-visible,
+.mach-cell-edit-trigger:focus-visible,
+.mach-action-drawer__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mach-primary) 65%, transparent);
+  outline-offset: 1px;
+}
+
+.mach-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.mach-action-btn--loading svg {
+  animation: mach-spin 0.8s linear infinite;
+}
+
 .mach-action-btn--icon {
   padding: 0;
   width: 24px;
@@ -1215,6 +1261,261 @@ input.mach-select-all {
 
 .mach-context-menu-item--danger {
   color: var(--mach-danger);
+}
+
+.mach-context-menu-item,
+.mach-action-drawer__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.mach-context-menu-item--primary,
+.mach-action-drawer__item--primary {
+  color: var(--mach-primary);
+}
+
+.mach-context-menu-item--warning,
+.mach-action-drawer__item--warning {
+  color: var(--mach-warning);
+}
+
+.mach-context-menu-item--success,
+.mach-action-drawer__item--success {
+  color: var(--mach-success);
+}
+
+.mach-context-menu-item--danger,
+.mach-action-drawer__item--danger {
+  color: var(--mach-danger);
+}
+
+.mach-action-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--mach-z-menu) + 2);
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(1px);
+}
+
+.mach-action-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, calc(100vw - 24px));
+  height: 100%;
+  background: var(--mach-body-bg);
+  color: var(--mach-body-fg);
+  border-left: 1px solid var(--mach-border-color);
+  box-shadow: -16px 0 40px rgba(15, 23, 42, 0.14);
+  font-family: var(--mach-font-family);
+  animation: mach-drawer-in 0.18s ease-out;
+}
+
+.mach-action-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 16px 0 20px;
+  border-bottom: 1px solid var(--mach-border-color);
+}
+
+.mach-action-drawer__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mach-radius);
+  background: transparent;
+  color: var(--mach-header-fg);
+  cursor: pointer;
+}
+
+.mach-action-drawer__close:hover {
+  color: var(--mach-primary);
+  background: var(--mach-row-hover-bg);
+}
+
+.mach-action-drawer__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.mach-action-drawer__item {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--mach-radius);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mach-action-drawer__item:hover:not(:disabled) {
+  background: var(--mach-row-hover-bg);
+}
+
+.mach-action-drawer__item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes mach-drawer-in {
+  from { transform: translateX(18px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 640px) {
+  .mach-action-drawer {
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    height: auto;
+    max-height: min(70vh, 520px);
+    border-top: 1px solid var(--mach-border-color);
+    border-left: 0;
+    border-radius: var(--mach-radius-lg) var(--mach-radius-lg) 0 0;
+    animation-name: mach-drawer-up;
+  }
+}
+
+@keyframes mach-drawer-up {
+  from { transform: translateY(18px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.mach-cell:has(.mach-cell-edit-trigger) {
+  padding-right: 29px;
+}
+
+.mach-cell-edit-trigger {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: var(--mach-radius-sm);
+  background: transparent;
+  color: var(--mach-header-fg);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--mach-transition), color var(--mach-transition), background-color var(--mach-transition);
+}
+
+.mach-cell-edit-trigger svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mach-cell:hover .mach-cell-edit-trigger--hover,
+.mach-cell:focus-within .mach-cell-edit-trigger--hover,
+.mach-cell-edit-trigger--always {
+  opacity: 0.72;
+}
+
+.mach-cell-edit-trigger:hover {
+  opacity: 1;
+  color: var(--mach-primary);
+  background: color-mix(in srgb, var(--mach-primary) 9%, transparent);
+}
+
+.mach-cell--editing {
+  overflow: visible;
+  z-index: 4;
+}
+
+.mach-cell-editor-shell,
+.mach-row-editor-shell {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 5px;
+}
+
+.mach-cell-editor-shell > .mach-editor-input,
+.mach-cell-editor-shell > .mach-editor-select,
+.mach-cell-editor-shell > :not(.mach-cell-editor-controls),
+.mach-row-editor-shell > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mach-cell-editor-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--mach-border-color);
+  border-radius: var(--mach-radius);
+  background: var(--mach-body-bg);
+  box-shadow: var(--mach-shadow-sm);
+}
+
+.mach-edit-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mach-radius-sm);
+  background: transparent;
+  color: var(--mach-header-fg);
+  cursor: pointer;
+}
+
+.mach-edit-control svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mach-edit-control--confirm {
+  color: var(--mach-primary);
+}
+
+.mach-edit-control:hover {
+  background: var(--mach-row-hover-bg);
+}
+
+.mach-edit-control:disabled {
+  opacity: 0.35;
+  cursor: wait;
+}
+
+.mach-row--editing,
+.mach-row--editing .mach-cell {
+  background: color-mix(in srgb, var(--mach-primary) 3%, var(--mach-body-bg));
+}
+
+.mach-cell--row-editing .mach-editor-input,
+.mach-cell--row-editing .mach-editor-select {
+  border-color: color-mix(in srgb, var(--mach-primary) 45%, var(--mach-border-color));
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.mach-cell--row-editing .mach-editor-input:focus,
+.mach-cell--row-editing .mach-editor-select:focus {
+  border-color: var(--mach-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mach-primary) 12%, transparent);
 }
 
 .mach-tooltip {
@@ -1385,5 +1686,9 @@ input.mach-select-all {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .mach-action-drawer {
+    animation: none !important;
   }
 }

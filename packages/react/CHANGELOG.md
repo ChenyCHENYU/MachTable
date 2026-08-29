@@ -6,6 +6,7 @@
 
 - Add `MachTableProvider` for application/route defaults, canonical `MachTable` props, accurate readiness, and stable lazy-loading support.
 - Batch all reactive option changes into one atomic core update and retain the deprecated `RobotGrid` alias for 0.x compatibility.
+- Re-export full-row editing and action-column helpers; support `editType` and `editableIndicator` props without adapter glue.
 
 ### Patch Changes
 

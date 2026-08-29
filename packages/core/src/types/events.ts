@@ -22,6 +22,8 @@ export const EVENT_TYPES = [
   "cellValueChanged",
   "cellEditingStarted",
   "cellEditingStopped",
+  "rowEditingStarted",
+  "rowEditingStopped",
   "detailToggled",
   "rowDragEnd",
   "rangeSelectionChanged",
@@ -161,6 +163,28 @@ export interface CellEditingStoppedEvent<TData = any> extends GridEventBase<TDat
   newValue: any;
 }
 
+export interface RowEditChange {
+  colId: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+export interface RowEditingStartedEvent<TData = any> extends GridEventBase<TData> {
+  type: "rowEditingStarted";
+  rowIndex: number;
+  rowNode: RowNode<TData>;
+  data: TData;
+}
+
+export interface RowEditingStoppedEvent<TData = any> extends GridEventBase<TData> {
+  type: "rowEditingStopped";
+  rowIndex: number;
+  rowNode: RowNode<TData>;
+  data: TData;
+  cancelled: boolean;
+  changes: RowEditChange[];
+}
+
 export interface DetailToggledEvent<TData = any> extends GridEventBase<TData> {
   type: "detailToggled";
   rowId: string;
@@ -230,6 +254,8 @@ export interface GridEventMap<TData = any> {
   cellValueChanged: CellValueChangedEvent<TData>;
   cellEditingStarted: CellEditingStartedEvent<TData>;
   cellEditingStopped: CellEditingStoppedEvent<TData>;
+  rowEditingStarted: RowEditingStartedEvent<TData>;
+  rowEditingStopped: RowEditingStoppedEvent<TData>;
   detailToggled: DetailToggledEvent<TData>;
   rowDragEnd: RowDragEndEvent<TData>;
   rangeSelectionChanged: RangeSelectionChangedEvent<TData>;
