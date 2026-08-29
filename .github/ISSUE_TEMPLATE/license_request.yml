@@ -1,0 +1,46 @@
+name: License and authorization request
+description: Request written authorization to evaluate, integrate, deploy, or distribute MachTable
+title: "[License]: "
+labels: [license]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        MachTable 0.9.1+ requires prior written authorization for any use. This public form starts a discussion but does not itself grant authorization. Do not post contracts, credentials, personal identity documents, customer data, or other confidential information.
+  - type: input
+    id: applicant
+    attributes:
+      label: Applicant or organization
+      description: Use a public-facing name only; private legal details can be exchanged later through an agreed secure channel.
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact method
+      description: A business email or GitHub account that the maintainer can use to continue the discussion.
+    validations:
+      required: true
+  - type: dropdown
+    id: purpose
+    attributes:
+      label: Intended purpose
+      options: [Technical evaluation, Internal application, Customer project, SaaS or multi-tenant product, SDK or redistribution, Education or research, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Requested scope
+      description: Describe packages/versions, environments, expected users, duration, source modifications, redistribution, and support needs. Keep confidential details out of this public issue.
+    validations:
+      required: true
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I understand that submitting this request does not grant permission to install, run, test, integrate, deploy, modify, or distribute MachTable.
+          required: true
+        - label: I have not included secrets, contracts, identity documents, customer data, or other confidential information.
+          required: true

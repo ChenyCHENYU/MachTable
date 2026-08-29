@@ -11,7 +11,7 @@ body:
     attributes:
       label: Package versions
       description: Core and Vue/React adapter versions.
-      placeholder: "@agile-team/mach-table 0.4.0"
+      placeholder: "@agile-team/mach-table 0.9.1"
     validations:
       required: true
   - type: dropdown

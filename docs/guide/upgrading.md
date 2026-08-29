@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。三个包固定版本联动：
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.9.0
+pnpm up @agile-team/mach-table-vue@^0.9.1
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：

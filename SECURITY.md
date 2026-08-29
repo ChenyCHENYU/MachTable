@@ -6,8 +6,8 @@ MachTable 处于 `0.x` 阶段。安全修复优先发布到最新 minor；使用
 
 | Version | Supported |
 | --- | --- |
-| `0.4.x` | Yes |
-| `< 0.4` | No |
+| `0.9.x` | Yes |
+| `< 0.9` | No |
 
 ## Reporting a vulnerability
 

@@ -1,5 +1,13 @@
 # @agile-team/mach-table-vue
 
+## 0.9.1
+
+### Patch Changes
+
+- Apply the MachTable Source-Available License 1.0 and document the prior written authorization requirement in the published package.
+- Updated dependencies
+  - @agile-team/mach-table@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes

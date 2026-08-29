@@ -23,6 +23,7 @@ export default defineConfig({
             { text: "React 接入", link: "/guide/react" },
             { text: "Vue 3 接入", link: "/guide/vue" },
             { text: "SSR / Nuxt / Next", link: "/guide/ssr" },
+            { text: "许可证与授权", link: "/guide/licensing" },
             { text: "排错手册", link: "/guide/troubleshooting" },
             { text: "版本升级", link: "/guide/upgrading" }
           ]
@@ -78,6 +79,7 @@ export default defineConfig({
             { text: "国际化 i18n", link: "/advanced/i18n" },
             { text: "可访问性与键盘", link: "/advanced/accessibility" },
             { text: "架构说明", link: "/advanced/architecture" },
+            { text: "竞品分析与调研计划", link: "/advanced/competitive-analysis" },
             { text: "路线图与差距分析", link: "/advanced/roadmap" }
           ]
         }

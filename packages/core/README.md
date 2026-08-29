@@ -65,4 +65,4 @@ Documentation: [Quick start](https://github.com/ChenyCHENYU/MachTable/blob/main/
 
 > Overlay strings render as text by default. Prefer HTMLElement factories for rich content; enable `allowUnsafeOverlayHtml` only for fully trusted static markup.
 
-MIT © Agile Team
+Source-available © ChenyCHENYU (Agile Team). Any use requires prior written authorization. See the [license](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) and [authorization process](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md).

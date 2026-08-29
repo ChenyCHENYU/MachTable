@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.9.0-2563eb" alt="Source version 0.9.0" />
+  <img src="https://img.shields.io/badge/source-0.9.1-2563eb" alt="Source version 0.9.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e" alt="MIT License" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
   <img src="https://img.shields.io/badge/core%20dependencies-0-14b8a6" alt="Zero core runtime dependencies" />
   <img src="https://img.shields.io/badge/TypeScript-first-6366f1" alt="TypeScript first" />
 </p>
@@ -22,7 +22,8 @@
   <a href="./docs/guide/vue.md">Vue 3</a> ·
   <a href="./docs/guide/react.md">React</a> ·
   <a href="./docs/api/grid-options.md">API</a> ·
-  <a href="./examples">示例</a>
+  <a href="./examples">示例</a> ·
+  <a href="./LICENSING.md">授权说明</a>
 </p>
 
 ---
@@ -294,6 +295,7 @@ pnpm test:e2e
 | 配置与命令 | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) |
 | 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频业务 | [场景配方](./docs/recipes/selection.md) |
+| 竞品与后续规划 | [竞品分析与调研计划](./docs/advanced/competitive-analysis.md) · [路线图](./docs/advanced/roadmap.md) |
 | 故障定位 | [排错手册](./docs/guide/troubleshooting.md) |
 | 版本升级 | [升级指南](./docs/guide/upgrading.md) · [Changelog](./packages/core/CHANGELOG.md) |
 
@@ -303,7 +305,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前版本为 `0.9.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前版本为 `0.9.1`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 
@@ -313,4 +315,6 @@ pnpm test:e2e
 
 ## License
 
-[MIT](./LICENSE) © Agile Team
+MachTable 从 `0.9.1` 起采用 [MachTable Source-Available License 1.0](./LICENSE)：源码公开可查看，但不是 OSI 定义下的开源软件。任何安装、运行、测试、修改、集成、部署、分发或商业使用均须事先取得作者书面授权。申请流程见[授权说明](./LICENSING.md)。
+
+历史上已按 MIT 文本公开的版本保留其当时的授权事实；旧版许可不延伸到 `0.9.1` 及后续版本。

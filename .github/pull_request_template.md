@@ -10,6 +10,8 @@
 - [ ] Public API and documentation updated
 - [ ] Changeset added when a published package changes
 - [ ] No credentials, private endpoints, or customer data included
+- [ ] Commits follow `type(scope): subject`
+- [ ] I have the right to submit this contribution and accept LICENSE section 5
 
 ## Compatibility
 

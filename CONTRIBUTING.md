@@ -2,6 +2,8 @@
 
 感谢你帮助 MachTable 变得更可靠。提交前请先搜索已有 Issue；较大的 API 或架构变化建议先创建讨论，避免实现方向与项目边界冲突。
 
+MachTable 从 `0.9.1` 起采用需作者书面授权的 source-available 许可证。提交贡献不代表贡献者获得项目使用权；贡献授权条款见根目录 [`LICENSE`](./LICENSE) 第 5 节。提交 PR 即表示你确认有权提交相关内容并接受该贡献条款。
+
 ## 开发环境
 
 - Node.js `>= 22.22.2`
@@ -34,13 +36,15 @@ pnpm test:e2e
 
 ## 提交与变更记录
 
-提交信息建议使用 Conventional Commits，例如：
+提交信息必须使用 `type(scope): subject` 格式的 Conventional Commits，例如：
 
 ```text
 fix(core): clean row drag listeners after pointer up
 feat(vue): expose reactive grid lifecycle composable
 docs: add enterprise integration guide
 ```
+
+允许的常用 `type` 包括 `feat`、`fix`、`refactor`、`perf`、`test`、`docs`、`build`、`ci`、`chore` 和 `revert`。`scope` 应使用明确的包或领域，例如 `core`、`vue`、`react`、`docs`、`license`、`release`；主题使用祈使语气，避免“update files”一类无信息描述。
 
 影响发布包的变更需要 Changeset：
 
@@ -58,3 +62,5 @@ pnpm changeset
 - [ ] 必要时 `pnpm test:e2e` 通过
 - [ ] 公共 API、文档、示例和 Changeset 已同步
 - [ ] 未提交 token、凭证、内部地址或业务数据
+- [ ] 提交信息符合 `type(scope): subject`
+- [ ] 已确认贡献内容来源合法并接受 LICENSE 第 5 节贡献授权

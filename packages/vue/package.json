@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-vue",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Official Vue 3 adapter for the MachTable enterprise data grid",
   "keywords": [
     "vue",
@@ -11,7 +11,7 @@
     "virtualization"
   ],
   "author": "Agile Team",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/ChenyCHENYU/MachTable#readme",
   "bugs": {
     "url": "https://github.com/ChenyCHENYU/MachTable/issues"

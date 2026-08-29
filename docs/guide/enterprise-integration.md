@@ -30,20 +30,20 @@ Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的
 Vue：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.9.0
+pnpm add @agile-team/mach-table-vue@^0.9.1
 ```
 
 React：
 
 ```bash
-pnpm add @agile-team/mach-table-react@^0.9.0
+pnpm add @agile-team/mach-table-react@^0.9.1
 ```
 
 npm / Yarn：
 
 ```bash
-npm install @agile-team/mach-table-vue@^0.9.0
-yarn add @agile-team/mach-table-vue@^0.9.0
+npm install @agile-team/mach-table-vue@^0.9.1
+yarn add @agile-team/mach-table-vue@^0.9.1
 ```
 
 三个 MachTable 包采用同版本联动。适配器会锁定匹配版本的 Core，业务项目只需升级适配器并提交 lockfile。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。

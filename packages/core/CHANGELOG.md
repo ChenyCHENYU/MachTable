@@ -1,5 +1,12 @@
 # @agile-team/mach-table
 
+## 0.9.1
+
+### Patch Changes
+
+- Replace the MIT terms with the MachTable Source-Available License 1.0. Any use from this version requires prior written authorization from the copyright holder.
+- Add an evidence-based AG Grid, Vxe-Table, Surely Table, Handsontable, RevoGrid and VTable gap analysis with benchmark and versioned delivery plans.
+
 ## 0.9.0
 
 ### Minor Changes
