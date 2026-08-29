@@ -436,9 +436,13 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
         cells: change.cells.map((cell) => ({ ...cell }))
       }));
     if (snapshot.length === 0) return [];
-    await handler(snapshot);
-    if (!this.core.isDestroyed()) this.core.changeTracker.acknowledge(snapshot);
-    return snapshot;
+    const result = await handler(snapshot);
+    const savedIds = result && typeof result === "object" && Array.isArray(result.savedRowIds)
+      ? new Set(result.savedRowIds.map(String))
+      : null;
+    const saved = savedIds ? snapshot.filter((change) => savedIds.has(change.rowId)) : snapshot;
+    if (!this.core.isDestroyed()) this.core.changeTracker.acknowledge(saved);
+    return saved;
   }
 
   rollbackChanges(rowIds?: readonly string[]): boolean {

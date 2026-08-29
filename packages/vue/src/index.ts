@@ -14,6 +14,11 @@ export {
 } from "./adapters";
 export { useMachTable } from "./useMachTable";
 export type { UseMachTableReturn } from "./useMachTable";
+export { useMachTableEditing } from "./useMachTableEditing";
+export type {
+  UseMachTableEditingOptions,
+  UseMachTableEditingReturn
+} from "./useMachTableEditing";
 export { useMachTableQuery } from "./useMachTableQuery";
 export type {
   MachTablePageRequest,

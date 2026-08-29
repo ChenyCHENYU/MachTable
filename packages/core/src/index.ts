@@ -91,7 +91,20 @@ export type {
 export { describeFilter } from "./lib/filterSummary";
 export { buildColDefsFromSchema } from "./lib/schema";
 export type { GridSchema, GridSchemaField, GridSchemaGroup, GridSchemaFieldType, SchemaSelectOption } from "./lib/schema";
-export { saveColumnState, loadColumnState, clearColumnState } from "./lib/columnStateStore";
+export {
+  saveColumnState,
+  loadColumnState,
+  clearColumnState,
+  createColumnStateKey,
+  createLocalColumnStateStore
+} from "./lib/columnStateStore";
+export type {
+  ColumnStateKeyParts,
+  ColumnStateStorage,
+  LocalColumnStateStoreOptions,
+  ManagedColumnStateStore,
+  StoredColumnState
+} from "./lib/columnStateStore";
 export { BUILTIN_AGG_FUNCS, createAggResolver } from "./lib/aggregate";
 export type { AggFunction, AggValues } from "./lib/aggregate";
 export { DEFAULT_LOCALE, LOCALE_EN, matchLocaleKey, formatText, formatTwo } from "./lib/locale";
@@ -152,6 +165,7 @@ export type {
   GridChange,
   GridDiagnosticError,
   GridDiagnostics,
+  SaveChangesResult,
   SaveChangesHandler,
   ImportCsvOptions,
   PrintOptions

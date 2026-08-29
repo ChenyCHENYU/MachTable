@@ -393,6 +393,27 @@ describe("enterprise DX helpers and change tracking", () => {
     }));
     api.destroy();
   });
+
+  it("acknowledges only successful rows from a partial batch save", async () => {
+    const host = createHost();
+    const data = rows.slice(0, 2).map((row) => ({ ...row }));
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "name", editable: true }],
+      rowData: data,
+      pagination: false,
+      getRowId: (p) => p.data.id
+    });
+    for (let rowIndex = 0; rowIndex < 2; rowIndex++) {
+      api.startEditingCell({ rowIndex, colId: "name" });
+      (host.querySelector(".mach-editor-input") as HTMLInputElement).value = `changed-${rowIndex}`;
+      await api.stopEditingAsync();
+    }
+    const saved = await api.saveChanges(() => ({ savedRowIds: ["1"] }));
+    expect(saved.map((change) => change.rowId)).toEqual(["1"]);
+    expect(api.getDirtyRowIds()).toEqual(["2"]);
+    expect(api.getChanges()[0].cells[0].value).toBe("changed-1");
+    api.destroy();
+  });
 });
 
 describe("diagnostics and lifecycle hygiene", () => {

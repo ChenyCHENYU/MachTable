@@ -68,9 +68,14 @@ export interface GridDiagnostics {
   recentErrors: readonly GridDiagnosticError[];
 }
 
+export interface SaveChangesResult {
+  /** Omit to acknowledge every submitted row; return a subset for partial batch success. */
+  savedRowIds?: readonly string[];
+}
+
 export type SaveChangesHandler<TData = any> = (
   changes: readonly GridChange<TData>[]
-) => void | Promise<void>;
+) => void | SaveChangesResult | Promise<void | SaveChangesResult>;
 
 export interface ScrollToIndexPosition {
   position?: "top" | "bottom" | "middle" | "nearest";
@@ -156,7 +161,7 @@ export interface GridApi<TData = any> {
   getDirtyRowIds(): string[];
   getChanges(): GridChange<TData>[];
   markChangesSaved(rowIds?: readonly string[]): void;
-  /** Saves a stable change snapshot and safely preserves edits made while the request is in flight. */
+  /** Saves a stable snapshot; supports partial success and preserves edits made in flight. */
   saveChanges(handler: SaveChangesHandler<TData>, rowIds?: readonly string[]): Promise<GridChange<TData>[]>;
   rollbackChanges(rowIds?: readonly string[]): boolean;
 

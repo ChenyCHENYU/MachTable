@@ -5,6 +5,7 @@ import { vueCellRenderer } from "../adapters";
 import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTable, MachTablePlugin, type ColDef } from "../index";
 import { AsyncMachTable, AsyncMachTablePlugin, preloadMachTable } from "../async";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
+import { useMachTableEditing, type UseMachTableEditingReturn } from "../useMachTableEditing";
 import { useMachTableQuery, type UseMachTableQueryReturn } from "../useMachTableQuery";
 import { defineMachTableConfig, provideMachTableConfig } from "../index";
 
@@ -346,6 +347,43 @@ describe("Vue adapter", () => {
     app.unmount();
     await nextTick();
     expect(grid!.ready.value).toBe(false);
+  });
+
+  it("provides a reactive save, partial-success and rollback workflow", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    let grid: UseMachTableReturn<{ id: string; name: string }> | null = null;
+    let editing: UseMachTableEditingReturn<{ id: string; name: string }> | null = null;
+    const app = createApp(defineComponent({
+      setup() {
+        grid = useMachTable();
+        editing = useMachTableEditing(grid, { guardBeforeUnload: true });
+        return () => h(RobotGrid, {
+          ref: grid!.ref,
+          columnDefs: [{ field: "name", editable: true }],
+          rowData: [{ id: "1", name: "one" }, { id: "2", name: "two" }],
+          getRowId: ({ data }: any) => data.id,
+          pagination: false
+        });
+      }
+    }));
+    app.mount(host);
+    await nextTick();
+    await nextTick();
+    for (let rowIndex = 0; rowIndex < 2; rowIndex++) {
+      grid!.api.value!.startEditingCell({ rowIndex, colId: "name" });
+      (host.querySelector(".mach-editor-input") as HTMLInputElement).value = `changed-${rowIndex}`;
+      await grid!.api.value!.stopEditingAsync();
+    }
+    expect(editing!.dirty.value).toBe(true);
+    expect(editing!.dirtyRowIds.value).toEqual(["1", "2"]);
+    const saved = await editing!.save(async () => ({ savedRowIds: ["1"] }));
+    expect(saved.map((change) => change.rowId)).toEqual(["1"]);
+    expect(editing!.dirtyRowIds.value).toEqual(["2"]);
+    expect(editing!.reveal("2", "name")).toBe(true);
+    expect(editing!.rollback()).toBe(true);
+    expect(editing!.dirty.value).toBe(false);
+    app.unmount();
   });
 
   it("cancels stale remote queries and ignores late responses", async () => {

@@ -69,7 +69,7 @@
 | `stopEditingAsync(cancel?): Promise<boolean>` | 等待同步/异步校验；成功结束返回 `true`，校验失败保持编辑并返回 `false` |
 | `stopEditingRow(cancel?): Promise<boolean>` | 整行提交/取消；提交时全部校验通过后统一写值，并形成一个 undo 批次 |
 | `getDirtyRowIds()` / `getChanges()` | 查询尚未确认保存的行和逐单元格原值/当前值 |
-| `saveChanges(handler, rowIds?)` | 把稳定快照交给异步保存函数；成功后只确认该快照，保留请求期间产生的新编辑 |
+| `saveChanges(handler, rowIds?)` | 把稳定快照交给异步保存函数；可返回 `{ savedRowIds }` 表示部分成功，并保留请求期间产生的新编辑 |
 | `markChangesSaved(rowIds?)` | 业务已自行保存时手动确认 |
 | `rollbackChanges(rowIds?)` | 回滚全部或指定行到最近已确认值 |
 | `undo()` / `redo()` / `canUndo()` / `canRedo()` | 撤销栈操作，见[配方](/recipes/undo-redo) |

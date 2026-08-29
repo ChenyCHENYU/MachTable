@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { createGrid, buildColDefsFromSchema, describeFilter, isColDefGroup } from "../index";
+import {
+  createColumnStateKey,
+  createGrid,
+  createLocalColumnStateStore,
+  buildColDefsFromSchema,
+  describeFilter,
+  isColDefGroup
+} from "../index";
 import type { GridApi, ColDef, ColDefGroup } from "../index";
 
 interface Row {
@@ -236,7 +243,7 @@ describe("column state persistence", () => {
 
     const saved = localStorage.getItem("mach-table:col-state:test-key");
     expect(saved).toBeTruthy();
-    expect(JSON.parse(saved!).some((s: any) => s.colId === "id" && s.width === 222)).toBe(true);
+    expect(JSON.parse(saved!).columns.some((s: any) => s.colId === "id" && s.width === 222)).toBe(true);
 
     api.destroy();
 
@@ -284,6 +291,44 @@ describe("column state persistence", () => {
     expect(headerTexts[0]).toBe("Score");
     api2.destroy();
     localStorage.clear();
+  });
+
+  it("isolates versioned user state and migrates legacy payloads", () => {
+    localStorage.clear();
+    const key = createColumnStateKey({
+      app: "erp",
+      tenant: "north",
+      user: "u/1",
+      route: "/orders",
+      table: "main",
+      schema: 2
+    });
+    expect(key).toContain("table=main");
+    expect(key).not.toContain("u/1");
+
+    const store = createLocalColumnStateStore({
+      namespace: "test-columns",
+      version: 2,
+      migrate: (columns, from) => from === 0
+        ? columns.map((column) => column.colId === "old" ? { ...column, colId: "new" } : column)
+        : null
+    });
+    localStorage.setItem(store.storageKey(key), JSON.stringify([
+      { colId: "old", width: 180 },
+      { colId: "old", width: 999 },
+      { colId: "bad", width: -1, pinned: "center" }
+    ]));
+    expect(store.load(key)).toEqual([
+      { colId: "new", width: 180 },
+      { colId: "bad" }
+    ]);
+    store.save(key, [{ colId: "new", width: 200 }]);
+    expect(JSON.parse(localStorage.getItem(store.storageKey(key))!)).toEqual(expect.objectContaining({
+      version: 2,
+      columns: [{ colId: "new", width: 200 }]
+    }));
+    store.clear(key);
+    expect(store.load(key)).toBeNull();
   });
 
   it("single selection keeps only the latest row", () => {

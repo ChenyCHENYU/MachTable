@@ -8,13 +8,45 @@
 createGrid(host, {
   columnDefs,
   rowData,
-  columnStateKey: "machine-grid-v1"   // 每个表格场景一个稳定 key
+  columnStateKey: "machine-grid"   // 每个表格场景一个稳定 key
 });
 ```
 
 写入时机：调宽/换位/显隐/固定/排序 结束时自动保存。读取时机：创建时与 `setColumnDefs` 后自动应用（按 colId 匹配，新增列不受影响）。
 
-> key 中带版本号（`-v1`）可在列结构大改后强制所有用户重置。
+默认存储已经使用 `{ version, savedAt, columns }` 信封，并能读取旧版数组格式。多租户项目建议显式隔离并提供迁移：
+
+```ts
+import {
+  createColumnStateKey,
+  createLocalColumnStateStore
+} from "@agile-team/mach-table-vue";
+
+const columnStateStore = createLocalColumnStateStore({
+  namespace: "erp:table-layout",
+  version: 3,
+  migrate(columns, fromVersion) {
+    if (fromVersion < 3) {
+      return columns.map((column) =>
+        column.colId === "customerName" ? { ...column, colId: "customer.name" } : column
+      );
+    }
+    return columns;
+  },
+  onError: (error, operation, key) => telemetry.captureException(error, { operation, key })
+});
+
+const columnStateKey = createColumnStateKey({
+  app: "erp",
+  tenant: session.tenantId,
+  user: session.userId,
+  route: route.name?.toString(),
+  table: "order-list",
+  schema: 3
+});
+```
+
+将 `columnStateStore` 放入全局配置的 `defaults`，页面只需要提供 `columnStateKey`。迁移失败或载荷损坏会安全回退到列默认值；载荷还会过滤重复 ID、非法宽度和非法固定/排序值。
 
 ## 后端存储（按用户记忆）
 
@@ -67,4 +99,4 @@ api.resetColumnState();            // 重置为 columnDefs 初始状态（并持
 | `setColumnDefs` 更新列 | 状态按 colId 保留（新列用默认；消失列的状态滞留无害） |
 | 状态中的列顺序 | 应用时在同窗格/同分组内重排 |
 | 与列拖拽 | 用户拖拽换位即写入状态 |
-| localStorage 键 | `mach-table:col-state:{key}`（工具函数 `saveColumnState/loadColumnState/clearColumnState` 可直接操作） |
+| localStorage 键 | `mach-table:col-state:{key}`（版本化信封；工具函数 `saveColumnState/loadColumnState/clearColumnState` 可直接操作） |
