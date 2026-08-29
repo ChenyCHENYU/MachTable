@@ -7,6 +7,7 @@ export default defineConfig({
   timeout: 45_000,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
+  failOnFlakyTests: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   // WebKit startup can starve one of the three Vite-backed framework pages when
   // all browser projects render the 8k-row demos at once. Two workers keeps the

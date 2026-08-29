@@ -11,6 +11,7 @@ MachTable 从 `0.9.1` 起采用需作者书面授权的 source-available 许可�
 
 ```bash
 pnpm install
+pnpm quality:quick
 pnpm verify
 pnpm exec playwright install chromium firefox webkit
 pnpm test:e2e
@@ -25,7 +26,7 @@ pnpm test:e2e
 - DOM、全局监听器、定时器、框架 root 和异步请求必须有清理路径。
 - 用户输入不得直接写入 `innerHTML`；安全默认值不能为了兼容而静默放宽。
 
-详细设计见 [`docs/advanced/architecture.md`](./docs/advanced/architecture.md)。
+详细设计见 [`docs/advanced/architecture.md`](./docs/advanced/architecture.md)，复杂度、类型检查和分层反馈规则见 [`docs/advanced/quality-gates.md`](./docs/advanced/quality-gates.md)。
 
 ## 测试要求
 
@@ -41,10 +42,10 @@ pnpm test:e2e
 ```text
 fix(core): clean row drag listeners after pointer up
 feat(vue): expose reactive grid lifecycle composable
-docs: add enterprise integration guide
+docs(guide): add enterprise integration guide
 ```
 
-允许的常用 `type` 包括 `feat`、`fix`、`refactor`、`perf`、`test`、`docs`、`build`、`ci`、`chore` 和 `revert`。`scope` 应使用明确的包或领域，例如 `core`、`vue`、`react`、`docs`、`license`、`release`；主题使用祈使语气，避免“update files”一类无信息描述。
+允许的常用 `type` 包括 `feat`、`fix`、`refactor`、`perf`、`test`、`docs`、`build`、`ci`、`chore` 和 `revert`。`scope` 必填，应使用明确的包或领域，例如 `core`、`vue`、`react`、`docs`、`license`、`release`；主题使用祈使语气，避免“update files”一类无信息描述。可运行 `pnpm commit` 交互生成提交信息。
 
 影响发布包的变更需要 Changeset：
 

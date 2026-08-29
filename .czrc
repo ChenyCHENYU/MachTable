@@ -1,0 +1,18 @@
+{
+  "scopes": [
+    "core",
+    "vue",
+    "react",
+    "editing",
+    "data",
+    "a11y",
+    "quality",
+    "deps",
+    "docs",
+    "release",
+    "repo"
+  ],
+  "allowCustomScopes": true,
+  "allowEmptyScopes": false,
+  "maxHeaderLength": 100
+}

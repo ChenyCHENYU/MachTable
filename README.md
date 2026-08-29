@@ -293,7 +293,8 @@ flowchart TB
 
 - Core、Vue、React 共 230+ 个单元测试，并包含重复挂载/销毁的监听器泄漏检查。
 - Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 的键盘、编辑和过滤交互；Chromium 额外执行 10 万行 × 100 列性能预算。
-- ESLint、TypeScript、覆盖率阈值、publint、真实消费端类型检查、ESM/CJS exports、gzip 预算、示例与文档构建统一进入 `pnpm verify`。
+- 类型感知 ESLint、TypeScript、复杂度防回升、依赖/循环引用、覆盖率阈值、publint、真实消费端类型检查、ESM/CJS exports、gzip 预算、示例与文档构建统一进入 `pnpm verify`。
+- Husky + lint-staged 只检查暂存文件；完整任务由并行 CI 承担，兼顾严格门禁与日常开发效率。详见[质量门禁与高效开发](./docs/advanced/quality-gates.md)。
 - Overlay 字符串默认按文本渲染；可信 HTML 必须显式开启 `allowUnsafeOverlayHtml`。
 - 所有框架渲染器、编辑器、Feature、全局监听器和异步数据源都有销毁/取消边界。
 - CSV 导出默认防公式注入，字段路径写入拒绝危险原型键。
@@ -317,6 +318,7 @@ pnpm test:e2e
 | 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频业务 | [场景配方](./docs/recipes/selection.md) |
 | 竞品与后续规划 | [竞品分析](./docs/advanced/competitive-analysis.md) · [AG Grid 源码审计](./docs/advanced/ag-grid-source-study.md) · [路线图](./docs/advanced/roadmap.md) |
+| 贡献与质量体系 | [架构边界](./docs/advanced/architecture.md) · [质量门禁](./docs/advanced/quality-gates.md) · [贡献指南](./CONTRIBUTING.md) |
 | 故障定位 | [排错手册](./docs/guide/troubleshooting.md) |
 | 版本升级 | [升级指南](./docs/guide/upgrading.md) · [Changelog](./packages/core/CHANGELOG.md) |
 
@@ -330,7 +332,7 @@ pnpm test:e2e
 
 ## 参与贡献
 
-提交代码前请先阅读[架构边界](./docs/advanced/architecture.md)。新增配置必须登记到 `GRID_OPTION_META`，服务改动必须补测试，可选业务能力优先实现为 `GridFeature`，Core 不接受新增运行时依赖。
+提交代码前请先阅读[架构边界](./docs/advanced/architecture.md)与[质量门禁](./docs/advanced/quality-gates.md)。新增配置必须登记到 `GRID_OPTION_META`，服务改动必须补测试，可选业务能力优先实现为 `GridFeature`，Core 不接受新增运行时依赖。提交信息必须使用 `type(scope): subject`，也可通过 `pnpm commit` 交互生成。
 
 问题与建议请通过 [GitHub Issues](https://github.com/ChenyCHENYU/MachTable/issues) 提交。
 

@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("React cell editing exposes a pencil and local confirm/cancel controls", async ({ page }, testInfo) => {
+  // WebKit needs additional cold-start headroom when the virtualized React and
+  // Vue scenarios share constrained CI workers; actionability stays enabled.
+  test.setTimeout(testInfo.project.name === "webkit" ? 90_000 : 45_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("http://127.0.0.1:4174");
@@ -9,6 +12,7 @@ test("React cell editing exposes a pencil and local confirm/cancel controls", as
   const trigger = nameCell.getByRole("button", { name: "Edit cell" });
   // Cold WebKit startup can finish the grid shell before the virtual rows mount.
   await expect(trigger).toBeVisible({ timeout: 15_000 });
+  await expect(trigger).toBeEnabled();
   await trigger.click();
   await expect(nameCell.locator(".mach-cell-editor-controls")).toBeVisible();
   await expect(nameCell.getByRole("button", { name: "Confirm edit" })).toBeVisible();

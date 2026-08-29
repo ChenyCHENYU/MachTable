@@ -82,6 +82,7 @@ export default defineConfig({
             { text: "国际化 i18n", link: "/advanced/i18n" },
             { text: "可访问性与键盘", link: "/advanced/accessibility" },
             { text: "架构说明", link: "/advanced/architecture" },
+            { text: "质量门禁与高效开发", link: "/advanced/quality-gates" },
             { text: "竞品分析与调研计划", link: "/advanced/competitive-analysis" },
             { text: "AG Grid 源码审计", link: "/advanced/ag-grid-source-study" },
             { text: "路线图与差距分析", link: "/advanced/roadmap" }
