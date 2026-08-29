@@ -1,4 +1,4 @@
-import { createApp, defineComponent, h, nextTick, onUnmounted, ref, type GlobalComponents } from "vue";
+import { createApp, defineComponent, h, nextTick, onUnmounted, ref, shallowRef, type GlobalComponents } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RobotGrid } from "../RobotGrid";
 import { vueCellRenderer } from "../adapters";
@@ -8,6 +8,11 @@ import { useMachTable, type UseMachTableReturn } from "../useMachTable";
 import { useMachTableEditing, type UseMachTableEditingReturn } from "../useMachTableEditing";
 import { useMachTableQuery, type UseMachTableQueryReturn } from "../useMachTableQuery";
 import { defineMachTableConfig, provideMachTableConfig } from "../index";
+import {
+  mergeMachTableConfig,
+  normalizeMachTableConfig,
+  resolveMachTableGridOptions
+} from "../configuration";
 
 class ResizeObserverStub {
   observe(): void {}
@@ -103,6 +108,41 @@ describe("Vue adapter", () => {
     expect(table.value.explainOption("size")).toEqual(expect.objectContaining({ source: "table props", value: "large" }));
     expect(table.value.explainOption("editType")).toEqual(expect.objectContaining({ source: "preset:editable" }));
     app.unmount();
+  });
+
+  it("merges scoped config, reports invalid presets and explains built-in values", () => {
+    const inheritedWarning = vi.fn();
+    const parent = normalizeMachTableConfig({
+      defaults: { theme: "light", defaultColDef: { sortable: false } },
+      presets: { list: { stripedRows: true, defaultColDef: { resizable: false } } },
+      defaultPreset: "list",
+      onConfigWarning: inheritedWarning
+    });
+    const merged = mergeMachTableConfig(parent, {
+      defaults: { size: "compact" },
+      presets: {
+        list: { defaultColDef: { editable: false } },
+        editable: { editType: "fullRow" }
+      }
+    });
+    const resolved = resolveMachTableGridOptions(
+      merged,
+      ["", "missing", "list", "editable"],
+      { size: "large" }
+    );
+
+    expect(inheritedWarning).toHaveBeenCalledWith(expect.objectContaining({ code: "UNKNOWN_PRESET", preset: "missing" }));
+    expect(resolved.options.defaultColDef).toEqual({ sortable: false, resizable: false, editable: false });
+    expect(resolved.options.editType).toBe("fullRow");
+    expect(resolved.explain("size")).toEqual(expect.objectContaining({ source: "table props", value: "large" }));
+    expect(resolved.explain("rowHeight")).toEqual(expect.objectContaining({ source: "MachTable built-in" }));
+
+    const reportWarning = vi.fn();
+    resolveMachTableGridOptions(merged, "unknown", {}, reportWarning);
+    expect(reportWarning).toHaveBeenCalledOnce();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    resolveMachTableGridOptions(normalizeMachTableConfig(), "unknown", {});
+    expect(warn).toHaveBeenCalledOnce();
   });
 
   it("reacts to route-scoped configuration sources", async () => {
@@ -386,6 +426,61 @@ describe("Vue adapter", () => {
     app.unmount();
   });
 
+  it("guards editing failures, concurrent saves and before-unload cleanup", async () => {
+    let resolveSave!: (value: any[]) => void;
+    const saveChanges = vi.fn(() => new Promise<any[]>((resolve) => { resolveSave = resolve; }));
+    const removeDirtyListener = vi.fn();
+    const api = {
+      isDestroyed: () => false,
+      getDirtyRowIds: () => ["1"],
+      getChanges: () => [{ rowId: "1", colId: "name", oldValue: "before", newValue: "after" }],
+      addEventListener: vi.fn(() => removeDirtyListener),
+      saveChanges,
+      rollbackChanges: vi.fn(() => true),
+      markChangesSaved: vi.fn(),
+      getNodeById: vi.fn(() => null),
+      scrollToIndex: vi.fn(),
+      startEditingCell: vi.fn()
+    };
+    const table = { api: shallowRef<any>(api) } as UseMachTableReturn<any>;
+    const onSaveError = vi.fn();
+    let editing: UseMachTableEditingReturn<any> | null = null;
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup() {
+        editing = useMachTableEditing(table, {
+          guardBeforeUnload: true,
+          beforeUnloadMessage: "请先保存",
+          onSaveError
+        });
+        return () => h("div");
+      }
+    }));
+    app.mount(host);
+
+    const unload = new Event("beforeunload", { cancelable: true }) as BeforeUnloadEvent;
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    const pendingSave = editing!.save(saveChanges as any);
+    await expect(editing!.save(saveChanges as any)).rejects.toThrow(/already in progress/);
+    resolveSave([]);
+    await expect(pendingSave).resolves.toEqual([]);
+    expect(editing!.reveal("missing", "name", true)).toBe(false);
+    expect(editing!.rollback(["1"])).toBe(true);
+    editing!.markSaved(["1"]);
+    expect(api.markChangesSaved).toHaveBeenCalledWith(["1"]);
+
+    api.saveChanges = vi.fn().mockRejectedValue(new Error("save failed"));
+    await expect(editing!.save(api.saveChanges as any)).rejects.toThrow("save failed");
+    expect(onSaveError).toHaveBeenCalledOnce();
+    expect(editing!.saveError.value).toBeInstanceOf(Error);
+    table.api.value = null;
+    await nextTick();
+    await expect(editing!.save(saveChanges as any)).rejects.toThrow(/grid is ready/);
+    app.unmount();
+    expect(removeDirtyListener).toHaveBeenCalled();
+  });
+
   it("cancels stale remote queries and ignores late responses", async () => {
     const query = ref({ keyword: "first" });
     const pending: Array<{
@@ -483,6 +578,108 @@ describe("Vue adapter", () => {
     remote!.applySelectionState({ mode: "explicit", selectedKeys: ["1"] });
     expect(remote!.selectionState.value).toEqual({ mode: "explicit", selectedKeys: ["1"] });
     expect(remote!.selectedKeys.value).toEqual(["1"]);
+    app.unmount();
+  });
+
+  it("surfaces remote validation failures and supports explicit retry and abort", async () => {
+    const onError = vi.fn();
+    const requests = [
+      () => Promise.reject(new Error("offline")),
+      () => Promise.resolve({ rows: null, total: -1 }),
+      () => Promise.resolve({ rows: [{ id: "1" }], total: 1 }),
+      ({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      })
+    ];
+    const request = vi.fn((params: any): Promise<{ rows: { id: string }[]; total: number }> => (
+      requests.shift()!(params) as Promise<{ rows: { id: string }[]; total: number }>
+    ));
+    let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup() {
+        remote = useMachTableQuery({
+          query: () => ({ keyword: "x" }),
+          rowKey: (row) => row.id,
+          request,
+          immediate: false,
+          initialPage: 0,
+          pageSize: Number.NaN,
+          pageSizeOptions: [0, 20, 20],
+          keepPreviousData: false,
+          onError
+        });
+        return () => h("div");
+      }
+    }));
+    app.mount(host);
+    expect(request).not.toHaveBeenCalled();
+    expect(remote!.page.value).toBe(1);
+    expect(remote!.pageSize.value).toBe(20);
+
+    await remote!.reload();
+    expect(remote!.error.value).toEqual(expect.objectContaining({ message: "offline" }));
+    await remote!.retry();
+    expect(remote!.error.value).toBeInstanceOf(TypeError);
+    await remote!.reload({ resetPage: true });
+    expect(remote!.rows.value).toEqual([{ id: "1" }]);
+    expect(onError).toHaveBeenCalledTimes(2);
+
+    const pending = remote!.reload();
+    expect(remote!.rows.value).toEqual([]);
+    expect(remote!.loading.value).toBe(true);
+    remote!.abort();
+    await pending;
+    expect(remote!.loading.value).toBe(false);
+    expect(remote!.error.value).toBeNull();
+    app.unmount();
+  });
+
+  it("handles server sort, filter, page selection and controlled selected keys", async () => {
+    const query = ref({ status: "all" });
+    const quickFilterText = ref<string | null>(null);
+    const request = vi.fn(async ({ page }: { page: number }) => ({
+      rows: [{ id: String(page), name: `row-${page}` }],
+      total: 40
+    }));
+    let remote: UseMachTableQueryReturn<{ id: string; name: string }> | null = null;
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup() {
+        remote = useMachTableQuery({
+          query,
+          quickFilterText,
+          rowKey: "id",
+          request,
+          selectionScope: "page",
+          clearSelectionOnQueryChange: false,
+          debounceMs: -1
+        });
+        return () => h("div");
+      }
+    }));
+    app.mount(host);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    remote!.gridProps.value.onPaginationChanged?.({ page: 1, pageSize: 20 } as any);
+    expect(request).toHaveBeenCalledTimes(1);
+
+    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
+    expect(remote!.selectedKeys.value).toEqual(["1"]);
+    remote!.selectedKeys.value = [];
+    expect(remote!.selectedRows.value).toEqual([]);
+
+    remote!.gridProps.value.onSortChanged?.({ sortModel: [{ colId: "name", sort: "asc" }] } as any);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    remote!.gridProps.value.onFilterChanged?.({ filterModel: { name: { type: "contains", filter: "x" } } } as any);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(3));
+    quickFilterText.value = "fast";
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(4));
+    query.value = { status: "enabled" };
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(5));
+    await remote!.reset();
+    expect(remote!.sortModel.value).toEqual([]);
+    expect(remote!.filterModel.value).toEqual({});
+    expect(request).toHaveBeenCalledTimes(6);
     app.unmount();
   });
 });
