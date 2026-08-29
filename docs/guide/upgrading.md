@@ -2,7 +2,7 @@
 
 ## 版本策略
 
-MachTable 当前处于 `0.x`。三个包固定版本联动：
+MachTable 当前处于 `0.x`。Core、Vue、React 与可选 XLSX 包固定版本联动：
 
 - patch：兼容性修复和文档改进；
 - minor：新能力，也可能包含经过说明的破坏性调整；
@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。三个包固定版本联动：
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.10.0
+pnpm up @agile-team/mach-table-vue@^0.13.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,16 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.10 → 0.13
+
+0.13 汇总验收了早期已合并但未按路线更新版本号的 0.11/0.12 能力，并新增列工作台、懒加载树和独立 XLSX 包。现有配置默认值保持兼容：
+
+- `openColumnPanel()` 继续可用，新代码改用 `openColumnWorkbench()`；自定义抽屉读取 `getColumnWorkbenchItems()`。
+- 普通树表不受影响；仅同时提供 `isTreeRowExpandable` 与 `loadTreeChildren` 时启用懒加载。
+- Vue 的 `vueCellEditor()` 与 `createElementPlusEditors()` 从同包的 `@agile-team/mach-table-vue/editors` 按需导入，不安装 Element Plus 时不产生依赖。
+- XLSX 不随适配器安装；只有 Excel 页面额外安装 `@agile-team/mach-table-xlsx` 和宿主选择的工作簿引擎。
+- `useMachTableQuery` 新增错误/空态 overlay 绑定；已有 `#empty` 插槽仍可完全覆盖。
 
 ## 0.9 → 0.10
 
@@ -116,4 +126,4 @@ columnStateKey: "orders-v2"
 
 ## 回滚
 
-回滚必须同时回滚三个包和 lockfile。若新版本已经写入新的列状态 key，旧版本继续使用旧 key，不要复用不兼容状态。
+回滚必须同时回滚本次实际安装的 MachTable 包和 lockfile。若新版本已经写入新的列状态 key，旧版本继续使用旧 key，不要复用不兼容状态。

@@ -102,6 +102,10 @@ onGridReady: (e) => { /* grid 可交互，e.api 即命令接口 */ }
 { rowId: string, rowNode: RowNode, expanded: boolean }
 ```
 
+### `treeChildrenLoaded` / `treeChildrenLoadFailed`
+
+懒加载树节点成功或失败时触发。成功事件包含 `rowId`、`rowNode` 与 `children`；失败事件包含 `error`。失败同时进入统一 `gridError`，错误码为 `DATA_SOURCE_ERROR`。
+
 ## 分页
 
 ### `paginationChanged`

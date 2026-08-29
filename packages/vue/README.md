@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-Official Vue 3 adapter for MachTable 0.10. It provides `<MachTable>`, native typed slots, dedicated app/route configuration, remote query and editing composables, async boundaries, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official Vue 3 adapter for MachTable 0.13. It provides `<MachTable>`, native typed slots, dedicated app/route configuration, remote query and editing composables, optional Element Plus editors, workbench/lazy-tree Core APIs, async boundaries, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -107,6 +107,21 @@ Remote B-side lists can bind `useMachTableQuery()` directly. For the smallest co
 Million-row batch actions use `selectionScope: "query"` and compact `allMatching + excludedKeys` rules, so clients never download every matching row ID.
 
 `useMachTableEditing()` exposes reactive dirty changes, save state, partial batch success, rollback, failed-cell reveal and an optional unsaved-page guard. Semantic business types and cached dictionaries are configured once with `createBusinessColumnTypes()` and `createCachedDictionary()`.
+
+Element Plus editors are optional and registered once without making EP a package dependency:
+
+```ts
+import { createElementPlusEditors } from "@agile-team/mach-table-vue/editors";
+
+const ep = createElementPlusEditors({
+  input: ElInput,
+  inputNumber: ElInputNumber,
+  select: ElSelect,
+  datePicker: ElDatePicker
+});
+```
+
+Use `api.openColumnWorkbench()` for the built-in column settings UI. Lazy trees opt in with `isTreeRowExpandable` plus `loadTreeChildren`; ordinary tree data is unchanged.
 
 ## Cell and full-row editing
 

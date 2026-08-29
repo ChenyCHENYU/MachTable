@@ -39,6 +39,21 @@ await api.applyTransactionAsync({ update: realtimeRows });
 api.applyState(state);
 ```
 
+0.13 adds a built-in/headless column workbench and cancellable lazy trees:
+
+```ts
+api.openColumnWorkbench();
+const columns = api.getColumnWorkbenchItems();
+
+const treeOptions = {
+  treeData: true,
+  isTreeRowExpandable: ({ data }) => data.hasChildren,
+  loadTreeChildren: ({ data, signal }) => catalogApi.children(data.id, { signal })
+};
+```
+
+XLSX stays outside Core; install `@agile-team/mach-table-xlsx` only on Excel routes.
+
 Polished editing and row actions are built in rather than adapter-specific:
 
 ```ts

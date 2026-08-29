@@ -94,6 +94,8 @@
 | --- | --- | --- | --- |
 | `treeData` | `boolean` | `false` | 树形数据模式 |
 | `childrenKey` | `string` | `"children"` | 树形子节点字段 |
+| `isTreeRowExpandable` | `(p) => boolean` | — | 标记尚无本地 children 但可从服务端展开的节点 |
+| `loadTreeChildren` | `async ({ data, node, api, signal }) => rows` | — | 首次展开时懒加载子级；支持取消、去重、错误状态与重试 |
 | `defaultExpandAll` | `boolean` | `false` | 初始展开全部树节点 |
 | `autoCheckedChildren` | `boolean` | `true` | 树形复选框父子级联 |
 | `masterDetail` | `boolean` | `false` | 主从明细模式 |

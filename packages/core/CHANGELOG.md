@@ -1,5 +1,14 @@
 # @agile-team/mach-table
 
+## 0.13.0
+
+### Minor Changes
+
+- Add a searchable built-in column workbench with visibility, pinning, ordering, sizing, reset and a headless item API for custom drawers.
+- Add cancellable, deduplicated lazy tree loading with atomic subtree replacement, loading/error state, retries and lifecycle events.
+- Add public workbench, lazy-tree and data-source error contracts while retaining the 0.x `openColumnPanel` compatibility alias.
+- Consolidate the completed 0.10—0.13 product route without freezing the 1.0 API.
+
 ## 0.10.0
 
 ### Minor Changes

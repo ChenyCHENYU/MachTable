@@ -112,34 +112,32 @@ MachTable 已有版本化 `GridState`，本次又把列布局本地存储升级�
 
 ## 可执行路线与退出条件
 
-### 0.10：Vue DX 与应用治理（本轮已完成）
+### 0.10：配置 V2 与 Vue 原生 DX（已完成）
 
 - 专用 `mach-table.config.ts`，`main.ts` 保持一行安装；
 - app/route/preset/table 四层覆盖与配置来源解释；
-- 原生 Vue slots、自动列宽、远程查询、语义列、字典缓存、统一操作策略；
-- 响应式编辑保存、部分成功、版本化列状态。
-- 查询级全选规则、托管 feature 生命周期和基础 GridOption 校验。
+- 原生 Vue slots、自动列宽、命名预设和响应式 scoped defaults；
+- 托管 feature 生命周期和基础 GridOption 校验。
 
 退出条件：常用列表页无需直接保存 `gridApi`；配置示例和严格类型测试通过。
 
-### 0.11：Remote Block Store（下一架构主题）
+### 0.11：标准 B 端远程查询（已完成）
 
-建立独立模块，必须同时具备：随机 block 定位、并发上限、debounce、AbortSignal、请求代次、LRU、可见/焦点块保护、失败重试、purge/refresh、未知总数收敛和 `getCacheState()`。不得继续把 append-only datasource 宣称为完整远程模型。
+`useMachTableQuery` 已覆盖服务端分页、排序/过滤、debounce、AbortSignal、请求代次、失败重试、加载/空/错状态、跨页选择和查询级全选规则。它明确不是 AG Grid SSRM 或随机 Block Store。
 
-退出条件：百万行虚拟总高下可跳到任意索引；快速往返滚动复用缓存；缓存有硬上限；故障注入下无陈旧覆盖和永久 loading。
+退出条件：故障注入下无陈旧覆盖和永久 loading；跨页选择不下载全量 ID；查询切换默认清理旧规则。
 
-### 0.12：复杂编辑与可选文件能力
+### 0.12：业务字段与编辑保存闭环（已完成）
 
-- 批量修改审阅台、服务端 version/ETag 冲突模型、跨视口错误队列；
-- 可选 XLSX 包，动态加载，不进入零依赖 Core；
-- feature 生命周期托管与 renderer `refresh` 契约；
-- validation/deprecation registry。
+- 语义业务列、TTL/LRU/批量字典缓存和统一权限策略；
+- 通用 Vue v-model 编辑器与可选 Element Plus 编辑器桥接；
+- 脏状态、稳定保存快照、部分成功、回滚、定位和离页保护。
 
-退出条件：部分成功、冲突修正、重试、放弃形成闭环；关闭 XLSX 时默认包体不增长。
+退出条件：单元格/整行编辑共享保存事务；保存中产生的新编辑不会被旧响应误确认；EP 未安装时零成本。
 
-### 0.13：仅由真实项目触发
+### 0.13：高频工作台能力（已完成）
 
-候选为高级筛选 AST、列/字段工具面板、受控合并、服务端分组呈现。服务端 Pivot/公式/图表仍需独立 ADR，不以版本号倒逼功能。
+已完成列工作台、权限动作、可选 XLSX 动态扩展、可取消/去重/重试的树表懒加载和主从详情闭环。随机 Block Store、高级筛选 AST、服务端分组/Pivot、公式和图表仍需独立 ADR，不以版本号倒逼功能。
 
 ### 1.0：暂不上
 

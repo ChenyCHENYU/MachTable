@@ -64,6 +64,18 @@ const columns: ColDef<Order>[] = [
 
 页面不再需要 `grid-ready`、`gridApi`、外部分页器、手动 `loading` 或请求序号。
 
+如果不想写 `#empty` 插槽，可直接配置统一错误/空态；错误工厂会收到可调用的 `retry()`：
+
+```ts
+useMachTableQuery({
+  // ...
+  emptyOverlay: "暂无订单",
+  errorOverlay: ({ retry }) => createRequestErrorPanel({ onRetry: retry })
+});
+```
+
+`bindings` 会自动把 loading、空态和错误态交给表格 Overlay；业务也仍可读取 `error`/`retry` 自定义整页状态。
+
 ## 请求协议
 
 每次请求都会收到当次分页、排序和过滤状态的独立快照，以及当前业务查询值：

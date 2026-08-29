@@ -1,5 +1,18 @@
 # @agile-team/mach-table-vue
 
+## 0.13.0
+
+### Minor Changes
+
+- Add a lifecycle-safe `vueCellEditor()` factory and zero-dependency `createElementPlusEditors()` bridge through the tree-shakable `./editors` entry with optional host app context.
+- Complete remote query empty/error overlay bindings while retaining cancellation, retries and cross-page/query-wide selection.
+- Re-export the 0.13 Core workbench and lazy-tree APIs and events.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.13.0
+
 ## 0.10.0
 
 ### Minor Changes

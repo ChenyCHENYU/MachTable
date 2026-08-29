@@ -97,4 +97,4 @@ GridCore.emit ——→ EventBus + options.onXxx（双通道广播）
 
 ## 发布流
 
-changesets（三包 fixed 版本联动）→ CI（lint + typecheck + coverage + size budget + packages/examples/docs build + Playwright）→ Changesets 版本 PR → 合并后 publish。详见根 README「开发与贡献」。
+changesets（Core、Vue、React、可选 XLSX 四包 fixed 版本联动）→ CI（lint + typecheck + coverage + size budget + packages/examples/docs build + Playwright）→ Changesets 版本 PR → 合并后 publish。详见根 README「开发与贡献」。

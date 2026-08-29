@@ -31,7 +31,9 @@
 | `setColumnPinned(colId, "left" \| "right" \| null)` | 固定/取消固定 |
 | `sizeColumnsToFit(width?)` | 按比例铺满容器 |
 | `autoSizeColumn(colId, skipHeader?)` / `autoSizeAllColumns(skipHeader?)` | 内容自适应列宽（Canvas 测量，取样前 2000 行） |
-| `openColumnPanel(anchor?)` | 打开独立列设置面板（`anchor` 缺省在表格右上角） |
+| `openColumnWorkbench(anchor?)` / `closeColumnWorkbench()` | 打开/关闭可搜索的列工作台（显隐、固定、排序、自适应、重置） |
+| `getColumnWorkbenchItems()` | 读取自定义列工作台所需的 `colId/label/visible/pinned/width/movable/hideable` |
+| `openColumnPanel(anchor?)` | 0.x 兼容别名；新代码使用 `openColumnWorkbench()` |
 
 ## 排序 / 过滤 / 分页
 
@@ -83,6 +85,8 @@
 | `toggleRowGroup(groupId)` / `isGroupExpanded(groupId)` | 分组行展开切换 |
 | `expandAllGroups()` / `collapseAllGroups()` | 全部分组展开/收起 |
 | `expandRow(id)` / `collapseRow(id)` / `toggleDetailRow(id)` / `isRowExpanded(id)` | 明细/树节点展开 |
+| `loadTreeChildren(id, { force? })` / `retryTreeChildren(id)` | 加载或强制重试懒加载树子级；并发请求自动去重 |
+| `isTreeRowLoading(id)` | 查询节点子级是否正在加载 |
 | `expandAllDetails()` / `collapseAllDetails()` | 全部展开/收起（树与明细通用） |
 | `reorderRows(fromIndex, toIndex)` | 编程式行重排（触发 `rowDragEnd` 同语义） |
 

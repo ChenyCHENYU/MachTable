@@ -1,5 +1,17 @@
 # @agile-team/mach-table-react
 
+## 0.13.0
+
+### Minor Changes
+
+- Re-export the 0.13 Core column workbench, lazy tree loading contracts and events through the React single-package entry.
+- Keep Provider/table overrides and StrictMode lifecycle behavior compatible with 0.10.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.13.0
+
 ## 0.10.0
 
 ### Minor Changes

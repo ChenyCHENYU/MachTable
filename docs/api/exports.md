@@ -165,11 +165,15 @@ import type {
 
 ## Vue 包附加导出
 
-`MachTable` / `MachTableVueProps` / `MachTablePlugin` / `provideMachTableDefaults` / `useMachTableDefaults` / `vueCellRenderer` / `vueDetailRenderer` / `useMachTable`（`{ ref, api, ready }`）。异步子路径导出 `AsyncMachTablePlugin` / `createAsyncMachTable` / `preloadMachTable`。另重导出完整 Core；`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
+根入口导出 `MachTable` / `MachTableVueProps` / `MachTablePlugin` / `provideMachTableDefaults` / `useMachTableDefaults` / `vueCellRenderer` / `vueDetailRenderer` / `useMachTable`（`{ ref, api, ready }`）。异步子路径导出 `AsyncMachTablePlugin` / `createAsyncMachTable` / `preloadMachTable`；`workflows` 子路径导出远程查询和编辑保存 composable；`editors` 子路径导出 `vueCellEditor` / `createElementPlusEditors`，不增加第二个安装依赖。另重导出完整 Core；`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
 
 ## React 包附加导出
 
 `MachTable` / `MachTableReactProps` / `MachTableProvider` / `useMachTableDefaults` / `reactCellRenderer` / `reactDetailRenderer` / `useMachGrid`（`{ apiRef, api, ready }`），并重导出完整 Core。`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
+
+## 可选 XLSX 包
+
+`@agile-team/mach-table-xlsx` 导出 `createXlsxExtension` / `exportGridToXlsx` / `importGridFromXlsx` 与 `XlsxEngine` 协议。它不包含工作簿引擎，推荐使用动态 loader，见[可选 XLSX](/recipes/xlsx)。
 
 ## 主题 CSS
 

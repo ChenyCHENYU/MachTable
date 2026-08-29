@@ -1,13 +1,126 @@
 # Element Plus 集成
 
-MachTable 与 Element Plus **不冲突**：表格内核独立，EP 负责页面其余组件；通过主题令牌桥接 + 适配器即可浑然一体。适合"用 el-table 卡在数据量/交互上限，但不想换技术栈"的团队。
+MachTable 不依赖 Element Plus；Vue 包提供可选编辑器桥接，由宿主传入已经安装的 EP 组件。因此未使用 EP 的项目零额外体积，使用 EP 的项目可以继承 `ElConfigProvider` 的主题、尺寸与国际化上下文。
 
-## 1. 主题桥接（一次配置，全局统一）
+## 一次注册常用编辑器
 
-EP 的 CSS 变量挂在 `html` 上，直接映射到 `.mach-root`：
+```ts
+// mach-table.config.ts
+import { h } from "vue";
+import {
+  ElDatePicker,
+  ElInput,
+  ElInputNumber,
+  ElOption,
+  ElSelect
+} from "element-plus";
+import {
+  defineMachTableConfig
+} from "@agile-team/mach-table-vue";
+import { createElementPlusEditors } from "@agile-team/mach-table-vue/editors";
+
+const ep = createElementPlusEditors(
+  {
+    input: ElInput,
+    inputNumber: ElInputNumber,
+    select: ElSelect,
+    datePicker: ElDatePicker
+  },
+  {
+    select: {
+      children: ({ params }) =>
+        (params.colDef.cellEditorParams?.values ?? []).map((item: any) =>
+          h(ElOption, {
+            label: typeof item === "object" ? item.label : item,
+            value: typeof item === "object" ? item.value : item
+          })
+        )
+    },
+    date: {
+      props: { type: "date", valueFormat: "YYYY-MM-DD", teleported: true }
+    }
+  }
+);
+
+export default defineMachTableConfig({
+  defaults: {
+    components: {
+      cellEditors: {
+        "ep-input": ep.input!,
+        "ep-number": ep.number!,
+        "ep-select": ep.select!,
+        "ep-date": ep.date!
+      }
+    }
+  }
+});
+```
+
+页面只声明编辑器名称，不再重复创建/销毁 Vue App：
+
+```ts
+const columns: ColDef<Order>[] = [
+  { field: "customer", editable: true, cellEditor: "ep-input" },
+  { field: "amount", editable: true, cellEditor: "ep-number" },
+  {
+    field: "status",
+    editable: true,
+    cellEditor: "ep-select",
+    cellEditorParams: {
+      values: [
+        { label: "待处理", value: "pending" },
+        { label: "已完成", value: "done" }
+      ]
+    }
+  },
+  { field: "deliveryDate", editable: true, cellEditor: "ep-date" }
+];
+```
+
+编辑器桥接统一处理 `modelValue`、`update:modelValue`、初始聚焦、宽度和销毁。Enter/Escape/Tab 仍由表格编辑事务管理。配置文件在模块顶层执行时，编辑器使用独立 Vue 根；如需继承页面级 `ElConfigProvider` 注入，请在组件 `setup()` 中创建工厂，或通过编辑器选项显式传入 `appContext`。
+
+## 任意 Vue 组件
+
+非 Element Plus 组件使用同一个通用工厂：
+
+```ts
+import { vueCellEditor } from "@agile-team/mach-table-vue/editors";
+
+const currencyEditor = vueCellEditor(CurrencyInput, {
+  props: ({ data }) => ({ currency: data.currency }),
+  focusSelector: "input",
+  className: "order-currency-editor"
+});
+```
+
+组件不是标准 `modelValue` 协议时可设置 `valueProp` 和 `updateEvent`。
+
+## 渲染 EP 组件
+
+```ts
+import { h } from "vue";
+import { ElTag } from "element-plus";
+import { vueCellRenderer } from "@agile-team/mach-table-vue";
+
+const StatusTag = {
+  props: ["value"],
+  setup: (props: any) => () =>
+    h(ElTag, { type: props.value === "done" ? "success" : "warning", size: "small" }, () => props.value)
+};
+
+const statusColumn = {
+  field: "status",
+  cellRenderer: vueCellRenderer(StatusTag)
+};
+```
+
+在组件 `setup()` 中创建适配器会自动捕获宿主 `appContext`；在模块顶层创建时可显式传 `{ appContext }`。
+
+## 主题桥接
+
+全局引入一次：
 
 ```css
-/* mach-table-el-bridge.css —— 全局引入一次即可 */
 .mach-root {
   --mach-primary: var(--el-color-primary, #409eff);
   --mach-primary-weak: var(--el-color-primary-light-9, #ecf5ff);
@@ -18,143 +131,43 @@ EP 的 CSS 变量挂在 `html` 上，直接映射到 `.mach-root`：
   --mach-body-fg: var(--el-text-color-primary, #303133);
   --mach-row-hover-bg: var(--el-fill-color-light, #f5f7fa);
   --mach-row-selected-bg: var(--el-color-primary-light-9, #ecf5ff);
-  --mach-zebra-bg: var(--el-fill-color-lighter, #fafafa);
-  --mach-scrollbar-thumb: var(--el-border-color, #dcdfe6);
 }
 
-/* EP 暗色模式自动同步 */
 html.dark .mach-root {
   --mach-border-color: var(--el-border-color-dark, #414243);
   --mach-header-bg: var(--el-fill-color-darker, #1d1d1d);
-  --mach-body-bg: transparent;
-  --mach-row-hover-bg: var(--el-fill-color-dark, #262727);
-  --mach-header-fg: var(--el-text-color-regular, #cfd3dc);
   --mach-body-fg: var(--el-text-color-primary, #e5eaf3);
+  --mach-row-hover-bg: var(--el-fill-color-dark, #262727);
   color-scheme: dark;
 }
 ```
 
-密度对齐 EP 的 `size`：`size="small"` 表格用 `size: "compact"`、默认用 `"normal"`、large 用 `"large"`。
+EP `size="small"` 可对应表格 `size: "compact"`，默认对应 `normal`，大尺寸对应 `large`。
 
-## 2. 单元格渲染 EP 组件
+## Dialog / Drawer 中使用
 
-```ts
-import { h } from "vue";
-import { ElTag, ElProgress, ElRate } from "element-plus";
-import { vueCellRenderer } from "@agile-team/mach-table-vue";
-
-const columns = [
-  {
-    field: "status",
-    headerName: "状态",
-    width: 110,
-    cellRenderer: vueCellRenderer({
-      render: () => h(ElTag, { type: "danger", size: "small", effect: "light" }, () => "故障")
-    })
-  },
-  {
-    field: "progress",
-    headerName: "进度",
-    cellRenderer: vueCellRenderer({
-      render: () => h(ElProgress, { percentage: 66, strokeWidth: 8 })
-    })
-  }
-];
-```
-
-动态值版本（每次渲染读取最新 params）：
+隐藏容器变为可见后刷新一次布局：
 
 ```ts
-cellRenderer: (params) => {
-  const tagType = params.value === "故障" ? "danger" : "success";
-  const host = document.createElement("div");
-  createApp({ render: () => h(ElTag, { type: tagType, size: "small" }, () => params.value) }).mount(host);
-  return { el: host, destroy: () => setTimeout(() => host.__vue_app__?.unmount(), 0) };
-}
-```
-
-更简洁的方式：把通用样式注册成渲染器（可序列化，见[渲染器注册表](/recipes/editing)）。
-
-## 3. 富编辑器（el-select / el-date-picker / el-input-number）
-
-```ts
-import { createApp, h } from "vue";
-import { ElSelect, ElOption, ElDatePicker, ElInputNumber } from "element-plus";
-
-function epEditor(component: any, props: Record<string, any> = {}) {
-  return (params: any) => {
-    const host = document.createElement("div");
-    host.style.width = "100%";
-    let value: any = params.value;
-    const app = createApp({
-      render: () =>
-        h(component, {
-          ...props,
-          modelValue: value,
-          "onUpdate:modelValue": (v: any) => (value = v),
-          style: { width: "100%" }
-        })
-    });
-    app.mount(host);
-    setTimeout(() => host.querySelector("input")?.focus());
-    return {
-      el: host,
-      getValue: () => value,
-      destroy: () => app.unmount()
-    };
-  };
-}
-
-// 使用 / 注册
-import { registerCellEditor } from "@agile-team/mach-table-vue";
-registerCellEditor("ep-select", epEditor(ElSelect));
-registerCellEditor("ep-date", epEditor(ElDatePicker, { type: "datetime", valueFormat: "YYYY-MM-DD HH:mm:ss" }));
-registerCellEditor("el-input-number" as any, epEditor(ElInputNumber, { min: 0, precision: 2 }));
-
-columnDefs: [
-  { field: "level", editable: true, cellEditor: "ep-select" },
-  { field: "createdAt", editable: true, cellEditor: "ep-date" }
-]
-```
-
-::: tip
-Enter/Escape/Tab 由 MachTable 统一接管（保存/取消/跳格），EP 组件自身的键盘冲突已被编辑器容器屏蔽。
-:::
-
-## 4. 与 el-dialog / el-drawer 共用
-
-```ts
-const visible = ref(false);
-watch(visible, async (v) => {
-  if (v) {
-    await nextTick();
-    api?.refreshLayout();   // 容器从隐藏变可见后刷新尺寸
-  }
+watch(visible, async (value) => {
+  if (!value) return;
+  await nextTick();
+  table.api.value?.refreshLayout();
 });
 ```
 
-## 5. 混用策略（渐进迁移）
+## 保存闭环
 
-同页面可并存：旧 `el-table` 列表页不动，新需求/数据量超 1 千行的页面用 `MachTable`。列描述符映射助手：
+EP 编辑器只负责输入，提交仍使用 MachTable 的事务 API：
 
 ```ts
-// el-table column → MachTable ColDef
-function fromElColumn(c: { prop: string; label: string; width?: number; fixed?: string }) {
-  return {
-    field: c.prop,
-    headerName: c.label,
-    width: c.width,
-    pinned: c.fixed === "left" ? ("left" as const) : c.fixed === "right" ? ("right" as const) : undefined
-  };
-}
+const editing = useMachTableEditing(table.api, {
+  save: (changes, { signal }) => orderApi.saveChanges(changes, { signal }),
+  beforeUnload: true
+});
+
+await editing.save();
+editing.rollback();
 ```
 
-## 6. 不冲突的边界
-
-| 关注点 | 说明 |
-| --- | --- |
-| 样式作用域 | MachTable 全部样式限定在 `.mach-root` 内，EP 全局变量不受影响 |
-| 事件系统 | MachTable 事件仅在表格根元素内，不冒泡污染页面 |
-| 暗色模式 | EP 用 `html.dark`，表格桥接 CSS 同步；也可独立加 `mach-theme-dark` 类 |
-| 依赖 | core 零依赖，不与 EP 共享任何包版本约束 |
-| 适配器上下文 | 在组件 `setup` 内调用适配器工厂会自动继承宿主 appContext（ElConfigProvider 注入随单元格生效）；模块顶层调用可用第二参数 `{ appContext }` 显式指定 |
+这样单元格编辑、整行编辑、异步校验、部分成功、并发保存和离页保护使用同一套规则，不会因 UI 库不同形成多套业务状态。

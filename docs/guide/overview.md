@@ -71,8 +71,9 @@ MachTable 从 `0.9.1` 起不是 OSI 定义下的开源软件。公开源码只�
 | `@agile-team/mach-table` | 内核 + 原生用法 + 主题 CSS | 无 |
 | `@agile-team/mach-table-vue` | Vue 单包入口；局部导入、全局同步插件、全局异步插件与预加载 | peer: vue ≥ 3.2 |
 | `@agile-team/mach-table-react` | React 单包入口；命名导入与标准 `React.lazy` 默认导出 | peer: react/react-dom ≥ 18 |
+| `@agile-team/mach-table-xlsx` | Excel 页面可选桥接；动态注入工作簿引擎，不进入默认包 | Core；工作簿引擎由宿主选择 |
 
-内核与适配层独立发版、版本联动（changesets fixed），core 修 bug 不需要动框架包。
+内核、适配层与可选扩展独立发版、版本联动（changesets fixed）。Vue/React 项目平时只安装自己的适配包；只有 Excel 页面才增加 XLSX 扩展。
 
 ## 浏览器与环境
 

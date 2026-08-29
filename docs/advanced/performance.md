@@ -73,7 +73,7 @@ Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列：初次�
 | 产物 | gzip 上限 |
 | --- | ---: |
 | `@agile-team/mach-table` ESM | 80 KB |
-| Vue 全部 ESM 产物 / 默认入口 / 工作流入口 | 8 KB / 6.25 KB / 5 KB |
+| Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10 KB / 6.4 KB / 5 KB / 3 KB |
 | React 适配器 ESM | 5 KB |
 | Core CSS | 6 KB |
 

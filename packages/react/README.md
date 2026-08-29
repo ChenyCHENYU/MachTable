@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-Official React 18+ adapter for MachTable 0.10. It provides `<MachTable>`, `MachTableProvider`, `useMachGrid`, React cell/detail renderer factories, the complete semantic-column/action/state Core API, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official React 18+ adapter for MachTable 0.13. It provides `<MachTable>`, `MachTableProvider`, `useMachGrid`, React cell/detail renderer factories, the complete workbench/lazy-tree/semantic-column/action/state Core API, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 

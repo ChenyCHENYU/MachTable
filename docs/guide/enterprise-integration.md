@@ -30,23 +30,23 @@ Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的
 Vue：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.10.0
+pnpm add @agile-team/mach-table-vue@^0.13.0
 ```
 
 React：
 
 ```bash
-pnpm add @agile-team/mach-table-react@^0.10.0
+pnpm add @agile-team/mach-table-react@^0.13.0
 ```
 
 npm / Yarn：
 
 ```bash
-npm install @agile-team/mach-table-vue@^0.10.0
-yarn add @agile-team/mach-table-vue@^0.10.0
+npm install @agile-team/mach-table-vue@^0.13.0
+yarn add @agile-team/mach-table-vue@^0.13.0
 ```
 
-三个 MachTable 包采用同版本联动。适配器会锁定匹配版本的 Core，业务项目只需升级适配器并提交 lockfile。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
+Core、Vue、React 与可选 XLSX 包采用同版本联动。适配器会锁定匹配版本的 Core，普通业务项目仍只需升级自己的适配器并提交 lockfile；未使用 Excel 时不要安装 XLSX 包。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
 
 ### 私有镜像
 
@@ -346,6 +346,8 @@ const remoteDefaults = {
 
 请求失败后按基础延迟指数退避（最长 30 秒）；仅重试耗尽后发出 `DATA_SOURCE_ERROR`。`reload()`、排序/过滤变化和组件卸载都会取消当前请求及待执行重试。
 
+标准服务端分页、查询表单和跨页选择优先使用 [`useMachTableQuery`](/recipes/remote-query)。组织/目录类数据使用 [`isTreeRowExpandable + loadTreeChildren`](/recipes/tree-lazy-loading)：必须提供稳定 `getRowId`，并把 `signal` 传给请求客户端。普通分页、无限追加和懒加载树是三种不同模型，不应混用或宣称为完整 SSRM。
+
 ## 9. 列状态持久化
 
 单机应用只需设置带版本的 key：
@@ -364,6 +366,8 @@ columnStateStore: {
 ```
 
 列结构发生不兼容变化时升级 key，例如 `orders-v1` → `orders-v2`，不要让旧状态污染新列结构。
+
+内置列工作台通过 `api.openColumnWorkbench()` 打开；业务需要自己的 `ElDrawer` 时读取 `api.getColumnWorkbenchItems()` 并调用标准列 API，详见[列工作台](/recipes/column-workbench)。不要在页面再维护一份会与 GridState 漂移的字段数组。
 
 ## 10. 全量视图状态
 
@@ -437,6 +441,7 @@ api.rollbackChanges();
 - 除非内容完全由代码静态控制，否则禁止启用 `allowUnsafeOverlayHtml`。
 - 单元格富内容优先返回 DOM/框架组件，不要拼接用户输入为 HTML。
 - CSV 默认启用公式注入保护；只有可信内部数据才能关闭 `protectFormulas`。
+- XLSX 只通过可选扩展动态加载；限制文件大小/Sheet 数/行数并在服务端重新校验，详见[可选 XLSX](/recipes/xlsx)。
 - npm token、后端地址和租户信息不得写入列定义或前端仓库。
 - 自定义 renderer/editor 必须返回 `destroy`，用于卸载框架 root 和取消监听器。
 

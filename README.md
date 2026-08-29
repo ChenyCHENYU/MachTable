@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.10.0-2563eb" alt="Source version 0.10.0" />
+  <img src="https://img.shields.io/badge/source-0.13.0-2563eb" alt="Source version 0.13.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
@@ -36,12 +36,14 @@ MachTable 为后台管理、工业台账、财务报表、订单工单和低代�
 | --- | --- |
 | 大数据量稳定滚动 | 行/列双虚拟化、行池复用、rAF 合帧、变高行前缀和定位 |
 | Excel 式操作 | 框选、复制/剪切/粘贴、Delete、填充柄、撤销/重做 |
-| 企业级数据模型 | 排序、四类过滤、受控远程分页、请求取消/重试、查询级全选、树形、分组聚合、主从明细 |
+| 企业级数据模型 | 排序、四类过滤、受控远程分页、请求取消/重试、查询级全选、树表懒加载、分组聚合、主从明细 |
 | 复杂布局 | 左右固定列、多级表头、变高行、固定首末行、行列拖拽、行合并 |
 | 业务组件集成 | Vue 原生 cell/header/editor/overlay/detail/actions 插槽、React 适配器、自定义编辑器 |
 | 长期可维护 | 分层配置与来源解释、版本化状态迁移、托管 `GridFeature`、稳定错误码与运行时校验 |
 | 复杂编辑流程 | 精致单元格就地编辑、原子化整行编辑、同步/异步校验、脏数据、保存与回滚 |
 | 操作列 | 查看/编辑/删除图标、整行对勾/取消、任意业务动作、菜单/抽屉/全部展开 |
+| 用户个性化 | 可搜索列工作台、显隐/固定/排序、自适应、版本化列偏好与工作区状态 |
+| 按需 Excel | 独立 XLSX 桥接包、动态加载工作簿引擎，不进入 Core 和普通页面 chunk |
 | 安全与治理 | 安全 Overlay 默认值、CSV 公式注入防护、原型污染防护、体积/覆盖率门禁 |
 
 ## 60 秒开始
@@ -246,9 +248,9 @@ export function Orders() {
 | 服务端排序过滤 | 原子校验、自定义编辑器 | 列宽拖拽与自适应 | 组件注册表 |
 | 无限滚动数据源 | Undo / Redo | 行列拖拽 | `GridFeature` 插件 |
 | 分页与同步/异步事务 | 框选与剪贴板 | 变高行与换行 | Schema 驱动、类型化列助手 |
-| 树形与分组聚合 | 填充柄、右键菜单 | 行合并、固定行 | i18n、主题令牌 |
+| 树形/懒加载树与分组聚合 | 填充柄、右键菜单 | 行合并、固定行 | i18n、主题令牌 |
 | 主从明细 | Tooltip、状态栏 | 明暗主题与密度 | 状态持久化 |
-| CSV 导入导出 | 图标操作列、菜单/抽屉 | 空态/加载态/水印 | 全量状态、诊断与稳定错误码 |
+| CSV + 可选 XLSX | 图标操作列、菜单/抽屉 | 空态/加载态/水印 | 列工作台、全量状态、诊断与稳定错误码 |
 
 ## 为框架适配，也为包体积负责
 
@@ -257,12 +259,25 @@ MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配
 | 包 | 用途 | gzip 预算 / 当前值 |
 | --- | --- | --- |
 | `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 65.4 KB |
-| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部产物 8 KB / 约 7.7 KB；工作流入口约 2.8 KB |
+| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部产物 10 KB / 约 8.6 KB；首屏入口约 6.25 KB，工作流约 2.9 KB |
 | `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 5 KB / 约 1.4 KB（适配代码） |
+| `@agile-team/mach-table-xlsx` | 仅 Excel 页面按需安装；工作簿引擎由宿主动态注入 | 3 KB 预算；不进入适配器/Core |
 
 Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
 
 远程查询与编辑仍可从 Vue 根入口导入；追求最小业务 chunk 时从同包的 `@agile-team/mach-table-vue/workflows` 子入口导入，不增加第二个安装依赖。
+
+只有需要 Excel 的页面才额外安装 XLSX 扩展：
+
+```bash
+pnpm add @agile-team/mach-table-xlsx xlsx
+```
+
+```ts
+import { createXlsxExtension } from "@agile-team/mach-table-xlsx";
+const excel = createXlsxExtension(() => import("xlsx"));
+await excel.export(api, { fileName: "orders.xlsx" });
+```
 
 ## 架构
 
@@ -278,6 +293,7 @@ flowchart TB
   Core --> Services[Selection / Editing / Filter / Drag]
   Core --> Render[Virtualized DOM Renderers]
   Features[GridFeature / Components] --> Core
+  Xlsx[Optional XLSX Extension] -. on demand .-> Core
   Models --> Render
   Services --> Render
 ```
@@ -317,6 +333,7 @@ pnpm test:e2e
 | 配置与命令 | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) |
 | 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频业务 | [场景配方](./docs/recipes/selection.md) |
+| 0.13 能力 | [列工作台](./docs/recipes/column-workbench.md) · [树表懒加载](./docs/recipes/tree-lazy-loading.md) · [可选 XLSX](./docs/recipes/xlsx.md) |
 | 竞品与后续规划 | [竞品分析](./docs/advanced/competitive-analysis.md) · [AG Grid 源码审计](./docs/advanced/ag-grid-source-study.md) · [路线图](./docs/advanced/roadmap.md) |
 | 贡献与质量体系 | [架构边界](./docs/advanced/architecture.md) · [质量门禁](./docs/advanced/quality-gates.md) · [贡献指南](./CONTRIBUTING.md) |
 | 故障定位 | [排错手册](./docs/guide/troubleshooting.md) |
@@ -328,7 +345,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前源码版本为 `0.10.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前源码版本为 `0.13.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

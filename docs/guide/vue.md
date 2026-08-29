@@ -289,23 +289,16 @@ import OrderDetailPanel from "./OrderDetailPanel.vue";
 ## 自定义编辑器（挂任意 Vue 组件）
 
 ```ts
-cellEditor: (params) => {
-  const host = document.createElement("div");
-  let value = params.value;
-  const app = createApp({
-    render: () =>
-      h(ElSelect, {
-        modelValue: value,
-        "onUpdate:modelValue": (v: any) => (value = v),
-        filterable: true
-      }, () => options.map((o) => h(ElOption, { key: o, value: o, label: o })))
-  });
-  app.mount(host);
-  return {
-    el: host,
-    getValue: () => value,
-    focus: () => host.querySelector("input")?.focus(),
-    destroy: () => app.unmount()
-  };
-}
+import { vueCellEditor } from "@agile-team/mach-table-vue/editors";
+
+const departmentEditor = vueCellEditor(DepartmentSelect, {
+  props: ({ data }) => ({ tenantId: data.tenantId }),
+  focusSelector: "input"
+});
+
+const columns = [
+  { field: "departmentId", editable: true, cellEditor: departmentEditor }
+];
 ```
+
+Element Plus 常用编辑器可以一次注册为字符串名称，见[Element Plus 集成](/guide/element-plus)。工厂统一处理 v-model、可选宿主 appContext、聚焦和销毁，不要在每次编辑时手写 `createApp()`。

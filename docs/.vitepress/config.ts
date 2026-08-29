@@ -55,6 +55,9 @@ export default defineConfig({
           items: [
             { text: "行选择", link: "/recipes/selection" },
             { text: "远程查询与跨页选择", link: "/recipes/remote-query" },
+            { text: "列工作台", link: "/recipes/column-workbench" },
+            { text: "树表懒加载", link: "/recipes/tree-lazy-loading" },
+            { text: "可选 XLSX", link: "/recipes/xlsx" },
             { text: "业务字段、字典与权限", link: "/recipes/business-columns" },
             { text: "操作列与状态列", link: "/recipes/action-columns" },
             { text: "单元格与整行编辑", link: "/recipes/editing" },
