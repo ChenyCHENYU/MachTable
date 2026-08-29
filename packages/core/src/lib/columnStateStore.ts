@@ -155,7 +155,7 @@ export function createLocalColumnStateStore(options: LocalColumnStateStoreOption
 const defaultStore = createLocalColumnStateStore();
 
 export function saveColumnState(key: string, state: ColumnState[]): void {
-  defaultStore.save(key, state);
+  void defaultStore.save(key, state);
 }
 
 export function loadColumnState(key: string): ColumnState[] | null {
@@ -163,5 +163,5 @@ export function loadColumnState(key: string): ColumnState[] | null {
 }
 
 export function clearColumnState(key: string): void {
-  defaultStore.clear(key);
+  void defaultStore.clear(key);
 }

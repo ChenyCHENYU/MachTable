@@ -14,7 +14,7 @@ export class EventBus<TEvents extends object = Record<string, any>> {
     }
     set.add(listener as Listener<any>);
     return () => {
-      set!.delete(listener);
+      set.delete(listener);
     };
   }
 

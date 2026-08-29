@@ -95,7 +95,7 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
       };
     }
 
-    const api = createGrid<TData>(host, options as GridOptions<TData>);
+    const api = createGrid<TData>(host, options);
     gridApiRef.current = api;
     return () => {
       api.destroy();
@@ -126,7 +126,7 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
       changed[GRID_OPTION_KEYS[index]] = value;
     });
     if (Object.keys(changed).length > 0) {
-      gridApiRef.current?.updateOptions(changed as Partial<GridOptions<TData>>);
+      gridApiRef.current?.updateOptions(changed);
     }
   }, optionValues);
 

@@ -44,7 +44,7 @@ export function evaluateNumberFilter(value: any, conditions: NumberFilterConditi
     const n = typeof value === "number" ? value : Number(value);
     if (isNaN(n)) return false;
     const f = c.value;
-    if (f == null || isNaN(f as number)) return false;
+    if (f == null || isNaN(f)) return false;
     switch (c.match) {
       case "equals":
         return n === f;

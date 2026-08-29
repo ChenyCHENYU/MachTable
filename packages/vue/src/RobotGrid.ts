@@ -69,7 +69,7 @@ const MachTableImpl = defineComponent({
   name: "MachTable",
   inheritAttrs: false,
   props: runtimeProps,
-  emits: [...EVENT_TYPES] as unknown as string[],
+  emits: [...EVENT_TYPES],
   setup(rawProps, { expose, attrs, emit, slots }) {
     const props = rawProps as Readonly<Record<string, any>>;
     const host = ref<HTMLDivElement | null>(null);

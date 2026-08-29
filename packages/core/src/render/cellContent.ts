@@ -2,7 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { RowNode } from "../types/row";
 import type { Column } from "../services/column";
 import { hasColumnType } from "../core/resolveOptions";
-import type { CellClassParams, CellRendererParams, ICellRendererResult } from "../types/params";
+import type { CellClassParams, CellRendererParams } from "../types/params";
 import { getCellRuntimeState, peekCellRuntimeState } from "./runtimeState";
 
 type ErrorContext = Pick<GridCore<any>, "reportError">;
@@ -155,8 +155,8 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
       cell.textContent = out;
     } else if (out instanceof HTMLElement) {
       cell.replaceChildren(out);
-    } else if (out && typeof out === "object" && (out as ICellRendererResult).el instanceof HTMLElement) {
-      const result = out as ICellRendererResult;
+    } else if (out && typeof out === "object" && out.el instanceof HTMLElement) {
+      const result = out;
       cell.replaceChildren(result.el);
       if (result.destroy) getCellRuntimeState(cell).destroy = result.destroy;
     } else {

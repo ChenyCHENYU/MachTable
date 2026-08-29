@@ -122,7 +122,7 @@ const MATCH_LOCALE_KEYS: Record<string, RgLocaleKey> = {
 };
 
 export function matchLocaleKey(match: string): RgLocaleKey {
-  return MATCH_LOCALE_KEYS[match] ?? ("matchEquals" as RgLocaleKey);
+  return MATCH_LOCALE_KEYS[match] ?? ("matchEquals");
 }
 
 export function formatText(template: string, n: number | string): string {

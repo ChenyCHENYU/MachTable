@@ -42,9 +42,9 @@ export class PinnedRowsRenderer {
   private createSide(root: HTMLElement): SideState {
     const state: SideState = {
       root,
-      segments: { left: el("div"), center: el("div"), right: el("div") } as Record<PaneType, HTMLElement>,
+      segments: { left: el("div"), center: el("div"), right: el("div") },
       centerViewport: el("div", "mach-pinned-viewport"),
-      rowWrappers: { left: [], center: [], right: [] } as Record<PaneType, HTMLElement[]>,
+      rowWrappers: { left: [], center: [], right: [] },
       cells: [],
       data: []
     };

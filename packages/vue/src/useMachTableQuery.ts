@@ -189,6 +189,47 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     loading.value = false;
   };
 
+  const isStaleRequest = (activeController: AbortController, requestGeneration: number): boolean =>
+    activeController.signal.aborted || requestGeneration !== generation;
+
+  const validatePageResult = (result: MachTablePageResult<TData>): void => {
+    if (!result || !Array.isArray(result.rows) || !Number.isFinite(result.total) || result.total < 0) {
+      throw new TypeError("[MachTable] Remote request must resolve to { rows: TData[], total: non-negative number }.");
+    }
+  };
+
+  const applyPageResult = async (
+    result: MachTablePageResult<TData>,
+    activeController: AbortController,
+    requestGeneration: number
+  ): Promise<void> => {
+    if (isStaleRequest(activeController, requestGeneration)) return;
+    validatePageResult(result);
+    const nextRows = [...result.rows];
+    for (const row of nextRows) rowId(row);
+    rows.value = nextRows;
+    total.value = Math.floor(result.total);
+    for (const row of rows.value) {
+      const id = rowId(row);
+      if (isSelectedId(id)) selectedById.set(id, row);
+      else selectedById.delete(id);
+    }
+    updateSelectedRefs();
+    options.onSuccess?.(result);
+    await nextTick();
+    syncVisibleSelection();
+  };
+
+  const handleRequestError = (
+    requestError: unknown,
+    activeController: AbortController,
+    requestGeneration: number
+  ): void => {
+    if (isStaleRequest(activeController, requestGeneration) || isAbortError(requestError)) return;
+    error.value = requestError;
+    options.onError?.(requestError);
+  };
+
   const load = async (): Promise<void> => {
     if (debounceTimer != null) clearTimeout(debounceTimer);
     debounceTimer = null;
@@ -210,27 +251,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
         quickFilterText: quickFilterText.value,
         signal: activeController.signal
       });
-      if (activeController.signal.aborted || requestGeneration !== generation) return;
-      if (!result || !Array.isArray(result.rows) || !Number.isFinite(result.total) || result.total < 0) {
-        throw new TypeError("[MachTable] Remote request must resolve to { rows: TData[], total: non-negative number }.");
-      }
-      const nextRows = [...result.rows];
-      for (const row of nextRows) rowId(row);
-      rows.value = nextRows;
-      total.value = Math.floor(result.total);
-      for (const row of rows.value) {
-        const id = rowId(row);
-        if (isSelectedId(id)) selectedById.set(id, row);
-        else selectedById.delete(id);
-      }
-      updateSelectedRefs();
-      options.onSuccess?.(result);
-      await nextTick();
-      syncVisibleSelection();
+      await applyPageResult(result, activeController, requestGeneration);
     } catch (requestError) {
-      if (activeController.signal.aborted || requestGeneration !== generation || isAbortError(requestError)) return;
-      error.value = requestError;
-      options.onError?.(requestError);
+      handleRequestError(requestError, activeController, requestGeneration);
     } finally {
       if (requestGeneration === generation) {
         loading.value = false;

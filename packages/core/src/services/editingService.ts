@@ -200,7 +200,7 @@ export class EditingService {
       this.core.bodyRenderer.refreshRows([rowIndex]);
       return false;
     }
-    const first = drafts.values().next().value as RowDraft | undefined;
+    const first = drafts.values().next().value;
     const target = (preferredColId ? drafts.get(preferredColId) : undefined) ?? first;
     if (target?.mounted) this.focusEditor(target.mounted.editor, target.column, node);
     this.core.emit("rowEditingStarted", { rowIndex, rowNode: node, data: node.data });
@@ -607,7 +607,7 @@ export class EditingService {
   }
 
   private showError(editor: ICellEditor, message: string): void {
-    const editorEl = editor.el as HTMLElement;
+    const editorEl = editor.el;
     editorEl.classList.add("mach-editor-invalid");
     editorEl.setAttribute("title", message);
     editorEl.setAttribute("aria-invalid", "true");

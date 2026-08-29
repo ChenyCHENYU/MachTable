@@ -40,7 +40,7 @@ export class ColumnMenuService {
         this.standaloneAnchor = fake;
         return fake;
       })();
-    this.open(null as unknown as Column, target);
+    this.open(null, target);
   }
 
   close(): void {

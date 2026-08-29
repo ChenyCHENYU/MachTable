@@ -106,7 +106,7 @@ export class TooltipService {
     this.showTimer = setTimeout(() => {
       if (this.core.isDestroyed() || this.currentCell !== cell) return;
       this.showPanel(cell, params);
-    }, Math.max(0, this.core.options.tooltipShowDelay)) as unknown as number;
+    }, Math.max(0, this.core.options.tooltipShowDelay));
   };
 
   private onBodyLeave = (): void => {

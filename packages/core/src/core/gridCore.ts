@@ -109,28 +109,28 @@ export class GridCore<TData = any> {
       else this.reportError(error, "eventBus.listener", { eventType });
     });
 
-    this.columnModel = new ColumnModel(this as GridCore<any>);
-    this.rowModel = new RowModel<TData>(this as GridCore<any>);
-    this.selectionService = new SelectionService(this as GridCore<any>);
-    this.skeleton = new GridSkeleton(this as GridCore<any>);
-    this.headerRenderer = new HeaderRenderer(this as GridCore<any>);
-    this.bodyRenderer = new BodyRenderer(this as GridCore<any>);
-    this.resizeService = new ResizeService(this as GridCore<any>);
-    this.columnDragService = new ColumnDragService(this as GridCore<any>);
-    this.keyboardService = new KeyboardService(this as GridCore<any>);
-    this.editingService = new EditingService(this as GridCore<any>);
-    this.undoService = new UndoRedoService(this as GridCore<any>);
-    this.filterPopup = new FilterPopupService(this as GridCore<any>);
-    this.columnMenu = new ColumnMenuService(this as GridCore<any>);
-    this.contextMenuService = new ContextMenuService(this as GridCore<any>);
-    this.tooltipService = new TooltipService(this as GridCore<any>);
-    this.watermarkService = new WatermarkService(this as GridCore<any>);
-    this.paginationBar = new PaginationBar(this as GridCore<any>);
-    this.pinnedRowsRenderer = new PinnedRowsRenderer(this as GridCore<any>);
-    this.summaryRenderer = new SummaryRenderer(this as GridCore<any>);
-    this.statusBarService = new StatusBarService(this as GridCore<any>);
-    this.api = new GridApiImpl<TData>(this as GridCore<TData>);
-    this.changeTracker = new ChangeTrackingService<TData>(this as GridCore<TData>);
+    this.columnModel = new ColumnModel(this);
+    this.rowModel = new RowModel<TData>(this);
+    this.selectionService = new SelectionService(this);
+    this.skeleton = new GridSkeleton(this);
+    this.headerRenderer = new HeaderRenderer(this);
+    this.bodyRenderer = new BodyRenderer(this);
+    this.resizeService = new ResizeService(this);
+    this.columnDragService = new ColumnDragService(this);
+    this.keyboardService = new KeyboardService(this);
+    this.editingService = new EditingService(this);
+    this.undoService = new UndoRedoService(this);
+    this.filterPopup = new FilterPopupService(this);
+    this.columnMenu = new ColumnMenuService(this);
+    this.contextMenuService = new ContextMenuService(this);
+    this.tooltipService = new TooltipService(this);
+    this.watermarkService = new WatermarkService(this);
+    this.paginationBar = new PaginationBar(this);
+    this.pinnedRowsRenderer = new PinnedRowsRenderer(this);
+    this.summaryRenderer = new SummaryRenderer(this);
+    this.statusBarService = new StatusBarService(this);
+    this.api = new GridApiImpl<TData>(this);
+    this.changeTracker = new ChangeTrackingService<TData>(this);
 
     try {
       this.changeTracker.init();
@@ -583,7 +583,7 @@ export class GridCore<TData = any> {
     this.emit("sortChanged", { sortModel: this.columnModel.getSortModel() });
     this.persistColumnState();
     if (this.rowModel.isInfinite) {
-      this.rowModel.onServerParamsChanged();
+      void this.rowModel.onServerParamsChanged();
       return;
     }
     this.rowModel.refreshPipeline();
@@ -598,7 +598,7 @@ export class GridCore<TData = any> {
     this.headerRenderer.refreshFilterIcons();
     this.emit("filterChanged", { filterModel: this.rowModel.getFilterModel() });
     if (this.rowModel.isInfinite) {
-      this.rowModel.onServerParamsChanged();
+      void this.rowModel.onServerParamsChanged();
       return;
     }
     this.rowModel.refreshPipeline();
@@ -608,7 +608,7 @@ export class GridCore<TData = any> {
   applyQuickFilter(): void {
     this.emit("filterChanged", { filterModel: this.rowModel.getFilterModel() });
     if (this.rowModel.isInfinite) {
-      this.rowModel.onServerParamsChanged();
+      void this.rowModel.onServerParamsChanged();
       return;
     }
     this.rowModel.refreshPipeline();
@@ -665,8 +665,8 @@ export class GridCore<TData = any> {
       const result = this.options.columnStateStore
         ? this.options.columnStateStore.save(this.options.columnStateKey, state)
         : saveColumnState(this.options.columnStateKey, state);
-      if (result && typeof (result as Promise<void>).catch === "function") {
-        void (result as Promise<void>).catch((error) => this.reportError(error, "columnState.save"));
+      if (result && typeof result.catch === "function") {
+        void result.catch((error) => this.reportError(error, "columnState.save"));
       }
     } catch (error) {
       this.reportError(error, "columnState.save");

@@ -18,6 +18,40 @@ type KeyboardContext = Pick<
   | "undoService"
 >;
 
+const NAVIGATION_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Enter",
+  "F2",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+  "Tab",
+  " ",
+  "Escape",
+  "Delete",
+  "Backspace"
+]);
+
+const MOVEMENT_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown"
+]);
+
+interface KeyboardPosition {
+  colIdx: number;
+  row: number;
+}
+
 export class KeyboardService {
   constructor(private core: KeyboardContext) {}
 
@@ -117,182 +151,196 @@ export class KeyboardService {
   };
 
   private onKeyDown = (e: KeyboardEvent): void => {
-    if (this.core.isDestroyed()) return;
-    if (this.core.editingService.isEditing()) return;
+    if (this.core.isDestroyed() || this.core.editingService.isEditing()) return;
+    if (this.handleSelectAll(e) || this.handleHistoryShortcut(e)) return;
+    if (!NAVIGATION_KEYS.has(e.key)) return;
+    if (this.handleRangeCommand(e)) return;
+    if (this.focusFirstCell(e)) return;
+    this.handleFocusedKey(e);
+  };
 
-    if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
-      if (this.core.options.rowSelection === "multiple") {
-        e.preventDefault();
-        this.core.selectionService.selectAll(true);
-      }
-      return;
+  private handleSelectAll(e: KeyboardEvent): boolean {
+    const modifier = e.ctrlKey || e.metaKey;
+    if (!modifier || e.key.toLowerCase() !== "a") return false;
+    if (this.core.options.rowSelection === "multiple") {
+      e.preventDefault();
+      this.core.selectionService.selectAll(true);
     }
+    return true;
+  }
 
-    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-      const key = e.key.toLowerCase();
-      if (key === "z") {
-        e.preventDefault();
-        if (e.shiftKey) this.core.undoService.redo();
-        else this.core.undoService.undo();
-        return;
-      }
-      if (key === "y") {
-        e.preventDefault();
-        this.core.undoService.redo();
-        return;
-      }
+  private handleHistoryShortcut(e: KeyboardEvent): boolean {
+    if ((!e.ctrlKey && !e.metaKey) || e.altKey) return false;
+    const key = e.key.toLowerCase();
+    if (key === "z") {
+      e.preventDefault();
+      if (e.shiftKey) this.core.undoService.redo();
+      else this.core.undoService.undo();
+      return true;
     }
+    if (key !== "y") return false;
+    e.preventDefault();
+    this.core.undoService.redo();
+    return true;
+  }
 
-    const navigationKeys = [
-      "ArrowUp",
-      "ArrowDown",
-      "ArrowLeft",
-      "ArrowRight",
-      "Enter",
-      "F2",
-      "Home",
-      "End",
-      "PageUp",
-      "PageDown",
-      "Tab",
-      " ",
-      "Escape",
-      "Delete",
-      "Backspace"
-    ];
-    if (!navigationKeys.includes(e.key)) return;
-
+  private handleRangeCommand(e: KeyboardEvent): boolean {
     const body = this.core.bodyRenderer;
-    const focus = body.focusedCell;
-
     if (e.key === "Escape") {
       if (this.core.options.enableRangeSelection && body.normalizedRange()) {
         e.preventDefault();
         body.clearRangeSelection();
       }
-      return;
+      return true;
     }
-
-    if (e.key === "Delete" || e.key === "Backspace") {
-      if (this.core.options.enableRangeSelection) {
-        const range = body.normalizedRange();
-        if (range && !(range.r1 === range.r2 && range.c1 === range.c2)) {
-          e.preventDefault();
-          this.core.clearRangeValues(range);
-          return;
-        }
-      }
-      return;
+    if (e.key !== "Delete" && e.key !== "Backspace") return false;
+    if (!this.core.options.enableRangeSelection) return true;
+    const range = body.normalizedRange();
+    if (range && !(range.r1 === range.r2 && range.c1 === range.c2)) {
+      e.preventDefault();
+      this.core.clearRangeValues(range);
     }
+    return true;
+  }
 
-    if (!focus) {
-      if (this.core.rowModel.getDisplayedRowCount() > 0) {
-        const cols = this.core.columnModel.getOrderedVisible();
-        if (cols.length > 0) {
-          e.preventDefault();
-          body.setFocusedCell(0, cols[0].id);
-        }
-      }
-      return;
+  private focusFirstCell(e: KeyboardEvent): boolean {
+    if (this.core.bodyRenderer.focusedCell) return false;
+    const columns = this.core.columnModel.getOrderedVisible();
+    if (this.core.rowModel.getDisplayedRowCount() > 0 && columns.length > 0) {
+      e.preventDefault();
+      this.core.bodyRenderer.setFocusedCell(0, columns[0].id);
     }
+    return true;
+  }
 
-    const cols = this.core.columnModel.getOrderedVisible();
-    const colIdx = cols.findIndex((c) => c.id === focus.colId);
-    if (colIdx < 0) return;
+  private handleFocusedKey(e: KeyboardEvent): void {
+    const body = this.core.bodyRenderer;
+    const focus = body.focusedCell;
+    if (!focus) return;
+    const columns = this.core.columnModel.getOrderedVisible();
+    const colIdx = columns.findIndex((column) => column.id === focus.colId);
     const rowCount = this.core.rowModel.getDisplayedRowCount();
-    if (rowCount === 0) return;
+    if (colIdx < 0 || rowCount === 0) return;
 
-    const rangeMode = e.shiftKey && this.core.options.enableRangeSelection;
+    const start = { row: focus.rowIndex, colIdx };
+    const position = this.resolveKeyPosition(e, start, columns, rowCount);
+    if (!position) return;
+    e.preventDefault();
 
-    let row = focus.rowIndex;
-    let handled = true;
-    let nextRow = row;
-    let nextColIdx = colIdx;
+    const moved = position.row !== start.row || position.colIdx !== start.colIdx;
+    if (e.shiftKey && this.core.options.enableRangeSelection && moved) {
+      body.moveRangeEnd(position.row, position.colIdx);
+      return;
+    }
+    if (moved) body.setFocusedCell(position.row, columns[position.colIdx].id);
+  }
 
+  private resolveKeyPosition(
+    e: KeyboardEvent,
+    position: KeyboardPosition,
+    columns: readonly Column[],
+    rowCount: number
+  ): KeyboardPosition | null {
+    if (MOVEMENT_KEYS.has(e.key)) return this.movePosition(e, position, columns.length, rowCount);
+    if (e.key === "Enter" || e.key === "F2") {
+      return this.activateEditor(e, position, columns, rowCount);
+    }
+    if (e.key === " ") {
+      this.toggleFocusedRow(position.row);
+      return position;
+    }
+    if (e.key === "Tab") return this.moveToEditable(e, position, columns);
+    return null;
+  }
+
+  private movePosition(
+    e: KeyboardEvent,
+    position: KeyboardPosition,
+    columnCount: number,
+    rowCount: number
+  ): KeyboardPosition {
+    let { row, colIdx } = position;
     switch (e.key) {
       case "ArrowUp":
-        nextRow = this.skipDetailRows(row - 1, -1);
-        if (nextRow >= 0) row = nextRow;
+        row = this.validSkippedRow(row, this.skipDetailRows(row - 1, -1), rowCount);
         break;
       case "ArrowDown":
-        nextRow = this.skipDetailRows(row + 1, 1);
-        if (nextRow >= 0 && nextRow < rowCount) row = nextRow;
+        row = this.validSkippedRow(row, this.skipDetailRows(row + 1, 1), rowCount);
         break;
       case "ArrowLeft":
-        nextColIdx = Math.max(0, colIdx - 1);
+        colIdx = Math.max(0, colIdx - 1);
         break;
       case "ArrowRight":
-        nextColIdx = Math.min(cols.length - 1, colIdx + 1);
+        colIdx = Math.min(columnCount - 1, colIdx + 1);
         break;
       case "Home":
-        nextColIdx = 0;
+        colIdx = 0;
         if (e.ctrlKey) row = 0;
         break;
       case "End":
-        nextColIdx = cols.length - 1;
+        colIdx = columnCount - 1;
         if (e.ctrlKey) row = Math.max(0, this.skipDetailRows(rowCount - 1, -1));
         break;
       case "PageUp":
-      case "PageDown": {
-        const viewport = this.core.skeleton.bodyViewports.center;
-        const pageRows = Math.max(1, Math.floor(viewport.clientHeight / this.core.options.rowHeight));
-        const target = e.key === "PageUp" ? row - pageRows : row + pageRows;
-        const skipped = this.skipDetailRows(Math.max(0, Math.min(rowCount - 1, target)), e.key === "PageUp" ? -1 : 1);
-        if (skipped >= 0) row = skipped;
+      case "PageDown":
+        row = this.movePage(e.key, row, rowCount);
         break;
-      }
-      case "Enter":
-      case "F2": {
-        const node = this.core.rowModel.getDisplayedRow(row);
-        const column = cols[colIdx];
-        if (node && !node.isDetail && column && this.core.editingService.isEditable(node, column)) {
-          this.core.editingService.start(row, column, e.key === "F2" ? e.key : null);
-        } else {
-          const down = this.skipDetailRows(row + 1, 1);
-          if (down >= 0 && down < rowCount) row = down;
-        }
-        break;
-      }
-      case " ": {
-        const node = this.core.rowModel.getDisplayedRow(row);
-        if (node && !node.isDetail) {
-          if (node.isGroup) {
-            this.core.rowModel.toggleGroup(node.id);
-          } else if (this.core.options.rowSelection !== "none") {
-            this.core.selectionService.setNodeSelected(
-              node,
-              !node.selected,
-              this.core.options.rowSelection === "single"
-            );
-          }
-        }
-        break;
-      }
-      case "Tab": {
-        const next = this.nextEditable(row, focus.colId, e.shiftKey ? -1 : 1);
-        if (next) {
-          body.setFocusedCell(next.rowIndex, next.column.id);
-          this.core.editingService.start(next.rowIndex, next.column);
-        } else {
-          // Let the browser move to the previous/next control outside the grid.
-          // A composite grid must never trap keyboard-only users at its edges.
-          handled = false;
-        }
-        break;
-      }
-      default:
-        handled = false;
     }
+    return { row, colIdx };
+  }
 
-    if (handled) e.preventDefault();
+  private validSkippedRow(current: number, candidate: number, rowCount: number): number {
+    return candidate >= 0 && candidate < rowCount ? candidate : current;
+  }
 
-    if (rangeMode && (row !== focus.rowIndex || nextColIdx !== colIdx)) {
-      body.moveRangeEnd(row, nextColIdx);
+  private movePage(key: string, row: number, rowCount: number): number {
+    const viewport = this.core.skeleton.bodyViewports.center;
+    const pageRows = Math.max(1, Math.floor(viewport.clientHeight / this.core.options.rowHeight));
+    const direction: 1 | -1 = key === "PageUp" ? -1 : 1;
+    const target = Math.max(0, Math.min(rowCount - 1, row + pageRows * direction));
+    return this.validSkippedRow(row, this.skipDetailRows(target, direction), rowCount);
+  }
+
+  private activateEditor(
+    e: KeyboardEvent,
+    position: KeyboardPosition,
+    columns: readonly Column[],
+    rowCount: number
+  ): KeyboardPosition {
+    const node = this.core.rowModel.getDisplayedRow(position.row);
+    const column = columns[position.colIdx];
+    if (node && !node.isDetail && column && this.core.editingService.isEditable(node, column)) {
+      this.core.editingService.start(position.row, column, e.key === "F2" ? e.key : null);
+      return position;
+    }
+    const down = this.skipDetailRows(position.row + 1, 1);
+    return { ...position, row: this.validSkippedRow(position.row, down, rowCount) };
+  }
+
+  private toggleFocusedRow(row: number): void {
+    const node = this.core.rowModel.getDisplayedRow(row);
+    if (!node || node.isDetail) return;
+    if (node.isGroup) {
+      this.core.rowModel.toggleGroup(node.id);
       return;
     }
+    if (this.core.options.rowSelection === "none") return;
+    this.core.selectionService.setNodeSelected(
+      node,
+      !node.selected,
+      this.core.options.rowSelection === "single"
+    );
+  }
 
-    if (row !== focus.rowIndex || cols[nextColIdx].id !== focus.colId) {
-      body.setFocusedCell(row, cols[nextColIdx].id);
-    }
-  };
+  private moveToEditable(
+    e: KeyboardEvent,
+    position: KeyboardPosition,
+    columns: readonly Column[]
+  ): KeyboardPosition | null {
+    const next = this.nextEditable(position.row, columns[position.colIdx].id, e.shiftKey ? -1 : 1);
+    if (!next) return null;
+    this.core.bodyRenderer.setFocusedCell(next.rowIndex, next.column.id);
+    this.core.editingService.start(next.rowIndex, next.column);
+    return position;
+  }
 }

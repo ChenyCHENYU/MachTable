@@ -286,7 +286,7 @@ export class FilterPopupService {
 
     const match = select.value;
     if (match === "blank" || match === "notBlank") {
-      return { type, conditions: [{ match: match as "blank" | "notBlank" }] } as ColumnFilter;
+      return { type, conditions: [{ match: match }] } as ColumnFilter;
     }
     const raw = valueInput.value;
     if (raw === "" && !(match === "inRange")) return null;

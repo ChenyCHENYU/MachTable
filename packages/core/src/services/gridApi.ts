@@ -1,6 +1,6 @@
 import type { GridCore } from "../core/gridCore";
-import type { CsvExportParams, RowTransaction } from "../types/api";
-import type { GridApi, } from "../types/api";
+import type { CsvExportParams, ImportCsvOptions, RowTransaction } from "../types/api";
+import type { GridApi } from "../types/api";
 import type { GridOptions } from "../types/options";
 import type { ApplyGridStateOptions, GridState, GridStateSection } from "../types/state";
 import type { Column } from "./column";
@@ -13,6 +13,57 @@ import { escapeHtml } from "../lib/download";
 import { setByPath } from "../lib/path";
 import { formatCellValue } from "../render/cellContent";
 
+interface OptionUpdateEffects {
+  datasourceChanged: boolean;
+  needsCellRefresh: boolean;
+  needsColumnRebuild: boolean;
+  needsHeaderRebuild: boolean;
+  needsPoolRebuild: boolean;
+  needsRelayout: boolean;
+  needsRowRebuild: boolean;
+  needsStateLoad: boolean;
+  needsSummaryRefresh: boolean;
+  stateToApply?: GridState;
+}
+
+interface CsvFieldBinding {
+  field: string;
+  index: number;
+}
+
+function createOptionUpdateEffects(): OptionUpdateEffects {
+  return {
+    datasourceChanged: false,
+    needsCellRefresh: false,
+    needsColumnRebuild: false,
+    needsHeaderRebuild: false,
+    needsPoolRebuild: false,
+    needsRelayout: false,
+    needsRowRebuild: false,
+    needsStateLoad: false,
+    needsSummaryRefresh: false
+  };
+}
+
+function hasOwnOption<T extends object>(options: T, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(options, key);
+}
+
+function normalizeFinite(value: unknown, min: number, integer = false): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min) return undefined;
+  return integer ? Math.floor(value) : value;
+}
+
+function changedFinite(
+  value: unknown,
+  current: number,
+  min: number,
+  integer = false
+): number | undefined {
+  const normalized = normalizeFinite(value, min, integer);
+  return normalized === undefined || normalized === current ? undefined : normalized;
+}
+
 function cloneSnapshotData<T>(data: T): T {
   try {
     if (typeof structuredClone === "function") return structuredClone(data);
@@ -20,7 +71,7 @@ function cloneSnapshotData<T>(data: T): T {
     // Rows containing functions or platform objects fall back to a shallow snapshot.
   }
   if (Array.isArray(data)) return [...data] as T;
-  if (data != null && typeof data === "object") return { ...data } as T;
+  if (data != null && typeof data === "object") return { ...data };
   return data;
 }
 
@@ -544,7 +595,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     return this.core.rowModel.getTotalRowCount();
   }
 
-  importCsv(text: string, options: import("../types/api").ImportCsvOptions = {}): boolean {
+  importCsv(text: string, options: ImportCsvOptions = {}): boolean {
     if (this.core.isDestroyed() || !text) return false;
     const grid = parseCsv(text, options.separator ?? ",");
     if (grid.length === 0) return false;
@@ -557,51 +608,9 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       return true;
     }
 
-    const cols = this.core.columnModel.getOrderedVisible().filter((c) => c.colDef.field);
-    const byHeader = new Map<string, string>();
-    for (const col of cols) {
-      byHeader.set(String(col.colDef.headerName ?? col.colDef.field ?? col.id), col.colDef.field!);
-      if (col.colDef.field) byHeader.set(col.colDef.field, col.colDef.field);
-    }
-    if (headerRow.length > 0) headerRow[0] = headerRow[0].replace(/^\uFEFF/, "");
-    let fieldOrder = headerRow
-      .map((header, index) => ({ field: byHeader.get(String(header).trim()) ?? null, index }))
-      .filter((entry): entry is { field: string; index: number } => entry.field != null);
-
-    if (fieldOrder.length === 0) {
-      fieldOrder = cols.map((col, index) => ({ field: col.colDef.field!, index }));
-    }
-
-    const records = body.map((row, rowIndex) => {
-      const record: Record<string, any> = {};
-      fieldOrder.forEach(({ field, index }) => {
-        const raw = row[index];
-        if (raw === undefined) return;
-        let value: any;
-        if (options.parseValue) {
-          try {
-            value = options.parseValue({ value: raw, field, rowIndex, columnIndex: index });
-          } catch (error) {
-            this.core.reportError(error, "csv.parseValue", { field, rowIndex, columnIndex: index });
-            value = raw;
-          }
-        } else if (raw === "") {
-          value = null;
-        } else if (
-          options.coerceNumbers !== false &&
-          /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw) &&
-          !/^[+-]?0\d/.test(raw)
-        ) {
-          value = Number(raw);
-        } else {
-          value = raw;
-        }
-        if (!setByPath(record, field, value)) {
-          this.core.reportError(new Error(`Unsafe CSV field: ${field}`), "csv.import", { field });
-        }
-      });
-      return record;
-    });
+    const columns = this.core.columnModel.getOrderedVisible().filter((column) => column.colDef.field);
+    const fieldOrder = this.resolveCsvFieldOrder(headerRow, columns);
+    const records = this.buildCsvRecords(body, fieldOrder, options);
 
     if (mode === "append") {
       this.core.rowModel.applyTransaction({ add: records as unknown as TData[] });
@@ -610,6 +619,62 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     }
     this.core.bodyRenderer.onDataChanged();
     return true;
+  }
+
+  private resolveCsvFieldOrder(headerRow: string[], columns: readonly Column[]): CsvFieldBinding[] {
+    const byHeader = new Map<string, string>();
+    for (const column of columns) {
+      const field = column.colDef.field;
+      if (!field) continue;
+      byHeader.set(String(column.colDef.headerName ?? field), field);
+      byHeader.set(field, field);
+    }
+    if (headerRow.length > 0) headerRow[0] = headerRow[0].replace(/^\uFEFF/, "");
+    const matched = headerRow
+      .map((header, index) => ({ field: byHeader.get(String(header).trim()) ?? null, index }))
+      .filter((entry): entry is { field: string; index: number } => entry.field != null);
+    if (matched.length > 0) return matched;
+    return columns.map((column, index) => ({ field: column.colDef.field!, index }));
+  }
+
+  private buildCsvRecords(
+    rows: string[][],
+    fieldOrder: CsvFieldBinding[],
+    options: ImportCsvOptions
+  ): Array<Record<string, any>> {
+    return rows.map((row, rowIndex) => {
+      const record: Record<string, any> = {};
+      fieldOrder.forEach(({ field, index }) => {
+        const raw = row[index];
+        if (raw === undefined) return;
+        const value = this.parseCsvValue(raw, field, rowIndex, index, options);
+        if (!setByPath(record, field, value)) {
+          this.core.reportError(new Error(`Unsafe CSV field: ${field}`), "csv.import", { field });
+        }
+      });
+      return record;
+    });
+  }
+
+  private parseCsvValue(
+    raw: string,
+    field: string,
+    rowIndex: number,
+    columnIndex: number,
+    options: ImportCsvOptions
+  ): any {
+    if (options.parseValue) {
+      try {
+        return options.parseValue({ value: raw, field, rowIndex, columnIndex });
+      } catch (error) {
+        this.core.reportError(error, "csv.parseValue", { field, rowIndex, columnIndex });
+        return raw;
+      }
+    }
+    if (raw === "") return null;
+    const isNumeric = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw);
+    const hasLeadingZero = /^[+-]?0\d/.test(raw);
+    return options.coerceNumbers !== false && isNumeric && !hasLeadingZero ? Number(raw) : raw;
   }
 
   print(options: import("../types/api").PrintOptions = {}): boolean {
@@ -693,156 +758,204 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
   }
 
   setGridOption<K extends keyof GridOptions<TData>>(key: K, value: GridOptions<TData>[K]): void {
-    this.updateOptions({ [key]: value } as Pick<GridOptions<TData>, K>);
+    this.updateOptions({ [key]: value });
   }
 
   updateOptions(options: Partial<GridOptions<TData>>): void {
     if (this.core.isDestroyed()) return;
     this.core.checkWarnings(options);
+    const effects = createOptionUpdateEffects();
+    const previousColumnMenu = this.core.options.columnMenu;
+
+    this.updateSourceOptions(options, effects);
+    this.updateDimensionOptions(options, effects);
+    this.updateEditingOptions(options, effects);
+    this.updateInteractionOptions(options, effects);
+    this.updatePaginationOptions(options);
+    this.updatePresentationOptions(options, effects);
+    this.updateAccessibilityOptions(options, effects);
+    this.updateRowModelOptions(options, effects);
+    this.updateExtensionOptions(options, effects);
+    this.updateDatasourceOptions(options, effects);
+    this.applyOptionUpdateEffects(options, effects, previousColumnMenu);
+  }
+
+  private updateSourceOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.options;
-    let needsRelayout = false;
-    let needsCellRefresh = false;
-    let needsHeaderRebuild = false;
-    let needsPoolRebuild = false;
-    let needsSummaryRefresh = false;
-    let needsColumnRebuild = false;
-    let needsRowRebuild = false;
-    let needsStateLoad = false;
-    let datasourceChanged = false;
-    let stateToApply: GridState | undefined;
-    const prevColumnMenu = resolved.columnMenu;
-    const prevUndoSize = resolved.undoStackSize;
-
-    if (Object.prototype.hasOwnProperty.call(options, "columnDefs") && options.columnDefs !== resolved.columnDefs) {
+    if (hasOwnOption(options, "columnDefs") && options.columnDefs !== resolved.columnDefs) {
       resolved.columnDefs = Array.isArray(options.columnDefs) ? options.columnDefs : [];
-      needsColumnRebuild = true;
-      needsRowRebuild = true;
+      effects.needsColumnRebuild = true;
+      effects.needsRowRebuild = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "rowData")) {
+    if (hasOwnOption(options, "rowData")) {
       resolved.rowData = Array.isArray(options.rowData) ? options.rowData : [];
-      needsRowRebuild = true;
+      effects.needsRowRebuild = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "initialState") && options.initialState) {
+    if (hasOwnOption(options, "initialState") && options.initialState) {
       resolved.initialState = options.initialState;
-      stateToApply = options.initialState;
+      effects.stateToApply = options.initialState;
     }
+    this.updateEventHandlers(options);
+  }
 
+  private updateEventHandlers(options: Partial<GridOptions<TData>>): void {
     for (const eventType of EVENT_TYPES) {
       const key = `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}` as keyof GridOptions<TData>;
-      if (Object.prototype.hasOwnProperty.call(options, key)) {
-        Object.assign(resolved, { [key]: options[key] });
-      }
+      if (hasOwnOption(options, key)) Object.assign(this.core.options, { [key]: options[key] });
     }
+  }
 
-    if (options.rowHeight != null && Number.isFinite(options.rowHeight) && options.rowHeight > 0 && options.rowHeight !== resolved.rowHeight) {
-      resolved.rowHeight = options.rowHeight;
-      needsRelayout = true;
+  private updateDimensionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
+    const rowHeight = changedFinite(options.rowHeight, resolved.rowHeight, 1);
+    const headerHeight = changedFinite(options.headerHeight, resolved.headerHeight, 1);
+    const rowBuffer = changedFinite(options.rowBuffer, resolved.rowBuffer, 0, true);
+    const detailHeight = changedFinite(options.detailRowHeight, resolved.detailRowHeight, 1);
+
+    if (rowHeight !== undefined) {
+      resolved.rowHeight = rowHeight;
+      effects.needsRelayout = true;
     }
-    if (options.headerHeight != null && Number.isFinite(options.headerHeight) && options.headerHeight > 0 && options.headerHeight !== resolved.headerHeight) {
-      resolved.headerHeight = options.headerHeight;
-      needsRelayout = true;
-      needsHeaderRebuild = true;
+    if (headerHeight !== undefined) {
+      resolved.headerHeight = headerHeight;
+      effects.needsRelayout = true;
+      effects.needsHeaderRebuild = true;
     }
-    if (options.rowBuffer != null && Number.isFinite(options.rowBuffer) && options.rowBuffer >= 0 && options.rowBuffer !== resolved.rowBuffer) {
-      resolved.rowBuffer = Math.floor(options.rowBuffer);
-      needsRelayout = true;
+    if (rowBuffer !== undefined) {
+      resolved.rowBuffer = rowBuffer;
+      effects.needsRelayout = true;
     }
     if (options.columnLayout != null && options.columnLayout !== resolved.columnLayout) {
       resolved.columnLayout = options.columnLayout === "fit" ? "fit" : "normal";
-      needsRelayout = true;
+      effects.needsRelayout = true;
     }
     if (options.multiSort != null) resolved.multiSort = options.multiSort;
-    if (options.detailRowHeight != null && Number.isFinite(options.detailRowHeight) && options.detailRowHeight > 0 && options.detailRowHeight !== resolved.detailRowHeight) {
-      resolved.detailRowHeight = options.detailRowHeight;
+    if (detailHeight !== undefined) {
+      resolved.detailRowHeight = detailHeight;
       this.core.bodyRenderer.applyContainerSizes();
       this.core.bodyRenderer.updateRange(true);
     }
+  }
+
+  private updateEditingOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
     if (options.editType != null && options.editType !== resolved.editType) {
       this.core.editingService.stop(true);
       resolved.editType = options.editType === "fullRow" ? "fullRow" : "cell";
-      needsCellRefresh = true;
+      effects.needsCellRefresh = true;
     }
     if (options.editableIndicator != null && options.editableIndicator !== resolved.editableIndicator) {
       resolved.editableIndicator =
         options.editableIndicator === "always" || options.editableIndicator === "none"
           ? options.editableIndicator
           : "hover";
-      needsCellRefresh = true;
+      effects.needsCellRefresh = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "rowEditValidator")) {
-      resolved.rowEditValidator = options.rowEditValidator;
-    }
+    if (hasOwnOption(options, "rowEditValidator")) resolved.rowEditValidator = options.rowEditValidator;
     if (options.singleClickEdit != null) resolved.singleClickEdit = options.singleClickEdit;
     if (options.manualSorting != null) resolved.manualSorting = options.manualSorting;
     if (options.manualFiltering != null) resolved.manualFiltering = options.manualFiltering;
+  }
+
+  private updateInteractionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
     if (options.locale != null && options.locale !== resolved.locale) {
       resolved.locale = options.locale;
-      needsHeaderRebuild = true;
-      needsCellRefresh = true;
+      effects.needsHeaderRebuild = true;
+      effects.needsCellRefresh = true;
       this.core.paginationBar.rebuild();
       this.core.statusBarService.rebuild();
     }
     if (options.indexOffset != null && options.indexOffset !== resolved.indexOffset) {
       resolved.indexOffset = options.indexOffset;
-      needsCellRefresh = true;
+      effects.needsCellRefresh = true;
     }
     if (options.showSummary != null && options.showSummary !== resolved.showSummary) {
       resolved.showSummary = options.showSummary;
-      needsSummaryRefresh = true;
-      needsRelayout = true;
+      effects.needsSummaryRefresh = true;
+      effects.needsRelayout = true;
     }
-    if (options.undoStackSize != null && Number.isFinite(options.undoStackSize) && options.undoStackSize >= 0 && options.undoStackSize !== prevUndoSize) {
-      resolved.undoStackSize = Math.floor(options.undoStackSize);
+    const undoStackSize = changedFinite(options.undoStackSize, resolved.undoStackSize, 0, true);
+    if (undoStackSize !== undefined) {
+      resolved.undoStackSize = undoStackSize;
       this.core.undoService.trimToSize();
     }
-    if (options.asyncTransactionWaitMillis != null && Number.isFinite(options.asyncTransactionWaitMillis) && options.asyncTransactionWaitMillis >= 0) {
-      resolved.asyncTransactionWaitMillis = Math.floor(options.asyncTransactionWaitMillis);
-    }
-    if (Object.prototype.hasOwnProperty.call(options, "getRowHeight")) {
-      const changed = resolved.getRowHeight !== options.getRowHeight;
-      resolved.getRowHeight = options.getRowHeight;
-      if (changed) this.core.bodyRenderer.invalidateAllRowHeights();
-      needsRelayout = true;
-    }
+    const wait = normalizeFinite(options.asyncTransactionWaitMillis, 0, true);
+    if (wait !== undefined) resolved.asyncTransactionWaitMillis = wait;
+    this.updateDynamicRowHeight(options, effects);
+    this.updateRangeAndFeedbackOptions(options);
+  }
+
+  private updateDynamicRowHeight(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    if (!hasOwnOption(options, "getRowHeight")) return;
+    const changed = this.core.options.getRowHeight !== options.getRowHeight;
+    this.core.options.getRowHeight = options.getRowHeight;
+    if (changed) this.core.bodyRenderer.invalidateAllRowHeights();
+    effects.needsRelayout = true;
+  }
+
+  private updateRangeAndFeedbackOptions(options: Partial<GridOptions<TData>>): void {
+    const resolved = this.core.options;
     if (options.enableRangeSelection != null) {
       resolved.enableRangeSelection = options.enableRangeSelection;
       if (!options.enableRangeSelection) this.clearRangeSelection();
     }
-    if (Object.prototype.hasOwnProperty.call(options, "tooltipComponent")) resolved.tooltipComponent = options.tooltipComponent;
-    if (options.tooltipShowDelay != null && Number.isFinite(options.tooltipShowDelay) && options.tooltipShowDelay >= 0) {
-      resolved.tooltipShowDelay = options.tooltipShowDelay;
-    }
+    if (hasOwnOption(options, "tooltipComponent")) resolved.tooltipComponent = options.tooltipComponent;
+    const tooltipDelay = normalizeFinite(options.tooltipShowDelay, 0);
+    if (tooltipDelay !== undefined) resolved.tooltipShowDelay = tooltipDelay;
     if (options.flashCells != null) resolved.flashCells = options.flashCells;
-    if (Object.prototype.hasOwnProperty.call(options, "getContextMenuItems")) resolved.getContextMenuItems = options.getContextMenuItems;
+    if (hasOwnOption(options, "getContextMenuItems")) {
+      resolved.getContextMenuItems = options.getContextMenuItems;
+    }
     if (options.theme != null && options.theme !== resolved.theme) {
       resolved.theme = options.theme;
       this.core.skeleton.applyTheme(options.theme);
       this.core.watermarkService.refresh();
     }
-    if (options.pagination !== undefined) {
-      const cfg = options.pagination;
-      const target = cfg !== false && resolved.datasource == null;
-      if (target !== resolved.paginationEnabled) {
-        this.core.rowModel.setPaginationEnabled(target);
-      }
-      if (typeof cfg === "object" && cfg) {
-        resolved.paginationMode = cfg.mode === "server" ? "server" : "client";
-        if (cfg.page != null && Number.isFinite(cfg.page)) {
-          resolved.paginationPage = Math.max(1, Math.floor(cfg.page));
-        }
-        if (cfg.total != null && Number.isFinite(cfg.total)) {
-          resolved.paginationTotal = Math.max(0, Math.floor(cfg.total));
-        }
-        if (cfg.pageSize != null) resolved.paginationPageSize = cfg.pageSize;
-        if (cfg.pageSizeOptions != null) resolved.paginationPageSizeOptions = cfg.pageSizeOptions;
-        if (cfg.showTotal != null) resolved.paginationShowTotal = cfg.showTotal;
-        if (cfg.showPageSizeSelector != null) resolved.paginationShowSizeSelector = cfg.showPageSizeSelector;
-      }
-      if (resolved.paginationEnabled) {
-        this.core.rowModel.onPaginationOptionsChanged();
-      }
-      this.core.paginationBar.rebuild();
+  }
+
+  private updatePaginationOptions(options: Partial<GridOptions<TData>>): void {
+    if (options.pagination === undefined) return;
+    const resolved = this.core.options;
+    const config = options.pagination;
+    const enabled = config !== false && resolved.datasource == null;
+    if (enabled !== resolved.paginationEnabled) this.core.rowModel.setPaginationEnabled(enabled);
+    if (typeof config === "object" && config) this.updatePaginationConfig(config);
+    if (resolved.paginationEnabled) this.core.rowModel.onPaginationOptionsChanged();
+    this.core.paginationBar.rebuild();
+  }
+
+  private updatePaginationConfig(config: Exclude<GridOptions<TData>["pagination"], boolean | undefined>): void {
+    const resolved = this.core.options;
+    resolved.paginationMode = config.mode === "server" ? "server" : "client";
+    const page = normalizeFinite(config.page, 1, true);
+    const total = normalizeFinite(config.total, 0, true);
+    if (page !== undefined) resolved.paginationPage = page;
+    if (total !== undefined) resolved.paginationTotal = total;
+    if (config.pageSize != null) resolved.paginationPageSize = config.pageSize;
+    if (config.pageSizeOptions != null) resolved.paginationPageSizeOptions = config.pageSizeOptions;
+    if (config.showTotal != null) resolved.paginationShowTotal = config.showTotal;
+    if (config.showPageSizeSelector != null) {
+      resolved.paginationShowSizeSelector = config.showPageSizeSelector;
     }
+  }
+
+  private updatePresentationOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    this.updateWatermarkAndStatus(options, effects);
+    this.updateSizePreset(options, effects);
+    const resolved = this.core.options;
+    if (options.stripedRows != null && options.stripedRows !== resolved.stripedRows) {
+      resolved.stripedRows = options.stripedRows;
+      this.core.skeleton.setStriped(options.stripedRows);
+    }
+    if (options.showCellBorders != null && options.showCellBorders !== resolved.showCellBorders) {
+      resolved.showCellBorders = options.showCellBorders;
+      this.core.skeleton.setCellBorders(options.showCellBorders);
+    }
+  }
+
+  private updateWatermarkAndStatus(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
     if (options.watermark !== undefined) {
       resolved.watermarkEnabled = options.watermark != null && options.watermark !== false;
       resolved.watermarkConfig =
@@ -853,6 +966,15 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
             : options.watermark;
       this.core.watermarkService.refresh();
     }
+    this.updateStatusOptions(options);
+    if (hasOwnOption(options, "summaryMethod")) {
+      resolved.summaryMethod = options.summaryMethod;
+      effects.needsSummaryRefresh = true;
+    }
+  }
+
+  private updateStatusOptions(options: Partial<GridOptions<TData>>): void {
+    const resolved = this.core.options;
     if (options.suppressClipboard != null) resolved.suppressClipboard = options.suppressClipboard;
     if (options.contextMenu != null) resolved.contextMenu = options.contextMenu;
     if (options.columnMenu != null) resolved.columnMenu = options.columnMenu;
@@ -865,160 +987,191 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       }
       this.core.statusBarService.rebuild();
     }
-    if (Object.prototype.hasOwnProperty.call(options, "summaryMethod")) {
-      resolved.summaryMethod = options.summaryMethod;
-      needsSummaryRefresh = true;
-    }
-    if (options.size != null && Object.prototype.hasOwnProperty.call(GRID_SIZE_PRESETS, options.size) && options.size !== resolved.size) {
-      const preset = GRID_SIZE_PRESETS[options.size];
-      resolved.size = options.size;
-      resolved.rowHeight = options.rowHeight ?? preset.rowHeight;
-      resolved.headerHeight = options.headerHeight ?? preset.headerHeight;
-      this.core.skeleton.applySize(options.size);
-      needsRelayout = true;
-      needsHeaderRebuild = true;
-    }
-    if (options.stripedRows != null && options.stripedRows !== resolved.stripedRows) {
-      resolved.stripedRows = options.stripedRows;
-      this.core.skeleton.setStriped(options.stripedRows);
-    }
-    if (options.showCellBorders != null && options.showCellBorders !== resolved.showCellBorders) {
-      resolved.showCellBorders = options.showCellBorders;
-      this.core.skeleton.setCellBorders(options.showCellBorders);
-    }
+  }
+
+  private updateSizePreset(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const { size } = options;
+    if (size == null || !hasOwnOption(GRID_SIZE_PRESETS, size) || size === this.core.options.size) return;
+    const preset = GRID_SIZE_PRESETS[size];
+    this.core.options.size = size;
+    this.core.options.rowHeight = options.rowHeight ?? preset.rowHeight;
+    this.core.options.headerHeight = options.headerHeight ?? preset.headerHeight;
+    this.core.skeleton.applySize(size);
+    effects.needsRelayout = true;
+    effects.needsHeaderRebuild = true;
+  }
+
+  private updateAccessibilityOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
     if (options.suppressCellFocus != null) resolved.suppressCellFocus = options.suppressCellFocus;
-    if (options.suppressRowHoverHighlight != null) resolved.suppressRowHoverHighlight = options.suppressRowHoverHighlight;
+    if (options.suppressRowHoverHighlight != null) {
+      resolved.suppressRowHoverHighlight = options.suppressRowHoverHighlight;
+    }
     if (options.suppressNoRowsOverlay != null) resolved.suppressNoRowsOverlay = options.suppressNoRowsOverlay;
     if (options.suppressHeaderFocus != null && options.suppressHeaderFocus !== resolved.suppressHeaderFocus) {
       resolved.suppressHeaderFocus = options.suppressHeaderFocus;
-      needsHeaderRebuild = true;
+      effects.needsHeaderRebuild = true;
     }
-    let ariaLabelsChanged = false;
-    if (Object.prototype.hasOwnProperty.call(options, "ariaLabel")) {
+    this.updateAriaLabels(options);
+    this.updateOverlayOptions(options);
+  }
+
+  private updateAriaLabels(options: Partial<GridOptions<TData>>): void {
+    const resolved = this.core.options;
+    let changed = false;
+    if (hasOwnOption(options, "ariaLabel")) {
       resolved.ariaLabel = options.ariaLabel ?? "MachTable data grid";
-      ariaLabelsChanged = true;
+      changed = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "ariaLabelledBy")) {
+    if (hasOwnOption(options, "ariaLabelledBy")) {
       resolved.ariaLabelledBy = options.ariaLabelledBy ?? "";
-      ariaLabelsChanged = true;
+      changed = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "ariaDescribedBy")) {
+    if (hasOwnOption(options, "ariaDescribedBy")) {
       resolved.ariaDescribedBy = options.ariaDescribedBy ?? "";
-      ariaLabelsChanged = true;
+      changed = true;
     }
-    if (ariaLabelsChanged) this.core.skeleton.applyAriaLabels(resolved);
-    if (Object.prototype.hasOwnProperty.call(options, "overlayNoRowsTemplate")) {
+    if (changed) this.core.skeleton.applyAriaLabels(resolved);
+  }
+
+  private updateOverlayOptions(options: Partial<GridOptions<TData>>): void {
+    const resolved = this.core.options;
+    if (hasOwnOption(options, "overlayNoRowsTemplate")) {
       resolved.overlayNoRowsTemplate = options.overlayNoRowsTemplate ?? "";
     }
-    if (Object.prototype.hasOwnProperty.call(options, "overlayLoadingTemplate")) {
+    if (hasOwnOption(options, "overlayLoadingTemplate")) {
       resolved.overlayLoadingTemplate = options.overlayLoadingTemplate ?? "";
     }
-    if (options.allowUnsafeOverlayHtml != null) {
-      resolved.allowUnsafeOverlayHtml = options.allowUnsafeOverlayHtml;
-    }
-    if (Object.prototype.hasOwnProperty.call(options, "className")) {
+    if (options.allowUnsafeOverlayHtml != null) resolved.allowUnsafeOverlayHtml = options.allowUnsafeOverlayHtml;
+    if (hasOwnOption(options, "className")) {
       resolved.className = options.className ?? "";
       this.core.skeleton.setCustomClass(resolved.className);
     }
     if (options.loading != null) resolved.loading = options.loading;
+  }
+
+  private updateRowModelOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    this.updateSelectionAndColumns(options, effects);
+    this.updateHierarchyOptions(options, effects);
+    const resolved = this.core.options;
+    if (options.autoCheckedChildren != null) resolved.autoCheckedChildren = options.autoCheckedChildren;
+    if (options.defaultExpandAll != null && options.defaultExpandAll !== resolved.defaultExpandAll) {
+      resolved.defaultExpandAll = options.defaultExpandAll;
+      effects.needsRowRebuild = true;
+    }
+    if (options.applyRowDrag != null) resolved.applyRowDrag = options.applyRowDrag;
+    if (options.suppressWarnings != null) resolved.suppressWarnings = options.suppressWarnings;
+  }
+
+  private updateSelectionAndColumns(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
     if (options.rowSelection != null && options.rowSelection !== resolved.rowSelection) {
       resolved.rowSelection = options.rowSelection;
       if (options.rowSelection === "none") this.deselectAll();
-      needsHeaderRebuild = true;
-      needsPoolRebuild = true;
+      effects.needsHeaderRebuild = true;
+      effects.needsPoolRebuild = true;
       this.core.refreshAriaState();
     }
-    if (options.quickFilterText !== undefined) {
-      this.setQuickFilter(options.quickFilterText);
-    }
+    if (options.quickFilterText !== undefined) this.setQuickFilter(options.quickFilterText);
     if (options.defaultColDef !== undefined && options.defaultColDef !== resolved.defaultColDef) {
       resolved.defaultColDef = { ...DEFAULT_COL_DEF, ...options.defaultColDef };
-      needsColumnRebuild = true;
+      effects.needsColumnRebuild = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "columnTypes") && options.columnTypes !== resolved.columnTypes) {
+    if (hasOwnOption(options, "columnTypes") && options.columnTypes !== resolved.columnTypes) {
       resolved.columnTypes = options.columnTypes ?? {};
-      needsColumnRebuild = true;
+      effects.needsColumnRebuild = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "getRowId") && options.getRowId !== resolved.getRowId) {
+    if (hasOwnOption(options, "getRowId") && options.getRowId !== resolved.getRowId) {
       resolved.getRowId = options.getRowId;
-      needsRowRebuild = true;
+      effects.needsRowRebuild = true;
     }
+  }
+
+  private updateHierarchyOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
     if (options.masterDetail != null && options.masterDetail !== resolved.masterDetail) {
       resolved.masterDetail = options.masterDetail;
-      needsColumnRebuild = true;
-      needsRowRebuild = true;
+      effects.needsColumnRebuild = true;
+      effects.needsRowRebuild = true;
     }
     if (options.detailToggleColumn != null && options.detailToggleColumn !== resolved.detailToggleColumn) {
       resolved.detailToggleColumn = options.detailToggleColumn;
-      needsColumnRebuild = true;
+      effects.needsColumnRebuild = true;
     }
     if (options.treeData != null && options.treeData !== resolved.treeData) {
       resolved.treeData = options.treeData;
-      needsRowRebuild = true;
-      needsColumnRebuild = true;
+      effects.needsRowRebuild = true;
+      effects.needsColumnRebuild = true;
       this.core.refreshAriaState();
     }
     if (options.childrenKey != null && options.childrenKey !== resolved.childrenKey) {
       resolved.childrenKey = options.childrenKey;
-      needsRowRebuild = true;
+      effects.needsRowRebuild = true;
     }
-    if (options.autoCheckedChildren != null) resolved.autoCheckedChildren = options.autoCheckedChildren;
-    if (options.defaultExpandAll != null && options.defaultExpandAll !== resolved.defaultExpandAll) {
-      resolved.defaultExpandAll = options.defaultExpandAll;
-      needsRowRebuild = true;
-    }
-    if (options.applyRowDrag != null) resolved.applyRowDrag = options.applyRowDrag;
-    if (options.suppressWarnings != null) resolved.suppressWarnings = options.suppressWarnings;
-    if (Object.prototype.hasOwnProperty.call(options, "aggFuncs")) {
+  }
+
+  private updateExtensionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
+    if (hasOwnOption(options, "aggFuncs")) {
       resolved.aggFuncs = options.aggFuncs;
-      needsRowRebuild = true;
+      effects.needsRowRebuild = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "components")) {
+    if (hasOwnOption(options, "components")) {
       resolved.components = options.components;
-      needsCellRefresh = true;
+      effects.needsCellRefresh = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "actionPolicy")) {
+    if (hasOwnOption(options, "actionPolicy")) {
       resolved.actionPolicy = options.actionPolicy;
-      needsCellRefresh = true;
+      effects.needsCellRefresh = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "features")) {
+    if (hasOwnOption(options, "features")) {
       resolved.features = Array.isArray(options.features) ? options.features : [];
       this.core.setFeatures(resolved.features);
     }
-    if (Object.prototype.hasOwnProperty.call(options, "columnStateStore")) {
+    if (hasOwnOption(options, "columnStateStore")) {
       resolved.columnStateStore = options.columnStateStore;
-      needsStateLoad = true;
+      effects.needsStateLoad = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "columnStateKey")) {
+    if (hasOwnOption(options, "columnStateKey")) {
       resolved.columnStateKey = options.columnStateKey ?? null;
-      needsStateLoad = true;
+      effects.needsStateLoad = true;
     }
-    if (options.blockSize != null && Number.isFinite(options.blockSize) && options.blockSize > 0) {
-      resolved.blockSize = Math.floor(options.blockSize);
-    }
-    if (options.infiniteBufferRows != null && Number.isFinite(options.infiniteBufferRows) && options.infiniteBufferRows >= 0) {
-      resolved.infiniteBufferRows = Math.floor(options.infiniteBufferRows);
-    }
-    if (options.datasourceRetryCount != null && Number.isFinite(options.datasourceRetryCount) && options.datasourceRetryCount >= 0) {
-      resolved.datasourceRetryCount = Math.floor(options.datasourceRetryCount);
-    }
-    if (options.datasourceRetryDelay != null && Number.isFinite(options.datasourceRetryDelay) && options.datasourceRetryDelay >= 0) {
-      resolved.datasourceRetryDelay = Math.floor(options.datasourceRetryDelay);
-    }
-    if (Object.prototype.hasOwnProperty.call(options, "datasource") && options.datasource !== resolved.datasource) {
+  }
+
+  private updateDatasourceOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
+    const blockSize = normalizeFinite(options.blockSize, 1, true);
+    const bufferRows = normalizeFinite(options.infiniteBufferRows, 0, true);
+    const retryCount = normalizeFinite(options.datasourceRetryCount, 0, true);
+    const retryDelay = normalizeFinite(options.datasourceRetryDelay, 0, true);
+    if (blockSize !== undefined) resolved.blockSize = blockSize;
+    if (bufferRows !== undefined) resolved.infiniteBufferRows = bufferRows;
+    if (retryCount !== undefined) resolved.datasourceRetryCount = retryCount;
+    if (retryDelay !== undefined) resolved.datasourceRetryDelay = retryDelay;
+    this.updateDatasourceReference(options, effects);
+    this.updatePinnedRows(options);
+  }
+
+  private updateDatasourceReference(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
+    if (hasOwnOption(options, "datasource") && options.datasource !== resolved.datasource) {
       resolved.datasource = options.datasource;
       resolved.paginationEnabled = options.datasource == null && resolved.paginationEnabled;
-      datasourceChanged = true;
+      effects.datasourceChanged = true;
       this.core.paginationBar.rebuild();
     }
-    if (Object.prototype.hasOwnProperty.call(options, "detailRowRenderer")) {
+    if (hasOwnOption(options, "detailRowRenderer")) {
       resolved.detailRowRenderer = options.detailRowRenderer;
-      needsCellRefresh = true;
+      effects.needsCellRefresh = true;
     }
-    if (Object.prototype.hasOwnProperty.call(options, "isRowExpandable")) {
+    if (hasOwnOption(options, "isRowExpandable")) {
       resolved.isRowExpandable = options.isRowExpandable;
-      needsCellRefresh = true;
+      effects.needsCellRefresh = true;
     }
+  }
+
+  private updatePinnedRows(options: Partial<GridOptions<TData>>): void {
+    const resolved = this.core.options;
     if (options.pinnedTopRowData !== undefined) {
       resolved.pinnedTopRowData = options.pinnedTopRowData ?? [];
       this.core.pinnedRowsRenderer.setTopData(resolved.pinnedTopRowData);
@@ -1027,41 +1180,53 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.pinnedBottomRowData = options.pinnedBottomRowData ?? [];
       this.core.pinnedRowsRenderer.setBottomData(resolved.pinnedBottomRowData);
     }
+  }
 
-    if (needsColumnRebuild) {
+  private applyOptionUpdateEffects(
+    options: Partial<GridOptions<TData>>,
+    effects: OptionUpdateEffects,
+    previousColumnMenu: boolean
+  ): void {
+    const resolved = this.core.options;
+    if (effects.needsColumnRebuild) {
       this.core.columnModel.setColumnDefs(resolved.columnDefs);
       this.core.onColumnsStructureChanged();
-      needsHeaderRebuild = false;
-      needsPoolRebuild = false;
+      effects.needsHeaderRebuild = false;
+      effects.needsPoolRebuild = false;
     }
-    if (needsStateLoad) {
+    if (effects.needsStateLoad) {
       this.core.loadPersistedColumnState();
       this.core.onColumnsStructureChanged();
     }
-    if (datasourceChanged) {
-      void this.core.rowModel.onDatasourceChanged();
-    } else if (needsRowRebuild) {
-      if (this.core.rowModel.isInfinite) void this.core.rowModel.onServerParamsChanged();
-      else {
-        this.core.rowModel.setRowData(resolved.rowData);
-        this.core.bodyRenderer.onDataChanged();
-      }
-    }
-
-    if (needsRelayout) {
+    this.applyRowUpdateEffect(effects);
+    if (effects.needsRelayout) {
       this.core.skeleton.updateHeights(resolved.rowHeight, resolved.headerHeight);
       this.core.relayout();
       this.core.relayoutColumns(false);
     }
-    if (options.columnMenu != null && options.columnMenu !== prevColumnMenu) {
-      needsHeaderRebuild = true;
+    if (options.columnMenu != null && options.columnMenu !== previousColumnMenu) {
+      effects.needsHeaderRebuild = true;
     }
-    if (needsHeaderRebuild) this.core.headerRenderer.build();
-    if (needsPoolRebuild) this.core.bodyRenderer.rebuildPool();
-    else if (needsCellRefresh) this.refreshCells();
-    if (needsSummaryRefresh) this.core.summaryRenderer.refresh();
-    if (stateToApply) this.applyState(stateToApply);
+    if (effects.needsHeaderRebuild) this.core.headerRenderer.build();
+    if (effects.needsPoolRebuild) this.core.bodyRenderer.rebuildPool();
+    else if (effects.needsCellRefresh) this.refreshCells();
+    if (effects.needsSummaryRefresh) this.core.summaryRenderer.refresh();
+    if (effects.stateToApply) this.applyState(effects.stateToApply);
     this.core.bodyRenderer.refreshOverlays();
+  }
+
+  private applyRowUpdateEffect(effects: OptionUpdateEffects): void {
+    if (effects.datasourceChanged) {
+      void this.core.rowModel.onDatasourceChanged();
+      return;
+    }
+    if (!effects.needsRowRebuild) return;
+    if (this.core.rowModel.isInfinite) {
+      void this.core.rowModel.onServerParamsChanged();
+      return;
+    }
+    this.core.rowModel.setRowData(this.core.options.rowData);
+    this.core.bodyRenderer.onDataChanged();
   }
 
   getDataAsCsv(params: CsvExportParams = {}): string {
@@ -1118,6 +1283,12 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     const sections = new Set(options.sections ?? all);
     this.core.editingService.stop(true);
 
+    this.restoreStateSections(state, sections);
+    this.refreshAfterStateRestore(state, sections);
+    if (options.emitEvents !== false) this.emitStateEvents(sections);
+  }
+
+  private restoreStateSections(state: GridState, sections: ReadonlySet<GridStateSection>): void {
     if (sections.has("columns")) this.core.columnModel.applyColumnState(state.columns ?? []);
     if (sections.has("sort")) this.core.columnModel.applySortModel(state.sortModel ?? []);
     if (sections.has("filter")) {
@@ -1132,7 +1303,9 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       this.core.rowModel.restorePagination(state.pagination.page, state.pagination.pageSize);
       this.core.paginationBar.rebuild();
     }
+  }
 
+  private refreshAfterStateRestore(state: GridState, sections: ReadonlySet<GridStateSection>): void {
     if (sections.has("columns")) this.core.onColumnsStructureChanged();
     if (this.core.rowModel.isInfinite) {
       void this.core.rowModel.onServerParamsChanged();
@@ -1144,18 +1317,18 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     this.core.headerRenderer.refreshFilterIcons();
     if (sections.has("selection")) this.core.selectionService.restoreSelection(state.selectedRowIds ?? []);
     this.core.persistColumnState();
+  }
 
-    if (options.emitEvents !== false) {
-      if (sections.has("sort")) this.core.emit("sortChanged", { sortModel: this.getSortModel() });
-      if (sections.has("filter")) this.core.emit("filterChanged", { filterModel: this.getFilterModel() });
-      if (sections.has("pagination")) {
-        this.core.emit("paginationChanged", {
-          page: this.getPage(),
-          pageSize: this.getPageSize(),
-          pageCount: this.getPageCount(),
-          total: this.getTotalRowCount()
-        });
-      }
+  private emitStateEvents(sections: ReadonlySet<GridStateSection>): void {
+    if (sections.has("sort")) this.core.emit("sortChanged", { sortModel: this.getSortModel() });
+    if (sections.has("filter")) this.core.emit("filterChanged", { filterModel: this.getFilterModel() });
+    if (sections.has("pagination")) {
+      this.core.emit("paginationChanged", {
+        page: this.getPage(),
+        pageSize: this.getPageSize(),
+        pageCount: this.getPageCount(),
+        total: this.getTotalRowCount()
+      });
     }
   }
 

@@ -37,7 +37,7 @@ export interface ColumnHelper<TData> {
 /** Creates strongly typed column definitions without repeating TData/TValue. */
 export function createColumnHelper<TData>(): ColumnHelper<TData> {
   return {
-    accessor: (field, definition = {}) => ({ ...definition, field }) as never,
+    accessor: (field, definition = {}) => ({ ...definition, field }),
     display: (definition) => ({ ...definition }),
     group: (definition) => ({ ...definition, children: [...definition.children] })
   };

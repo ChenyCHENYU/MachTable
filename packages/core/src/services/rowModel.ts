@@ -208,8 +208,8 @@ export class RowModel<TData = any> {
             },
             fail: failAttempt
           });
-          if (request && typeof (request as Promise<void>).catch === "function") {
-            void (request as Promise<void>).catch(failAttempt);
+          if (request && typeof request.catch === "function") {
+            void request.catch(failAttempt);
           }
         } catch (error) {
           failAttempt(error);

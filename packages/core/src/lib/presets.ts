@@ -6,7 +6,7 @@ function mergeSwitchableObject<T extends object>(
 ): boolean | T | undefined {
   if (next === undefined) return base;
   if (typeof next !== "object" || next === null || typeof base !== "object" || base === null) return next;
-  return { ...base, ...next } as T;
+  return { ...base, ...next };
 }
 
 function composeHandlers(base: unknown, next: unknown): unknown {

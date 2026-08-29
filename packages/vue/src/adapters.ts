@@ -119,7 +119,7 @@ export function vueCellSlotRenderer<TData = any, TValue = any>(
     const host = document.createElement("div");
     host.className = "mach-cell-vue mach-cell-vue--slot";
     host.style.width = "100%";
-    const unmount = mountSlot(slot, () => params as unknown as Record<string, any>, host, appContext);
+    const unmount = mountSlot(slot, () => params, host, appContext);
     return { el: host, destroy: unmount };
   };
 }
@@ -132,7 +132,7 @@ export function vueHeaderSlotRenderer<TData = any>(
   return (params) => {
     const host = document.createElement("div");
     host.className = "mach-header-vue-slot";
-    const unmount = mountSlot(slot, () => params as unknown as Record<string, any>, host, appContext);
+    const unmount = mountSlot(slot, () => params, host, appContext);
     return { el: host, destroy: unmount };
   };
 }
@@ -185,7 +185,7 @@ export function vueDetailSlotRenderer<TData = any>(
     const host = document.createElement("div");
     host.className = "mach-detail-vue-slot";
     host.style.height = "100%";
-    const unmount = mountSlot(slot, () => params as unknown as Record<string, any>, host, appContext);
+    const unmount = mountSlot(slot, () => params, host, appContext);
     return { el: host, destroy: unmount };
   };
 }

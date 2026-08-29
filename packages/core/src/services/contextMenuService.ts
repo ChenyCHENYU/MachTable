@@ -81,7 +81,7 @@ export class ContextMenuService {
             try {
               item.action?.();
             } catch (error) {
-              core.reportError(error, "contextMenu.action", { colId: anchorCol!.id, rowId: node!.id });
+              core.reportError(error, "contextMenu.action", { colId: anchorCol.id, rowId: node.id });
             }
           });
         }

@@ -1197,7 +1197,7 @@ export class BodyRenderer {
     handle.style.display = "none";
     handle.addEventListener("pointerdown", (e) => {
       this.fillFromPointer = true;
-      this.onFillHandleDown(e as unknown as MouseEvent);
+      this.onFillHandleDown(e);
     });
     handle.addEventListener("mousedown", (e) => {
       if (this.fillFromPointer) return;
@@ -1808,7 +1808,7 @@ export class BodyRenderer {
     if (this.core.isDestroyed() || e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (!target.closest(".mach-row-drag-handle")) return;
-    const resolved = this.resolveEventTarget(e as unknown as MouseEvent);
+    const resolved = this.resolveEventTarget(e);
     if (!resolved || resolved.node.isDetail || resolved.node.isGroup) return;
 
     this.rowDragController.start(e, resolved.node);
