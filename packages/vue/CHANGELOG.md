@@ -1,5 +1,21 @@
 # @agile-team/mach-table-vue
 
+## 0.10.0
+
+### Minor Changes
+
+- Add dedicated `mach-table.config.ts` support with app/route/preset/table layering and option-source diagnostics.
+- Add native cell/header/editor/loading/empty/detail/action slots and automatic fit layout.
+- Add `useMachTableQuery()` for cancellable remote pagination, stale-response protection, cross-page/query-wide selection and retries.
+- Add `useMachTableEditing()` for reactive dirty state, partial save, rollback, reveal and unsaved-page guards.
+- Re-export semantic business columns, dictionary caches, action policies and versioned column storage from Core.
+
+### Patch Changes
+
+- Minify production artifacts and add a tree-shakable `./workflows` entry for query/editing composables while retaining root exports.
+- Updated dependencies
+  - @agile-team/mach-table@0.10.0
+
 ## 0.9.1
 
 ### Patch Changes

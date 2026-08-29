@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。三个包固定版本联动：
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.9.1
+pnpm up @agile-team/mach-table-vue@^0.10.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,14 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.9 → 0.10
+
+0.10 保留现有表格 props，并新增专用配置文件、命名 preset 与 `explainOption()`；Vue 新增原生插槽、`useMachTableQuery()` 和 `useMachTableEditing()`。默认列状态存储改为版本化信封，但会自动读取旧数组格式；需要读取原始 localStorage 的业务代码应改用 `loadColumnState()`。
+
+两个 composable 仍可从 Vue 根入口导入；对体积敏感的新代码推荐从 `@agile-team/mach-table-vue/workflows` 导入。它是同一个安装包的按需子入口，不增加依赖。
+
+远程查询在业务查询/过滤变化时默认清空跨页选择，防止旧查询误操作新数据。如旧业务明确需要保留，设置 `clearSelectionOnQueryChange: false`。`saveChanges()` handler 可返回 `{ savedRowIds }` 表示部分成功，省略时行为与 0.9 一致。
 
 ## 0.5 → 0.9
 

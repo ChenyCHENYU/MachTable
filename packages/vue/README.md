@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-Official Vue 3 adapter for MachTable 0.9. It provides `<MachTable>`, `useMachTable`, app/route defaults, async boundaries, Vue cell/detail renderer factories, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official Vue 3 adapter for MachTable 0.10. It provides `<MachTable>`, native typed slots, dedicated app/route configuration, remote query and editing composables, async boundaries, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -102,9 +102,11 @@ Layouts can reactively refine defaults and presets with `provideMachTableConfig(
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `vue >= 3.2` remains a peer dependency supplied by the host application. Existing local imports remain fully supported.
 
-Remote B-side lists can bind `useMachTableQuery()` directly. It owns controlled server pagination, sorting/filtering requests, AbortSignal cancellation, stale-response protection, retry state and cross-page selection without exposing `gridApi` to ordinary pages.
+Remote B-side lists can bind `useMachTableQuery()` directly. For the smallest composable-only chunk, import query/editing helpers from `@agile-team/mach-table-vue/workflows`; root imports remain compatible. It owns controlled server pagination, sorting/filtering requests, AbortSignal cancellation, stale-response protection, retry state and cross-page selection without exposing `gridApi` to ordinary pages.
 
 Million-row batch actions use `selectionScope: "query"` and compact `allMatching + excludedKeys` rules, so clients never download every matching row ID.
+
+`useMachTableEditing()` exposes reactive dirty changes, save state, partial batch success, rollback, failed-cell reveal and an optional unsaved-page guard. Semantic business types and cached dictionaries are configured once with `createBusinessColumnTypes()` and `createCachedDictionary()`.
 
 ## Cell and full-row editing
 

@@ -1,5 +1,18 @@
 # @agile-team/mach-table-react
 
+## 0.10.0
+
+### Minor Changes
+
+- Re-export the 0.10 Core API including semantic column types, action policies, partial save results, versioned column state and managed features.
+- Keep Provider/table option overrides and StrictMode-safe lifecycle behavior compatible with 0.9.
+
+### Patch Changes
+
+- Minify production artifacts while retaining source maps and declaration output.
+- Updated dependencies
+  - @agile-team/mach-table@0.10.0
+
 ## 0.9.1
 
 ### Patch Changes

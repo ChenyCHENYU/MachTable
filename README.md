@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.9.1-2563eb" alt="Source version 0.9.1" />
+  <img src="https://img.shields.io/badge/source-0.10.0-2563eb" alt="Source version 0.10.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
@@ -36,10 +36,10 @@ MachTable 为后台管理、工业台账、财务报表、订单工单和低代�
 | --- | --- |
 | 大数据量稳定滚动 | 行/列双虚拟化、行池复用、rAF 合帧、变高行前缀和定位 |
 | Excel 式操作 | 框选、复制/剪切/粘贴、Delete、填充柄、撤销/重做 |
-| 企业级数据模型 | 排序、四类过滤、分页、可恢复无限数据源、树形、分组聚合、主从明细 |
+| 企业级数据模型 | 排序、四类过滤、受控远程分页、请求取消/重试、查询级全选、树形、分组聚合、主从明细 |
 | 复杂布局 | 左右固定列、多级表头、变高行、固定首末行、行列拖拽、行合并 |
-| 业务组件集成 | Vue/React 单元格与明细适配器、自定义编辑器、实例级组件注册表 |
-| 长期可维护 | TypeScript 字段路径推导、版本化 `GridState`、组合式 `GridFeature`、稳定错误码与诊断快照 |
+| 业务组件集成 | Vue 原生 cell/header/editor/overlay/detail/actions 插槽、React 适配器、自定义编辑器 |
+| 长期可维护 | 分层配置与来源解释、版本化状态迁移、托管 `GridFeature`、稳定错误码与运行时校验 |
 | 复杂编辑流程 | 精致单元格就地编辑、原子化整行编辑、同步/异步校验、脏数据、保存与回滚 |
 | 操作列 | 查看/编辑/删除图标、整行对勾/取消、任意业务动作、菜单/抽屉/全部展开 |
 | 安全与治理 | 安全 Overlay 默认值、CSV 公式注入防护、原型污染防护、体积/覆盖率门禁 |
@@ -175,7 +175,11 @@ void preloadMachTable();
 
 ```ts
 // src/config/mach-table.config.ts
-import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-vue";
+import {
+  createBusinessColumnTypes,
+  defineMachTableConfig,
+  defineMachTablePreset
+} from "@agile-team/mach-table-vue";
 
 export default defineMachTableConfig({
   defaults: {
@@ -190,10 +194,11 @@ export default defineMachTableConfig({
     list: defineMachTablePreset({ stripedRows: true, columnMenu: true }),
     crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
   },
-  columnTypes: {
-    money: { align: "right", filter: "number", cellEditor: "number" },
-    status: { filter: "set", cellRenderer: "statusTag" }
-  }
+  columnTypes: createBusinessColumnTypes({
+    locale: "zh-CN",
+    currency: "CNY",
+    timeZone: "Asia/Shanghai"
+  })
 });
 
 // main.ts
@@ -251,11 +256,13 @@ MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配
 
 | 包 | 用途 | gzip 预算 / 当前值 |
 | --- | --- | --- |
-| `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 73 KB |
-| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 6 KB / 约 3.7 KB（全部 ESM 适配代码） |
-| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 5 KB / 约 1.9 KB（适配代码） |
+| `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 65.4 KB |
+| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部产物 8 KB / 约 7.7 KB；工作流入口约 2.8 KB |
+| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 5 KB / 约 1.4 KB（适配代码） |
 
 Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
+
+远程查询与编辑仍可从 Vue 根入口导入；追求最小业务 chunk 时从同包的 `@agile-team/mach-table-vue/workflows` 子入口导入，不增加第二个安装依赖。
 
 ## 架构
 
@@ -309,7 +316,7 @@ pnpm test:e2e
 | 配置与命令 | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) |
 | 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频业务 | [场景配方](./docs/recipes/selection.md) |
-| 竞品与后续规划 | [竞品分析与调研计划](./docs/advanced/competitive-analysis.md) · [路线图](./docs/advanced/roadmap.md) |
+| 竞品与后续规划 | [竞品分析](./docs/advanced/competitive-analysis.md) · [AG Grid 源码审计](./docs/advanced/ag-grid-source-study.md) · [路线图](./docs/advanced/roadmap.md) |
 | 故障定位 | [排错手册](./docs/guide/troubleshooting.md) |
 | 版本升级 | [升级指南](./docs/guide/upgrading.md) · [Changelog](./packages/core/CHANGELOG.md) |
 
@@ -319,7 +326,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前版本为 `0.9.1`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留。在 `1.0.0` 前，破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前源码版本为 `0.10.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

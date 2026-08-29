@@ -1,5 +1,15 @@
 # @agile-team/mach-table
 
+## 0.10.0
+
+### Minor Changes
+
+- Add layered application presets, semantic column types, batched TTL/LRU dictionaries and central action permission/confirmation/error policies.
+- Add controlled server pagination, typed option reads/writes, query-wide selection rules and partial-success change saving.
+- Add versioned/migratable column preference storage, runtime GridOption validation with spelling suggestions, and automatically managed feature resources.
+- Add Vue-native lifecycle support for renderer/overlay cleanup and constrained automatic column fitting in Core.
+- Minify production artifacts with source maps, reducing the complete Core ESM gzip footprint below the existing 80 KB budget.
+
 ## 0.9.1
 
 ### Patch Changes
