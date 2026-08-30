@@ -62,8 +62,10 @@ export default defineConfig({
             { text: "业务字段、字典与权限", link: "/recipes/business-columns" },
             { text: "操作列与状态列", link: "/recipes/action-columns" },
             { text: "单元格与整行编辑", link: "/recipes/editing" },
+            { text: "批量保存与版本冲突", link: "/recipes/batch-save" },
             { text: "框选 / 复制 / 填充", link: "/recipes/clipboard" },
             { text: "排序与过滤", link: "/recipes/sorting-filtering" },
+            { text: "高级过滤表达式", link: "/recipes/advanced-filter" },
             { text: "行分组 / 树形数据", link: "/recipes/grouping-tree" },
             { text: "主从明细", link: "/recipes/master-detail" },
             { text: "无限滚动", link: "/recipes/infinite-scroll" },
@@ -71,6 +73,7 @@ export default defineConfig({
             { text: "固定首末行", link: "/recipes/pinned-rows" },
             { text: "撤销 / 重做", link: "/recipes/undo-redo" },
             { text: "全量状态与工作区", link: "/recipes/grid-state" },
+            { text: "命名视图", link: "/recipes/saved-views" },
             { text: "变高行与换行", link: "/recipes/variable-height" },
             { text: "列状态记忆", link: "/recipes/column-state" },
             { text: "Schema 驱动渲染", link: "/recipes/schema-driven" }

@@ -44,7 +44,10 @@ describe("React B-side workflows", () => {
       getDirtyRowIds: vi.fn(() => ["1"]),
       getChanges: vi.fn(() => changes),
       addEventListener: vi.fn(() => removeListener),
-      saveChanges: vi.fn(() => new Promise<GridChange[]>((resolve) => { resolveSave = resolve; })),
+      saveChanges: vi.fn(),
+      saveChangesDetailed: vi.fn(() => new Promise((resolve) => {
+        resolveSave = (saved) => resolve({ submitted: changes, saved, failures: [], conflicts: [] });
+      })),
       rollbackChanges: vi.fn(() => true),
       markChangesSaved: vi.fn(),
       getNodeById: vi.fn(() => ({ rowIndex: 2 })),
@@ -95,7 +98,7 @@ describe("React B-side workflows", () => {
 
     api.getNodeById.mockReturnValueOnce(null as never);
     expect(editing!.reveal("missing", "name", true)).toBe(false);
-    api.saveChanges = vi.fn().mockRejectedValue(new Error("save failed"));
+    api.saveChangesDetailed = vi.fn().mockRejectedValue(new Error("save failed"));
     await act(async () => {
       await expect(editing!.save(saveHandler)).rejects.toThrow("save failed");
     });

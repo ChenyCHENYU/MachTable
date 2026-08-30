@@ -1,5 +1,4 @@
 import {
-  createApp,
   h,
   render,
   renderSlot,
@@ -43,15 +42,11 @@ function mountComponent(
   host: HTMLElement,
   appContext?: AppContext
 ): () => void {
-  if (appContext) {
-    const vnode = h(component, props);
-    vnode.appContext = appContext;
-    render(vnode, host);
-    return () => render(null, host);
-  }
-  const app = createApp({ render: () => h(component, props) });
-  app.mount(host);
-  return () => app.unmount();
+  const Root = { setup: () => () => h(component, { ...props }) };
+  const vnode = h(Root);
+  if (appContext) vnode.appContext = appContext;
+  render(vnode, host);
+  return () => render(null, host);
 }
 
 function mountSlot(
@@ -89,10 +84,15 @@ export function vueCellRenderer<TData = any, TValue = any>(
     const host = document.createElement("div");
     host.className = "mach-cell-vue";
     host.style.width = "100%";
-    const unmount = mountComponent(component, params as Record<string, any>, host, appContext);
+    const reactiveParams = shallowReactive({ ...params }) as CellRendererParams<TData, TValue>;
+    const unmount = mountComponent(component, reactiveParams as Record<string, any>, host, appContext);
     let destroyed = false;
     return {
       el: host,
+      refresh: (next) => {
+        Object.assign(reactiveParams, next);
+        return true;
+      },
       destroy: () => {
         if (destroyed) return;
         destroyed = true;
@@ -133,8 +133,16 @@ export function vueCellSlotRenderer<TData = any, TValue = any>(
     const host = document.createElement("div");
     host.className = "mach-cell-vue mach-cell-vue--slot";
     host.style.width = "100%";
-    const unmount = mountSlot(slot, () => params, host, appContext);
-    return { el: host, destroy: unmount };
+    const reactiveParams = shallowReactive({ ...params }) as CellRendererParams<TData, TValue>;
+    const unmount = mountSlot(slot, () => reactiveParams, host, appContext);
+    return {
+      el: host,
+      refresh: (next) => {
+        Object.assign(reactiveParams, next);
+        return true;
+      },
+      destroy: unmount
+    };
   };
 }
 

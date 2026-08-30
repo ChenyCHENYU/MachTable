@@ -1,6 +1,10 @@
 /** Runtime-only DOM state kept out of public elements and their string keys. */
 export interface CellRuntimeState {
   destroy?: () => void;
+  refresh?: (params: import("../types/params").CellRendererParams) => boolean | void;
+  rendererDefinition?: unknown;
+  rendererRowId?: string;
+  rendererColumnId?: string;
   flashTimer?: number;
   styleKeys?: string[];
 }

@@ -35,6 +35,19 @@ export type {
   CellStyleRule,
   CellAlign
 } from "./types/colDef";
+export type {
+  AdvancedFilterCondition,
+  AdvancedFilterGroup,
+  AdvancedFilterModel,
+  AdvancedFilterNode
+} from "./types/advancedFilter";
+export {
+  advancedFilterCondition,
+  advancedFilterGroup,
+  normalizeAdvancedFilterModel,
+  normalizeColumnFilter,
+  normalizeFilterModel
+} from "./lib/advancedFilter";
 export { isColDefGroup } from "./types/colDef";
 export type {
   ValueGetterParams,
@@ -85,6 +98,7 @@ export type {
 export { GRID_SIZE_PRESETS } from "./core/resolveOptions";
 export type { GridSizePreset } from "./core/resolveOptions";
 export { GRID_OPTION_META, GRID_OPTION_KEYS, DIRECT_GRID_OPTION_KEYS } from "./core/gridOptionMetadata";
+export { matchesGridOptionKind, sanitizeGridOptionPatch } from "./core/gridOptionRuntime";
 export type {
   GridOptionKey,
   GridOptionMetadata,
@@ -94,6 +108,8 @@ export type {
 export { describeFilter } from "./lib/filterSummary";
 export { validateGridOptions } from "./lib/validateOptions";
 export type { GridValidationCode, GridValidationIssue } from "./lib/validateOptions";
+export { resolveGridFeatures } from "./lib/featureManifest";
+export type { GridFeatureIssue, GridFeatureIssueCode, ResolvedGridFeatures } from "./lib/featureManifest";
 export { buildColDefsFromSchema } from "./lib/schema";
 export type { GridSchema, GridSchemaField, GridSchemaGroup, GridSchemaFieldType, SchemaSelectOption } from "./lib/schema";
 export {
@@ -188,16 +204,43 @@ export type {
   RowTransaction,
   GridCellChange,
   GridChange,
+  GridBatchSaveResult,
+  SaveChangeConflict,
+  SaveChangeIssue,
   GridDiagnosticError,
   GridDiagnostics,
+  GridPerformanceSnapshot,
   ColumnWorkbenchItem,
   SaveChangesResult,
   SaveChangesHandler,
   ImportCsvOptions,
   PrintOptions
 } from "./types/api";
+export { createSaveSnapshot, normalizeBatchSaveResult, resolveSaveConflict } from "./lib/batchSave";
 export type { RowNode } from "./types/row";
-export type { GridState, GridStateSection, ApplyGridStateOptions } from "./types/state";
+export type {
+  GridState,
+  GridStateInput,
+  LegacyGridStateV1,
+  GridStateSection,
+  ApplyGridStateOptions
+} from "./types/state";
+export { migrateGridState } from "./lib/gridState";
+export type {
+  GridViewManager,
+  GridViewState,
+  GridViewStore,
+  SavedGridView
+} from "./types/views";
+export {
+  applyGridViewState,
+  captureGridViewState,
+  createGridViewManager,
+  createLocalGridViewStore,
+  normalizeGridViewState,
+  normalizeSavedGridView
+} from "./lib/gridViewStore";
+export type { LocalGridViewStoreOptions } from "./lib/gridViewStore";
 export type {
   GridEventMap,
   GridEventType,

@@ -12,6 +12,8 @@ import {
 } from "vue";
 import {
   getByPath,
+  normalizeAdvancedFilterModel,
+  type AdvancedFilterModel,
   type FilterChangedEvent,
   type FilterModel,
   type GridApi,
@@ -35,6 +37,7 @@ export interface MachTablePageRequest<TQuery> {
   query: TQuery;
   sortModel: SortModel;
   filterModel: FilterModel;
+  advancedFilterModel: AdvancedFilterModel | null;
   quickFilterText: string | null;
   signal: AbortSignal;
 }
@@ -82,6 +85,7 @@ export interface UseMachTableQueryReturn<TData> {
   total: Ref<number>;
   sortModel: ShallowRef<SortModel>;
   filterModel: ShallowRef<FilterModel>;
+  advancedFilterModel: ShallowRef<AdvancedFilterModel | null>;
   selectedKeys: Ref<string[]>;
   selectedRows: ShallowRef<TData[]>;
   selectionState: ComputedRef<MachTableRemoteSelectionState>;
@@ -129,6 +133,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const total = ref(0);
   const sortModel = shallowRef<SortModel>([]);
   const filterModel = shallowRef<FilterModel>({});
+  const advancedFilterModel = shallowRef<AdvancedFilterModel | null>(null);
   const selectedKeys = ref<string[]>([]);
   const selectedRows = shallowRef<TData[]>([]);
   const selectedIds = new Set<string>();
@@ -256,6 +261,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
         query: readSource(options.query),
         sortModel: sortModel.value.map((item) => ({ ...item })),
         filterModel: { ...filterModel.value },
+        advancedFilterModel: normalizeAdvancedFilterModel(advancedFilterModel.value),
         quickFilterText: quickFilterText.value,
         signal: activeController.signal
       });
@@ -307,6 +313,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const onFilterChanged = (event: FilterChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
     filterModel.value = { ...event.filterModel };
+    advancedFilterModel.value = normalizeAdvancedFilterModel(event.advancedFilterModel);
     if (options.clearSelectionOnQueryChange !== false) clearSelection();
     if (automatic) scheduleLoad(true);
     else page.value = 1;
@@ -350,6 +357,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     rowKey: rowId,
     manualSorting: true,
     manualFiltering: true,
+    advancedFilterModel: advancedFilterModel.value,
     quickFilterText: quickFilterText.value,
     error: error.value,
     overlayErrorTemplate: error.value
@@ -380,11 +388,13 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     page.value = 1;
     sortModel.value = [];
     filterModel.value = {};
+    advancedFilterModel.value = null;
     clearSelection();
     suppressGridEvents = true;
     try {
       api?.setSortModel(null);
       api?.setFilterModel(null);
+      api?.setAdvancedFilterModel(null);
     } finally {
       suppressGridEvents = false;
     }
@@ -479,6 +489,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     total,
     sortModel,
     filterModel,
+    advancedFilterModel,
     selectedKeys,
     selectedRows,
     selectionState,

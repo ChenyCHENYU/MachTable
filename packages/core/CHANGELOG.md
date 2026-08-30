@@ -1,5 +1,15 @@
 # @agile-team/mach-table
 
+## 0.18.0
+
+### Minor Changes
+
+- Add metadata-driven runtime option sanitization and dependency-aware `GridFeature` manifests with version, requirement, conflict, cycle isolation and active-feature diagnostics.
+- Add bounded nested advanced filters, GridState v1→v2 migration, safe named-view stores and explicit preference/business-state separation.
+- Add snapshot-safe detailed batch saves with validation failures and version conflicts, plus conflict-resolution helpers that preserve edits made while a request is in flight.
+- Add in-place cell renderer refresh and bounded viewport performance metrics with average, P95, long-render and rendered-range evidence.
+- Harden persisted state and filter normalization against malformed, cyclic and oversized JavaScript/JSON input while reducing tracked complexity debt.
+
 ## 0.15.0
 
 ### Minor Changes

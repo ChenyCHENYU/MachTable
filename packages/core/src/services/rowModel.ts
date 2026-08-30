@@ -1,11 +1,13 @@
 import type { GridCore } from "../core/gridCore";
 import type { RowNode } from "../types/row";
 import type { FilterModel } from "../types/colDef";
+import type { AdvancedFilterModel } from "../types/advancedFilter";
 import type { RowTransaction } from "../types/api";
 import { doesNodePassFilters } from "./filterService";
 import { sortNodes } from "./sortService";
 import { createAggResolver } from "../lib/aggregate";
 import { defaultComparator } from "../lib/compare";
+import { normalizeAdvancedFilterModel, normalizeFilterModel } from "../lib/advancedFilter";
 
 type ColumnLike = import("./column").Column;
 type RowModelContext = Pick<
@@ -41,6 +43,7 @@ export class RowModel<TData = any> {
   private displayed: RowNode<TData>[] = [];
   private nodesById = new Map<string, RowNode<TData>>();
   private filterModel: FilterModel = {};
+  private advancedFilterModel: AdvancedFilterModel | null = null;
   private quickFilter: string | null = null;
   private expandedIds = new Set<string>();
   private groupExpandedIds = new Set<string>();
@@ -59,7 +62,9 @@ export class RowModel<TData = any> {
   private treeLoadControllers = new Map<string, AbortController>();
   private treeLoadPromises = new Map<string, Promise<readonly TData[]>>();
 
-  constructor(private core: RowModelContext) {}
+  constructor(private core: RowModelContext) {
+    this.advancedFilterModel = normalizeAdvancedFilterModel(core.options.advancedFilterModel);
+  }
 
   resolveRowId(data: TData, index: number, fallback: string): string {
     const getRowId = this.core.options.getRowId;
@@ -185,6 +190,7 @@ export class RowModel<TData = any> {
             endRow: stop,
             sortModel: this.core.columnModel.getSortModel(),
             filterModel: this.getFilterModel(),
+            advancedFilterModel: this.getAdvancedFilterModel(),
             quickFilterText: this.quickFilter,
             signal: controller.signal,
             onSuccess: (rows, lastRow) => {
@@ -624,12 +630,26 @@ export class RowModel<TData = any> {
 
   setFilterModel(filterModel: FilterModel | null): boolean {
     const before = JSON.stringify(this.filterModel);
-    this.filterModel = filterModel ? { ...filterModel } : {};
+    const columns = new Set(this.core.columnModel.getColumns().map((column) => column.id));
+    this.filterModel = normalizeFilterModel(filterModel, columns);
     return JSON.stringify(this.filterModel) !== before;
   }
 
   getFilterModel(): FilterModel {
     return { ...this.filterModel };
+  }
+
+  setAdvancedFilterModel(model: AdvancedFilterModel | null | undefined): boolean {
+    const columns = new Set(this.core.columnModel.getColumns().map((column) => column.id));
+    const next = normalizeAdvancedFilterModel(model, columns);
+    const before = JSON.stringify(this.advancedFilterModel);
+    this.advancedFilterModel = next;
+    this.core.options.advancedFilterModel = next;
+    return JSON.stringify(next) !== before;
+  }
+
+  getAdvancedFilterModel(): AdvancedFilterModel | null {
+    return normalizeAdvancedFilterModel(this.advancedFilterModel);
   }
 
   setQuickFilter(text: string | null | undefined): boolean {
@@ -644,7 +664,7 @@ export class RowModel<TData = any> {
   }
 
   isFilterPresent(): boolean {
-    return Object.keys(this.filterModel).length > 0 || this.quickFilter != null;
+    return Object.keys(this.filterModel).length > 0 || this.advancedFilterModel != null || this.quickFilter != null;
   }
 
   refreshPipeline(): void {
@@ -671,7 +691,9 @@ export class RowModel<TData = any> {
       rows = this.all;
       const filteringLocally = this.isFilterPresent() && !this.core.options.manualFiltering;
       if (filteringLocally) {
-        rows = rows.filter((node) => doesNodePassFilters(node, columns, this.filterModel, this.quickFilter, getCellValue));
+        rows = rows.filter((node) => doesNodePassFilters(
+          node, columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
+        ));
       }
       const sortModel = this.core.columnModel.getSortModel();
       if (sortModel.length > 0 && !this.core.options.manualSorting) {
@@ -854,7 +876,9 @@ export class RowModel<TData = any> {
       if (cached !== undefined) return cached;
       let pass = true;
       if (filterPresent) {
-        pass = doesNodePassFilters(node, columns, this.filterModel, this.quickFilter, getCellValue);
+        pass = doesNodePassFilters(
+          node, columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
+        );
         for (const childId of this.childIds.get(node.id) ?? []) {
           const child = this.nodesById.get(childId);
           if (child && nodePasses(child)) pass = true;

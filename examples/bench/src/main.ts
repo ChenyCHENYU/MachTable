@@ -72,6 +72,7 @@ function buildDefs(colCount: number): ColDef<BenchRow>[] {
 const host = document.getElementById("host")!;
 const statEl = document.getElementById("stat")!;
 let api: GridApi<BenchRow> | null = null;
+let lastInitMs = 0;
 
 interface BenchSnapshot {
   api: GridApi<BenchRow>;
@@ -97,7 +98,8 @@ function rebuild(): void {
     statusBar: true
   });
   const t1 = performance.now();
-  updateStat(t1 - t0);
+  lastInitMs = t1 - t0;
+  updateStat(lastInitMs);
   (window as typeof window & { __MACH_BENCH__?: BenchSnapshot }).__MACH_BENCH__ = {
     api,
     initMs: t1 - t0,
@@ -118,6 +120,7 @@ document.getElementById("rebuild")!.addEventListener("click", rebuild);
 
 document.getElementById("scroll")!.addEventListener("click", () => {
   if (!api) return;
+  api.resetPerformanceMetrics();
   const viewport = host.querySelector(".mach-body-viewport--scroll") as HTMLElement;
   const startTop = viewport.scrollTop;
   const maxScroll = viewport.scrollHeight - viewport.clientHeight;
@@ -135,8 +138,13 @@ document.getElementById("scroll")!.addEventListener("click", () => {
       requestAnimationFrame(tick);
     } else {
       const elapsed = performance.now() - t0;
-      const avgFrame = elapsed / frames;
-      updateStat(0, `滚动 ${Math.round(maxScroll)}px：平均帧 <b>${avgFrame.toFixed(2)}ms</b>（≈${Math.min(60, Math.round(1000 / avgFrame))} FPS，${frames} 帧）`);
+      const measuredFrames = Math.max(1, frames);
+      const avgFrame = elapsed / measuredFrames;
+      const metrics = api?.getPerformanceSnapshot();
+      const internal = metrics
+        ? `，内核 P95 <b>${metrics.p95RenderMs.toFixed(2)}ms</b>，长渲染 ${metrics.longRenderCount}/${metrics.sampleCount}`
+        : "";
+      updateStat(lastInitMs, `滚动 ${Math.round(maxScroll)}px：平均帧 <b>${avgFrame.toFixed(2)}ms</b>（≈${Math.min(60, Math.round(1000 / avgFrame))} FPS，${measuredFrames} 帧${internal}）`);
     }
   };
   requestAnimationFrame(tick);

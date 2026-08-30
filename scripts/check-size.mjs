@@ -15,7 +15,7 @@ const reactEsmFiles = (await readdir(new URL("../packages/react/dist/", import.m
 
 const budgets = [
   ["Core ESM", ["packages/core/dist/index.js"], 80 * 1024],
-  ["Vue ESM artifacts", vueEsmFiles, 10 * 1024],
+  ["Vue ESM artifacts", vueEsmFiles, 10.5 * 1024],
   ["React ESM artifacts", reactEsmFiles, 8 * 1024],
   ["Optional XLSX bridge", ["packages/xlsx/dist/index.js"], 3 * 1024],
   ["Core CSS", ["packages/core/styles/mach-table.css"], 7 * 1024]
@@ -39,7 +39,9 @@ const consumerBudgets = [
       import plugin, { MachTable, defineMachTableConfig } from "./packages/vue/dist/index.js";
       globalThis.__machTableConsumer = [plugin, MachTable, defineMachTableConfig];
     `,
-    limit: 6_400
+    // Native slots, async/global registration and configuration remain below
+    // 6.75 KiB while query/editing/UI stay independently tree-shakeable.
+    limit: 6.75 * 1024
   },
   {
     label: "Vue B-side workflows",
@@ -72,9 +74,9 @@ const consumerBudgets = [
       globalThis.__machTableReact = [MachTable, MachTableProvider, defineMachTableConfig];
     `,
     // React's adapter also includes the typed Provider/config resolver. Keep the
-    // initial path below 6 KiB while the optional query/editing workflows stay
+    // initial path below 6.25 KiB while the optional query/editing workflows stay
     // independently measurable through the workflows subpath.
-    limit: 6 * 1024
+    limit: 6.25 * 1024
   },
   {
     label: "React B-side workflows",

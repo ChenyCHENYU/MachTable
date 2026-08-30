@@ -2,7 +2,8 @@ import type { ColDef, ColDefGroup, ColumnState, FilterModel, SortModel } from ".
 import type { GridErrorCode, GridEventMap, GridEventType } from "./events";
 import type { GridOptions, RowSelectionMode } from "./options";
 import type { RowNode } from "./row";
-import type { ApplyGridStateOptions, GridState } from "./state";
+import type { ApplyGridStateOptions, GridState, GridStateInput } from "./state";
+import type { AdvancedFilterModel } from "./advancedFilter";
 
 export interface CsvExportParams {
   includeHeader?: boolean;
@@ -54,6 +55,18 @@ export interface GridDiagnosticError {
   context?: Record<string, unknown>;
 }
 
+export interface GridPerformanceSnapshot {
+  sampleCount: number;
+  lastRenderMs: number;
+  averageRenderMs: number;
+  maxRenderMs: number;
+  p95RenderMs: number;
+  longRenderCount: number;
+  renderedRows: number;
+  renderedColumns: number;
+  renderedCells: number;
+}
+
 export interface ColumnWorkbenchItem {
   colId: string;
   label: string;
@@ -75,17 +88,41 @@ export interface GridDiagnostics {
   columnCount: number;
   selectedRowCount: number;
   dirtyRowCount: number;
+  activeFeatures: ReadonlyArray<{ key: string; version?: string }>;
+  performance: GridPerformanceSnapshot;
   recentErrors: readonly GridDiagnosticError[];
 }
 
-export interface SaveChangesResult {
+export interface SaveChangeIssue {
+  rowId: string;
+  code?: string;
+  message: string;
+  colIds?: readonly string[];
+  retryable?: boolean;
+}
+
+export interface SaveChangeConflict<TData = any> extends SaveChangeIssue {
+  serverData?: TData;
+  serverVersion?: string | number;
+}
+
+export interface SaveChangesResult<TData = any> {
   /** Omit to acknowledge every submitted row; return a subset for partial batch success. */
   savedRowIds?: readonly string[];
+  failures?: readonly SaveChangeIssue[];
+  conflicts?: readonly SaveChangeConflict<TData>[];
+}
+
+export interface GridBatchSaveResult<TData = any> {
+  submitted: GridChange<TData>[];
+  saved: GridChange<TData>[];
+  failures: SaveChangeIssue[];
+  conflicts: SaveChangeConflict<TData>[];
 }
 
 export type SaveChangesHandler<TData = any> = (
   changes: readonly GridChange<TData>[]
-) => void | SaveChangesResult | Promise<void | SaveChangesResult>;
+) => void | SaveChangesResult<TData> | Promise<void | SaveChangesResult<TData>>;
 
 export interface ScrollToIndexPosition {
   position?: "top" | "bottom" | "middle" | "nearest";
@@ -128,6 +165,8 @@ export interface GridApi<TData = any> {
 
   getFilterModel(): FilterModel;
   setFilterModel(filterModel: FilterModel | null): void;
+  getAdvancedFilterModel(): AdvancedFilterModel | null;
+  setAdvancedFilterModel(model: AdvancedFilterModel | null): void;
   isColumnFilterPresent(colId: string): boolean;
 
   setQuickFilter(text: string | null | undefined): void;
@@ -182,6 +221,10 @@ export interface GridApi<TData = any> {
   markChangesSaved(rowIds?: readonly string[]): void;
   /** Saves a stable snapshot; supports partial success and preserves edits made in flight. */
   saveChanges(handler: SaveChangesHandler<TData>, rowIds?: readonly string[]): Promise<GridChange<TData>[]>;
+  saveChangesDetailed(
+    handler: SaveChangesHandler<TData>,
+    rowIds?: readonly string[]
+  ): Promise<GridBatchSaveResult<TData>>;
   rollbackChanges(rowIds?: readonly string[]): boolean;
 
   setPinnedTopRowData(rows: TData[] | null): void;
@@ -234,9 +277,12 @@ export interface GridApi<TData = any> {
   getDataAsCsv(params?: CsvExportParams): string;
 
   getState(): GridState;
-  applyState(state: GridState, options?: ApplyGridStateOptions): void;
+  applyState(state: GridStateInput, options?: ApplyGridStateOptions): void;
   /** Lightweight runtime snapshot suitable for support logs and health panels. */
   getDiagnostics(): GridDiagnostics;
+  /** Rolling viewport-render metrics for diagnostics and reproducible benchmarks. */
+  getPerformanceSnapshot(): GridPerformanceSnapshot;
+  resetPerformanceMetrics(): void;
 
   setOverlay(type: "loading" | "noRows" | "error" | null): void;
   hideOverlays(): void;

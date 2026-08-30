@@ -320,6 +320,34 @@ describe("Vue adapter", () => {
     expect(cleanup).toHaveBeenCalledTimes(mounted.mock.calls.length);
   });
 
+  it("refreshes Vue cell components in place when cell params change", async () => {
+    const mounted = vi.fn();
+    const cleanup = vi.fn();
+    const Cell = defineComponent({
+      props: { value: String },
+      setup(props) {
+        mounted();
+        onUnmounted(cleanup);
+        return () => h("span", { class: "refreshable-cell" }, props.value);
+      }
+    });
+    const renderer = vueCellRenderer(Cell);
+    const initial = { value: "before" } as any;
+    const result = renderer(initial) as any;
+    document.body.appendChild(result.el);
+    await nextTick();
+    expect(result.el.textContent).toBe("before");
+
+    expect(result.refresh({ ...initial, value: "after" })).toBe(true);
+    await nextTick();
+    expect(result.el.textContent).toBe("after");
+    expect(mounted).toHaveBeenCalledOnce();
+
+    result.destroy();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it("maps native Vue cell, header, editor and overlay slots without renderer factories", async () => {
     const rows = ref([{ id: 1, name: "before" }]);
     const loading = ref(true);
@@ -486,8 +514,9 @@ describe("Vue adapter", () => {
   });
 
   it("guards editing failures, concurrent saves and before-unload cleanup", async () => {
-    let resolveSave!: (value: any[]) => void;
-    const saveChanges = vi.fn(() => new Promise<any[]>((resolve) => { resolveSave = resolve; }));
+    let resolveSave!: (value: any) => void;
+    const saveChanges = vi.fn();
+    const saveChangesDetailed = vi.fn(() => new Promise<any>((resolve) => { resolveSave = resolve; }));
     const removeDirtyListener = vi.fn();
     const api = {
       isDestroyed: () => false,
@@ -495,6 +524,7 @@ describe("Vue adapter", () => {
       getChanges: () => [{ rowId: "1", colId: "name", oldValue: "before", newValue: "after" }],
       addEventListener: vi.fn(() => removeDirtyListener),
       saveChanges,
+      saveChangesDetailed,
       rollbackChanges: vi.fn(() => true),
       markChangesSaved: vi.fn(),
       getNodeById: vi.fn(() => null),
@@ -522,15 +552,15 @@ describe("Vue adapter", () => {
     expect(unload.defaultPrevented).toBe(true);
     const pendingSave = editing!.save(saveChanges as any);
     await expect(editing!.save(saveChanges as any)).rejects.toThrow(/already in progress/);
-    resolveSave([]);
+    resolveSave({ submitted: [], saved: [], failures: [], conflicts: [] });
     await expect(pendingSave).resolves.toEqual([]);
     expect(editing!.reveal("missing", "name", true)).toBe(false);
     expect(editing!.rollback(["1"])).toBe(true);
     editing!.markSaved(["1"]);
     expect(api.markChangesSaved).toHaveBeenCalledWith(["1"]);
 
-    api.saveChanges = vi.fn().mockRejectedValue(new Error("save failed"));
-    await expect(editing!.save(api.saveChanges as any)).rejects.toThrow("save failed");
+    api.saveChangesDetailed = vi.fn().mockRejectedValue(new Error("save failed"));
+    await expect(editing!.save(saveChanges as any)).rejects.toThrow("save failed");
     expect(onSaveError).toHaveBeenCalledOnce();
     expect(editing!.saveError.value).toBeInstanceOf(Error);
     table.api.value = null;
@@ -763,10 +793,24 @@ describe("Vue adapter", () => {
     query.value = { keyword: "after" };
     await nextTick();
     remote!.gridProps.value.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
+    remote!.gridProps.value.onFilterChanged?.({
+      filterModel: {},
+      advancedFilterModel: {
+        version: 1,
+        root: {
+          kind: "condition",
+          colId: "id",
+          filter: { type: "text", conditions: [{ match: "equals", value: "after" }] }
+        }
+      }
+    } as any);
     await nextTick();
     expect(request).not.toHaveBeenCalled();
     await remote!.reload();
     expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0][0]).toEqual(expect.objectContaining({
+      advancedFilterModel: expect.objectContaining({ version: 1 })
+    }));
     expect(remote!.rows.value).toEqual([{ id: "after" }]);
     app.unmount();
   });

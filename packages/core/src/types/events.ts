@@ -1,5 +1,6 @@
 import type { ColDef } from "./colDef";
 import type { FilterModel, SortModel } from "./colDef";
+import type { AdvancedFilterModel } from "./advancedFilter";
 import type { RowNode } from "./row";
 import type { GridApi } from "./api";
 import type { Column } from "../services/column";
@@ -117,6 +118,7 @@ export interface SortChangedEvent<TData = any> extends GridEventBase<TData> {
 export interface FilterChangedEvent<TData = any> extends GridEventBase<TData> {
   type: "filterChanged";
   filterModel: FilterModel;
+  advancedFilterModel: AdvancedFilterModel | null;
 }
 
 export interface ColumnResizedEvent<TData = any> extends GridEventBase<TData> {

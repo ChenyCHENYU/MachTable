@@ -14,6 +14,7 @@ import { TooltipService } from "../services/tooltipService";
 import { WatermarkService } from "../services/watermarkService";
 import { UndoRedoService } from "../services/undoRedoService";
 import { ChangeTrackingService } from "../services/changeTrackingService";
+import { PerformanceMonitor } from "../services/performanceMonitor";
 import { GridApiImpl } from "../services/gridApi";
 import { GridSkeleton } from "../render/skeleton";
 import { HeaderRenderer } from "../render/headerRenderer";
@@ -33,6 +34,7 @@ import {
 } from "../lib/componentRegistry";
 import { validateColumnDefs } from "../lib/validateDefs";
 import { validateGridOptions } from "../lib/validateOptions";
+import { resolveGridFeatures } from "../lib/featureManifest";
 import { toTsv, parseTsv, writeClipboard } from "../lib/clipboard";
 import { formatCellValueWith } from "../render/cellContent";
 import { DEFAULT_LOCALE, type RgLocale, type RgLocaleKey } from "../lib/locale";
@@ -88,6 +90,7 @@ export class GridCore<TData = any> {
   readonly editingService: EditingService;
   readonly undoService: UndoRedoService;
   readonly changeTracker: ChangeTrackingService<TData>;
+  readonly performanceMonitor: PerformanceMonitor;
   readonly filterPopup: FilterPopupService;
   readonly columnMenu: ColumnMenuService;
   readonly contextMenuService: ContextMenuService;
@@ -136,6 +139,7 @@ export class GridCore<TData = any> {
     this.keyboardService = new KeyboardService(this);
     this.editingService = new EditingService(this);
     this.undoService = new UndoRedoService(this);
+    this.performanceMonitor = new PerformanceMonitor();
     this.filterPopup = new FilterPopupService(this);
     this.columnMenu = new ColumnMenuService(this);
     this.contextMenuService = new ContextMenuService(this);
@@ -162,6 +166,8 @@ export class GridCore<TData = any> {
 
       this.rowModel.restorePagination(this.options.paginationPage, this.options.paginationPageSize);
       this.columnModel.setColumnDefs(this.options.columnDefs);
+      this.rowModel.setAdvancedFilterModel(this.options.advancedFilterModel);
+      this.rowModel.setQuickFilter(this.options.quickFilterText);
       this.refreshAriaState();
       this.validateDefs(this.options.columnDefs);
       this.checkWarnings(options);
@@ -221,18 +227,33 @@ export class GridCore<TData = any> {
     return this.options.components?.cellEditors?.[name] ?? getCellEditor(name);
   }
 
+  private inactiveFeatureDependency(feature: GridFeature<TData>): string | undefined {
+    return feature.requires
+      ?.map((dependency) => dependency.trim())
+      .find((dependency) => dependency.length > 0 && !this.activeFeatures.has(dependency));
+  }
+
   setFeatures(features: readonly GridFeature<TData>[] | null | undefined): void {
     this.destroyFeatures();
     if (this.destroyed) return;
+    const resolved = resolveGridFeatures(features ?? []);
+    for (const issue of resolved.issues) {
+      this.reportError(new Error(issue.message), "feature.manifest", {
+        code: issue.code,
+        ...(issue.feature ? { key: issue.feature } : {}),
+        ...(issue.dependency ? { dependency: issue.dependency } : {})
+      });
+    }
 
-    for (const feature of features ?? []) {
-      const key = typeof feature?.key === "string" ? feature.key.trim() : "";
-      if (!key) {
-        this.reportError(new Error("GridFeature.key must be a non-empty string"), "feature.setup");
-        continue;
-      }
-      if (this.activeFeatures.has(key)) {
-        this.reportError(new Error(`Duplicate GridFeature key: ${key}`), "feature.setup", { key });
+    for (const feature of resolved.features) {
+      const key = feature.key.trim();
+      const inactiveDependency = this.inactiveFeatureDependency(feature);
+      if (inactiveDependency) {
+        this.reportError(
+          new Error(`GridFeature "${key}" dependency "${inactiveDependency}" did not initialise`),
+          "feature.manifest",
+          { code: "FEATURE_DEPENDENCY_SETUP_FAILED", key, dependency: inactiveDependency }
+        );
         continue;
       }
       const cleanups: Array<() => void> = [];
@@ -585,6 +606,11 @@ export class GridCore<TData = any> {
       columnCount: this.columnModel.getColumns().length,
       selectedRowCount: this.selectionService.getSelectedNodes().length,
       dirtyRowCount: this.changeTracker.getDirtyRowIds().length,
+      activeFeatures: [...this.activeFeatures].map(([key, active]) => ({
+        key,
+        ...(active.feature.version ? { version: active.feature.version } : {})
+      })),
+      performance: this.performanceMonitor.snapshot(),
       recentErrors: this.recentErrors.map((entry) => ({
         ...entry,
         ...(entry.context ? { context: { ...entry.context } } : {})
@@ -615,7 +641,10 @@ export class GridCore<TData = any> {
     else delete model[column.id];
     this.rowModel.setFilterModel(model);
     this.headerRenderer.refreshFilterIcons();
-    this.emit("filterChanged", { filterModel: this.rowModel.getFilterModel() });
+    this.emit("filterChanged", {
+      filterModel: this.rowModel.getFilterModel(),
+      advancedFilterModel: this.rowModel.getAdvancedFilterModel()
+    });
     if (this.rowModel.isInfinite) {
       void this.rowModel.onServerParamsChanged();
       return;
@@ -625,7 +654,10 @@ export class GridCore<TData = any> {
   }
 
   applyQuickFilter(): void {
-    this.emit("filterChanged", { filterModel: this.rowModel.getFilterModel() });
+    this.emit("filterChanged", {
+      filterModel: this.rowModel.getFilterModel(),
+      advancedFilterModel: this.rowModel.getAdvancedFilterModel()
+    });
     if (this.rowModel.isInfinite) {
       void this.rowModel.onServerParamsChanged();
       return;
@@ -714,21 +746,21 @@ export class GridCore<TData = any> {
     const token = ++this.gridStateLoadToken;
     const key = this.options.stateKey;
     if (!key) return;
-    let saved: import("../types/state").GridState | null | Promise<import("../types/state").GridState | null>;
+    let saved: import("../types/state").GridStateInput | null | Promise<import("../types/state").GridStateInput | null>;
     try {
       saved = this.options.stateStore ? this.options.stateStore.load(key) : loadGridState(key);
     } catch (error) {
       this.reportError(error, "gridState.load");
       return;
     }
-    const apply = (state: import("../types/state").GridState | null): void => {
+    const apply = (state: import("../types/state").GridStateInput | null): void => {
       if (this.destroyed || token !== this.gridStateLoadToken || !state) return;
       this.api.applyState(state, { emitEvents: false });
     };
     if (saved && typeof (saved as Promise<unknown>).then === "function") {
       void Promise.resolve(saved).then(apply).catch((error) => this.reportError(error, "gridState.load"));
     } else {
-      apply(saved as import("../types/state").GridState | null);
+      apply(saved as import("../types/state").GridStateInput | null);
     }
   }
 

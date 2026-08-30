@@ -24,6 +24,10 @@ export function reactCellRenderer<TData = any, TValue = any>(
     let destroyed = false;
     return {
       el: host,
+      refresh: (next) => {
+        root.render(createElement(Component, next as ReactCellRendererProps<TData, TValue>));
+        return true;
+      },
       destroy: () => {
         if (destroyed) return;
         destroyed = true;

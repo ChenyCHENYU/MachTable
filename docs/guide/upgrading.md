@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。Core、Vue、React 与可选 XLSX 包固定版本
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.15.0
+pnpm up @agile-team/mach-table-vue@^0.18.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,19 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.15 → 0.18
+
+0.16/0.17 的能力统一在 0.18 发布，没有要求业务安装中间版本。现有列宽、查询、编辑和状态 API 保持兼容，主要变化如下：
+
+- `GridState` 输出版本从 v1 升到 v2，增加 `advancedFilterModel`；`applyState()`、`initialState` 和内置 store 自动迁移 v1，不需要一次性清空用户状态。
+- `FilterChangedEvent` 和远程查询参数增加 `advancedFilterModel`。原有 handler 可忽略新增字段；需要复杂筛选时使用[高级过滤 AST](/recipes/advanced-filter)。
+- `saveChanges()` 继续返回成功的修改；需要逐行失败或版本冲突时改用 `saveChangesDetailed()`，Vue/React 使用 `useMachTableEditing().saveDetailed()`。
+- 自定义 cell renderer 可选实现 `refresh(params): boolean`。不实现仍安全重建；Vue/React 官方 renderer 已自动原地刷新。
+- `GridFeature` 可增加 `version/requires/conflicts`。重复 key、缺失依赖、冲突和循环会被隔离并写入诊断，而不会执行部分 setup。
+- `updateOptions()` 现在丢弃运行时类型错误的 JS/JSON 字段并报告警告；依赖“传错类型后由内部强制转换”的代码必须修正输入。
+
+命名视图是新增的偏好层，不替代 `stateKey`：前者不保存选择/展开/当前页，后者用于完整页面会话恢复。详见[命名视图](/recipes/saved-views)。
 
 ## 0.14 → 0.15
 

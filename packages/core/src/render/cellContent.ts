@@ -29,11 +29,62 @@ export function cleanupCellContent(core: ErrorContext, cell: HTMLElement): void 
   state.flashTimer = undefined;
   const destroy = state.destroy;
   state.destroy = undefined;
+  state.refresh = undefined;
+  state.rendererDefinition = undefined;
+  state.rendererRowId = undefined;
+  state.rendererColumnId = undefined;
   if (!destroy) return;
   try {
     destroy();
   } catch (error) {
     core.reportError(error, "cellRenderer.destroy", { colId: cell.dataset.colId });
+  }
+}
+
+function updateCellTooltip(
+  core: CellRenderContext,
+  cell: HTMLElement,
+  node: RowNode<any>,
+  column: Column,
+  value: any,
+  formatted: string
+): void {
+  let tooltip = core.options.tooltipComponent ? "" : formatted;
+  const tooltipGetter = column.colDef.tooltipValueGetter;
+  if (tooltipGetter) {
+    try {
+      tooltip = tooltipGetter({
+        api: core.getApi(), colDef: column.colDef, column, node, data: node.data, value
+      }) ?? formatted;
+    } catch (error) {
+      core.reportError(error, "tooltipValueGetter", { colId: column.id, rowId: node.id });
+    }
+  }
+  if (tooltip) cell.setAttribute("title", tooltip);
+  else cell.removeAttribute("title");
+}
+
+function tryRefreshRenderer(
+  core: CellRenderContext,
+  cell: HTMLElement,
+  node: RowNode<any>,
+  column: Column,
+  renderer: unknown,
+  params: CellRendererParams
+): boolean {
+  const state = peekCellRuntimeState(cell);
+  if (
+    !state?.refresh ||
+    state.rendererDefinition !== renderer ||
+    state.rendererRowId !== node.id ||
+    state.rendererColumnId !== column.id
+  ) return false;
+  try {
+    cell.querySelector(":scope > .mach-cell-edit-trigger")?.remove();
+    return state.refresh(params) !== false;
+  } catch (error) {
+    core.reportError(error, "cellRenderer.refresh", { colId: column.id, rowId: node.id });
+    return false;
   }
 }
 
@@ -123,8 +174,6 @@ export function applyCellStyle(core: CellValueContext, cell: HTMLElement, node: 
 }
 
 export function renderCellContent(core: CellRenderContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
-  cleanupCellContent(core, cell);
-
   const value = core.getCellValue(node, column);
   const formatted = formatCellValue(core, node, column);
   const rendererDef = column.colDef.cellRenderer;
@@ -143,6 +192,11 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
       rowIndex: node.rowIndex,
       rendererParams: column.colDef.cellRendererParams
     };
+    if (tryRefreshRenderer(core, cell, node, column, renderer, params)) {
+      updateCellTooltip(core, cell, node, column, value, formatted);
+      return;
+    }
+    cleanupCellContent(core, cell);
     let out: ReturnType<typeof renderer>;
     try {
       out = renderer(params);
@@ -158,37 +212,22 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
     } else if (out && typeof out === "object" && out.el instanceof HTMLElement) {
       const result = out;
       cell.replaceChildren(result.el);
-      if (result.destroy) getCellRuntimeState(cell).destroy = result.destroy;
+      const state = getCellRuntimeState(cell);
+      state.destroy = result.destroy;
+      if (result.refresh) {
+        state.refresh = (next) => result.refresh!(next);
+        state.rendererDefinition = renderer;
+        state.rendererRowId = node.id;
+        state.rendererColumnId = column.id;
+      }
     } else {
       cell.textContent = "";
     }
   } else {
+    cleanupCellContent(core, cell);
     cell.textContent = formatted;
   }
-
-  let tooltip = formatted;
-  if (core.options.tooltipComponent) tooltip = "";
-  const tooltipGetter = column.colDef.tooltipValueGetter;
-  if (tooltipGetter) {
-    try {
-      const out = tooltipGetter({
-        api: core.getApi(),
-        colDef: column.colDef,
-        column,
-        node,
-        data: node.data,
-        value
-      });
-      tooltip = out ?? formatted;
-    } catch (error) {
-      core.reportError(error, "tooltipValueGetter", { colId: column.id, rowId: node.id });
-    }
-  }
-  if (tooltip) {
-    if (cell.getAttribute("title") !== tooltip) cell.setAttribute("title", tooltip);
-  } else if (cell.hasAttribute("title")) {
-    cell.removeAttribute("title");
-  }
+  updateCellTooltip(core, cell, node, column, value, formatted);
 }
 
 export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {

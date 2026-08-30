@@ -33,10 +33,20 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   expect(updateMs).toBeLessThan(process.env.CI ? 5_000 : 2_500);
 
   await page.evaluate(() => {
+    const api = (window as any).__MACH_BENCH__.api;
+    api.resetPerformanceMetrics();
     const viewport = document.querySelector("#host .mach-body-viewport--scroll") as HTMLElement;
     viewport.scrollTop = viewport.scrollHeight;
     viewport.dispatchEvent(new Event("scroll"));
   });
   await page.waitForTimeout(100);
   expect(await page.locator("#host .mach-cell").count()).toBeLessThan(2_000);
+
+  const performanceSnapshot = await page.evaluate(() =>
+    (window as any).__MACH_BENCH__.api.getPerformanceSnapshot()
+  );
+  expect(performanceSnapshot.sampleCount).toBeGreaterThan(0);
+  expect(performanceSnapshot.renderedRows).toBeLessThan(100);
+  expect(performanceSnapshot.renderedCells).toBeLessThan(2_000);
+  expect(performanceSnapshot.p95RenderMs).toBeLessThan(process.env.CI ? 1_000 : 500);
 });

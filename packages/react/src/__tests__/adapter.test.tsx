@@ -149,6 +149,34 @@ describe("React adapter", () => {
     expect(cleanup).toHaveBeenCalledTimes(mounted.mock.calls.length);
   });
 
+  it("refreshes React cell components in place when cell params change", async () => {
+    const mounted = vi.fn();
+    const cleanup = vi.fn();
+    function Cell(props: { value?: string }) {
+      useEffect(() => {
+        mounted();
+        return cleanup;
+      }, []);
+      return createElement("span", { className: "refreshable-cell" }, props.value);
+    }
+    const renderer = reactCellRenderer(Cell as any);
+    const initial = { value: "before" } as any;
+    const result = renderer(initial) as any;
+    document.body.appendChild(result.el);
+    await act(async () => Promise.resolve());
+    expect(result.el.textContent).toBe("before");
+
+    await act(async () => {
+      expect(result.refresh({ ...initial, value: "after" })).toBe(true);
+    });
+    expect(result.el.textContent).toBe("after");
+    expect(mounted).toHaveBeenCalledOnce();
+
+    result.destroy();
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 0)));
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it("reactively forwards structural options, datasource and inner grid class", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -205,7 +233,10 @@ describe("React adapter", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
-    const request = vi.fn(async () => ({ rows: [{ id: "1" }], total: 1 }));
+    const request = vi.fn(async (params?: unknown) => {
+      void params;
+      return { rows: [{ id: "1" }], total: 1 };
+    });
     let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
     function Harness() {
       remote = useMachTableQuery({ query: { keyword: "x" }, queryKey: "x", rowKey: "id", request, mode: "manual" });
@@ -215,9 +246,24 @@ describe("React adapter", () => {
     expect(request).not.toHaveBeenCalled();
     await act(async () => {
       remote!.gridProps.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
+      remote!.gridProps.onFilterChanged?.({
+        filterModel: {},
+        api: { getQuickFilter: () => null },
+        advancedFilterModel: {
+          version: 1,
+          root: {
+            kind: "condition",
+            colId: "id",
+            filter: { type: "text", conditions: [{ match: "equals", value: "1" }] }
+          }
+        }
+      } as any);
       await remote!.reload();
     });
     expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0][0]).toEqual(expect.objectContaining({
+      advancedFilterModel: expect.objectContaining({ version: 1 })
+    }));
     expect(remote!.rows).toEqual([{ id: "1" }]);
     expect(remote!.gridProps.error).toBeNull();
     await act(async () => root.unmount());

@@ -65,7 +65,7 @@ onGridReady: (e) => { /* grid 可交互，e.api 即命令接口 */ }
 | 事件 | 载荷 |
 | --- | --- |
 | `sortChanged` | `{ sortModel: { colId, direction }[] }` |
-| `filterChanged` | `{ filterModel: FilterModel }`（含列过滤与 quickFilter 变化） |
+| `filterChanged` | `{ filterModel: FilterModel, advancedFilterModel: AdvancedFilterModel \| null }`（普通列、高级表达式或 quickFilter 变化） |
 
 ## 列
 

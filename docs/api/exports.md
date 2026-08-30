@@ -50,6 +50,9 @@ import type { GridFeature } from "@agile-team/mach-table";
 
 const auditFeature: GridFeature<Row> = {
   key: "audit",
+  version: "1.0.0",
+  requires: ["permissions"],
+  conflicts: ["readonly-audit"],
   setup({ api, root, addEventListener }) {
     root.dataset.audit = "enabled";
     const off = addEventListener("cellValueChanged", (event) => audit(event));
@@ -60,7 +63,29 @@ const auditFeature: GridFeature<Row> = {
 createGrid(host, { columnDefs, rowData, features: [auditFeature] });
 ```
 
-Feature 按 Grid 实例隔离；替换 `features` 或销毁 Grid 时按逆序执行 cleanup/destroy。
+Feature 按 Grid 实例隔离；初始化前执行 key、依赖、冲突和循环校验，依赖先于使用方 setup。无效 Feature 被隔离并进入结构化诊断；替换 `features` 或销毁 Grid 时按逆序执行 cleanup/destroy。可用 `resolveGridFeatures()` 在业务注册前预检清单。
+
+## 高级过滤、状态与命名视图
+
+| 导出 | 说明 |
+| --- | --- |
+| `advancedFilterCondition()` / `advancedFilterGroup()` | 类型安全地创建嵌套过滤 AST |
+| `normalizeAdvancedFilterModel()` | 克隆、限深、限量并隔离循环/非法过滤输入 |
+| `migrateGridState()` | 把 GridState v1 或不可信 v2 输入迁移、归一化为 v2 |
+| `createGridViewManager()` | 保存、列出、应用和删除命名视图 |
+| `createLocalGridViewStore()` | 有大小/数量/error 边界的 localStorage 视图 store |
+| `captureGridViewState()` / `applyGridViewState()` | 只处理展示偏好，不携带选择与展开状态 |
+
+详见[高级过滤](/recipes/advanced-filter)、[全量状态](/recipes/grid-state)与[命名视图](/recipes/saved-views)。
+
+## 保存结果与冲突
+
+| 导出 | 说明 |
+| --- | --- |
+| `createSaveSnapshot()` | 为异步保存创建稳定、按行可选的修改快照 |
+| `normalizeBatchSaveResult()` | 归一化成功、失败、冲突并忽略未提交行 ID |
+| `resolveSaveConflict()` | 显式接受服务端行或保留本地修改 |
+| `GridBatchSaveResult` / `SaveChangeIssue` / `SaveChangeConflict` | 详细保存协议类型 |
 
 ## 预设列工厂（精简配置）
 
@@ -153,7 +178,9 @@ Schema 字段：`field, title, type(string|number|date|select|boolean), width/mi
 
 ```ts
 import type {
-  GridApi, GridOptions, GridState, GridDiagnostics, GridChange,
+  GridApi, GridOptions, GridState, GridStateInput, GridDiagnostics, GridPerformanceSnapshot, GridChange,
+  AdvancedFilterModel, AdvancedFilterNode, GridViewState, SavedGridView, GridViewStore,
+  GridBatchSaveResult, SaveChangeIssue, SaveChangeConflict,
   ColDef, ColDefGroup, ColDefOrGroup, ColumnState,
   RowNode, GridEventMap, GridEventType, GridErrorCode, GridErrorEvent, CellClickEvent, CellValueChangedEvent,
   RangeSelectionChangedEvent, GridDatasource, InfiniteGetRowsParams,

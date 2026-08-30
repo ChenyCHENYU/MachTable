@@ -1,5 +1,18 @@
 # @agile-team/mach-table-react
 
+## 0.18.0
+
+### Minor Changes
+
+- Forward nested advanced filters through auto/manual remote-query requests and reset state.
+- Add detailed save results, failure/conflict state, failed-row discovery and explicit conflict resolution to `useMachTableEditing()`.
+- Refresh React cell renderers through the existing root instead of remounting on ordinary value updates.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.18.0
+
 ## 0.15.0
 
 ### Minor Changes

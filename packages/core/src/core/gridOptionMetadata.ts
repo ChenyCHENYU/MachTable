@@ -49,6 +49,7 @@ export const GRID_OPTION_META = {
   showCellBorders: { kind: "boolean", update: "options" },
   theme: { kind: "string", update: "options" },
   quickFilterText: { kind: "string", update: "quickFilter" },
+  advancedFilterModel: { kind: "object", update: "options" },
   masterDetail: { kind: "boolean", update: "options" },
   detailRowHeight: { kind: "number", update: "options" },
   detailRowRenderer: { kind: "function", update: "options" },

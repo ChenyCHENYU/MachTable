@@ -1,6 +1,6 @@
 # 全量状态与工作区恢复
 
-`GridState` 是带版本号的可序列化视图快照，覆盖列状态、排序、列过滤、快速搜索、分页、选择、树/分组展开。它适合页签恢复、路由返回、保存视图和用户工作区。
+`GridState` 是带版本号的可序列化工作区快照，覆盖列状态、排序、普通/高级过滤、快速搜索、分页、选择、树/分组展开。它适合页签恢复、路由返回和页面会话恢复。只保存用户展示偏好时使用[命名视图](/recipes/saved-views)，避免携带选择与展开等瞬时业务状态。
 
 ## 零胶水自动持久化
 
@@ -50,11 +50,13 @@ api.applyState(snapshot, {
 
 ## 版本迁移
 
-库状态包含 `version`，业务存储仍应维护自己的 schema 版本。删除/重命名关键列、改变筛选模型或行 ID 规则时，迁移或丢弃旧快照；不要把未知 JSON 无校验地长期回放。
+0.18 的 `GridState.version` 为 `2`，新增 `advancedFilterModel`。`applyState()`、`initialState` 和内置 store 会自动把 v1 迁移到 v2；无效列状态、排序、过滤、超长 ID/搜索文本和超限集合会被有界归一化后再进入实例。
+
+库状态包含 `version`，业务存储仍应维护自己的 schema 版本。删除/重命名关键列、改变筛选模型或行 ID 规则时，迁移或丢弃旧快照；不可信输入可先显式调用 `migrateGridState(input)`，返回 `null` 时不要回放。
 
 ```ts
 interface StoredWorkspace {
-  schema: 2;
+  schema: 3;
   grid: GridState;
 }
 ```

@@ -1,4 +1,5 @@
 import type { ColumnFilter, FilterModel, TextFilterCondition, NumberFilterCondition, DateFilterCondition } from "../types/colDef";
+import type { AdvancedFilterModel, AdvancedFilterNode } from "../types/advancedFilter";
 import type { RowNode } from "../types/row";
 import type { Column } from "./column";
 
@@ -127,10 +128,37 @@ export function evaluateColumnFilter(value: any, filter: ColumnFilter): boolean 
   }
 }
 
+function evaluateAdvancedNode(
+  node: AdvancedFilterNode,
+  columns: ReadonlyMap<string, Column>,
+  row: RowNode<any>,
+  getCellValue: (row: RowNode<any>, column: Column) => any
+): boolean {
+  if (node.kind === "condition") {
+    const column = columns.get(node.colId);
+    return !column || evaluateColumnFilter(getCellValue(row, column), node.filter);
+  }
+  const passed = node.operator === "or"
+    ? node.children.some((child) => evaluateAdvancedNode(child, columns, row, getCellValue))
+    : node.children.every((child) => evaluateAdvancedNode(child, columns, row, getCellValue));
+  return node.not ? !passed : passed;
+}
+
+export function evaluateAdvancedFilter(
+  row: RowNode<any>,
+  columns: Column[],
+  model: AdvancedFilterModel | null,
+  getCellValue: (row: RowNode<any>, column: Column) => any
+): boolean {
+  if (!model) return true;
+  return evaluateAdvancedNode(model.root, new Map(columns.map((column) => [column.id, column])), row, getCellValue);
+}
+
 export function doesNodePassFilters(
   node: RowNode<any>,
   columns: Column[],
   filterModel: FilterModel,
+  advancedFilterModel: AdvancedFilterModel | null,
   quickFilter: string | null,
   getCellValue: (node: RowNode<any>, column: Column) => any
 ): boolean {
@@ -141,6 +169,8 @@ export function doesNodePassFilters(
     const value = getCellValue(node, column);
     if (!evaluateColumnFilter(value, filter)) return false;
   }
+
+  if (!evaluateAdvancedFilter(node, columns, advancedFilterModel, getCellValue)) return false;
 
   if (quickFilter && quickFilter.trim() !== "") {
     const tokens = quickFilter.trim().toLowerCase().split(/\s+/);

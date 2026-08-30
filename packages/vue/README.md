@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-Official Vue 3 adapter for MachTable 0.15. It provides a generic `<MachTable>`, native typed slots, dedicated app/route configuration, cohesive controllers, auto/manual remote query, editing composables, optional and persistent column resizing, an optional standard toolbar, optional Element Plus editors, async boundaries, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official Vue 3 adapter for MachTable 0.18. It provides a generic `<MachTable>`, native typed slots, dedicated app/route configuration, cohesive controllers, advanced-filter aware remote query, conflict-aware editing composables, persistent named views, optional and persistent column resizing, an optional standard toolbar, optional Element Plus editors, async boundaries, in-place renderer refresh and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -118,7 +118,23 @@ Remote B-side lists can bind `useMachTableQuery()` directly. Use `mode: "auto"` 
 
 Million-row batch actions use `selectionScope: "query"` and compact `allMatching + excludedKeys` rules, so clients never download every matching row ID.
 
-`useMachTableEditing()` exposes reactive dirty changes, save state, partial batch success, rollback, failed-cell reveal and an optional unsaved-page guard. Semantic business types and cached dictionaries are configured once with `createBusinessColumnTypes()` and `createCachedDictionary()`.
+`useMachTableEditing()` exposes reactive dirty changes, detailed partial-save results, validation failures, version conflicts, failed-row reveal, rollback and an optional unsaved-page guard. `lastSaveResult`, `saveIssues`, `failedRowIds` and `resolveConflict()` keep page code small while preserving explicit business decisions. Semantic business types and cached dictionaries are configured once with `createBusinessColumnTypes()` and `createCachedDictionary()`.
+
+```ts
+const editing = useMachTableEditing(grid, { guardBeforeUnload: true });
+const result = await editing.saveDetailed(orderApi.saveChanges);
+if (result.conflicts.length) editing.reveal(result.conflicts[0].rowId);
+
+async function saveCurrentView() {
+  if (!grid.api.value) return;
+  const views = createGridViewManager(grid.api.value, {
+    scope: `${tenantId}:${userId}:orders`
+  });
+  await views.save("My pending orders");
+}
+```
+
+Remote query requests include both `filterModel` and the serializable nested `advancedFilterModel`. See the [advanced filter](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/advanced-filter.md), [named views](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/saved-views.md), and [batch save](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/batch-save.md) guides.
 
 Element Plus editors are optional and registered once without making EP a package dependency:
 

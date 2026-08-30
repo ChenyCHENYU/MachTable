@@ -43,6 +43,7 @@
 | --- | --- |
 | `setSortModel([{ colId, direction }])` / `getSortModel()` | 排序模型读写（表头指示器同步） |
 | `setFilterModel(model)` / `getFilterModel()` | 列过滤模型读写；`null` 清空。模型结构见[排序与过滤](/recipes/sorting-filtering) |
+| `setAdvancedFilterModel(model)` / `getAdvancedFilterModel()` | 嵌套 AND/OR/NOT 表达式读写；`null` 清空。见[高级过滤](/recipes/advanced-filter) |
 | `isColumnFilterPresent(colId)` | 某列是否有过滤 |
 | `setQuickFilter(text)` / `getQuickFilter()` | 全局快速过滤 |
 | `paginationEnabled()` / `setPaginationEnabled(bool)` | 内置分页开关（无数据自动隐藏，见[分页配方](/recipes/pagination-io)） |
@@ -73,7 +74,8 @@
 | `stopEditingAsync(cancel?): Promise<boolean>` | 等待同步/异步校验；成功结束返回 `true`，校验失败保持编辑并返回 `false` |
 | `stopEditingRow(cancel?): Promise<boolean>` | 整行提交/取消；提交时全部校验通过后统一写值，并形成一个 undo 批次 |
 | `getDirtyRowIds()` / `getChanges()` | 查询尚未确认保存的行和逐单元格原值/当前值 |
-| `saveChanges(handler, rowIds?)` | 把稳定快照交给异步保存函数；可返回 `{ savedRowIds }` 表示部分成功，并保留请求期间产生的新编辑 |
+| `saveChanges(handler, rowIds?)` | 兼容简写：把稳定快照交给保存函数并返回成功确认的修改；保留请求期间产生的新编辑 |
+| `saveChangesDetailed(handler, rowIds?)` | 返回 `{ submitted, saved, failures, conflicts }`，用于部分成功、逐行校验和乐观锁冲突；见[批量保存](/recipes/batch-save) |
 | `markChangesSaved(rowIds?)` | 业务已自行保存时手动确认 |
 | `rollbackChanges(rowIds?)` | 回滚全部或指定行到最近已确认值 |
 | `undo()` / `redo()` / `canUndo()` / `canRedo()` | 撤销栈操作，见[配方](/recipes/undo-redo) |
@@ -117,6 +119,7 @@
 | `addEventListener(type, fn)` | 订阅，返回取消函数 |
 | `removeEventListener(type, fn)` | 取消订阅 |
 | `whenReady(): Promise<GridApi>` | 首次布局帧与 `gridReady` 完成后 resolve；Vue/React Hook 的 `ready` 基于它 |
-| `getState()` / `applyState(state, options?)` | 读取/恢复版本化全量视图状态；`emitEvents: false` 可静默恢复 |
-| `getDiagnostics()` | 返回版本、加载/虚拟 DOM/行列/选择/脏数据和最近结构化错误快照，不包含业务行数据 |
+| `getState()` / `applyState(state, options?)` | 读取/恢复 GridState v2；自动迁移 v1，输入先有界归一化；`emitEvents: false` 可静默恢复 |
+| `getDiagnostics()` | 返回版本、加载/虚拟 DOM/行列/选择/脏数据、Feature 清单、性能和最近结构化错误，不包含业务行数据 |
+| `getPerformanceSnapshot()` / `resetPerformanceMetrics()` | 读取/清空最近 120 次视口渲染的平均、P95、最大耗时、长帧和实际渲染范围 |
 | `destroy()` / `isDestroyed()` | 销毁 / 状态查询 |

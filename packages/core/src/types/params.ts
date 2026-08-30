@@ -95,6 +95,8 @@ export interface HeaderComponentParams<TData = any> {
 
 export interface ICellRendererResult {
   el: HTMLElement;
+  /** Reuses the mounted renderer for an update. Return false to request recreation. */
+  refresh?(params: CellRendererParams): boolean | void;
   destroy?: () => void;
 }
 

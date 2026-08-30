@@ -1,4 +1,5 @@
-import { GRID_OPTION_KEYS } from "../core/gridOptionMetadata";
+import { GRID_OPTION_KEYS, GRID_OPTION_META } from "../core/gridOptionMetadata";
+import { matchesGridOptionKind } from "../core/gridOptionRuntime";
 import { EVENT_TYPES } from "../types/events";
 import type { GridOptions } from "../types/options";
 
@@ -81,6 +82,23 @@ function hasStableRowId(source: Record<string, unknown>): boolean {
   return typeof source.getRowId === "function" || source.rowKey != null;
 }
 
+function validateMetadataValues(source: Record<string, unknown>): GridValidationIssue[] {
+  const specialised = new Set(["enableColumnResize", "pagination", "rowKey"]);
+  const issues: GridValidationIssue[] = [];
+  for (const key of GRID_OPTION_KEYS) {
+    if (specialised.has(key) || !Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const value = source[key];
+    const expected = GRID_OPTION_META[key].kind;
+    if (matchesGridOptionKind(value, expected)) continue;
+    issues.push({
+      code: "INVALID_OPTION_VALUE",
+      option: key,
+      message: `${key} 值类型无效，期望 ${expected}`
+    });
+  }
+  return issues;
+}
+
 /** Runtime validation for JavaScript, JSON/schema driven and dynamic options. */
 export function validateGridOptions(options: Partial<GridOptions<any>> | Record<string, unknown>): GridValidationIssue[] {
   const source = options as Record<string, unknown>;
@@ -135,6 +153,7 @@ export function validateGridOptions(options: Partial<GridOptions<any>> | Record<
       message: "treeData 与 masterDetail 不能同时启用，主从明细将被忽略"
     });
   }
+  issues.push(...validateMetadataValues(source));
   issues.push(...validateIdentityAndLayout(source));
   return issues;
 }

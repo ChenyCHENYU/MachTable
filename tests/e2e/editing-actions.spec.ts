@@ -7,7 +7,7 @@ test("React cell editing exposes a pencil and local confirm/cancel controls", as
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("http://127.0.0.1:4174");
-  await expect(page.getByRole("grid", { name: "MachTable data grid" })).toBeVisible();
+  await expect(page.getByRole("grid", { name: "MachTable data grid" })).toBeVisible({ timeout: 30_000 });
   const nameCell = page.locator('.mach-cell[data-col-id="name"]').first();
   const trigger = nameCell.getByRole("button", { name: "Edit cell" });
   // Cold WebKit startup can finish the grid shell before the virtual rows mount.

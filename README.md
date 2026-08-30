@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.15.0-2563eb" alt="Source version 0.15.0" />
+  <img src="https://img.shields.io/badge/source-0.18.0-2563eb" alt="Source version 0.18.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
@@ -154,6 +154,28 @@ api.destroy();
 
 > 默认布局的容器必须有明确高度，并且必须引入主题 CSS。小数据详情表可使用 `domLayout: "autoHeight"` 由内容撑开；不要将自动高度用于虚拟大表或远程无限数据源。完整的生产项目配置、SSR、错误治理、状态持久化和上线检查见[企业级项目接入手册](./docs/guide/enterprise-integration.md)。
 
+## 0.18：可治理、可迁移、可诊断的业务工作区
+
+0.18 把高频 B 端表格从“能配置”推进到“可长期治理”：
+
+- `GridFeature` 支持 `version`、`requires`、`conflicts`，初始化前完成依赖排序、循环/冲突隔离，并通过诊断快照公开实际启用清单。
+- `updateOptions()` 对 JavaScript、低代码 JSON 等非 TypeScript 输入执行元数据驱动的运行时校验，非法字段只告警、不污染现有实例。
+- 高级过滤 AST 支持嵌套 `AND / OR / NOT`，同一模型可用于本地计算、远程分页和状态持久化；恶意深度、循环引用和超大集合会被有界归一化。
+- `GridState` 升级到 v2 并自动迁移 v1；命名视图只保存列、排序、过滤与页大小，不误带业务选择和树展开状态。
+- `saveChangesDetailed()` 返回成功、失败和版本冲突明细；请求期间的新编辑不会被旧保存结果吞掉，Vue/React 工作流提供失败行定位与冲突处理。
+- Vue/React 单元格 renderer 支持原地 `refresh`，避免数据刷新时重复挂载富组件；内置滚动性能快照包含平均值、P95、长帧与实际 DOM 范围。
+
+```ts
+const views = createGridViewManager(api, { scope: `${tenantId}:${userId}:orders` });
+await views.save("我的待办");
+
+const result = await api.saveChangesDetailed(orderApi.saveChanges);
+console.table(result.conflicts);
+console.info(api.getPerformanceSnapshot());
+```
+
+详见[高级过滤](./docs/recipes/advanced-filter.md)、[命名视图](./docs/recipes/saved-views.md)、[批量保存与冲突](./docs/recipes/batch-save.md)和[性能指南](./docs/advanced/performance.md)。
+
 ## 0.15：可控、可恢复的列宽体验
 
 列宽拖动现在由 `enableColumnResize: true` 显式开启，默认保持关闭。开启后支持鼠标/触控拖动、双击内容自适应和表头 `Alt+←/→`；配合 `stateKey` 即可记忆完整工作区，配合 `columnStateKey` 则只记忆列偏好。拖动取消会完整回滚，松手只保存一次，未拖动的自动列与 flex 列继续响应容器宽度。
@@ -291,8 +313,8 @@ MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配
 | 包 | 用途 | gzip 预算 / 当前值 |
 | --- | --- | --- |
 | `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 70.7 KB |
-| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部 ESM 10 KB / 约 9.7 KB；基础入口约 6.2 KB，工作流约 2.9 KB，可选 UI 约 1.3 KB |
-| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 全部 ESM 8 KB / 约 6.1 KB；基础消费约 5.8 KB，工作流约 3.1 KB |
+| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部 ESM 10.5 KB / 约 10.1 KB；基础入口约 6.5 KB，工作流约 3.2 KB，可选 UI 约 1.3 KB |
+| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 全部 ESM 8 KB / 约 6.5 KB；基础消费约 6.2 KB，工作流约 3.5 KB |
 | `@agile-team/mach-table-xlsx` | 仅 Excel 页面按需安装；工作簿引擎由宿主动态注入 | 3 KB 预算；不进入适配器/Core |
 
 Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
@@ -365,6 +387,7 @@ pnpm test:e2e
 | 配置与命令 | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) |
 | 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频业务 | [场景配方](./docs/recipes/selection.md) |
+| 0.18 API 与业务治理 | [高级过滤](./docs/recipes/advanced-filter.md) · [命名视图](./docs/recipes/saved-views.md) · [批量保存与冲突](./docs/recipes/batch-save.md) · [性能诊断](./docs/advanced/performance.md) |
 | 0.15 列宽体验 | [列宽拖动与状态记忆](./docs/recipes/column-state.md) · [完整状态持久化](./docs/recipes/grid-state.md) |
 | 0.14 使用体验 | [控制器与标准工具栏](./docs/recipes/controller-toolbar.md) · [远程查询](./docs/recipes/remote-query.md) |
 | 竞品与后续规划 | [竞品分析](./docs/advanced/competitive-analysis.md) · [AG Grid 源码审计](./docs/advanced/ag-grid-source-study.md) · [路线图](./docs/advanced/roadmap.md) |
@@ -378,7 +401,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前源码版本为 `0.15.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前源码版本为 `0.18.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

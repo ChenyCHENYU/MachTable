@@ -7,10 +7,11 @@ import type {
   FilterModel,
   SortModel
 } from "./colDef";
+import type { AdvancedFilterModel } from "./advancedFilter";
 import type { GridEventMap } from "./events";
 import type { CellRendererParams, GetRowIdParams } from "./params";
 import type { RowNode } from "./row";
-import type { GridState } from "./state";
+import type { GridStateInput } from "./state";
 import type { FieldPath } from "./path";
 
 export interface ColumnStateStore {
@@ -19,8 +20,8 @@ export interface ColumnStateStore {
 }
 
 export interface GridStateStore {
-  load(key: string): GridState | null | Promise<GridState | null>;
-  save(key: string, state: GridState): void | Promise<void>;
+  load(key: string): GridStateInput | null | Promise<GridStateInput | null>;
+  save(key: string, state: GridStateInput): void | Promise<void>;
   clear?(key: string): void | Promise<void>;
 }
 
@@ -54,6 +55,12 @@ export interface GridFeatureContext<TData = any> {
 /** Composable extension point; feature instances are scoped to one grid. */
 export interface GridFeature<TData = any> {
   readonly key: string;
+  /** Informational extension version exposed through diagnostics. */
+  readonly version?: string;
+  /** Feature keys that must be initialised before this feature. */
+  readonly requires?: readonly string[];
+  /** Mutually exclusive feature keys. Conflicting features are not initialised. */
+  readonly conflicts?: readonly string[];
   setup(context: GridFeatureContext<TData>): void | (() => void);
   destroy?(): void;
 }
@@ -76,6 +83,7 @@ export interface InfiniteGetRowsParams<TData = any> {
   endRow: number;
   sortModel: SortModel;
   filterModel: FilterModel;
+  advancedFilterModel: AdvancedFilterModel | null;
   quickFilterText: string | null;
   signal: AbortSignal;
   onSuccess(rows: TData[], lastRow?: number): void;
@@ -192,6 +200,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   showCellBorders?: boolean;
   theme?: ThemeMode;
   quickFilterText?: string | null;
+  /** Nested AND/OR filter expression, safe for local evaluation and backend serialization. */
+  advancedFilterModel?: AdvancedFilterModel | null;
   masterDetail?: boolean;
   detailRowHeight?: number;
   detailRowRenderer?: (params: DetailRowRendererParams<TData>) => string | HTMLElement | import("./params").ICellRendererResult | null | undefined;
@@ -206,7 +216,7 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   actionPolicy?: ActionPolicy<TData>;
   features?: readonly GridFeature<TData>[];
   /** State restored atomically after columns and initial rows are available. */
-  initialState?: GridState;
+  initialState?: GridStateInput;
   /** Persist the complete user-visible GridState with a versioned store. */
   stateKey?: string | null;
   stateStore?: GridStateStore;
@@ -301,6 +311,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   showCellBorders: boolean;
   theme: ThemeMode;
   quickFilterText: string | null;
+  advancedFilterModel: AdvancedFilterModel | null;
   masterDetail: boolean;
   detailRowHeight: number;
   detailRowRenderer?: (params: DetailRowRendererParams<TData>) => string | HTMLElement | import("./params").ICellRendererResult | null | undefined;
@@ -313,7 +324,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   components?: GridComponents;
   actionPolicy?: ActionPolicy<TData>;
   features: readonly GridFeature<TData>[];
-  initialState?: GridState;
+  initialState?: GridStateInput;
   stateKey: string | null;
   stateStore?: GridStateStore;
   stateSaveDebounceMs: number;

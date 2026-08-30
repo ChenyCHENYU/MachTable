@@ -18,7 +18,7 @@
 | `datasourceRetryCount` | `number` | `2` | 数据源失败后的自动重试次数；`0` 关闭 |
 | `datasourceRetryDelay` | `number` | `300` | 首次重试基础延迟（ms），之后指数退避，最长 30 秒 |
 | `asyncTransactionWaitMillis` | `number` | `16` | `applyTransactionAsync` 合并时间窗；事务保持调用顺序，管线只刷新一次 |
-| `initialState` | `GridState` | — | 列、排序、过滤、分页、选择、展开等版本化首屏状态，列和初始行就绪后一次应用 |
+| `initialState` | `GridStateInput` | — | 列、排序、过滤、分页、选择、展开等版本化首屏状态；接受 v1/v2，列和初始行就绪后迁移并应用 |
 | `pagination.mode` | `"client" \| "server"` | `"client"` | server 模式按传入页面原样展示，不二次切片；配合 `page`、`pageSize`、`total`，见[远程查询](/recipes/remote-query) |
 
 ## 尺寸与密度
@@ -62,6 +62,7 @@
 | --- | --- | --- | --- |
 | `multiSort` | `boolean` | `true` | Shift 点击表头叠加多列排序（带序号徽标） |
 | `quickFilterText` | `string \| null` | `null` | 全局快速过滤（分词 AND、跨列 OR 包含） |
+| `advancedFilterModel` | `AdvancedFilterModel \| null` | `null` | 可序列化的嵌套 AND/OR/NOT 表达式；与普通列、快速过滤按 AND 合并，见[高级过滤](/recipes/advanced-filter) |
 | `manualSorting` | `boolean` | `false` | 服务端排序：跳过本地排序但更新指示器并触发 `sortChanged` |
 | `manualFiltering` | `boolean` | `false` | 服务端过滤：跳过本地过滤但触发 `filterChanged` |
 | `aggFuncs` | `Record<string, (values) => any>` | — | 自定义聚合函数（内置 sum/avg/count/min/max/first/last） |
@@ -133,7 +134,7 @@
 | --- | --- | --- | --- |
 | `locale` | `RgLocale` | 中文 | 覆盖内置文案，提供 `LOCALE_EN` 英文预设，见 [i18n](/advanced/i18n) |
 | `components` | `GridComponents` | — | 当前 Grid 的渲染器/编辑器注册表，优先级高于全局注册，适合微前端和多租户隔离 |
-| `features` | `GridFeature[]` | `[]` | 实例级功能扩展；提供 setup/cleanup/destroy 生命周期，不需要修改 GridCore |
+| `features` | `GridFeature[]` | `[]` | 实例级扩展；支持 key/version/requires/conflicts 与 setup/cleanup/destroy，非法依赖图在 setup 前隔离 |
 | `suppressCellFocus` | `boolean` | `false` | 关闭单元格焦点（同时关闭键盘导航） |
 | `suppressHeaderFocus` | `boolean` | `false` | 关闭表头焦点环 |
 | `ariaLabel` | `string` | `"MachTable data grid"` | 内部 `role=grid/treegrid` 元素的可访问名称 |

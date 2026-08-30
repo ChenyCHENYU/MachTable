@@ -1,6 +1,6 @@
 {
   "name": "mach-table",
-  "version": "0.15.0",
+  "version": "0.18.0",
   "private": true,
   "type": "module",
   "description": "MachTable - high performance, framework-agnostic data grid (monorepo)",
@@ -28,6 +28,7 @@
     "test": "pnpm --filter \"./packages/*\" run test",
     "test:coverage": "pnpm --filter \"./packages/*\" run test:coverage",
     "test:e2e": "playwright test",
+    "test:performance": "playwright test tests/e2e/performance.spec.ts --project=chromium",
     "clean": "pnpm -r exec rimraf dist node_modules/.cache",
     "dev": "pnpm --filter vanilla-demo dev",
     "dev:react": "pnpm --filter react-demo dev",

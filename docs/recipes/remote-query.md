@@ -24,13 +24,14 @@ const table = useMachTableQuery<Order, typeof query>({
   pageSizeOptions: [20, 50, 100, 200],
   debounceMs: 200,
   selectionScope: "preserve",
-  request: async ({ page, pageSize, query, sortModel, filterModel, signal }) => {
+  request: async ({ page, pageSize, query, sortModel, filterModel, advancedFilterModel, signal }) => {
     const response = await orderApi.page({
       ...query,
       page,
       size: pageSize,
       sort: sortModel,
-      filters: filterModel
+      filters: filterModel,
+      expression: advancedFilterModel
     }, { signal });
     return { rows: response.records, total: response.total };
   },
@@ -106,6 +107,7 @@ interface MachTablePageRequest<TQuery> {
   query: TQuery;
   sortModel: SortModel;
   filterModel: FilterModel;
+  advancedFilterModel: AdvancedFilterModel | null;
   quickFilterText: string | null;
   signal: AbortSignal;
 }
@@ -125,7 +127,7 @@ interface MachTablePageRequest<TQuery> {
 - `reload()` 刷新当前页。
 - `reload({ resetPage: true })` 从第一页刷新。
 - `retry()` 重试最后的当前状态。
-- `reset()` 清空表格排序/过滤并回到第一页；业务查询表单由页面按自己的产品规则重置。
+- `reset()` 清空表格排序、普通/高级过滤并回到第一页；业务查询表单由页面按自己的产品规则重置。
 - `abort()` 主动取消请求，组件作用域销毁时也会自动取消。
 
 ## 跨页选择

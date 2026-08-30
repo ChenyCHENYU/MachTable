@@ -41,6 +41,20 @@ await api.applyTransactionAsync({ update: realtimeRows });
 api.applyState(state);
 ```
 
+0.18 adds governed runtime APIs, nested filters, named views, conflict-aware saves and performance evidence:
+
+```ts
+const views = createGridViewManager(api, { scope: "tenant:user:orders" });
+await views.save("My pending orders");
+
+const result = await api.saveChangesDetailed(orderApi.saveChanges);
+console.table(result.failures);
+console.table(result.conflicts);
+console.info(api.getDiagnostics().performance);
+```
+
+`GridState` v1 inputs migrate to v2 automatically. `GridFeature` manifests can declare `version`, `requires` and `conflicts`; invalid graphs are isolated before setup side effects run. JavaScript/JSON option patches are sanitized from the same metadata registry used by Core and framework adapters.
+
 0.13 added a built-in/headless column workbench and cancellable lazy trees:
 
 ```ts

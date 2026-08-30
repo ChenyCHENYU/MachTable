@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   getByPath,
+  normalizeAdvancedFilterModel,
+  type AdvancedFilterModel,
   type FilterModel,
   type FilterChangedEvent,
   type GridApi,
@@ -20,6 +22,7 @@ export interface MachTablePageRequest<TQuery> {
   query: TQuery;
   sortModel: SortModel;
   filterModel: FilterModel;
+  advancedFilterModel: AdvancedFilterModel | null;
   quickFilterText: string | null;
   signal: AbortSignal;
 }
@@ -64,6 +67,7 @@ export interface UseMachTableQueryReturn<TData> {
   total: number;
   sortModel: SortModel;
   filterModel: FilterModel;
+  advancedFilterModel: AdvancedFilterModel | null;
   quickFilterText: string | null;
   setQuickFilterText(value: string | null): void;
   selectedKeys: string[];
@@ -108,10 +112,11 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const [total, setTotal] = useState(0);
   const [sortModel, setSortModel] = useState<SortModel>([]);
   const [filterModel, setFilterModel] = useState<FilterModel>({});
+  const [advancedFilterModel, setAdvancedFilterModel] = useState<AdvancedFilterModel | null>(null);
   const [quickFilterText, setQuickFilterText] = useState<string | null>(options.initialQuickFilterText ?? null);
   const [, refreshSelection] = useReducer((value: number) => value + 1, 0);
-  const stateRef = useRef({ page, pageSize, sortModel, filterModel, quickFilterText, rows });
-  stateRef.current = { page, pageSize, sortModel, filterModel, quickFilterText, rows };
+  const stateRef = useRef({ page, pageSize, sortModel, filterModel, advancedFilterModel, quickFilterText, rows });
+  stateRef.current = { page, pageSize, sortModel, filterModel, advancedFilterModel, quickFilterText, rows };
   const apiRef = useRef<GridApi<TData> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,6 +216,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
         query: readQuery(optionsRef.current.query),
         sortModel: current.sortModel.map((item) => ({ ...item })),
         filterModel: { ...current.filterModel },
+        advancedFilterModel: normalizeAdvancedFilterModel(current.advancedFilterModel),
         quickFilterText: current.quickFilterText,
         signal: controller.signal
       });
@@ -269,8 +275,11 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (suppressGrid.current) return;
     const next = { ...event.filterModel };
     stateRef.current.filterModel = next;
+    const advanced = normalizeAdvancedFilterModel(event.advancedFilterModel);
+    stateRef.current.advancedFilterModel = advanced;
     stateRef.current.quickFilterText = event.api.getQuickFilter();
     setFilterModel(next);
+    setAdvancedFilterModel(advanced);
     setQuickFilterText(stateRef.current.quickFilterText);
     if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
     if (optionsRef.current.mode !== "manual") scheduleLoad(true);
@@ -305,9 +314,14 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     stateRef.current.page = 1;
     stateRef.current.sortModel = [];
     stateRef.current.filterModel = {};
-    setPage(1); setSortModel([]); setFilterModel({}); clearSelection();
+    stateRef.current.advancedFilterModel = null;
+    setPage(1); setSortModel([]); setFilterModel({}); setAdvancedFilterModel(null); clearSelection();
     suppressGrid.current = true;
-    try { apiRef.current?.setSortModel(null); apiRef.current?.setFilterModel(null); }
+    try {
+      apiRef.current?.setSortModel(null);
+      apiRef.current?.setFilterModel(null);
+      apiRef.current?.setAdvancedFilterModel(null);
+    }
     finally { suppressGrid.current = false; }
     await load();
   }, [clearSelection, load]);
@@ -351,6 +365,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     rowKey: rowId,
     manualSorting: true,
     manualFiltering: true,
+    advancedFilterModel,
     quickFilterText,
     overlayErrorTemplate: error
       ? () => optionsRef.current.errorOverlay?.({ error, retry: load }) ?? "Remote request failed. Please retry."
@@ -365,7 +380,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     onSortChanged,
     onFilterChanged,
     onSelectionChanged
-  }), [error, load, loading, onFilterChanged, onPaginationChanged, onSelectionChanged, onSortChanged, options.emptyOverlay, page, pageSize, pageSizes, quickFilterText, rowId, rows, syncVisibleSelection, total]);
+  }), [advancedFilterModel, error, load, loading, onFilterChanged, onPaginationChanged, onSelectionChanged, onSortChanged, options.emptyOverlay, page, pageSize, pageSizes, quickFilterText, rowId, rows, syncVisibleSelection, total]);
 
   const selectedKeys = allMatching.current ? [] : [...selectedIds.current];
   const selectedRows = [...selectedById.current.entries()]
@@ -376,7 +391,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     : { mode: "explicit", selectedKeys };
 
   return {
-    rows, loading, error, page, pageSize, total, sortModel, filterModel,
+    rows, loading, error, page, pageSize, total, sortModel, filterModel, advancedFilterModel,
     quickFilterText,
     setQuickFilterText(value) {
       stateRef.current.quickFilterText = value;

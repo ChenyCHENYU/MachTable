@@ -22,7 +22,7 @@ AG 的 [`moduleRegistry.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f
 - 模块自己的运行时校验与注册钩子；
 - Grid 销毁后的作用域模块清理。
 
-MachTable 目前已有 `GridFeature` 和组件注册表，但缺少模块依赖、版本握手、能力冲突与 per-grid 模块清单。短期不照搬 Bean/Module 规模；先把高级能力改为可声明、可诊断、可销毁的 feature manifest，避免 Core 随功能线性膨胀。
+MachTable 0.18 已为 `GridFeature` 增加 `version/requires/conflicts`，初始化前执行依赖排序、缺失/冲突/循环隔离，并在 `getDiagnostics().activeFeatures` 暴露 per-grid 清单。它仍不照搬 AG 的 Bean/Module 规模，也暂不执行 semver 握手；未来只有独立扩展包形成真实生态时再增加兼容范围协议。
 
 ### 2. 生命周期治理是 AG 稳定性的关键
 
@@ -34,9 +34,8 @@ MachTable 已有显式 service 销毁、renderer `{ el, destroy }`、Vue slot �
 
 AG 的 [`validationService.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f7bd35598b67ce38c1036ed0082df9/packages/ag-grid-community/src/validation/validationService.ts) 和 [`gridOptionsValidations.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f7bd35598b67ce38c1036ed0082df9/packages/ag-grid-community/src/validation/rules/gridOptionsValidations.ts) 覆盖拼写建议、依赖模块、互斥选项、数值约束、废弃迁移和组件合法性。错误不仅写控制台，还带稳定编号和缺失模块建议。
 
-MachTable 已有 `GRID_OPTION_META`、列定义校验、稳定错误码、`getDiagnostics()` 和配置来源 `explainOption()`；本次新增了基础 `validateGridOptions()` registry，能够发现未知选项、给出相似拼写、校验服务端分页和数据模型冲突。后续继续覆盖：
+MachTable 已有 `GRID_OPTION_META`、列定义校验、稳定错误码、`getDiagnostics()` 和配置来源 `explainOption()`；0.18 让 registry 同时驱动初始校验和 `updateOptions()` 运行时净化，未知/类型错误的 JavaScript 或低代码 JSON 只报告、不部分污染实例。服务端分页和数据模型冲突仍由组合规则校验。后续继续覆盖：
 
-- 初始选项与运行时可更新选项；
 - 互斥的数据模型组合；
 - 功能依赖和缺失组件；
 - 带替代方案与移除版本的 deprecation；
@@ -72,13 +71,13 @@ MachTable 已据自身远程查询协议实现 `selectionScope: "query"`、`sele
 
 AG 的 [`userComponentFactory.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f7bd35598b67ce38c1036ed0082df9/packages/ag-grid-community/src/components/framework/userComponentFactory.ts) 统一解析 JS 函数、类组件、框架组件、selector、默认参数、popup 和 mandatory methods。Vue/React 包只负责桥接生命周期，数据模型不分叉。
 
-MachTable 的 Core renderer/editor 契约更小，Vue 已有原生 cell/header/editor/overlay/detail/actions slots，并会继承 appContext 和销毁挂载。后续应补 `refresh(params)` 可选契约，减少高频更新时组件重建；不能为了“像 AG”把简单函数 renderer 全部类化。
+MachTable 的 Core renderer/editor 契约更小，Vue 已有原生 cell/header/editor/overlay/detail/actions slots，并会继承 appContext 和销毁挂载。0.18 已增加可选 `refresh(params)`：同 renderer/行/列更新优先原地刷新，Vue 使用浅响应 params，React 复用现有 root；返回 `false` 或抛错才重建。简单函数 renderer 继续保持函数式，不为了“像 AG”全部类化。
 
 ### 8. 状态必须版本化并能迁移
 
 AG 官方 [Grid State](https://www.ag-grid.com/javascript-data-grid/grid-state/) 包含版本，并在载入旧状态时迁移；还覆盖列、筛选、选择、展开、分页、固定行、滚动和工具面板。
 
-MachTable 已有版本化 `GridState`，本次又把列布局本地存储升级为 `{ version, savedAt, columns }`，支持旧数组迁移、用户/租户/路由隔离和非法载荷净化。仍缺状态更新事件、销毁前最终状态、焦点/滚动/展开状态的完整兼容策略。
+MachTable 0.18 将 `GridState` 升级为 v2，自动迁移 v1，并对列、排序、普通/高级过滤、搜索与 ID 集合做有界净化；销毁前会刷新自动状态保存。命名视图刻意排除选择、当前页和展开状态，避免偏好与业务会话混淆。仍缺统一 state-updated 事件、焦点/滚动状态和跨未来大版本迁移工具。
 
 ## wl 项目真实使用画像
 
@@ -100,8 +99,8 @@ MachTable 已有版本化 `GridState`，本次又把列布局本地存储升级�
 | 维度 | AG Grid 36.1 | MachTable 当前 | 判断 |
 | --- | --- | --- | --- |
 | 普通 Vue 列表接入 | 仍需模块/主题/GridOptions 组合 | 单包、单配置文件、`app.use(MachTablePlugin, config)`、原生 slots | MachTable 更轻、更符合现有项目约定 |
-| 配置可控性 | 全局选项、模块、丰富校验 | app → route → preset → table 分层，且 `explainOption()` 可追溯 | MachTable 的来源解释更直观；校验深度落后 |
-| 编辑事务 | 成熟单元格/整行与批处理 API | 原子整行草稿、异步跨字段校验、dirty diff、部分保存、回滚 | MachTable 更贴近当前 B 端保存流程；高级批量审阅仍缺 |
+| 配置可控性 | 全局选项、模块、丰富校验 | app → route → preset → table 分层，`explainOption()` 可追溯，Option/Feature 运行时治理 | MachTable 来源解释更直观；AG 的废弃/模块兼容规则仍更深 |
+| 编辑事务 | 成熟单元格/整行与批处理 API | 原子整行草稿、异步跨字段校验、dirty diff、部分成功、逐行失败/冲突、回滚 | MachTable 更贴近当前 B 端保存流程；通用审阅 UI 可继续按需补 |
 | 平面远程列表 | 成熟分页与 Infinite Cache | 受控分页很顺滑；顺序无限加载，不是随机块缓存 | 常规页面 MachTable 更简单；任意跳转/滚动 AG 更强 |
 | SSRM / Pivot / 分析 | 非常成熟，多项为商业能力 | 尚无 | AG 显著领先；按真实需求独立立项 |
 | 百万行选择 | 规则状态，含层级 | 平面 query 全选 + 排除规则已完成 | 平面场景已对齐；层级规则未做 |
@@ -137,7 +136,14 @@ MachTable 已有版本化 `GridState`，本次又把列布局本地存储升级�
 
 ### 0.13：高频工作台能力（已完成）
 
-已完成列工作台、权限动作、可选 XLSX 动态扩展、可取消/去重/重试的树表懒加载和主从详情闭环。随机 Block Store、高级筛选 AST、服务端分组/Pivot、公式和图表仍需独立 ADR，不以版本号倒逼功能。
+已完成列工作台、权限动作、可选 XLSX 动态扩展、可取消/去重/重试的树表懒加载和主从详情闭环。随机 Block Store、服务端分组/Pivot、公式和图表仍需独立 ADR，不以版本号倒逼功能。
+
+### 0.14—0.18：使用体验与治理闭环（已完成）
+
+- 0.14：组合控制器、标准工具栏、手动/自动远程查询、完整状态自动持久化；
+- 0.15：显式可控且可恢复的列宽交互；
+- 0.16—0.17 能力并入 0.18 统一发布：高级过滤 AST、命名视图、详细批量保存与冲突协议；
+- 0.18：Option/Feature 治理、GridState v2 迁移、renderer 原地刷新和可复现性能诊断。
 
 ### 1.0：暂不上
 

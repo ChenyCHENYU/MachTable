@@ -10,6 +10,8 @@
 | 预取值排序 | Schwartzian 变换预提取排序键，避免 O(n log n) 次 valueGetter |
 | 合帧与去重 | rAF 滚动合帧、className/title/style 写入前比较、`contain: layout style` |
 | 范围缓存 | 框选坐标帧内缓存（8 个变更点失效），高亮零额外分配 |
+| Renderer 原地刷新 | 同一行/列/renderer 优先调用 `refresh(params)`；Vue/React 更新现有组件 root，失败才安全重建 |
+| 有界性能诊断 | 最近 120 次视口渲染滚动窗口，公开平均/P95/最大耗时、长帧数和实际 DOM 范围 |
 
 ## 数据侧最佳实践
 
@@ -64,7 +66,23 @@ await Promise.all(messages.map((row) =>
 
 可复现基准见 `examples/bench`（`pnpm --filter bench-demo dev`）：1k/10k/100k 行 × 8/30/60/100 列，含状态/进度/操作预设列，自动滚动统计帧耗时与可见 DOM 计数。
 
-Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列：初次构建、1000 次异步更新和滚动后的 DOM 上限均有保守 CI 预算。绝对耗时受硬件、浏览器、renderer 与数据形态影响，请在目标设备用业务列模型复测，不把 README 数字当 SLA。
+Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列：初次构建、1000 次异步更新、滚动后的 DOM 上限和 P95 视口渲染预算均有保守 CI 阈值。可单独运行：
+
+```bash
+pnpm test:performance
+```
+
+生产问题可采集不含业务行数据的快照：
+
+```ts
+api.resetPerformanceMetrics();
+// 执行需要测量的滚动或批量更新
+const metrics = api.getPerformanceSnapshot();
+// { sampleCount, averageRenderMs, p95RenderMs, maxRenderMs,
+//   longRenderCount, renderedRows, renderedColumns, renderedCells }
+```
+
+`getDiagnostics().performance` 返回同一份指标，适合接入内部诊断面板。它是轻量观测，不替代 Chrome trace、内存 profile 或真实业务 UAT。绝对耗时受硬件、浏览器、renderer 与数据形态影响，请在目标设备用业务列模型复测，不把 README 数字当 SLA。
 
 ## 发布体积预算
 
@@ -73,8 +91,8 @@ Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列：初次�
 | 产物 | gzip 上限 |
 | --- | ---: |
 | `@agile-team/mach-table` ESM | 80 KB |
-| Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10 KB / 6.4 KB / 5 KB / 3 KB |
-| React 适配器 ESM | 5 KB |
+| Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10.5 KB / 6.75 KB / 5 KB / 3 KB |
+| React 全部 ESM / 默认入口 / 工作流入口 | 8 KB / 6.25 KB / 5 KB |
 | Core CSS | 6 KB |
 
 框架包把 Vue、React、ReactDOM 和 Core 声明为 external/peer dependency，因此 Vue 应用不会打入 React 适配代码，反之亦然。

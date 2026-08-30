@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-Official React 18+ adapter for MachTable 0.15. It provides a generic `<MachTable>`, full app/route configuration, remote query and editing workflows, a cohesive controller, optional and persistent column resizing, a standard toolbar, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official React 18+ adapter for MachTable 0.18. It provides a generic `<MachTable>`, full app/route configuration, advanced-filter aware remote query, conflict-aware editing workflows, persistent named views, a cohesive controller, optional and persistent column resizing, a standard toolbar, in-place React cell refresh, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -123,7 +123,24 @@ const controller = useMachTableController({ query });
 <MachTable apiRef={controller.table.apiRef} {...controller.bindings} />;
 ```
 
-The query hook cancels superseded requests, ignores stale responses, exposes an error overlay and supports cross-page or select-all-matching selection. `useMachTableEditing()` adds dirty state, guarded saves, rollback and reveal helpers.
+The query hook cancels superseded requests, ignores stale responses, forwards nested advanced filters, exposes an error overlay and supports cross-page or select-all-matching selection. `useMachTableEditing()` adds dirty state, detailed partial-save/conflict results, guarded saves, conflict resolution, rollback and reveal helpers.
+
+```tsx
+const editing = useMachTableEditing(grid, { guardBeforeUnload: true });
+const result = await editing.saveDetailed(orderApi.saveChanges);
+if (result.conflicts.length) editing.reveal(result.conflicts[0].rowId);
+
+async function saveCurrentView() {
+  const api = grid.apiRef.current;
+  if (!api) return;
+  const views = createGridViewManager(api, {
+    scope: `${tenantId}:${userId}:orders`
+  });
+  await views.save("My pending orders");
+}
+```
+
+See the [advanced filter](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/advanced-filter.md), [named views](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/saved-views.md), and [batch save](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/batch-save.md) guides.
 
 ## Cell and full-row editing
 

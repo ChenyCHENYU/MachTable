@@ -200,7 +200,7 @@ api.getDirtyRowIds();
 api.getChanges();
 
 try {
-  await api.saveChanges((changes) => orderApi.saveBatch(changes));
+  await api.saveChangesDetailed((changes) => orderApi.saveBatch(changes));
 } catch (error) {
   // 保存失败不会清理 dirty 集合，可重试或让用户回滚。
 }
@@ -208,7 +208,7 @@ try {
 api.rollbackChanges([rowId]);
 ```
 
-`saveChanges` 先固定本次快照。若网络请求期间用户把同一格继续从 B 改为 C，服务端确认 B 后，本地仍保留 `B → C` 的待保存变更，不会把新编辑错误地标成已保存。
+`saveChangesDetailed` 先固定本次快照。若网络请求期间用户把同一格继续从 B 改为 C，服务端确认 B 后，本地仍保留 `B → C` 的待保存变更，不会把新编辑错误地标成已保存。完整失败/冲突协议见[批量保存、失败与版本冲突](/recipes/batch-save)。
 
 Vue 页面推荐直接使用响应式控制器：
 
@@ -223,12 +223,13 @@ const edit = useMachTableEditing(grid, {
 });
 
 async function save() {
-  await edit.save(async (changes) => {
+  const result = await edit.saveDetailed(async (changes) => {
     const result = await orderApi.saveBatch(changes);
     // 部分成功时只确认成功行，失败行继续保持 dirty 供修正/重试。
     return { savedRowIds: result.successIds };
   });
+  if (result.conflicts.length) edit.reveal(result.conflicts[0].rowId);
 }
 ```
 
-模板可直接绑定 `edit.dirty`、`edit.saving`、`edit.saveError` 和 `edit.changes`；使用 `edit.rollback(rowIds)` 回滚，使用 `edit.reveal(rowId, colId, true)` 定位并打开失败单元格。重复点击保存会被拦截，卸载时监听器自动清理。
+模板可直接绑定 `edit.dirty`、`edit.saving`、`edit.saveError`、`edit.changes`、`edit.saveIssues` 和 `edit.failedRowIds`；使用 `edit.rollback(rowIds)` 回滚，使用 `edit.reveal(rowId, colId, true)` 定位并打开失败单元格，使用 `edit.resolveConflict()` 显式接受服务端值或保留本地值。重复点击保存会被拦截，卸载时监听器自动清理。

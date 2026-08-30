@@ -18,7 +18,9 @@
 │             headerRenderer · bodyRenderer        │
 │             pinnedRows · summary · statusBar     │
 ├──────────────────────────────────────────────────┤
-│ 基础设施     EventBus · lib/（纯函数库）· 主题CSS │
+│ 基础设施     EventBus · option/feature governance │
+│             state migration · performance monitor │
+│             lib/（纯函数库）· 主题 CSS             │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -61,7 +63,7 @@ GridCore.emit ——→ EventBus + options.onXxx（双通道广播）
 - **模型与 UI 职责分离**：columnModel/rowModel/selection 等不持有 DOM；编辑、菜单、提示、拖拽服务负责受控的临时 DOM 与监听器生命周期
 - **写值单一入口** `GridCore.setCellValue`：编辑/粘贴/填充/剪切/清除/撤销统一走它（保证事件、撤销栈、视图刷新一致）
 - **纯函数下沉 lib/**：路径、比较、布局、CSV/TSV、聚合等逻辑独立测试；DOM 管线由 jsdom 集成测试覆盖
-- **运行时配置单一事实源**：`GRID_OPTION_META` 同时约束 Core 更新策略、Vue runtime props 与 React 动态 props；新增 GridOptions 未登记时 TypeScript 直接报错
+- **运行时配置单一事实源**：`GRID_OPTION_META` 同时约束 Core 更新策略、运行时输入净化、Vue runtime props 与 React 动态 props；新增 GridOptions 未登记时 TypeScript 直接报错
 - **最小权限依赖**：所有 Service/Renderer 构造器只接收 `Pick<GridCore, ...>` 所声明的能力，不能无意访问整个内核
 - **实例状态不污染 DOM**：单元格/表头/明细销毁器和计时器保存在 WeakMap，组件注册支持每个 Grid 独立覆盖
 
@@ -79,11 +81,11 @@ GridCore.emit ——→ EventBus + options.onXxx（双通道广播）
 - 左右固定列物理隔离（非 sticky），中心滚动时 header/pinned 行仅做 `transform` 同步
 - 行池：`slot = pool[index % poolSize]`，`index+nodeId` 双校验跳过未变行
 - 变高行前缀和（Float64Array 仅按已加载行扩容）+ 二分查找可视窗口；服务端已知总量不会按总行数分配数组
-- 列虚拟化：中窗格 20+ 列时只激活可视列；离窗富组件会调用 `destroy` 卸载框架 root
+- 列虚拟化：中窗格 20+ 列时只激活可视列；同 renderer/行/列优先调用 `refresh(params)`，离窗富组件才调用 `destroy` 卸载框架 root
 
 ## 扩展新特性
 
-业务/可选功能优先实现为 `GridFeature`，通过 `options.features` 注册。Feature 只获得稳定的 `GridFeatureContext`（api/root/options/events/error），替换或销毁时自动执行 cleanup/destroy，不需要修改 GridCore。
+业务/可选功能优先实现为 `GridFeature`，通过 `options.features` 注册。Feature 以 `key/version/requires/conflicts` 声明清单，初始化前完成去重、依赖排序、缺失依赖、冲突与循环隔离。Feature 只获得稳定的 `GridFeatureContext`（api/root/options/events/error），替换或销毁时自动逆序执行 cleanup/destroy，不需要修改 GridCore；实际启用清单可从 `getDiagnostics().activeFeatures` 读取。
 
 只有基础行列模型或渲染管线能力才进入内核：
 

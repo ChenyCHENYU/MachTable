@@ -27,6 +27,7 @@ type BodyContext = Pick<
   | "gridId"
   | "isDestroyed"
   | "options"
+  | "performanceMonitor"
   | "pinnedRowsRenderer"
   | "reportError"
   | "resolveCellRenderer"
@@ -49,6 +50,8 @@ interface RowSlot {
   cellColIds: Partial<Record<PaneType, string[]>>;
   detailRow?: HTMLElement;
 }
+
+type CellRenderKind = "standard" | "group" | "detail" | "checkbox" | "drag" | "index" | "tree";
 
 export interface FocusedCell {
   rowIndex: number;
@@ -518,6 +521,16 @@ export class BodyRenderer {
   }
 
   updateRange(force = false): void {
+    const startedAt = this.core.performanceMonitor.start();
+    if (!this.updateRangeInner(force)) return;
+    const rows = Math.max(0, this.lastExcl - this.first);
+    const columns = this.core.columnModel.getPaneColumns("left").length +
+      this.activePaneColumns("center").length +
+      this.core.columnModel.getPaneColumns("right").length;
+    this.core.performanceMonitor.recordRender(startedAt, rows, columns);
+  }
+
+  private updateRangeInner(force: boolean): boolean {
     const viewport = this.core.skeleton.bodyViewports.center;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     const buffer = this.core.options.rowBuffer;
@@ -528,38 +541,48 @@ export class BodyRenderer {
       for (const slot of this.pool) this.hideSlot(slot);
       this.first = 0;
       this.lastExcl = 0;
-      return;
+      return true;
     }
 
-    if (this.renderAutoHeightRange(rowCount, force)) return;
+    if (this.renderAutoHeightRange(rowCount, force)) return true;
 
-    const scrollTop = viewport.scrollTop;
-    const viewBottom = scrollTop + viewport.clientHeight;
-    const firstVisible = lowerBound(this.positions, scrollTop, rowCount);
-    let lastVisible = lowerBound(this.positions, viewBottom, rowCount) + 1;
-    if (lastVisible > rowCount) lastVisible = rowCount;
+    const { first, lastExcl } = this.calculateVisibleRange(viewport, rowCount, buffer);
 
-    const first = clamp(firstVisible - buffer, 0, rowCount - 1);
-    const lastExcl = clamp(lastVisible + buffer, 1, rowCount);
-
-    if (!force && first === this.first && lastExcl === this.lastExcl) return;
+    if (!force && first === this.first && lastExcl === this.lastExcl) return colWindowChanged;
     this.first = first;
     this.lastExcl = lastExcl;
+    this.hideOutsideRange(first, lastExcl);
+    this.renderVirtualRange(first, lastExcl, force, colWindowChanged);
+    return true;
+  }
 
+  private calculateVisibleRange(
+    viewport: HTMLElement,
+    rowCount: number,
+    buffer: number
+  ): { first: number; lastExcl: number } {
+    const firstVisible = lowerBound(this.positions, viewport.scrollTop, rowCount);
+    const viewBottom = viewport.scrollTop + viewport.clientHeight;
+    const lastVisible = Math.min(rowCount, lowerBound(this.positions, viewBottom, rowCount) + 1);
+    return {
+      first: clamp(firstVisible - buffer, 0, rowCount - 1),
+      lastExcl: clamp(lastVisible + buffer, 1, rowCount)
+    };
+  }
+
+  private hideOutsideRange(first: number, lastExcl: number): void {
     for (const slot of this.pool) {
-      if (slot.index !== -1 && (slot.index < first || slot.index >= lastExcl)) {
-        this.hideSlot(slot);
-      }
+      if (slot.index !== -1 && (slot.index < first || slot.index >= lastExcl)) this.hideSlot(slot);
     }
+  }
 
+  private renderVirtualRange(first: number, lastExcl: number, force: boolean, columnsChanged: boolean): void {
     for (let i = first; i < lastExcl; i++) {
       const node = this.core.rowModel.getDisplayedRow(i);
       const slot = this.pool[i % this.poolSize];
       if (!slot || !node) continue;
       if (!force && slot.index === i && slot.nodeId === node.id) {
-        if (colWindowChanged && slot.kind === "master") {
-          this.renderPaneCells(slot, node, "center");
-        }
+        if (columnsChanged && slot.kind === "master") this.renderPaneCells(slot, node, "center");
         continue;
       }
       this.assignSlot(slot, i);
@@ -786,24 +809,48 @@ export class BodyRenderer {
   }
 
   private renderCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
-    cleanupCellContent(this.core, cell);
     cell.setAttribute("aria-readonly", this.core.editingService.isEditable(node, column) ? "false" : "true");
     cell.removeAttribute("aria-expanded");
     cell.removeAttribute("aria-level");
-    if (node.isGroup) {
-      this.renderGroupCell(cell, node, column);
+    const kind = this.cellRenderKind(node, column);
+    if (kind !== "standard") {
+      cleanupCellContent(this.core, cell);
+      this.renderStructuralCell(kind, cell, node, column);
       return;
     }
-    if (column.isDetailToggle) {
+    renderCellContent(this.core, cell, node, column);
+    applyCellClasses(this.core, cell, node, column);
+    applyCellStyle(this.core, cell, node, column);
+    this.applyCellSpanStyle(cell, node, column);
+    this.appendEditableIndicator(cell, node, column);
+  }
+
+  private cellRenderKind(node: RowNode<any>, column: Column): CellRenderKind {
+    if (node.isGroup) return "group";
+    if (column.isDetailToggle) return "detail";
+    if (column.hasCheckbox) return "checkbox";
+    if (column.colDef.rowDrag) return "drag";
+    if (hasColumnType(column.colDef, "index")) return "index";
+    if (this.core.rowModel.isTree && this.getTreeColumn()?.id === column.id) return "tree";
+    return "standard";
+  }
+
+  private renderStructuralCell(
+    kind: Exclude<CellRenderKind, "standard">,
+    cell: HTMLElement,
+    node: RowNode<any>,
+    column: Column
+  ): void {
+    if (kind === "group") {
+      this.renderGroupCell(cell, node, column);
+    } else if (kind === "detail") {
       const expanded = this.core.rowModel.isRowExpanded(node.id);
       const toggle = el("span", `mach-detail-toggle${expanded ? " mach-detail-toggle--open" : ""}`);
       toggle.textContent = "▶";
       cell.replaceChildren(toggle);
       cell.classList.add("mach-cell--detail-toggle");
       this.resetSpanStyle(cell);
-      return;
-    }
-    if (column.hasCheckbox) {
+    } else if (kind === "checkbox") {
       const input = cell.querySelector<HTMLInputElement>(".mach-row-checkbox");
       if (input) {
         input.checked = node.selected;
@@ -812,31 +859,19 @@ export class BodyRenderer {
       }
       if (cell.className !== "mach-cell mach-cell--selection") cell.className = "mach-cell mach-cell--selection";
       this.resetSpanStyle(cell);
-      return;
-    }
-    if (column.colDef.rowDrag) {
+    } else if (kind === "drag") {
       const handle = el("span", "mach-row-drag-handle");
       handle.textContent = "⠿";
       cell.replaceChildren(handle);
       if (cell.className !== "mach-cell mach-cell--drag") cell.className = "mach-cell mach-cell--drag";
       this.resetSpanStyle(cell);
-      return;
-    }
-    if (hasColumnType(column.colDef, "index") && !node.isDetail) {
+    } else if (kind === "index") {
       cell.textContent = String(this.core.rowModel.getRowSeq(node) + this.core.options.indexOffset);
       if (cell.className !== "mach-cell mach-cell--index") cell.className = "mach-cell mach-cell--index";
       this.applyCellSpanStyle(cell, node, column);
-      return;
-    }
-    if (this.core.rowModel.isTree && this.getTreeColumn()?.id === column.id) {
+    } else {
       this.renderTreeCell(cell, node, column);
-      return;
     }
-    renderCellContent(this.core, cell, node, column);
-    applyCellClasses(this.core, cell, node, column);
-    applyCellStyle(this.core, cell, node, column);
-    this.applyCellSpanStyle(cell, node, column);
-    this.appendEditableIndicator(cell, node, column);
   }
 
   private appendEditableIndicator(cell: HTMLElement, node: RowNode<any>, column: Column): void {

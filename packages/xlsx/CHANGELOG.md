@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.18.0
+
+### Patch Changes
+
+- Keep the optional XLSX bridge aligned with the 0.18 Core API and fixed workspace release line.
+- Updated dependencies
+  - @agile-team/mach-table@0.18.0
+
 ## 0.15.0
 
 ### Minor Changes

@@ -9,9 +9,13 @@ import {
   type ShallowRef
 } from "vue";
 import type {
+  GridBatchSaveResult,
   GridChange,
+  SaveChangeConflict,
+  SaveChangeIssue,
   SaveChangesHandler
 } from "@agile-team/mach-table";
+import { resolveSaveConflict } from "@agile-team/mach-table";
 import type { UseMachTableReturn } from "./useMachTable";
 
 export interface UseMachTableEditingOptions<TData = any> {
@@ -19,6 +23,7 @@ export interface UseMachTableEditingOptions<TData = any> {
   guardBeforeUnload?: boolean;
   beforeUnloadMessage?: string;
   onSaveSuccess?(saved: readonly GridChange<TData>[]): void;
+  onSaveResult?(result: GridBatchSaveResult<TData>): void;
   onSaveError?(error: unknown): void;
 }
 
@@ -28,7 +33,13 @@ export interface UseMachTableEditingReturn<TData = any> {
   dirty: ComputedRef<boolean>;
   saving: Ref<boolean>;
   saveError: ShallowRef<unknown | null>;
+  lastSaveResult: ShallowRef<GridBatchSaveResult<TData> | null>;
+  saveIssues: ComputedRef<Array<SaveChangeIssue | SaveChangeConflict<TData>>>;
+  failedRowIds: ComputedRef<string[]>;
   save(handler: SaveChangesHandler<TData>, rowIds?: readonly string[]): Promise<GridChange<TData>[]>;
+  saveDetailed(handler: SaveChangesHandler<TData>, rowIds?: readonly string[]): Promise<GridBatchSaveResult<TData>>;
+  clearSaveIssues(): void;
+  resolveConflict(rowId: string, strategy: "acceptServer" | "keepLocal"): boolean;
   rollback(rowIds?: readonly string[]): boolean;
   markSaved(rowIds?: readonly string[]): void;
   /** Scrolls to a loaded changed row and optionally opens the failed cell editor. */
@@ -45,7 +56,13 @@ export function useMachTableEditing<TData = any>(
   const dirtyRowIds = ref<string[]>([]);
   const saving = ref(false);
   const saveError = shallowRef<unknown | null>(null);
+  const lastSaveResult = shallowRef<GridBatchSaveResult<TData> | null>(null);
   const dirty = computed(() => dirtyRowIds.value.length > 0);
+  const saveIssues = computed(() => [
+    ...(lastSaveResult.value?.failures ?? []),
+    ...(lastSaveResult.value?.conflicts ?? [])
+  ]);
+  const failedRowIds = computed(() => [...new Set(saveIssues.value.map((issue) => issue.rowId))]);
   let removeDirtyListener: (() => void) | null = null;
 
   const refresh = (): void => {
@@ -67,20 +84,23 @@ export function useMachTableEditing<TData = any>(
     removeDirtyListener = api.addEventListener("dirtyStateChanged", refresh);
   }, { immediate: true });
 
-  const save = async (
+  const saveDetailed = async (
     handler: SaveChangesHandler<TData>,
     rowIds?: readonly string[]
-  ): Promise<GridChange<TData>[]> => {
+  ): Promise<GridBatchSaveResult<TData>> => {
     const api = table.api.value;
     if (!api || api.isDestroyed()) throw new Error("[MachTable] Cannot save before the grid is ready.");
     if (saving.value) throw new Error("[MachTable] A save operation is already in progress.");
     saving.value = true;
     saveError.value = null;
+    lastSaveResult.value = null;
     try {
-      const saved = await api.saveChanges(handler, rowIds);
+      const result = await api.saveChangesDetailed(handler, rowIds);
+      lastSaveResult.value = result;
       refresh();
-      options.onSaveSuccess?.(saved);
-      return saved;
+      options.onSaveSuccess?.(result.saved);
+      options.onSaveResult?.(result);
+      return result;
     } catch (error) {
       saveError.value = error;
       options.onSaveError?.(error);
@@ -88,6 +108,25 @@ export function useMachTableEditing<TData = any>(
     } finally {
       saving.value = false;
     }
+  };
+  const save = async (
+    handler: SaveChangesHandler<TData>,
+    rowIds?: readonly string[]
+  ): Promise<GridChange<TData>[]> => (await saveDetailed(handler, rowIds)).saved;
+
+  const clearSaveIssues = (): void => { lastSaveResult.value = null; };
+  const resolveConflict = (rowId: string, strategy: "acceptServer" | "keepLocal"): boolean => {
+    const result = lastSaveResult.value;
+    const conflict = result?.conflicts.find((entry) => entry.rowId === rowId);
+    const api = table.api.value;
+    if (!result || !conflict || !api || !resolveSaveConflict(api, conflict, strategy)) return false;
+    lastSaveResult.value = {
+      ...result,
+      failures: result.failures,
+      conflicts: result.conflicts.filter((entry) => entry.rowId !== rowId)
+    };
+    refresh();
+    return true;
   };
 
   const rollback = (rowIds?: readonly string[]): boolean => {
@@ -132,7 +171,13 @@ export function useMachTableEditing<TData = any>(
     dirty,
     saving,
     saveError,
+    lastSaveResult,
+    saveIssues,
+    failedRowIds,
     save,
+    saveDetailed,
+    clearSaveIssues,
+    resolveConflict,
     rollback,
     markSaved,
     reveal,

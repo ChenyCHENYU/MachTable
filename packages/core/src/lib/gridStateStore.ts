@@ -1,9 +1,10 @@
 import type { GridState } from "../types/state";
 import type { GridStateStore } from "../types/options";
 import type { ColumnStateStorage } from "./columnStateStore";
+import { migrateGridState } from "./gridState";
 
 export interface StoredGridState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   savedAt: number;
   state: GridState;
 }
@@ -29,17 +30,8 @@ function currentStorage(): ColumnStateStorage | null {
   }
 }
 
-function isGridState(value: unknown): value is GridState {
-  if (value == null || typeof value !== "object") return false;
-  const state = value as Partial<GridState>;
-  return state.version === 1 &&
-    Array.isArray(state.columns) &&
-    Array.isArray(state.sortModel) &&
-    state.filterModel != null && typeof state.filterModel === "object" &&
-    state.pagination != null && typeof state.pagination === "object" &&
-    Array.isArray(state.selectedRowIds) &&
-    Array.isArray(state.expandedRowIds) &&
-    Array.isArray(state.expandedGroupIds);
+function storageBytes(value: string): number {
+  return typeof TextEncoder === "undefined" ? value.length * 2 : new TextEncoder().encode(value).byteLength;
 }
 
 /** Safe, versioned localStorage adapter for full grid state. */
@@ -56,9 +48,10 @@ export function createLocalGridStateStore(options: LocalGridStateStoreOptions = 
     load(key) {
       try {
         const raw = (options.storage ?? currentStorage())?.getItem(storageKey(key));
-        if (!raw || raw.length > maxBytes) return null;
-        const parsed = JSON.parse(raw) as Partial<StoredGridState>;
-        return parsed?.schemaVersion === 1 && isGridState(parsed.state) ? parsed.state : null;
+        if (!raw || storageBytes(raw) > maxBytes) return null;
+        const parsed = JSON.parse(raw) as { schemaVersion?: unknown; state?: unknown };
+        if (parsed?.schemaVersion !== 1 && parsed?.schemaVersion !== 2) return null;
+        return migrateGridState(parsed.state);
       } catch (error) {
         report(error, "load", key);
         return null;
@@ -66,9 +59,10 @@ export function createLocalGridStateStore(options: LocalGridStateStoreOptions = 
     },
     save(key, state) {
       try {
-        if (!isGridState(state)) throw new TypeError(`[MachTable] Invalid grid state for "${key}".`);
-        const payload = JSON.stringify({ schemaVersion: 1, savedAt: Date.now(), state } satisfies StoredGridState);
-        if (payload.length > maxBytes) throw new RangeError(`[MachTable] Grid state for "${key}" exceeds ${maxBytes} bytes.`);
+        const normalized = migrateGridState(state);
+        if (!normalized) throw new TypeError(`[MachTable] Invalid grid state for "${key}".`);
+        const payload = JSON.stringify({ schemaVersion: 2, savedAt: Date.now(), state: normalized } satisfies StoredGridState);
+        if (storageBytes(payload) > maxBytes) throw new RangeError(`[MachTable] Grid state for "${key}" exceeds ${maxBytes} bytes.`);
         (options.storage ?? currentStorage())?.setItem(storageKey(key), payload);
       } catch (error) {
         report(error, "save", key);
@@ -86,7 +80,7 @@ export function createLocalGridStateStore(options: LocalGridStateStoreOptions = 
 
 const defaultStore = createLocalGridStateStore();
 
-export function saveGridState(key: string, state: GridState): void {
+export function saveGridState(key: string, state: import("../types/state").GridStateInput): void {
   void defaultStore.save(key, state);
 }
 

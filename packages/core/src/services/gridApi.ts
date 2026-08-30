@@ -2,7 +2,8 @@ import type { GridCore } from "../core/gridCore";
 import type { CsvExportParams, ImportCsvOptions, RowTransaction } from "../types/api";
 import type { GridApi } from "../types/api";
 import type { GridOptions } from "../types/options";
-import type { ApplyGridStateOptions, GridState, GridStateSection } from "../types/state";
+import type { ApplyGridStateOptions, GridState, GridStateInput, GridStateSection } from "../types/state";
+import type { AdvancedFilterModel } from "../types/advancedFilter";
 import type { Column } from "./column";
 import { EVENT_TYPES } from "../types/events";
 import type { ColDefOrGroup, ColumnState, FilterModel, SortModel } from "../types/colDef";
@@ -12,9 +13,13 @@ import { parseCsv, toTsv } from "../lib/clipboard";
 import { escapeHtml } from "../lib/download";
 import { setByPath } from "../lib/path";
 import { formatCellValue } from "../render/cellContent";
+import { sanitizeGridOptionPatch } from "../core/gridOptionRuntime";
+import { migrateGridState } from "../lib/gridState";
+import { createSaveSnapshot, normalizeBatchSaveResult } from "../lib/batchSave";
 
 interface OptionUpdateEffects {
   datasourceChanged: boolean;
+  filterChanged: boolean;
   needsCellRefresh: boolean;
   needsColumnRebuild: boolean;
   needsHeaderRebuild: boolean;
@@ -23,7 +28,7 @@ interface OptionUpdateEffects {
   needsRowRebuild: boolean;
   needsStateLoad: boolean;
   needsSummaryRefresh: boolean;
-  stateToApply?: GridState;
+  stateToApply?: GridStateInput;
 }
 
 interface CsvFieldBinding {
@@ -34,6 +39,7 @@ interface CsvFieldBinding {
 function createOptionUpdateEffects(): OptionUpdateEffects {
   return {
     datasourceChanged: false,
+    filterChanged: false,
     needsCellRefresh: false,
     needsColumnRebuild: false,
     needsHeaderRebuild: false,
@@ -62,17 +68,6 @@ function changedFinite(
 ): number | undefined {
   const normalized = normalizeFinite(value, min, integer);
   return normalized === undefined || normalized === current ? undefined : normalized;
-}
-
-function cloneSnapshotData<T>(data: T): T {
-  try {
-    if (typeof structuredClone === "function") return structuredClone(data);
-  } catch {
-    // Rows containing functions or platform objects fall back to a shallow snapshot.
-  }
-  if (Array.isArray(data)) return [...data] as T;
-  if (data != null && typeof data === "object") return { ...data };
-  return data;
 }
 
 export class GridApiImpl<TData = any> implements GridApi<TData> {
@@ -288,13 +283,35 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (this.core.isDestroyed()) return;
     this.core.rowModel.setFilterModel(filterModel);
     this.core.headerRenderer.refreshFilterIcons();
-    this.core.emit("filterChanged", { filterModel: this.core.rowModel.getFilterModel() });
+    this.emitFilterChanged();
     if (this.core.rowModel.isInfinite) {
       void this.core.rowModel.onServerParamsChanged();
       return;
     }
     this.core.rowModel.refreshPipeline();
     this.core.bodyRenderer.onDataChanged();
+  }
+
+  getAdvancedFilterModel(): AdvancedFilterModel | null {
+    return this.core.rowModel.getAdvancedFilterModel();
+  }
+
+  setAdvancedFilterModel(model: AdvancedFilterModel | null): void {
+    if (this.core.isDestroyed() || !this.core.rowModel.setAdvancedFilterModel(model)) return;
+    this.emitFilterChanged();
+    if (this.core.rowModel.isInfinite) {
+      void this.core.rowModel.onServerParamsChanged();
+      return;
+    }
+    this.core.rowModel.refreshPipeline();
+    this.core.bodyRenderer.onDataChanged();
+  }
+
+  private emitFilterChanged(): void {
+    this.core.emit("filterChanged", {
+      filterModel: this.core.rowModel.getFilterModel(),
+      advancedFilterModel: this.core.rowModel.getAdvancedFilterModel()
+    });
   }
 
   isColumnFilterPresent(colId: string): boolean {
@@ -502,22 +519,18 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     handler: import("../types/api").SaveChangesHandler<TData>,
     rowIds?: readonly string[]
   ): Promise<import("../types/api").GridChange<TData>[]> {
-    const ids = rowIds ? new Set(rowIds) : null;
-    const snapshot = this.core.changeTracker.getChanges()
-      .filter((change) => !ids || ids.has(change.rowId))
-      .map((change) => ({
-        ...change,
-        data: cloneSnapshotData(change.data),
-        cells: change.cells.map((cell) => ({ ...cell }))
-      }));
-    if (snapshot.length === 0) return [];
-    const result = await handler(snapshot);
-    const savedIds = result && typeof result === "object" && Array.isArray(result.savedRowIds)
-      ? new Set(result.savedRowIds.map(String))
-      : null;
-    const saved = savedIds ? snapshot.filter((change) => savedIds.has(change.rowId)) : snapshot;
-    if (!this.core.isDestroyed()) this.core.changeTracker.acknowledge(saved);
-    return saved;
+    return (await this.saveChangesDetailed(handler, rowIds)).saved;
+  }
+
+  async saveChangesDetailed(
+    handler: import("../types/api").SaveChangesHandler<TData>,
+    rowIds?: readonly string[]
+  ): Promise<import("../types/api").GridBatchSaveResult<TData>> {
+    const snapshot = createSaveSnapshot(this.core.changeTracker.getChanges(), rowIds);
+    if (snapshot.length === 0) return { submitted: [], saved: [], failures: [], conflicts: [] };
+    const result = normalizeBatchSaveResult(snapshot, await handler(snapshot));
+    if (!this.core.isDestroyed()) this.core.changeTracker.acknowledge(result.saved);
+    return result;
   }
 
   rollbackChanges(rowIds?: readonly string[]): boolean {
@@ -810,6 +823,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
   updateOptions(options: Partial<GridOptions<TData>>): void {
     if (this.core.isDestroyed()) return;
     this.core.checkWarnings(options);
+    options = sanitizeGridOptionPatch(options);
     const effects = createOptionUpdateEffects();
     const previousColumnMenu = this.core.options.columnMenu;
 
@@ -1122,6 +1136,9 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.defaultExpandAll = options.defaultExpandAll;
       effects.needsRowRebuild = true;
     }
+    if (hasOwnOption(options, "advancedFilterModel")) {
+      effects.filterChanged = this.core.rowModel.setAdvancedFilterModel(options.advancedFilterModel) || effects.filterChanged;
+    }
     if (options.applyRowDrag != null) resolved.applyRowDrag = options.applyRowDrag;
     if (options.suppressWarnings != null) resolved.suppressWarnings = options.suppressWarnings;
   }
@@ -1292,6 +1309,16 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       this.core.onColumnsStructureChanged();
     }
     this.applyRowUpdateEffect(effects);
+    if (effects.filterChanged) {
+      this.emitFilterChanged();
+      if (!effects.datasourceChanged && !effects.needsRowRebuild) {
+        if (this.core.rowModel.isInfinite) void this.core.rowModel.onServerParamsChanged();
+        else {
+          this.core.rowModel.refreshPipeline();
+          this.core.bodyRenderer.onDataChanged();
+        }
+      }
+    }
     if (effects.needsRelayout) {
       this.core.skeleton.updateHeights(resolved.rowHeight, resolved.headerHeight);
       this.core.relayout();
@@ -1354,10 +1381,11 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   getState(): GridState {
     return {
-      version: 1,
+      version: 2,
       columns: this.getColumnState(),
       sortModel: this.getSortModel(),
       filterModel: this.getFilterModel(),
+      advancedFilterModel: this.getAdvancedFilterModel(),
       quickFilterText: this.getQuickFilter(),
       pagination: {
         enabled: this.paginationEnabled(),
@@ -1370,8 +1398,10 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     };
   }
 
-  applyState(state: GridState, options: ApplyGridStateOptions = {}): void {
-    if (this.core.isDestroyed() || !state || state.version !== 1) return;
+  applyState(input: GridStateInput, options: ApplyGridStateOptions = {}): void {
+    if (this.core.isDestroyed()) return;
+    const state = migrateGridState(input);
+    if (!state) return;
     const all: readonly GridStateSection[] = ["columns", "sort", "filter", "pagination", "selection", "expansion"];
     const sections = new Set(options.sections ?? all);
     this.core.editingService.stop(true);
@@ -1386,6 +1416,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (sections.has("sort")) this.core.columnModel.applySortModel(state.sortModel ?? []);
     if (sections.has("filter")) {
       this.core.rowModel.setFilterModel(state.filterModel ?? {});
+      this.core.rowModel.setAdvancedFilterModel(state.advancedFilterModel);
       this.core.rowModel.setQuickFilter(state.quickFilterText);
     }
     if (sections.has("expansion")) {
@@ -1414,7 +1445,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   private emitStateEvents(sections: ReadonlySet<GridStateSection>): void {
     if (sections.has("sort")) this.core.emit("sortChanged", { sortModel: this.getSortModel() });
-    if (sections.has("filter")) this.core.emit("filterChanged", { filterModel: this.getFilterModel() });
+    if (sections.has("filter")) this.emitFilterChanged();
     if (sections.has("pagination")) {
       this.core.emit("paginationChanged", {
         page: this.getPage(),
@@ -1427,6 +1458,14 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   getDiagnostics(): import("../types/api").GridDiagnostics {
     return this.core.getDiagnostics();
+  }
+
+  getPerformanceSnapshot(): import("../types/api").GridPerformanceSnapshot {
+    return this.core.performanceMonitor.snapshot();
+  }
+
+  resetPerformanceMetrics(): void {
+    this.core.performanceMonitor.reset();
   }
 
   setOverlay(type: "loading" | "noRows" | "error" | null): void {

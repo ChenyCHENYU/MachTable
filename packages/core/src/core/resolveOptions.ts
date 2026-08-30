@@ -1,6 +1,7 @@
 import type { GridOptions, GridSize, ResolvedGridOptions } from "../types/options";
 import type { ColDef } from "../types/colDef";
 import { getByPath } from "../lib/path";
+import { normalizeAdvancedFilterModel } from "../lib/advancedFilter";
 
 export const DEFAULT_COL_DEF: Partial<ColDef> = {
   sortable: true,
@@ -172,6 +173,7 @@ function resolveInteraction(options: GridOptions) {
   return {
     columnMenu: options.columnMenu ?? false,
     columnStateKey: options.columnStateKey ?? null,
+    advancedFilterModel: normalizeAdvancedFilterModel(options.advancedFilterModel),
     ...resolveStatePersistence(options),
     locale: options.locale ?? {},
     suppressWarnings: options.suppressWarnings ?? false,
