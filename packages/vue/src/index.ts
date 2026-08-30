@@ -45,20 +45,6 @@ export {
   useMachTableDefaults
 } from "./defaults";
 export type { MachTableConfigSource } from "./defaults";
-export {
-  defineMachTableConfig,
-  mergeMachTableConfig,
-  normalizeMachTableConfig,
-  resolveMachTableGridOptions
-} from "./configuration";
-export type {
-  MachTableConfigWarning,
-  MachTableOptionExplanation,
-  MachTablePresetSelection,
-  MachTableRuntimeConfig,
-  ResolvedMachTableConfig,
-  ResolvedMachTableGridOptions
-} from "./configuration";
 export * from "@agile-team/mach-table";
 
 export default MachTablePlugin;

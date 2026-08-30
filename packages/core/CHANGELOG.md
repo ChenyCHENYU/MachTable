@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.18.1
+
+### Patch Changes
+
+- Keep the synchronized package line on the verified 0.18.1 release and extend release validation to execute every framework adapter through both ESM and CommonJS entry points.
+
 ## 0.18.0
 
 ### Minor Changes

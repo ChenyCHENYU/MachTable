@@ -1,5 +1,14 @@
 # @agile-team/mach-table-vue
 
+## 0.18.1
+
+### Patch Changes
+
+- Fix the CommonJS root entry by removing duplicate explicit Core configuration re-exports that collided with the adapter's Core star export.
+- Add direct ESM/CommonJS adapter entry execution to the package export gate so the published runtime path cannot regress silently.
+- Updated dependencies
+  - @agile-team/mach-table@0.18.1
+
 ## 0.18.0
 
 ### Minor Changes

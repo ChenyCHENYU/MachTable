@@ -1,5 +1,13 @@
 # @agile-team/mach-table-react
 
+## 0.18.1
+
+### Patch Changes
+
+- Add direct CommonJS root-entry execution to the package export gate and keep the framework package line synchronized.
+- Updated dependencies
+  - @agile-team/mach-table@0.18.1
+
 ## 0.18.0
 
 ### Minor Changes

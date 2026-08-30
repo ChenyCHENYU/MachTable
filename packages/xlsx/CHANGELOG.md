@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.18.1
+
+### Patch Changes
+
+- Keep the optional extension on the verified synchronized 0.18.1 package line.
+- Updated dependencies
+  - @agile-team/mach-table@0.18.1
+
 ## 0.18.0
 
 ### Patch Changes

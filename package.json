@@ -1,6 +1,6 @@
 {
   "name": "mach-table",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "private": true,
   "type": "module",
   "description": "MachTable - high performance, framework-agnostic data grid (monorepo)",

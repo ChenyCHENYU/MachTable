@@ -25,11 +25,13 @@ const require = createRequire(import.meta.url);
 const coreEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/index.js")));
 const coreCjs = require(resolve(root, "packages/core/dist/index.cjs"));
 const vueEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/index.js")));
+const vueCjs = require(resolve(root, "packages/vue/dist/index.cjs"));
 const vueWorkflowsEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/workflows.js")));
 const vueWorkflowsCjs = require(resolve(root, "packages/vue/dist/workflows.cjs"));
 const vueEditorsEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/editors.js")));
 const vueEditorsCjs = require(resolve(root, "packages/vue/dist/editors.cjs"));
 const reactEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/index.js")));
+const reactCjs = require(resolve(root, "packages/react/dist/index.cjs"));
 const xlsxEsm = await import(pathToFileURL(resolve(root, "packages/xlsx/dist/index.js")));
 const xlsxCjs = require(resolve(root, "packages/xlsx/dist/index.cjs"));
 
@@ -38,9 +40,12 @@ for (const entry of [coreEsm, coreCjs]) {
   assert.equal(typeof entry.createColumnHelper, "function");
   assert.equal(typeof entry.createEnterprisePreset, "function");
 }
-assert.equal(typeof vueEsm.MachTable, "object");
-assert.equal(typeof vueEsm.MachTablePlugin.install, "function");
-assert.equal(typeof vueEsm.provideMachTableDefaults, "function");
+for (const entry of [vueEsm, vueCjs]) {
+  assert.equal(typeof entry.MachTable, "object");
+  assert.equal(typeof entry.MachTablePlugin.install, "function");
+  assert.equal(typeof entry.defineMachTableConfig, "function");
+  assert.equal(typeof entry.provideMachTableDefaults, "function");
+}
 for (const entry of [vueWorkflowsEsm, vueWorkflowsCjs]) {
   assert.equal(typeof entry.useMachTableEditing, "function");
   assert.equal(typeof entry.useMachTableQuery, "function");
@@ -49,8 +54,10 @@ for (const entry of [vueEditorsEsm, vueEditorsCjs]) {
   assert.equal(typeof entry.vueCellEditor, "function");
   assert.equal(typeof entry.createElementPlusEditors, "function");
 }
-assert.equal(typeof reactEsm.MachTable, "function");
-assert.equal(typeof reactEsm.MachTableProvider, "function");
+for (const entry of [reactEsm, reactCjs]) {
+  assert.equal(typeof entry.MachTable, "function");
+  assert.equal(typeof entry.MachTableProvider, "function");
+}
 for (const entry of [xlsxEsm, xlsxCjs]) {
   assert.equal(typeof entry.createXlsxExtension, "function");
   assert.equal(typeof entry.exportGridToXlsx, "function");
