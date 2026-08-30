@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。Core、Vue、React 与可选 XLSX 包固定版本
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.14.0
+pnpm up @agile-team/mach-table-vue@^0.15.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,23 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.14 → 0.15
+
+0.15 将用户交互式列宽调整改为显式启用，避免只读列表无意显示拖动热区：
+
+```ts
+// 建议放在 mach-table.config.ts，全应用只配置一次。
+defineMachTableConfig({
+  defaults: { enableColumnResize: true }
+});
+```
+
+- 原来依赖 `defaultColDef.resizable: true` 的页面，需要增加表格级 `enableColumnResize: true`；列级 `resizable: false` 仍用于排除选择、序号和操作列。
+- 列宽记忆不需要新的存储 API：完整工作区继续使用 `stateKey`，仅列偏好继续使用 `columnStateKey`。
+- 新状态会携带可选 `flex` 与 `widthMode` 字段，使未手动拖动的普通列和弹性列都保持响应式；旧列状态仍可读取。
+- 新增 `api.setColumnWidth(colId, width)`，非法宽度或未知列安全返回 `false`。
+- `columnResized.finished: false` 不再触发状态写入；松手、键盘和 API 完成事件才保存。
 
 ## 0.13 → 0.14
 

@@ -7,6 +7,7 @@ export class Column<TData = any> {
   hide: boolean;
   pinned: PinnedDirection | null;
   manualWidth: number | null = null;
+  flex: number | null = null;
   currentWidth = 0;
   parentGroup: ColumnGroup<TData> | null = null;
   level = 0;
@@ -18,6 +19,7 @@ export class Column<TData = any> {
     this.hide = colDef.hide ?? false;
     const p = colDef.pinned;
     this.pinned = p === true ? "left" : p === false || p == null ? null : p;
+    this.resetWidth();
   }
 
   get sortable(): boolean {
@@ -43,5 +45,12 @@ export class Column<TData = any> {
 
   get hasCheckbox(): boolean {
     return this.colDef.checkboxSelection === true;
+  }
+
+  resetWidth(): void {
+    this.manualWidth = null;
+    this.flex = typeof this.colDef.flex === "number" && Number.isFinite(this.colDef.flex) && this.colDef.flex > 0
+      ? this.colDef.flex
+      : null;
   }
 }

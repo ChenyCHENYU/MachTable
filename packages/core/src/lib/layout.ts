@@ -8,10 +8,19 @@ export interface WidthInput {
 export const DEFAULT_COLUMN_WIDTH = 150;
 export const DEFAULT_MIN_WIDTH = 80;
 
+function positiveFinite(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function widthBounds(input: WidthInput): { min: number; max: number } {
+  const min = positiveFinite(input.minWidth, DEFAULT_MIN_WIDTH);
+  return { min, max: Math.max(min, positiveFinite(input.maxWidth, Number.MAX_SAFE_INTEGER)) };
+}
+
 export function clampWidth(w: number, input: WidthInput): number {
-  const min = input.minWidth ?? DEFAULT_MIN_WIDTH;
-  const max = input.maxWidth ?? Number.MAX_SAFE_INTEGER;
-  return Math.max(min, Math.min(max, w));
+  const { min, max } = widthBounds(input);
+  const width = positiveFinite(w, positiveFinite(input.width, DEFAULT_COLUMN_WIDTH));
+  return Math.max(min, Math.min(max, width));
 }
 
 export function computeColumnWidths(cols: WidthInput[], availableWidth: number): number[] {
@@ -78,8 +87,7 @@ export function fitColumnWidths(cols: WidthInput[], availableWidth: number): num
     for (const index of [...active]) {
       const target = remainingWidth * (Math.max(1, widths[index]) / weightTotal);
       const fitted = clampWidth(target, cols[index]);
-      const min = cols[index].minWidth ?? DEFAULT_MIN_WIDTH;
-      const max = cols[index].maxWidth ?? Number.MAX_SAFE_INTEGER;
+      const { min, max } = widthBounds(cols[index]);
       if (target < min || target > max) {
         widths[index] = fitted;
         remainingWidth -= fitted;

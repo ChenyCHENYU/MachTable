@@ -1,100 +1,162 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { clamp } from "../lib/dom";
 
 type ResizeContext = Pick<
   GridCore<any>,
-  "columnModel" | "emit" | "persistColumnState" | "relayoutColumns" | "skeleton"
+  | "columnModel"
+  | "commitColumnWidths"
+  | "emitColumnResize"
+  | "options"
+  | "relayoutColumns"
+  | "skeleton"
 >;
 
+interface ActiveResize {
+  column: Column;
+  didResize: boolean;
+  handle: HTMLElement;
+  pointerId: number;
+  startFlex: number | null;
+  startManualWidth: number | null;
+  startWidth: number;
+  startX: number;
+}
+
 export class ResizeService {
-  private active: {
-    column: Column;
-    startX: number;
-    startWidth: number;
-    pointerId: number;
-    handle: HTMLElement;
-  } | null = null;
+  private active: ActiveResize | null = null;
   private rafId = 0;
   private pendingWidth = 0;
 
   constructor(private core: ResizeContext) {}
 
-  startResize(e: PointerEvent, column: Column): void {
-    const handle = e.currentTarget as HTMLElement;
-    const def = column.colDef;
-    const startWidth = column.manualWidth ?? column.currentWidth;
-    const minWidth = def.minWidth ?? 80;
-    if (startWidth < minWidth && def.width == null) {
-      column.manualWidth = startWidth;
+  startResize(event: PointerEvent, column: Column): void {
+    if (!this.core.options.enableColumnResize || !column.resizable || event.isPrimary === false) return;
+    this.cancelResize();
+
+    const handle = event.currentTarget as HTMLElement;
+    const startWidth = column.currentWidth;
+    this.pendingWidth = startWidth;
+    this.active = {
+      column,
+      didResize: false,
+      handle,
+      pointerId: event.pointerId,
+      startFlex: column.flex,
+      startManualWidth: column.manualWidth,
+      startWidth,
+      startX: event.clientX
+    };
+
+    window.addEventListener("pointermove", this.onMove);
+    // Capture phase finalizes before the browser's normal lostpointercapture event.
+    window.addEventListener("pointerup", this.onUp, true);
+    window.addEventListener("pointercancel", this.onCancel, true);
+    handle.addEventListener("lostpointercapture", this.onLostPointerCapture);
+    try {
+      handle.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Window listeners keep resizing functional when pointer capture is unavailable.
     }
-    this.active = { column, startX: e.clientX, startWidth: column.manualWidth ?? startWidth, pointerId: e.pointerId, handle };
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", this.onMove);
-    handle.addEventListener("pointerup", this.onUp);
-    handle.addEventListener("pointercancel", this.onUp);
     this.core.skeleton.root.classList.add("mach-root--resizing");
   }
 
-  private onMove = (e: PointerEvent): void => {
-    const active = this.active;
-    if (!active) return;
-    const def = active.column.colDef;
-    const min = def.minWidth ?? 80;
-    const max = def.maxWidth ?? Number.MAX_SAFE_INTEGER;
-    this.pendingWidth = clamp(active.startWidth + (e.clientX - active.startX), min, max);
-    if (this.rafId) return;
-    this.rafId = requestAnimationFrame(() => {
-      this.rafId = 0;
-      const current = this.active;
-      if (!current) return;
-      this.core.columnModel.setColumnWidth(current.column, this.pendingWidth);
-      this.core.relayoutColumns();
-      this.core.emit("columnResized", {
-        colId: current.column.id,
-        width: this.pendingWidth,
-        finished: false
-      });
-    });
-  };
-
-  private onUp = (e: PointerEvent): void => {
+  cancelResize(restore = true): void {
     const active = this.active;
     if (!active) return;
     this.active = null;
-    if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
-      this.core.columnModel.setColumnWidth(active.column, this.pendingWidth);
+    this.clearFrame();
+    this.removeListeners(active);
+    if (restore) {
+      active.column.manualWidth = active.startManualWidth;
+      active.column.flex = active.startFlex;
       this.core.relayoutColumns();
     }
-    this.rafId = 0;
-    active.handle.removeEventListener("pointermove", this.onMove);
-    active.handle.removeEventListener("pointerup", this.onUp);
-    active.handle.removeEventListener("pointercancel", this.onUp);
-    try {
-      active.handle.releasePointerCapture(e.pointerId);
-    } catch {
-      void 0;
-    }
     this.core.skeleton.root.classList.remove("mach-root--resizing");
-    this.core.emit("columnResized", {
-      colId: active.column.id,
-      width: active.column.manualWidth ?? active.column.currentWidth,
-      finished: true
+  }
+
+  private onMove = (event: PointerEvent): void => {
+    const active = this.matchActivePointer(event);
+    if (!active) return;
+    this.pendingWidth = this.widthFromPointer(active, event.clientX);
+    active.didResize ||= Math.abs(this.pendingWidth - active.startWidth) >= 0.5;
+    if (this.rafId) return;
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = 0;
+      this.applyPendingWidth();
     });
-    this.core.persistColumnState();
   };
 
-  destroy(): void {
-    cancelAnimationFrame(this.rafId);
-    this.rafId = 0;
-    if (this.active) {
-      const active = this.active;
-      this.active = null;
-      active.handle.removeEventListener("pointermove", this.onMove);
-      active.handle.removeEventListener("pointerup", this.onUp);
-      active.handle.removeEventListener("pointercancel", this.onUp);
+  private onUp = (event: PointerEvent): void => {
+    const active = this.matchActivePointer(event);
+    if (!active) return;
+    this.pendingWidth = this.widthFromPointer(active, event.clientX);
+    active.didResize ||= Math.abs(this.pendingWidth - active.startWidth) >= 0.5;
+    this.finishResize(active);
+  };
+
+  private onCancel = (event: PointerEvent): void => {
+    if (!this.matchActivePointer(event)) return;
+    this.cancelResize();
+  };
+
+  private onLostPointerCapture = (): void => {
+    this.cancelResize();
+  };
+
+  private finishResize(active: ActiveResize): void {
+    this.active = null;
+    this.clearFrame();
+    if (active.didResize) {
+      if (Math.abs(this.pendingWidth - active.startWidth) < 0.5) {
+        active.column.manualWidth = active.startManualWidth;
+        active.column.flex = active.startFlex;
+      } else {
+        this.core.columnModel.setColumnWidth(active.column, this.pendingWidth);
+      }
+      this.core.relayoutColumns();
     }
+    this.removeListeners(active);
+    try {
+      active.handle.releasePointerCapture?.(active.pointerId);
+    } catch {
+      // The capture can already be released by the browser.
+    }
+    this.core.skeleton.root.classList.remove("mach-root--resizing");
+    if (active.didResize) this.core.commitColumnWidths([active.column]);
+  }
+
+  private applyPendingWidth(): void {
+    const active = this.active;
+    if (!active || !this.core.columnModel.setColumnWidth(active.column, this.pendingWidth)) return;
+    this.core.relayoutColumns();
+    this.core.emitColumnResize(active.column, false);
+  }
+
+  private widthFromPointer(active: ActiveResize, clientX: number): number {
+    const pointerX = Number.isFinite(clientX) ? clientX : active.startX;
+    return active.startWidth + pointerX - active.startX;
+  }
+
+  private matchActivePointer(event: PointerEvent): ActiveResize | null {
+    const active = this.active;
+    return active && event.pointerId === active.pointerId ? active : null;
+  }
+
+  private clearFrame(): void {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
+  }
+
+  private removeListeners(active: ActiveResize): void {
+    window.removeEventListener("pointermove", this.onMove);
+    window.removeEventListener("pointerup", this.onUp, true);
+    window.removeEventListener("pointercancel", this.onCancel, true);
+    active.handle.removeEventListener("lostpointercapture", this.onLostPointerCapture);
+  }
+
+  destroy(): void {
+    this.cancelResize(false);
+    this.clearFrame();
     this.core.skeleton.root?.classList.remove("mach-root--resizing");
   }
 }

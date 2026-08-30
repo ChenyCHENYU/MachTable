@@ -116,6 +116,8 @@ export interface GridApi<TData = any> {
   setColumnVisibility(colId: string, visible: boolean): void;
   moveColumn(colId: string, toIndex: number): void;
   setColumnPinned(colId: string, pinned: "left" | "right" | null): void;
+  /** Sets one width without replacing the rest of the column state. */
+  setColumnWidth(colId: string, width: number): boolean;
 
   sizeColumnsToFit(width?: number): void;
   autoSizeColumn(colId: string, skipHeader?: boolean): void;

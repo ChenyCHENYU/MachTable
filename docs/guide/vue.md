@@ -40,6 +40,7 @@ export default defineMachTableConfig({
   defaults: {
     size: "compact",
     pagination: false,
+    enableColumnResize: true,
     defaultColDef: { sortable: true, resizable: true, filter: true },
     onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
   }

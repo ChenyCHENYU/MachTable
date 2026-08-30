@@ -39,7 +39,7 @@ MachTable 不以“把所有竞品功能全部复制一遍”为目标。调研�
 
 | 产品 | 主要定位与渲染路径 | 当前授权形态 | 对 MachTable 最有参考价值的部分 |
 | --- | --- | --- | --- |
-| MachTable 0.14 | DOM 行列双虚拟化；复杂业务浏览和录入；Vue 优先、React 官方支持 | 从 0.9.1 起源码公开可查看，使用前需书面授权 | 分层配置、远程查询、业务编辑、组合控制器、可选工具栏、自动状态、列工作台、懒加载树、可选 XLSX、零 Core 运行时依赖 |
+| MachTable 0.15 | DOM 行列双虚拟化；复杂业务浏览和录入；Vue 优先、React 官方支持 | 从 0.9.1 起源码公开可查看，使用前需书面授权 | 分层配置、远程查询、业务编辑、组合控制器、可选工具栏、可恢复列宽与自动状态、列工作台、懒加载树、可选 XLSX、零 Core 运行时依赖 |
 | AG Grid 36 | DOM 虚拟化；Community + Enterprise；四类 Row Model | Community MIT，Enterprise 商业授权 | SSRM/Viewport、Pivot/图表/XLSX、模块注册、工具面板、无障碍治理 |
 | Vxe-Table 4 | Vue 3 PC 端 CRUD/可编辑表格；虚拟列表和插件生态 | MIT | Vue 模板体验、Grid/Form/Toolbar 一体化、CRUD、导入导出与插件生态 |
 | Surely Vue Table 5 | Vue 3 商业表格；默认虚拟滚动，强调 10 万行/列与复杂布局 | Commercial | Vue 单包接入、自动行高/合并/树/子表在虚拟滚动下的一致体验 |

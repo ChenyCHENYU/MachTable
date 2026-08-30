@@ -181,6 +181,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   rowBuffer?: number;
   /** `fit` continuously fills the container without grid-ready glue code. */
   columnLayout?: ColumnLayoutMode;
+  /** Enables pointer, double-click and Alt+Arrow column resizing. Disabled by default. */
+  enableColumnResize?: boolean;
   /** Lets small grids grow with their rows. Avoid for large or infinite datasets. */
   domLayout?: DomLayoutMode;
   rowSelection?: RowSelectionMode;
@@ -290,6 +292,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   headerHeight: number;
   rowBuffer: number;
   columnLayout: ColumnLayoutMode;
+  enableColumnResize: boolean;
   domLayout: DomLayoutMode;
   rowSelection: RowSelectionMode;
   multiSort: boolean;

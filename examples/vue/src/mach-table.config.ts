@@ -34,6 +34,7 @@ export const machTableConfig = defineMachTableConfig({
     size: "compact",
     theme: "auto",
     columnLayout: "fit",
+    enableColumnResize: true,
     stripedRows: true,
     columnMenu: true,
     columnStateStore,

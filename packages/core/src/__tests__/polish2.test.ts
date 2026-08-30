@@ -70,6 +70,7 @@ describe("header keyboard accessibility", () => {
       columnDefs: defs,
       rowData: rows,
       pagination: false,
+      enableColumnResize: true,
       getRowId: (p) => p.data.id
     });
     api.addEventListener("columnResized", resized);
@@ -269,6 +270,7 @@ describe("enterprise DX helpers and change tracking", () => {
       { defaultColDef: { minWidth: 120 }, size: "compact" }
     );
     expect(preset.enableRangeSelection).toBe(true);
+    expect(preset.enableColumnResize).toBe(true);
     expect(preset.defaultColDef).toEqual(expect.objectContaining({ filter: true, minWidth: 120 }));
   });
 

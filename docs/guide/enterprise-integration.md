@@ -30,20 +30,20 @@ Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的
 Vue：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.14.0
+pnpm add @agile-team/mach-table-vue@^0.15.0
 ```
 
 React：
 
 ```bash
-pnpm add @agile-team/mach-table-react@^0.14.0
+pnpm add @agile-team/mach-table-react@^0.15.0
 ```
 
 npm / Yarn：
 
 ```bash
-npm install @agile-team/mach-table-vue@^0.14.0
-yarn add @agile-team/mach-table-vue@^0.14.0
+npm install @agile-team/mach-table-vue@^0.15.0
+yarn add @agile-team/mach-table-vue@^0.15.0
 ```
 
 Core、Vue、React 与可选 XLSX 包采用同版本联动。适配器会锁定匹配版本的 Core，普通业务项目仍只需升级自己的适配器并提交 lockfile；未使用 Excel 时不要安装 XLSX 包。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
@@ -103,6 +103,7 @@ export default defineMachTableConfig({
   defaults: {
     size: "compact",
     pagination: false,
+    enableColumnResize: true,
     defaultColDef: { minWidth: 100, sortable: true, resizable: true, filter: true },
     onGridError: ({ code, error, source, context }) => {
       telemetry.captureException(error, { tags: { code, source }, extra: context });
@@ -146,6 +147,7 @@ const defaults = computed(() => ({
   defaultColDef: { minWidth: 100, sortable: true, resizable: true },
   rowSelection: "multiple" as const,
   size: "compact" as const,
+  enableColumnResize: true,
   stripedRows: true,
   columnMenu: true,
   onGridError: (event: { error: unknown; source: string; context?: Record<string, unknown> }) => {
@@ -253,6 +255,7 @@ export function AppDataGrid<TData extends object>(props: AppDataGridProps<TData>
       defaultColDef={defaultColDef}
       rowSelection="multiple"
       size="compact"
+      enableColumnResize
       stripedRows
       columnMenu
       onGridError={(event) => console.error("[grid]", event.source, event.error, event.context)}
@@ -269,6 +272,7 @@ export function AppDataGrid<TData extends object>(props: AppDataGridProps<TData>
 <MachTableProvider defaults={{
   size: "compact",
   pagination: false,
+  enableColumnResize: true,
   defaultColDef: { sortable: true, resizable: true, filter: true },
   onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
 }}>

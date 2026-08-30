@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.14.0-2563eb" alt="Source version 0.14.0" />
+  <img src="https://img.shields.io/badge/source-0.15.0-2563eb" alt="Source version 0.15.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
@@ -89,6 +89,8 @@ const columns: ColDef<Order>[] = [
       :row-data="rows"
       row-key="id"
       row-selection="multiple"
+      enable-column-resize
+      state-key="orders-list"
       striped-rows
     />
   </div>
@@ -122,6 +124,8 @@ export function OrdersPage({ rows }: { rows: Order[] }) {
         columnDefs={columns}
         rowData={rows}
         rowKey="id"
+        enableColumnResize
+        stateKey="orders-list"
       />
     </div>
   );
@@ -149,6 +153,21 @@ api.destroy();
 ```
 
 > 默认布局的容器必须有明确高度，并且必须引入主题 CSS。小数据详情表可使用 `domLayout: "autoHeight"` 由内容撑开；不要将自动高度用于虚拟大表或远程无限数据源。完整的生产项目配置、SSR、错误治理、状态持久化和上线检查见[企业级项目接入手册](./docs/guide/enterprise-integration.md)。
+
+## 0.15：可控、可恢复的列宽体验
+
+列宽拖动现在由 `enableColumnResize: true` 显式开启，默认保持关闭。开启后支持鼠标/触控拖动、双击内容自适应和表头 `Alt+←/→`；配合 `stateKey` 即可记忆完整工作区，配合 `columnStateKey` 则只记忆列偏好。拖动取消会完整回滚，松手只保存一次，未拖动的自动列与 flex 列继续响应容器宽度。
+
+```ts
+export default defineMachTableConfig({
+  defaults: { enableColumnResize: true }
+});
+
+// 每个页面只提供稳定 key；无需自行监听 columnResized。
+<MachTable stateKey="orders-list" />
+```
+
+程序化调整不受交互开关限制：`api.setColumnWidth("amount", 180)` 会统一触发完成事件和状态持久化。详见[列状态记忆](./docs/recipes/column-state.md)。
 
 ## 0.14：把常见页面胶水收进标准工作流
 
@@ -199,6 +218,7 @@ export default defineMachTableConfig({
   defaults: {
     size: "compact",
     columnLayout: "fit",
+    enableColumnResize: true,
     pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] },
     defaultColDef: { sortable: true, resizable: true, filter: true },
     onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
@@ -345,7 +365,8 @@ pnpm test:e2e
 | 配置与命令 | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) |
 | 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频业务 | [场景配方](./docs/recipes/selection.md) |
-| 0.14 使用体验 | [控制器与标准工具栏](./docs/recipes/controller-toolbar.md) · [远程查询](./docs/recipes/remote-query.md) · [状态自动持久化](./docs/recipes/grid-state.md) |
+| 0.15 列宽体验 | [列宽拖动与状态记忆](./docs/recipes/column-state.md) · [完整状态持久化](./docs/recipes/grid-state.md) |
+| 0.14 使用体验 | [控制器与标准工具栏](./docs/recipes/controller-toolbar.md) · [远程查询](./docs/recipes/remote-query.md) |
 | 竞品与后续规划 | [竞品分析](./docs/advanced/competitive-analysis.md) · [AG Grid 源码审计](./docs/advanced/ag-grid-source-study.md) · [路线图](./docs/advanced/roadmap.md) |
 | 贡献与质量体系 | [架构边界](./docs/advanced/architecture.md) · [质量门禁](./docs/advanced/quality-gates.md) · [贡献指南](./CONTRIBUTING.md) |
 | 故障定位 | [排错手册](./docs/guide/troubleshooting.md) |
@@ -357,7 +378,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前源码版本为 `0.14.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前源码版本为 `0.15.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

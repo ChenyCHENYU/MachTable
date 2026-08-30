@@ -67,6 +67,13 @@ function validateIdentityAndLayout(source: Record<string, unknown>): GridValidat
       message: "autoHeight 会渲染全部已加载行，不适用于 datasource 无限滚动模式"
     });
   }
+  if (source.enableColumnResize != null && typeof source.enableColumnResize !== "boolean") {
+    issues.push({
+      code: "INVALID_OPTION_VALUE",
+      option: "enableColumnResize",
+      message: "enableColumnResize 必须是 boolean；未配置时默认关闭"
+    });
+  }
   return issues;
 }
 

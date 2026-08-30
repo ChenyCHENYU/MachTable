@@ -87,6 +87,7 @@ export function createEnterprisePreset<TData>(
 ): GridOptions<TData> {
   return createMachTablePreset<TData>({
     defaultColDef: { sortable: true, resizable: true, movable: true, filter: true },
+    enableColumnResize: true,
     rowSelection: "multiple",
     columnMenu: true,
     contextMenu: true,

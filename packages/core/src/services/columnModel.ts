@@ -19,6 +19,10 @@ export type PaneType = "left" | "center" | "right";
 export const DETAIL_TOGGLE_COL_ID = "__rg_detail_toggle__";
 type ColumnModelContext = Pick<GridCore<any>, "options">;
 
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 export class ColumnModel {
   private columns: Column[] = [];
   private rootChildren: (ColumnGroup<any> | Column<any>)[] = [];
@@ -64,6 +68,7 @@ export class ColumnModel {
         const p = prev.get(uniqueId);
         if (p) {
           column.manualWidth = p.manualWidth;
+          column.flex = p.flex;
           column.hide = p.hide;
           column.pinned = p.pinned;
         }
@@ -186,8 +191,11 @@ export class ColumnModel {
     }
 
     const available = Math.max(0, viewportWidth - pinnedTotal);
-    const scalable = this.center.filter((column) => !column.colDef.suppressSizeToFit);
-    const fixed = this.center.filter((column) => column.colDef.suppressSizeToFit);
+    const scalable: Column[] = [];
+    const fixed: Column[] = [];
+    for (const column of this.center) {
+      (column.colDef.suppressSizeToFit || column.manualWidth != null ? fixed : scalable).push(column);
+    }
     let fixedTotal = 0;
     for (const column of fixed) {
       column.currentWidth = clampWidth(
@@ -211,11 +219,19 @@ export class ColumnModel {
     if (c.manualWidth != null) {
       return { width: c.manualWidth, minWidth: def.minWidth, maxWidth: def.maxWidth };
     }
-    return { width: def.width, minWidth: def.minWidth, maxWidth: def.maxWidth, flex: def.flex };
+    return {
+      width: def.width,
+      minWidth: def.minWidth,
+      maxWidth: def.maxWidth,
+      ...(c.flex != null ? { flex: c.flex } : {})
+    };
   }
 
-  setColumnWidth(column: Column, width: number): void {
+  setColumnWidth(column: Column, width: number): boolean {
+    if (!isPositiveFiniteNumber(width)) return false;
     column.manualWidth = clampWidth(width, this.widthInputOf(column));
+    column.flex = null;
+    return true;
   }
 
   setColumnVisibility(colId: string, visible: boolean): void {
@@ -274,6 +290,8 @@ export class ColumnModel {
         colId: c.id,
         hide: c.hide,
         width: c.manualWidth ?? c.currentWidth,
+        flex: c.flex,
+        widthMode: c.manualWidth == null ? "auto" : "manual",
         pinned: c.pinned
       };
       if (sortIndex >= 0) {
@@ -291,21 +309,44 @@ export class ColumnModel {
     const stateById = new Map(states.map((s) => [s.colId, s]));
     for (const c of this.columns) {
       const s = stateById.get(c.id);
-      if (!s) continue;
-      if (s.hide != null) c.hide = s.hide;
-      if (s.width != null) c.manualWidth = s.width;
-      if (s.pinned !== undefined) c.pinned = s.pinned;
+      if (s) this.applyColumnViewState(c, s);
     }
-    const nextSort: { colId: string; direction: SortDirection; sortIndex: number }[] = [];
-    for (const s of states) {
-      if (s.sort && this.columns.some((c) => c.id === s.colId)) {
-        nextSort.push({ colId: s.colId, direction: s.sort, sortIndex: s.sortIndex ?? 0 });
-      }
-    }
-    nextSort.sort((a, b) => a.sortIndex - b.sortIndex);
-    this.sortModel = nextSort.map(({ colId, direction }) => ({ colId, direction }));
+    this.sortModel = this.sortModelFromState(states);
     this.applyStateOrder(states);
     this.regroup();
+  }
+
+  private applyColumnViewState(column: Column, state: ColumnState): void {
+    if (typeof state.hide === "boolean") column.hide = state.hide;
+    if (state.widthMode === "auto") {
+      column.resetWidth();
+      if (isPositiveFiniteNumber(state.flex)) column.flex = state.flex;
+    } else if (isPositiveFiniteNumber(state.flex)) {
+      column.flex = state.flex;
+      column.manualWidth = null;
+    } else if (isPositiveFiniteNumber(state.width)) {
+      column.manualWidth = clampWidth(state.width, this.widthInputOf(column));
+      column.flex = null;
+    }
+    if (state.pinned === "left" || state.pinned === "right" || state.pinned === null) {
+      column.pinned = state.pinned;
+    }
+  }
+
+  private sortModelFromState(states: ColumnState[]): SortModelItem[] {
+    const knownIds = new Set(this.columns.map((column) => column.id));
+    const seenIds = new Set<string>();
+    const nextSort: { colId: string; direction: SortDirection; sortIndex: number }[] = [];
+    for (const s of states) {
+      if ((s.sort !== "asc" && s.sort !== "desc") || !knownIds.has(s.colId) || seenIds.has(s.colId)) continue;
+      seenIds.add(s.colId);
+      const sortIndex = typeof s.sortIndex === "number" && Number.isInteger(s.sortIndex) && s.sortIndex >= 0
+        ? s.sortIndex
+        : nextSort.length;
+      nextSort.push({ colId: s.colId, direction: s.sort, sortIndex });
+    }
+    nextSort.sort((a, b) => a.sortIndex - b.sortIndex);
+    return nextSort.map(({ colId, direction }) => ({ colId, direction }));
   }
 
   private applyStateOrder(states: ColumnState[]): void {
@@ -339,7 +380,7 @@ export class ColumnModel {
 
   resetColumnState(): void {
     for (const c of this.columns) {
-      c.manualWidth = null;
+      c.resetWidth();
       c.hide = c.colDef.hide ?? false;
       const p = c.colDef.pinned;
       c.pinned = p === true ? "left" : p === false || p == null ? null : p;

@@ -5,6 +5,7 @@ export default defineMachTableConfig({
   defaults: {
     size: "compact",
     columnLayout: "fit",
+    enableColumnResize: true,
     stripedRows: true,
     defaultColDef: { minWidth: 100, sortable: true, resizable: true, movable: true, filter: true },
     pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100], showTotal: true }

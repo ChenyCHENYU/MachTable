@@ -26,10 +26,11 @@
 | --- | --- |
 | `setColumnDefs(defs)` | 更新列定义（列宽/顺序/显隐/排序状态按 colId 保留） |
 | `getColumnDefs()` | 取当前 defs |
-| `getColumnState()` / `setColumnState(state)` / `resetColumnState()` | 列状态读写与重置（含 width/hide/pinned/sort/sortIndex） |
+| `getColumnState()` / `setColumnState(state)` / `resetColumnState()` | 列状态读写与重置（含 width/flex/widthMode/hide/pinned/sort/sortIndex） |
 | `setColumnVisibility(colId, visible)` | 显示/隐藏列 |
 | `moveColumn(colId, toIndex)` | 编程式移动（同窗格/同分组内） |
 | `setColumnPinned(colId, "left" \| "right" \| null)` | 固定/取消固定 |
+| `setColumnWidth(colId, width)` | 安全设置单列宽度并触发统一事件/持久化；非法宽度或未知列返回 `false` |
 | `sizeColumnsToFit(width?)` | 按比例铺满容器 |
 | `autoSizeColumn(colId, skipHeader?)` / `autoSizeAllColumns(skipHeader?)` | 内容自适应列宽（Canvas 测量，取样前 2000 行） |
 | `openColumnWorkbench(anchor?)` / `closeColumnWorkbench()` | 打开/关闭可搜索的列工作台（显隐、固定、排序、自适应、重置） |

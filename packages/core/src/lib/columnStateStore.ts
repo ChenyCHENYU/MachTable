@@ -54,6 +54,25 @@ function safeSegment(value: string | number): string {
   return encodeURIComponent(String(value).trim()).replace(/%/g, "~");
 }
 
+function copyColumnDimensions(source: Record<string, unknown>, state: ColumnState): void {
+  if (typeof source.width === "number" && Number.isFinite(source.width) && source.width > 0) {
+    state.width = source.width;
+  }
+  if (source.flex === null) state.flex = null;
+  else if (typeof source.flex === "number" && Number.isFinite(source.flex) && source.flex > 0) {
+    state.flex = source.flex;
+  }
+  if (source.widthMode === "auto" || source.widthMode === "manual") state.widthMode = source.widthMode;
+}
+
+function copyColumnSort(source: Record<string, unknown>, state: ColumnState): void {
+  if (source.sort === "asc" || source.sort === "desc" || source.sort === null) state.sort = source.sort;
+  if (source.sortIndex === null) state.sortIndex = null;
+  else if (typeof source.sortIndex === "number" && Number.isInteger(source.sortIndex) && source.sortIndex >= 0) {
+    state.sortIndex = source.sortIndex;
+  }
+}
+
 /** Builds a collision-resistant key for per-user/per-route table preferences. */
 export function createColumnStateKey(parts: ColumnStateKeyParts): string {
   const segments: Array<[string, string | number | undefined]> = [
@@ -81,13 +100,9 @@ function sanitizeColumnState(value: unknown, maxColumns: number): ColumnState[] 
     ids.add(source.colId);
     const state: ColumnState = { colId: source.colId };
     if (typeof source.hide === "boolean") state.hide = source.hide;
-    if (typeof source.width === "number" && Number.isFinite(source.width) && source.width > 0) state.width = source.width;
+    copyColumnDimensions(source, state);
     if (source.pinned === "left" || source.pinned === "right" || source.pinned === null) state.pinned = source.pinned;
-    if (source.sort === "asc" || source.sort === "desc" || source.sort === null) state.sort = source.sort;
-    if (source.sortIndex === null) state.sortIndex = null;
-    else if (typeof source.sortIndex === "number" && Number.isInteger(source.sortIndex) && source.sortIndex >= 0) {
-      state.sortIndex = source.sortIndex;
-    }
+    copyColumnSort(source, state);
     result.push(state);
   }
   return result;

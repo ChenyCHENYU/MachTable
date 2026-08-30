@@ -1,6 +1,6 @@
 # 可访问性与键盘规范
 
-MachTable 0.14 按 WAI-ARIA Grid / Treegrid 交互模型实现语义和键盘基础。业务仍需为页面提供清晰标题、操作说明、颜色对比和可访问的自定义 renderer/editor。
+MachTable 0.15 按 WAI-ARIA Grid / Treegrid 交互模型实现语义和键盘基础。业务仍需为页面提供清晰标题、操作说明、颜色对比和可访问的自定义 renderer/editor。
 
 ## 可访问名称
 
@@ -30,7 +30,7 @@ MachTable 0.14 按 WAI-ARIA Grid / Treegrid 交互模型实现语义和键盘基
 | 编辑器 | Escape | 取消编辑 |
 | 表头 | 左右方向、Home/End | roving tabindex 导航 |
 | 表头 | Enter / Space | 排序 |
-| 表头 | Alt+左右方向 | 调整列宽 |
+| 表头 | Alt+左右方向 | 调整列宽（需 `enableColumnResize: true`） |
 | 表头 | Ctrl+左右方向 | 移动列 |
 
 设置 `suppressCellFocus` 或 `suppressHeaderFocus` 会关闭对应键盘入口，只应用在确有替代交互的只读展示场景。

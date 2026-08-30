@@ -11,6 +11,7 @@ type HeaderContext = Pick<
   | "columnDragService"
   | "columnMenu"
   | "columnModel"
+  | "commitColumnWidths"
   | "cycleSort"
   | "emit"
   | "filterPopup"
@@ -55,6 +56,7 @@ export class HeaderRenderer {
   constructor(private core: HeaderContext) {}
 
   build(): void {
+    this.core.resizeService.cancelResize();
     for (const cell of this.leafCells) {
       const destroy = takeHeaderDestroyer(cell.el);
       if (destroy) {
@@ -230,8 +232,9 @@ export class HeaderRenderer {
       cellEl.appendChild(menuBtn);
     }
 
-    if (column.resizable) {
+    if (this.canResizeColumn(column)) {
       const resizeEl = el("div", "mach-header-resize");
+      resizeEl.setAttribute("aria-hidden", "true");
       resizeEl.addEventListener("pointerdown", (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -331,7 +334,7 @@ export class HeaderRenderer {
       );
       this.core.columnModel.setColumnWidth(column, next);
       this.core.relayoutColumns();
-      this.core.emit("columnResized", { colId: column.id, width: column.currentWidth, finished: true });
+      this.core.commitColumnWidths([column]);
       e.preventDefault();
     };
 
@@ -342,7 +345,7 @@ export class HeaderRenderer {
         if (column.sortable) this.core.cycleSort(column, e.shiftKey);
         return;
       case e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft"):
-        if (!column.resizable) return;
+        if (!this.canResizeColumn(column)) return;
         resize(e.key === "ArrowRight" ? 24 : -24);
         return;
       case e.ctrlKey && (e.key === "ArrowLeft" || e.key === "ArrowRight"):
@@ -378,6 +381,10 @@ export class HeaderRenderer {
     if (!target) return;
     for (const cell of this.leafCells) cell.el.tabIndex = cell === target ? 0 : -1;
     target.el.focus({ preventScroll: true });
+  }
+
+  private canResizeColumn(column: Column): boolean {
+    return this.core.options.enableColumnResize && column.resizable;
   }
 
   refreshSortIndicators(): void {

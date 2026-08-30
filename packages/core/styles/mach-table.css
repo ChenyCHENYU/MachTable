@@ -429,8 +429,8 @@
 .mach-header-resize {
   position: absolute;
   top: 0;
-  right: -3px;
-  width: 6px;
+  right: 0;
+  width: 8px;
   height: 100%;
   cursor: col-resize;
   z-index: 2;
@@ -441,7 +441,7 @@
 .mach-root--resizing .mach-header-resize::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: 0 3px;
   background: var(--mach-primary);
   opacity: 0.45;
   border-radius: 1px;

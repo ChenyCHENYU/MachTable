@@ -1,5 +1,16 @@
 # @agile-team/mach-table-react
 
+## 0.15.0
+
+### Minor Changes
+
+- Make interactive column resizing an explicit opt-in, harden pointer cancellation and runtime toggling, persist completed width changes exactly once, preserve responsive automatic/flex widths across state restoration, expose a safe single-column width API, and synchronize framework examples and integration documentation.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes

@@ -54,6 +54,16 @@ import type {
 
 const DATA_SOURCE_ERROR_PREFIXES = ["datasource", "treeData"] as const;
 const STATE_ERROR_PREFIXES = ["columnState.", "gridState."] as const;
+const GRID_STATE_CHANGE_EVENTS = new Set<GridEventType>([
+  "selectionChanged",
+  "sortChanged",
+  "filterChanged",
+  "columnMoved",
+  "columnVisibilityChanged",
+  "displayedColumnsChanged",
+  "paginationChanged",
+  "detailToggled"
+]);
 
 type ColumnStateLike = ColumnState;
 
@@ -530,11 +540,8 @@ export class GridCore<TData = any> {
         else this.reportError(error, `eventHandler.${String(handlerKey)}`, { eventType: type });
       }
     }
-    if (
-      type === "selectionChanged" || type === "sortChanged" || type === "filterChanged" ||
-      type === "columnResized" || type === "columnMoved" || type === "columnVisibilityChanged" ||
-      type === "displayedColumnsChanged" || type === "paginationChanged" || type === "detailToggled"
-    ) this.scheduleGridStateSave();
+    const finishedResize = type === "columnResized" && Boolean((event as { finished?: boolean }).finished);
+    if (finishedResize || GRID_STATE_CHANGE_EVENTS.has(type)) this.scheduleGridStateSave();
     return event;
   }
 
@@ -636,6 +643,24 @@ export class GridCore<TData = any> {
 
   toggleDetail(rowId: string): boolean {
     return this.rowModel.toggleDetail(rowId);
+  }
+
+  emitColumnResize(column: Column, finished: boolean): void {
+    this.emit("columnResized", {
+      colId: column.id,
+      width: column.currentWidth,
+      finished
+    });
+  }
+
+  /** Finalizes one logical resize operation and persists its state once. */
+  commitColumnWidths(columns: readonly Column[]): void {
+    if (this.destroyed || columns.length === 0) return;
+    for (const column of columns) {
+      if (this.destroyed) break;
+      this.emitColumnResize(column, true);
+    }
+    this.persistColumnState();
   }
 
   private columnStateLoadToken = 0;

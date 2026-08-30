@@ -81,6 +81,7 @@ export default function Page() {
         rowSelection="multiple"
         rowKey="id"
         stateKey="employees-list"
+        enableColumnResize
         stripedRows
         onSelectionChanged={(e) => setCount(e.selectedRows.length)}
         onCellValueChanged={(e) => console.log(e.colDef.field, e.oldValue, "→", e.newValue)}

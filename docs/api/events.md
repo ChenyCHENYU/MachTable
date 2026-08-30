@@ -71,7 +71,7 @@ onGridReady: (e) => { /* grid 可交互，e.api 即命令接口 */ }
 
 | 事件 | 载荷 | 说明 |
 | --- | --- | --- |
-| `columnResized` | `{ colId, width, finished }` | 拖拽过程 `finished: false`，松手 `true` |
+| `columnResized` | `{ colId, width, finished }` | 拖拽帧为 `finished: false`，松手、键盘或 API 提交为 `true`；自动持久化只响应完成事件 |
 | `columnMoved` | `{ colId, toIndex }` | 拖拽换位完成 |
 | `columnVisibilityChanged` | `{ colId, visible }` | 显示/隐藏切换 |
 | `displayedColumnsChanged` | `{}` | 列结构整体变化（defs 更新/状态应用） |

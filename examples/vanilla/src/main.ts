@@ -104,6 +104,7 @@ const api: GridApi<MachineRow> = createGrid<MachineRow>(host, {
   stripedRows: true,
   pagination: false,
   columnMenu: true,
+  enableColumnResize: true,
   columnStateKey: "demo-main-grid",
   enableRangeSelection: true,
   contextMenu: true,

@@ -46,7 +46,7 @@ api.applyState(snapshot, {
 });
 ```
 
-`columnStateKey` 只自动持久化列宽、顺序、显隐、固定和排序；`GridState` 由业务决定保存时机，范围更完整。两者同时使用时，应明确谁是最终来源，通常工作区恢复页面只选 `GridState`。
+`columnStateKey` 只自动持久化列宽、顺序、显隐、固定和排序；配置 `stateKey` 后，完整 `GridState` 会在用户状态完成变化时自动防抖保存。手动 `getState/applyState` 仍适合命名视图、服务端快照和跨页面传递。两者同时使用时会形成两个最终来源，通常工作区恢复页面只选 `stateKey`。
 
 ## 版本迁移
 

@@ -31,7 +31,7 @@
 | 属性 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `sortable` | `boolean` | `true` | 点击表头排序（asc → desc → 无） |
-| `resizable` | `boolean` | `true` | 拖拽调宽；双击把手自适应列宽 |
+| `resizable` | `boolean` | `true` | 当前列是否允许调宽；只有表格级 `enableColumnResize: true` 时才显示拖动把手并启用快捷键 |
 | `movable` | `boolean` | `true` | 拖拽表头换位（分组内或同窗格内） |
 | `filter` | `boolean \| "text" \| "number" \| "date" \| "set"` | `false` | 过滤器类型；`true` 等价 `"text"`。过滤条件摘要自动显示为表头 tag |
 | `filterParams` | `{ values?, maxValues? }` | — | set 过滤器候选值；默认从数据派生（上限 500） |

@@ -188,6 +188,15 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     this.core.persistColumnState();
   }
 
+  setColumnWidth(colId: string, width: number): boolean {
+    if (this.core.isDestroyed()) return false;
+    const column = this.core.columnModel.getColumn(colId);
+    if (!column || !this.core.columnModel.setColumnWidth(column, width)) return false;
+    this.core.relayoutColumns();
+    this.core.commitColumnWidths([column]);
+    return true;
+  }
+
   sizeColumnsToFit(width?: number): void {
     if (this.core.isDestroyed()) return;
     const cols = this.core.columnModel.getOrderedVisible();
@@ -196,11 +205,11 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (target <= 0) return;
     const total = cols.reduce((acc, c) => acc + c.currentWidth, 0);
     if (total <= 0) return;
-    for (const col of cols) {
-      this.core.columnModel.setColumnWidth(col, Math.max(30, Math.floor((col.currentWidth * target) / total)));
-    }
+    const changed = cols.filter((col) =>
+      this.core.columnModel.setColumnWidth(col, Math.max(30, Math.floor((col.currentWidth * target) / total)))
+    );
     this.core.relayoutColumns();
-    this.core.persistColumnState();
+    this.core.commitColumnWidths(changed);
   }
 
   autoSizeColumn(colId: string, skipHeader = false): void {
@@ -210,7 +219,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
     if (this.autoSizeColumnInternal(column, skipHeader)) {
       this.core.relayoutColumns();
-      this.core.persistColumnState();
+      this.core.commitColumnWidths([column]);
     }
   }
 
@@ -220,8 +229,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
   ): boolean {
 
     if (column.hasCheckbox || column.isDetailToggle) {
-      this.core.columnModel.setColumnWidth(column, column.isDetailToggle ? 38 : 46);
-      return true;
+      return this.core.columnModel.setColumnWidth(column, column.isDetailToggle ? 38 : 46);
     }
 
     this.measureCanvas ??= document.createElement("canvas");
@@ -247,19 +255,18 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     }
 
     const extra = (column.sortable ? 20 : 0) + (column.filterable ? 28 : 0) + (this.core.options.columnMenu ? 22 : 0) + 28;
-    this.core.columnModel.setColumnWidth(column, Math.ceil(maxWidth) + extra);
-    return true;
+    return this.core.columnModel.setColumnWidth(column, Math.ceil(maxWidth) + extra);
   }
 
   autoSizeAllColumns(skipHeader?: boolean): void {
     if (this.core.isDestroyed()) return;
-    let changed = false;
+    const changed: Column<TData>[] = [];
     for (const col of this.core.columnModel.getOrderedVisible()) {
-      changed = this.autoSizeColumnInternal(col, skipHeader ?? false) || changed;
+      if (this.autoSizeColumnInternal(col, skipHeader ?? false)) changed.push(col);
     }
-    if (changed) {
+    if (changed.length > 0) {
       this.core.relayoutColumns();
-      this.core.persistColumnState();
+      this.core.commitColumnWidths(changed);
     }
   }
 
@@ -903,6 +910,14 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   private updateInteractionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.options;
+    if (
+      typeof options.enableColumnResize === "boolean" &&
+      options.enableColumnResize !== resolved.enableColumnResize
+    ) {
+      this.core.resizeService.cancelResize();
+      resolved.enableColumnResize = options.enableColumnResize;
+      effects.needsHeaderRebuild = true;
+    }
     if (options.locale != null && options.locale !== resolved.locale) {
       resolved.locale = options.locale;
       effects.needsHeaderRebuild = true;

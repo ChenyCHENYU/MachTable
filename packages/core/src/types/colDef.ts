@@ -191,6 +191,10 @@ export interface ColumnState {
   colId: string;
   hide?: boolean;
   width?: number;
+  /** Active flex weight. A resize clears flex and turns width into a manual override. */
+  flex?: number | null;
+  /** Distinguishes responsive/definition width from an explicit user or API override. */
+  widthMode?: "auto" | "manual";
   pinned?: "left" | "right" | null;
   sort?: SortDirection | null;
   sortIndex?: number | null;

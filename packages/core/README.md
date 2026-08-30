@@ -21,6 +21,7 @@ const api = createGrid(document.querySelector("#grid")!, {
   ],
   rowData: [{ id: "1", name: "MachTable" }],
   rowKey: "id",
+  enableColumnResize: true,
   stateKey: "customer-list"
 });
 
@@ -85,6 +86,8 @@ api.setOverlay("error", () => "Request failed. Please retry.");
 ```
 
 `rowKey: "id"` is shorthand for a stable field path; `getRowId` remains available for derived IDs and wins when both are present. `domLayout: "autoHeight"` is intended only for small client-side tables—normal virtual layout remains the large-data default.
+
+Column resizing is deliberately opt-in. Set `enableColumnResize: true`; add `stateKey` to remember the complete workspace, or `columnStateKey` to remember only widths/order/visibility/pinning/sort. Pointer cancellation rolls back, completed drags persist once, and untouched automatic/flex columns remain responsive.
 
 For framework applications use the official adapters:
 

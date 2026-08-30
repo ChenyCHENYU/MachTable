@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-Official React 18+ adapter for MachTable 0.14. It provides a generic `<MachTable>`, full app/route configuration, remote query and editing workflows, a cohesive controller, a standard toolbar, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official React 18+ adapter for MachTable 0.15. It provides a generic `<MachTable>`, full app/route configuration, remote query and editing workflows, a cohesive controller, optional and persistent column resizing, a standard toolbar, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -41,6 +41,7 @@ export function App({ rows }: { rows: Row[] }) {
         columnDefs={columns}
         rowKey="id"
         stateKey="customer-list"
+        enableColumnResize
       />
     </div>
   );
@@ -77,6 +78,7 @@ import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-t
 export default defineMachTableConfig({
   defaults: {
     size: "compact",
+    enableColumnResize: true,
     defaultColDef: { sortable: true, resizable: true, filter: true }
   },
   defaultPreset: "list",

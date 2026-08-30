@@ -77,6 +77,7 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
     headerHeight: finiteAtLeast(options.headerHeight, preset.headerHeight, 1),
     rowBuffer: finiteAtLeast(options.rowBuffer, 8, 0, true),
     columnLayout: options.columnLayout === "fit" ? "fit" as const : "normal" as const,
+    enableColumnResize: options.enableColumnResize === true,
     domLayout: options.domLayout === "autoHeight" ? "autoHeight" as const : "normal" as const,
     rowSelection:
       options.rowSelection === "single" || options.rowSelection === "multiple"

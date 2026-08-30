@@ -27,6 +27,7 @@ export default defineMachTableConfig({
     size: "compact",
     theme: "auto",
     columnLayout: "fit", // ResizeObserver 自动填满容器，无需 grid-ready
+    enableColumnResize: true, // 默认关闭；开启后才显示列宽拖动把手
     stripedRows: true,
     columnMenu: true,
     pagination: {

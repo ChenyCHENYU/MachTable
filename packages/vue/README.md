@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-Official Vue 3 adapter for MachTable 0.14. It provides a generic `<MachTable>`, native typed slots, dedicated app/route configuration, cohesive controllers, auto/manual remote query, editing composables, an optional standard toolbar, optional Element Plus editors, async boundaries, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official Vue 3 adapter for MachTable 0.15. It provides a generic `<MachTable>`, native typed slots, dedicated app/route configuration, cohesive controllers, auto/manual remote query, editing composables, optional and persistent column resizing, an optional standard toolbar, optional Element Plus editors, async boundaries, atomic reactive updates and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -43,6 +43,7 @@ const columns: ColDef<Row>[] = [{ field: "name", headerName: "Name", flex: 1 }];
       :column-defs="columns"
       row-key="id"
       state-key="customer-list"
+      enable-column-resize
       striped-rows
     />
   </div>
@@ -95,6 +96,7 @@ import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-t
 export default defineMachTableConfig({
   defaults: {
     size: "compact",
+    enableColumnResize: true,
     pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] },
     defaultColDef: { sortable: true, resizable: true, filter: true }
   },

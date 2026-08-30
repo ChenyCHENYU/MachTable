@@ -52,3 +52,37 @@ for (const example of examples) {
     expect(errors).toEqual([]);
   });
 }
+
+test("vanilla resizes a column and restores the completed width", async ({ page }) => {
+  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: "domcontentloaded" });
+
+  const header = page.locator('.mach-header-cell[data-col-id="code"]').first();
+  const handle = header.locator(".mach-header-resize");
+  await expect(handle).toBeAttached();
+  const before = await header.boundingBox();
+  const box = await handle.boundingBox();
+  if (!before || !box) throw new Error("column resize geometry is unavailable");
+
+  const pointerX = box.x + box.width / 2;
+  const pointerY = box.y + box.height / 2;
+  await page.mouse.move(pointerX, pointerY);
+  await page.mouse.down();
+  await expect(page.locator(".mach-root").first()).toHaveClass(/mach-root--resizing/);
+  await page.mouse.move(pointerX + 56, pointerY, { steps: 4 });
+  await expect.poll(async () => (await header.boundingBox())?.width).toBeCloseTo(before.width + 56, 0);
+  await page.mouse.up();
+
+  await expect.poll(async () => (await header.boundingBox())?.width).toBeCloseTo(before.width + 56, 0);
+  const savedWidth = await page.evaluate(() => {
+    const raw = localStorage.getItem("mach-table:col-state:demo-main-grid");
+    const state = raw ? JSON.parse(raw) : null;
+    return state?.columns?.find((column: { colId: string }) => column.colId === "code")?.width;
+  });
+  expect(savedWidth).toBeCloseTo(before.width + 56, 0);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const restored = await page.locator('.mach-header-cell[data-col-id="code"]').first().boundingBox();
+  expect(restored?.width).toBeCloseTo(savedWidth, 0);
+});
