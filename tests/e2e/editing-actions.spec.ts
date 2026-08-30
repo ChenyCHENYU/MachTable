@@ -58,11 +58,11 @@ test("Vue full-row editing presents staged inputs and save/cancel actions", asyn
 test("Vue action overflow drawer is keyboard dismissible", async ({ page }) => {
   await page.goto("http://127.0.0.1:4175");
   const firstRow = page.locator('.mach-row[data-index="0"]');
-  const more = firstRow.getByRole("button", { name: "More actions" });
+  const more = firstRow.getByRole("button", { name: "更多操作" });
   await more.click();
   const drawer = page.getByRole("dialog", { name: "订单操作" });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "复制订单" })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "复制订单号" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(drawer).toHaveCount(0);
   await expect(more).toBeFocused();

@@ -23,7 +23,7 @@ export class GridSkeleton {
   private overlayContent!: HTMLElement;
   private infiniteLoadingEl!: HTMLElement;
   private infiniteLoadingText!: HTMLElement;
-  private currentOverlay: "loading" | "noRows" | null = null;
+  private currentOverlay: "loading" | "noRows" | "error" | null = null;
   private currentOverlayContent: OverlayTemplate | null = null;
   private currentOverlayAllowsHtml = false;
   private overlayCleanup: (() => void) | null = null;
@@ -37,6 +37,7 @@ export class GridSkeleton {
     const classes = ["mach-root", `mach-size--${options.size}`];
     if (options.stripedRows) classes.push("mach-striped");
     if (options.showCellBorders) classes.push("mach-cell-borders");
+    if (options.domLayout === "autoHeight") classes.push("mach-dom-layout--auto-height");
     this.root = el("div", classes.join(" "));
     this.setCustomClass(options.className);
     this.root.style.setProperty("--mach-row-h", `${options.rowHeight}px`);
@@ -234,6 +235,10 @@ export class GridSkeleton {
     this.root.classList.toggle("mach-cell-borders", on);
   }
 
+  applyDomLayout(layout: import("../types/options").DomLayoutMode): void {
+    this.root.classList.toggle("mach-dom-layout--auto-height", layout === "autoHeight");
+  }
+
   setCustomClass(className: string | null | undefined): void {
     for (const token of this.customClassTokens) this.root.classList.remove(token);
     this.customClassTokens = [];
@@ -244,7 +249,7 @@ export class GridSkeleton {
     }
   }
 
-  showOverlay(type: "loading" | "noRows", content: OverlayTemplate, allowUnsafeHtml = false): void {
+  showOverlay(type: "loading" | "noRows" | "error", content: OverlayTemplate, allowUnsafeHtml = false): void {
     if (
       this.currentOverlay === type &&
       this.currentOverlayContent === content &&
@@ -279,6 +284,7 @@ export class GridSkeleton {
       this.overlayContent.appendChild(spinner);
     }
     this.overlayWrapper.style.display = "";
+    this.applyOverlayRole(type);
     this.root.setAttribute("aria-busy", type === "loading" ? "true" : "false");
   }
 
@@ -291,6 +297,10 @@ export class GridSkeleton {
     this.cleanupOverlayContent();
     this.overlayContent.replaceChildren();
     this.root.setAttribute("aria-busy", "false");
+  }
+
+  private applyOverlayRole(type: "loading" | "noRows" | "error"): void {
+    this.overlayWrapper.setAttribute("role", type === "error" ? "alert" : "status");
   }
 
   setInfiniteLoading(active: boolean, text: string): void {

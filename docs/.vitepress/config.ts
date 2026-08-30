@@ -53,6 +53,7 @@ export default defineConfig({
         {
           text: "场景配方",
           items: [
+            { text: "控制器与标准工具栏", link: "/recipes/controller-toolbar" },
             { text: "行选择", link: "/recipes/selection" },
             { text: "远程查询与跨页选择", link: "/recipes/remote-query" },
             { text: "列工作台", link: "/recipes/column-workbench" },

@@ -28,7 +28,8 @@ export const options = defineGridOptions<Order>({
   ],
   editType: "fullRow",
   rowData: [],
-  getRowId: ({ data }) => data.id,
+  rowKey: "id",
+  stateKey: "orders",
   onCellValueChanged: ({ data, api }) => {
     data.amount.toFixed(2);
     api.getDiagnostics();

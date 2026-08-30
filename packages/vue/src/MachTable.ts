@@ -30,6 +30,19 @@ export type MachTableVueProps<TData = any> = Omit<GridOptions<TData>, AdapterOnl
   gridAriaDescribedBy?: string;
 };
 
+export interface MachTableVueExposed<TData = any> {
+  getApi(): GridApi<TData> | null;
+  getResolvedConfig(): GridOptions<TData>;
+  explainOption(key: keyof GridOptions<TData> | string): MachTableOptionExplanation;
+}
+
+export interface MachTableVueComponent extends DefineComponent<MachTableVueProps<any>> {
+  new <TData = any>(): {
+    $props: MachTableVueProps<TData>;
+    $exposed: MachTableVueExposed<TData>;
+  };
+}
+
 const ADAPTER_OPTION_KEYS = GRID_OPTION_KEYS.filter(
   (key) => !["className", "ariaLabel", "ariaLabelledBy", "ariaDescribedBy"].includes(key)
 );
@@ -169,7 +182,7 @@ const MachTableImpl = defineComponent({
   }
 });
 
-export const MachTable = MachTableImpl as unknown as DefineComponent<MachTableVueProps<any>>;
+export const MachTable = MachTableImpl as unknown as MachTableVueComponent;
 /** @deprecated Use MachTable. Kept as a source-compatible alias through 0.x. */
 export const RobotGrid = MachTable;
 /** @deprecated Use MachTableVueProps. */

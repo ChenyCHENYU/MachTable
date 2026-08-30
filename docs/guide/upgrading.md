@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。Core、Vue、React 与可选 XLSX 包固定版本
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.13.0
+pnpm up @agile-team/mach-table-vue@^0.14.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,18 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.13 → 0.14
+
+0.14 以兼容新增为主，现有 `getRowId`、手动 GridState、`MachTableProvider defaults` 与 Vue 根入口工作流仍可使用：
+
+- 简单稳定主键可改为 `rowKey: "id"`；同时提供 `getRowId` 时后者优先。
+- `stateKey` 自动保存和恢复完整 GridState；已有自管状态无需迁移。不要让 `stateKey` 和业务手动恢复同时争夺最终状态。
+- 远程查询错误现在使用一等 `error` overlay，而不是伪装成 no-rows；`useMachTableQuery().bindings` 已自动适配。
+- `useMachTableQuery({ mode: "manual" })` 只在显式 `reload/reset/retry` 时请求；默认 `auto` 保持旧行为。
+- Vue 标准工具栏位于同一包的 `/ui` 可选入口，基础插件不会自动注册；需要全局使用时额外 `.use(MachTableUiPlugin)`。
+- React Provider 新增完整 `config`，`defaults` 继续作为兼容简写；React Hooks 必须在每次渲染中无条件调用，因此远程页面先调用 `useMachTableQuery`，再把结果传给 `useMachTableController`。
+- 行操作确认按钮在没有服务端 `onSave` 时使用“确认”语义；显式 `labels.save` 继续覆盖。提供 `onSave` 后，失败会保留脏数据并重新打开整行编辑，便于修正或重试。
 
 ## 0.10 → 0.13
 

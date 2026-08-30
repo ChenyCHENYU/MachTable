@@ -11,10 +11,17 @@ import type { GridEventMap } from "./events";
 import type { CellRendererParams, GetRowIdParams } from "./params";
 import type { RowNode } from "./row";
 import type { GridState } from "./state";
+import type { FieldPath } from "./path";
 
 export interface ColumnStateStore {
   load(key: string): ColumnState[] | null | Promise<ColumnState[] | null>;
   save(key: string, state: ColumnState[]): void | Promise<void>;
+}
+
+export interface GridStateStore {
+  load(key: string): GridState | null | Promise<GridState | null>;
+  save(key: string, state: GridState): void | Promise<void>;
+  clear?(key: string): void | Promise<void>;
 }
 
 /** Per-grid component overrides. These take precedence over the global registry. */
@@ -86,6 +93,7 @@ export type EventHandlers<TData = any> = {
 export type RowSelectionMode = "none" | "single" | "multiple";
 export type GridSize = "compact" | "normal" | "large";
 export type ColumnLayoutMode = "normal" | "fit";
+export type DomLayoutMode = "normal" | "autoHeight";
 export type ThemeMode = "light" | "dark" | "auto";
 export type GridEditType = "cell" | "fullRow";
 export type EditableIndicator = "hover" | "always" | "none";
@@ -166,11 +174,15 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   /** Reusable semantic column definitions referenced through `colDef.type`. */
   columnTypes?: Readonly<Record<string, Partial<ColDef<TData>>>>;
   getRowId?: (params: GetRowIdParams<TData>) => string;
+  /** Stable business key shorthand. `getRowId` takes precedence when both are set. */
+  rowKey?: FieldPath<TData> | ((row: TData) => string | number);
   rowHeight?: number;
   headerHeight?: number;
   rowBuffer?: number;
   /** `fit` continuously fills the container without grid-ready glue code. */
   columnLayout?: ColumnLayoutMode;
+  /** Lets small grids grow with their rows. Avoid for large or infinite datasets. */
+  domLayout?: DomLayoutMode;
   rowSelection?: RowSelectionMode;
   multiSort?: boolean;
   size?: GridSize;
@@ -193,6 +205,10 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   features?: readonly GridFeature<TData>[];
   /** State restored atomically after columns and initial rows are available. */
   initialState?: GridState;
+  /** Persist the complete user-visible GridState with a versioned store. */
+  stateKey?: string | null;
+  stateStore?: GridStateStore;
+  stateSaveDebounceMs?: number;
   locale?: import("../lib/locale").RgLocale;
   /** Cell editing is isolated; fullRow stages every editable cell and commits them together. */
   editType?: GridEditType;
@@ -253,8 +269,11 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   /** ID of an external element that provides additional grid instructions. */
   ariaDescribedBy?: string;
   loading?: boolean;
+  /** Non-null errors take precedence over the empty state and remain retryable by the host. */
+  error?: unknown | null;
   overlayNoRowsTemplate?: OverlayTemplate;
   overlayLoadingTemplate?: OverlayTemplate;
+  overlayErrorTemplate?: OverlayTemplate;
   /** Opt in only for trusted overlay strings. Prefer HTMLElement factories. */
   allowUnsafeOverlayHtml?: boolean;
   className?: string;
@@ -266,10 +285,12 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   defaultColDef: Partial<ColDef<TData>>;
   columnTypes: Readonly<Record<string, Partial<ColDef<TData>>>>;
   getRowId?: (params: GetRowIdParams<TData>) => string;
+  rowKey?: FieldPath<TData> | ((row: TData) => string | number);
   rowHeight: number;
   headerHeight: number;
   rowBuffer: number;
   columnLayout: ColumnLayoutMode;
+  domLayout: DomLayoutMode;
   rowSelection: RowSelectionMode;
   multiSort: boolean;
   size: GridSize;
@@ -290,6 +311,9 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   actionPolicy?: ActionPolicy<TData>;
   features: readonly GridFeature<TData>[];
   initialState?: GridState;
+  stateKey: string | null;
+  stateStore?: GridStateStore;
+  stateSaveDebounceMs: number;
   locale: import("../lib/locale").RgLocale;
   editType: GridEditType;
   editableIndicator: EditableIndicator;
@@ -348,8 +372,10 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   ariaLabelledBy: string;
   ariaDescribedBy: string;
   loading: boolean;
+  error: unknown | null;
   overlayNoRowsTemplate: OverlayTemplate;
   overlayLoadingTemplate: OverlayTemplate;
+  overlayErrorTemplate: OverlayTemplate;
   allowUnsafeOverlayHtml: boolean;
   className: string;
 }

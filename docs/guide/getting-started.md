@@ -55,7 +55,7 @@ const api: GridApi<Machine> = createGrid<Machine>(document.getElementById("grid"
   columnDefs,
   rowData: machines,          // 直接给 1 万行也流畅
   rowSelection: "multiple",
-  getRowId: (p) => p.data.id, // 推荐：稳定行 id
+  rowKey: "id",              // 推荐：稳定行 id；复杂规则使用 getRowId
   stripedRows: true
 });
 ```
@@ -64,7 +64,7 @@ const api: GridApi<Machine> = createGrid<Machine>(document.getElementById("grid"
 
 1. **容器必须有高度**：`height: 600px`、`flex: 1`、`calc(100vh - xx)` 均可，表格自适应填满
 2. **必须引入主题 CSS**：`@agile-team/mach-table/styles/mach-table.css`
-3. **强烈建议提供 `getRowId`**：行编辑、选择保持、撤销、无限滚动都依赖稳定 id；缺失时使用自动 id，`setRowData` 后选中态会重置
+3. **强烈建议提供 `rowKey` 或 `getRowId`**：行编辑、选择保持、撤销、无限滚动都依赖稳定 id；简单字段用 `rowKey: "id"`，派生规则用 `getRowId`
 4. **销毁**：`api.destroy()` 移除 DOM 与全部事件监听（SPA 路由切换时务必调用）
 
 ## 常用后续操作

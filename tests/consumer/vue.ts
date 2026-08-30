@@ -4,8 +4,10 @@ import {
   provideMachTableDefaults,
   type MachTableVueProps
 } from "@agile-team/mach-table-vue";
+import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
 import {
   useMachTableEditing,
+  useMachTableController,
   useMachTableQuery
 } from "@agile-team/mach-table-vue/workflows";
 
@@ -13,11 +15,12 @@ interface Row { id: string; name: string }
 
 export const component = MachTable;
 export const plugin = MachTablePlugin;
-export const workflows = [useMachTableEditing, useMachTableQuery];
+export const workflows = [useMachTableEditing, useMachTableQuery, useMachTableController];
+export const toolbar = MachTableToolbar;
 export const props: MachTableVueProps<Row> = {
   columnDefs: [{ field: "name" }],
   rowData: [{ id: "1", name: "Ada" }],
-  getRowId: ({ data }) => data.id
+  rowKey: "id"
 };
 
 export function provideDefaults(): void {

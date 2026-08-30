@@ -5,13 +5,15 @@ import {
   type CSSProperties,
   type MutableRefObject
 } from "react";
-import { createGrid, createMachTablePreset, GRID_OPTION_KEYS, EVENT_TYPES } from "@agile-team/mach-table";
-import type { GridApi, GridOptions } from "@agile-team/mach-table";
-import { useMachTableDefaults } from "./defaults";
+import { createGrid, GRID_OPTION_KEYS, EVENT_TYPES, resolveMachTableGridOptions } from "@agile-team/mach-table";
+import type { GridApi, GridOptions, MachTablePresetSelection } from "@agile-team/mach-table";
+import { useMachTableConfig } from "./defaults";
 
 type AdapterOnlyGridOption = "className" | "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy";
 
 export type MachTableReactProps<TData = any> = Omit<GridOptions<TData>, AdapterOnlyGridOption> & {
+  /** Named application preset(s). Explicit component props still win. */
+  preset?: MachTablePresetSelection;
   /** CSS class applied to the React host element. */
   className?: string;
   /** CSS class forwarded to MachTable's inner grid root. */
@@ -28,7 +30,7 @@ export type MachTableReactProps<TData = any> = Omit<GridOptions<TData>, AdapterO
 
 function collectGridOptions<TData>(
   props: MachTableReactProps<TData>,
-  defaults: Partial<GridOptions<TData>>
+  config: ReturnType<typeof useMachTableConfig>
 ): GridOptions<TData> {
   const explicit: Record<string, unknown> = {};
   for (const key of GRID_OPTION_KEYS) {
@@ -43,7 +45,7 @@ function collectGridOptions<TData>(
     if (value !== undefined) explicit[key] = value;
   }
   if (props.gridClassName !== undefined) explicit.className = props.gridClassName;
-  return createMachTablePreset(defaults, explicit as Partial<GridOptions<TData>>);
+  return resolveMachTableGridOptions(config, props.preset, explicit as Partial<GridOptions<TData>>).options;
 }
 
 export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
@@ -52,9 +54,10 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
   const gridApiRef = useRef<GridApi<TData> | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
-  const defaults = useMachTableDefaults<TData>();
+  const config = useMachTableConfig();
   const effectiveInputs = [
-    defaults,
+    config,
+    props.preset,
     ...GRID_OPTION_KEYS.map((key) => key === "className"
       ? props.gridClassName
       : key === "ariaLabel"
@@ -71,7 +74,7 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
     effectiveCache.current.inputs.length !== effectiveInputs.length ||
     effectiveInputs.some((value, index) => !Object.is(value, effectiveCache.current?.inputs[index]))
   ) {
-    effectiveCache.current = { inputs: effectiveInputs, options: collectGridOptions(props, defaults) };
+    effectiveCache.current = { inputs: effectiveInputs, options: collectGridOptions(props, config) };
   }
   const effectiveOptions = effectiveCache.current.options;
   const effectiveRef = useRef(effectiveOptions);

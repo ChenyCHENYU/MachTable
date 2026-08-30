@@ -94,6 +94,8 @@ export interface ScrollToIndexPosition {
 export interface GridApi<TData = any> {
   /** Resolves after the first layout frame and gridReady emission. */
   whenReady(): Promise<GridApi<TData>>;
+  /** Stable grid root for portals, measurements and fullscreen targets; null after destroy. */
+  getRootElement(): HTMLElement | null;
   /** Reads the currently resolved value after application, preset and table overrides. */
   getGridOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K];
   /** Typed shorthand for updating one runtime option. */
@@ -234,7 +236,7 @@ export interface GridApi<TData = any> {
   /** Lightweight runtime snapshot suitable for support logs and health panels. */
   getDiagnostics(): GridDiagnostics;
 
-  setOverlay(type: "loading" | "noRows" | null): void;
+  setOverlay(type: "loading" | "noRows" | "error" | null): void;
   hideOverlays(): void;
 
   addEventListener<K extends GridEventType>(eventType: K, listener: (event: GridEventMap<TData>[K]) => void): () => void;

@@ -58,6 +58,7 @@ export type {
   RowSelectionMode,
   GridSize,
   ColumnLayoutMode,
+  DomLayoutMode,
   ThemeMode,
   GridEditType,
   EditableIndicator,
@@ -71,6 +72,7 @@ export type {
   OverlayContent,
   OverlayTemplate,
   ColumnStateStore,
+  GridStateStore,
   StatusBarPanel,
   StatusBarConfig,
   GridDatasource,
@@ -101,6 +103,8 @@ export {
   createColumnStateKey,
   createLocalColumnStateStore
 } from "./lib/columnStateStore";
+export { saveGridState, loadGridState, clearGridState, createLocalGridStateStore } from "./lib/gridStateStore";
+export type { LocalGridStateStoreOptions, ManagedGridStateStore, StoredGridState } from "./lib/gridStateStore";
 export type {
   ColumnStateKeyParts,
   ColumnStateStorage,
@@ -114,6 +118,8 @@ export { DEFAULT_LOCALE, LOCALE_EN, matchLocaleKey, formatText, formatTwo } from
 export type { RgLocale, RgLocaleKey } from "./lib/locale";
 export { toTsv, parseTsv, parseCsv, parseDelimited } from "./lib/clipboard";
 export { escapeHtml, downloadFile } from "./lib/download";
+export { createMachTableCommands } from "./lib/controller";
+export type { MachTableCommandOptions, MachTableCommands } from "./lib/controller";
 export { sanitizeFormulaCell } from "./lib/csv";
 export {
   registerCellRenderer,
@@ -139,12 +145,28 @@ export type {
   ActionButtonsConfig,
   RowActionsConfig,
   ActionVariant,
-  ActionOverflowMode
+  ActionOverflowMode,
+  BuiltInActionIcon
 } from "./lib/presetRenderers";
 export { selectionColumn, indexColumn, dragColumn, actionsColumn, rowActionsColumn } from "./lib/presetColumns";
 export { createColumnHelper, defineColumns } from "./lib/columnHelper";
-export type { ColumnHelper, FieldPath, FieldPathValue } from "./lib/columnHelper";
+export type { ColumnHelper } from "./lib/columnHelper";
+export type { FieldPath, FieldPathValue } from "./types/path";
 export { createMachTablePreset, createEnterprisePreset, defineMachTablePreset, defineGridOptions } from "./lib/presets";
+export {
+  defineMachTableConfig,
+  mergeMachTableConfig,
+  normalizeMachTableConfig,
+  resolveMachTableGridOptions
+} from "./lib/configuration";
+export type {
+  MachTableConfigWarning,
+  MachTableOptionExplanation,
+  MachTablePresetSelection,
+  MachTableRuntimeConfig,
+  ResolvedMachTableConfig,
+  ResolvedMachTableGridOptions
+} from "./lib/configuration";
 export {
   createBusinessColumnTypes,
   createCachedDictionary,

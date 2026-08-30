@@ -4,7 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GridApi } from "@agile-team/mach-table";
 import { RobotGrid } from "../MachTable";
 import { reactCellRenderer } from "../adapters";
-import DefaultMachTable, { createGrid, DEFAULT_LOCALE, MachTable, MachTableProvider, type ColDef } from "../index";
+import DefaultMachTable, {
+  createGrid,
+  DEFAULT_LOCALE,
+  defineMachTableConfig,
+  MachTable,
+  MachTableProvider,
+  MachTableToolbar,
+  useMachTableQuery,
+  type ColDef,
+  type UseMachTableQueryReturn
+} from "../index";
 import { useMachGrid } from "../useMachGrid";
 
 class ResizeObserverStub {
@@ -54,6 +64,23 @@ describe("React adapter", () => {
     )));
     expect(host.querySelector(".mach-root")?.classList.contains("mach-theme-dark")).toBe(false);
     expect((host.querySelector(".mach-pagination") as HTMLElement).style.display).toBe("none");
+    await act(async () => root.unmount());
+  });
+
+  it("supports the same named config presets as Vue", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const config = defineMachTableConfig({
+      defaults: { pagination: false },
+      presets: { dense: { size: "compact" as const, stripedRows: true } },
+      defaultPreset: "dense"
+    });
+    await act(async () => root.render(createElement(MachTableProvider, { config },
+      createElement(MachTable, { columnDefs: [{ field: "id" }], rowData: [{ id: 1 }] })
+    )));
+    expect(host.querySelector(".mach-root")?.classList).toContain("mach-size--compact");
+    expect(host.querySelector(".mach-root")?.classList).toContain("mach-striped");
     await act(async () => root.unmount());
   });
 
@@ -171,6 +198,47 @@ describe("React adapter", () => {
     await act(async () => root.render(createElement(Harness)));
     expect(observedApi).not.toBeNull();
     expect((observedApi as GridApi | null)?.getDisplayedRowCount()).toBe(1);
+    await act(async () => root.unmount());
+  });
+
+  it("keeps manual query mode explicit and exposes a first-class error binding", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const request = vi.fn(async () => ({ rows: [{ id: "1" }], total: 1 }));
+    let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
+    function Harness() {
+      remote = useMachTableQuery({ query: { keyword: "x" }, queryKey: "x", rowKey: "id", request, mode: "manual" });
+      return createElement(MachTable<{ id: string }>, { ...remote.gridProps, columnDefs: [{ field: "id" }] });
+    }
+    await act(async () => root.render(createElement(Harness)));
+    expect(request).not.toHaveBeenCalled();
+    await act(async () => {
+      remote!.gridProps.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
+      await remote!.reload();
+    });
+    expect(request).toHaveBeenCalledOnce();
+    expect(remote!.rows).toEqual([{ id: "1" }]);
+    expect(remote!.gridProps.error).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("renders the optional toolbar with accessible controls", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const search = vi.fn();
+    await act(async () => root.render(createElement(MachTableToolbar, {
+      search: "",
+      onSearchChange: search,
+      selectedCount: 2,
+      features: { export: false }
+    })));
+    const input = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    input.value = "orders";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(host.querySelector('[role="toolbar"]')).toBeTruthy();
+    expect(host.textContent).toContain("已选 2 项");
     await act(async () => root.unmount());
   });
 });

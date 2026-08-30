@@ -76,6 +76,25 @@ useMachTableQuery({
 
 `bindings` 会自动把 loading、空态和错误态交给表格 Overlay；业务也仍可读取 `error`/`retry` 自定义整页状态。
 
+## 自动与手动查询
+
+默认 `mode: "auto"`：业务 query、表格排序/过滤、快速搜索和分页变化会自动发起请求，适合即时筛选。
+
+`mode: "manual"`：表单输入、排序、过滤和分页只更新待查询状态，不暗中请求；由查询按钮显式提交：
+
+```ts
+const table = useMachTableQuery({
+  mode: "manual",
+  query: form,
+  rowKey: "id",
+  request: orderApi.page
+});
+
+await table.reload({ resetPage: true });
+```
+
+`retry()` 重放失败状态，`reset()` 清空表格排序/过滤后执行一次请求，`reload()` 始终显式请求。React 版本 API 等价；对象 query 应通过 `useMemo` 或 `queryKey` 声明变更依赖。
+
 ## 请求协议
 
 每次请求都会收到当次分页、排序和过滤状态的独立快照，以及当前业务查询值：

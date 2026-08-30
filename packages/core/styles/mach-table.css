@@ -67,6 +67,113 @@
   font-variant-numeric: tabular-nums;
 }
 
+.mach-root.mach-dom-layout--auto-height {
+  height: auto;
+  min-height: 0;
+}
+
+.mach-root.mach-dom-layout--auto-height .mach-body {
+  flex: none;
+}
+
+.mach-root.mach-dom-layout--auto-height .mach-body-viewport--scroll {
+  overflow-y: hidden;
+}
+
+.mach-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px;
+  font: 13px/1.4 var(--mach-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  color: var(--mach-body-fg, #26303f);
+  background: var(--mach-body-bg, #fff);
+  border: 1px solid var(--mach-border-color, #e6eaf0);
+  border-bottom: 0;
+  border-radius: var(--mach-radius-lg, 8px) var(--mach-radius-lg, 8px) 0 0;
+}
+
+.mach-toolbar__main,
+.mach-toolbar__aside {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mach-toolbar__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(240px, 32vw);
+  height: 32px;
+  padding: 0 9px;
+  color: #64748b;
+  background: var(--mach-header-bg, #fafbfd);
+  border: 1px solid var(--mach-border-color, #e6eaf0);
+  border-radius: 6px;
+  transition: border-color var(--mach-transition, .15s ease), box-shadow var(--mach-transition, .15s ease);
+}
+
+.mach-toolbar__search:focus-within {
+  border-color: var(--mach-primary, #2563eb);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mach-primary, #2563eb) 12%, transparent);
+}
+
+.mach-toolbar__search input {
+  min-width: 0;
+  width: 100%;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.mach-toolbar__button,
+.mach-toolbar__select,
+.mach-toolbar__selection {
+  height: 32px;
+  padding: 0 10px;
+  color: inherit;
+  background: var(--mach-body-bg, #fff);
+  border: 1px solid var(--mach-border-color, #e6eaf0);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color var(--mach-transition, .15s ease), border-color var(--mach-transition, .15s ease), background var(--mach-transition, .15s ease);
+}
+
+.mach-toolbar__button {
+  min-width: 32px;
+  padding: 0 8px;
+  font-size: 16px;
+}
+
+.mach-toolbar__button:hover:not(:disabled),
+.mach-toolbar__select:hover {
+  color: var(--mach-primary, #2563eb);
+  border-color: var(--mach-primary, #2563eb);
+}
+
+.mach-toolbar__button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.mach-toolbar__selection {
+  color: var(--mach-primary, #2563eb);
+  background: var(--mach-primary-weak, #dbeafe);
+  border-color: transparent;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .mach-toolbar { align-items: stretch; flex-direction: column; }
+  .mach-toolbar__main, .mach-toolbar__aside { flex-wrap: wrap; }
+  .mach-toolbar__search { flex: 1; width: auto; }
+}
+
 .mach-size--compact {
   --mach-font-size: 12px;
   --mach-cell-padding: 6px;

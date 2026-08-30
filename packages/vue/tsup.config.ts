@@ -5,6 +5,7 @@ export default defineConfig({
     index: "src/index.ts",
     async: "src/async.ts",
     workflows: "src/workflows.ts",
+    ui: "src/ui.ts",
     editors: "src/editors.ts"
   },
   format: ["esm", "cjs"],

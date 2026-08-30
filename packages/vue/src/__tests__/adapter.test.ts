@@ -3,11 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RobotGrid } from "../MachTable";
 import { vueCellRenderer } from "../adapters";
 import { createElementPlusEditors, vueCellEditor } from "../editors";
-import DefaultPlugin, { createGrid, DEFAULT_LOCALE, MachTable, MachTablePlugin, type ColDef } from "../index";
+import DefaultPlugin, {
+  createGrid,
+  DEFAULT_LOCALE,
+  MachTable,
+  MachTablePlugin,
+  type ColDef,
+  type GridApi,
+  type MachTableCommands
+} from "../index";
+import { MachTableToolbar, MachTableUiPlugin } from "../ui";
 import { AsyncMachTable, AsyncMachTablePlugin, preloadMachTable } from "../async";
 import { useMachTable, type UseMachTableReturn } from "../useMachTable";
 import { useMachTableEditing, type UseMachTableEditingReturn } from "../useMachTableEditing";
 import { useMachTableQuery, type UseMachTableQueryReturn } from "../useMachTableQuery";
+import { useMachTableController, type UseMachTableControllerReturn } from "../useMachTableController";
 import { defineMachTableConfig, provideMachTableConfig } from "../index";
 import {
   mergeMachTableConfig,
@@ -89,12 +99,14 @@ describe("Vue adapter", () => {
   it("registers typed global components through app.use", () => {
     const app = createApp({ render: () => null });
     app.use(MachTablePlugin);
+    app.use(MachTableUiPlugin);
     const globallyTyped: GlobalComponents["MachTable"] = RobotGrid;
 
     expect(DefaultPlugin).toBe(MachTablePlugin);
     expect(globallyTyped).toBe(RobotGrid);
     expect(app.component("MachTable")).toBe(RobotGrid);
     expect(app.component("RobotGrid")).toBe(RobotGrid);
+    expect(app.component("MachTableToolbar")).toBe(MachTableToolbar);
     expect(MachTable).toBe(RobotGrid);
   });
 
@@ -666,7 +678,7 @@ describe("Vue adapter", () => {
 
     await remote!.reload();
     expect(remote!.error.value).toEqual(expect.objectContaining({ message: "offline" }));
-    const errorOverlay = remote!.gridProps.value.overlayNoRowsTemplate as () => string;
+    const errorOverlay = remote!.gridProps.value.overlayErrorTemplate as () => string;
     expect(errorOverlay()).toContain("Remote request failed");
     await remote!.retry();
     expect(remote!.error.value).toBeInstanceOf(TypeError);
@@ -730,5 +742,181 @@ describe("Vue adapter", () => {
     expect(remote!.filterModel.value).toEqual({});
     expect(request).toHaveBeenCalledTimes(6);
     app.unmount();
+  });
+
+  it("supports manual query mode without hidden network requests", async () => {
+    const query = ref({ keyword: "before" });
+    const request = vi.fn(async ({ query: criteria }: { query: { keyword: string } }) => ({
+      rows: [{ id: criteria.keyword }],
+      total: 1
+    }));
+    let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup() {
+        remote = useMachTableQuery({ query, request, rowKey: "id", mode: "manual" });
+        return () => h("div");
+      }
+    }));
+    app.mount(host);
+    expect(request).not.toHaveBeenCalled();
+    query.value = { keyword: "after" };
+    await nextTick();
+    remote!.gridProps.value.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
+    await nextTick();
+    expect(request).not.toHaveBeenCalled();
+    await remote!.reload();
+    expect(request).toHaveBeenCalledOnce();
+    expect(remote!.rows.value).toEqual([{ id: "after" }]);
+    app.unmount();
+  });
+
+  it("wires the optional toolbar to commands, API fallbacks, events and slots", async () => {
+    const commands = {
+      search: vi.fn(), refresh: vi.fn(async () => undefined), openColumns: vi.fn(), setDensity: vi.fn(),
+      resetColumns: vi.fn(), undo: vi.fn(() => true), redo: vi.fn(() => true),
+      canUndo: vi.fn(() => true), canRedo: vi.fn(() => true), exportCsv: vi.fn(() => true),
+      toggleFullscreen: vi.fn(async () => true)
+    } satisfies MachTableCommands;
+    const model = ref("");
+    const clear = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const app = createApp(defineComponent({
+      setup: () => () => h(MachTableToolbar, {
+        commands,
+        modelValue: model.value,
+        selectedCount: 3,
+        features: { undoRedo: true, fullscreen: true },
+        "onUpdate:modelValue": (value: string) => { model.value = value; },
+        onClearSelection: clear
+      }, {
+        start: () => h("span", { id: "start" }, "start"),
+        default: () => h("span", { id: "middle" }, "middle"),
+        end: () => h("span", { id: "end" }, "end")
+      })
+    }));
+    app.mount(host);
+    const input = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    input.value = "orders";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const density = host.querySelector<HTMLSelectElement>("select")!;
+    density.value = "compact";
+    density.dispatchEvent(new Event("change", { bubbles: true }));
+    for (const button of host.querySelectorAll<HTMLButtonElement>("button")) button.click();
+    await nextTick();
+    expect(commands.search).toHaveBeenCalledWith("orders");
+    expect(commands.refresh).toHaveBeenCalledOnce();
+    expect(commands.openColumns).toHaveBeenCalledOnce();
+    expect(commands.setDensity).toHaveBeenCalledWith("compact");
+    expect(commands.undo).toHaveBeenCalledOnce();
+    expect(commands.redo).toHaveBeenCalledOnce();
+    expect(commands.exportCsv).toHaveBeenCalledOnce();
+    expect(commands.toggleFullscreen).toHaveBeenCalledOnce();
+    expect(clear).toHaveBeenCalledOnce();
+    expect(model.value).toBe("orders");
+    expect(host.querySelector("#start")).toBeTruthy();
+    expect(host.querySelector("#middle")).toBeTruthy();
+    expect(host.querySelector("#end")).toBeTruthy();
+    app.unmount();
+
+    const api = {
+      getGridOption: vi.fn(() => "normal"),
+      setQuickFilter: vi.fn(),
+      isInfinite: vi.fn(() => false),
+      refreshCells: vi.fn(),
+      openColumnWorkbench: vi.fn(),
+      setGridOption: vi.fn(),
+      canUndo: vi.fn(() => true),
+      canRedo: vi.fn(() => true),
+      undo: vi.fn(() => true),
+      redo: vi.fn(() => true)
+    } as unknown as GridApi;
+    const fallbackHost = document.createElement("div");
+    document.body.appendChild(fallbackHost);
+    const fallbackApp = createApp({
+      render: () => h(MachTableToolbar, {
+        api,
+        modelValue: "",
+        selectedCount: 1,
+        features: { undoRedo: true, fullscreen: true }
+      })
+    });
+    fallbackApp.mount(fallbackHost);
+    const fallbackInput = fallbackHost.querySelector<HTMLInputElement>('input[type="search"]')!;
+    fallbackInput.value = "local";
+    fallbackInput.dispatchEvent(new Event("input", { bubbles: true }));
+    const fallbackDensity = fallbackHost.querySelector<HTMLSelectElement>("select")!;
+    fallbackDensity.value = "large";
+    fallbackDensity.dispatchEvent(new Event("change", { bubbles: true }));
+    for (const button of fallbackHost.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")) button.click();
+    expect(api.setQuickFilter).toHaveBeenCalledWith("local");
+    expect(api.refreshCells).toHaveBeenCalledOnce();
+    expect(api.openColumnWorkbench).toHaveBeenCalledOnce();
+    expect(api.setGridOption).toHaveBeenCalledWith("size", "large");
+    expect(api.undo).toHaveBeenCalledOnce();
+    expect(api.redo).toHaveBeenCalledOnce();
+    fallbackApp.unmount();
+  });
+
+  it("composes local and remote Vue controllers with one command surface", async () => {
+    let local: UseMachTableControllerReturn<{ id: string; name: string }> | null = null;
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const app = createApp(defineComponent({
+      setup() {
+        local = useMachTableController();
+        return () => h(MachTable, {
+          ref: local!.table.ref,
+          columnDefs: [{ field: "name" }],
+          rowData: [{ id: "1", name: "Ada" }],
+          rowKey: "id",
+          rowSelection: "multiple",
+          pagination: false
+        });
+      }
+    }));
+    app.mount(host);
+    await nextTick();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    local!.search.value = "Ada";
+    await nextTick();
+    expect(local!.table.api.value?.getGridOption("quickFilterText")).toBe("Ada");
+    local!.table.api.value?.selectAll();
+    await nextTick();
+    expect(local!.selectedCount.value).toBe(1);
+    await local!.reload();
+    local!.commands.setDensity("compact");
+    expect(local!.table.api.value?.getGridOption("size")).toBe("compact");
+    expect(local!.busy.value).toBe(false);
+    expect(local!.error.value).toBeNull();
+    app.unmount();
+
+    const request = vi.fn(async () => ({ rows: [{ id: "2" }], total: 1 }));
+    let remote: UseMachTableControllerReturn<{ id: string }> | null = null;
+    const remoteHost = document.createElement("div");
+    document.body.appendChild(remoteHost);
+    const remoteApp = createApp(defineComponent({
+      setup() {
+        remote = useMachTableController({
+          query: { query: {}, rowKey: "id", request, mode: "manual" }
+        });
+        return () => h(MachTable, {
+          ref: remote!.table.ref,
+          columnDefs: [{ field: "id" }],
+          ...remote!.bindings.value
+        });
+      }
+    }));
+    remoteApp.mount(remoteHost);
+    expect(request).not.toHaveBeenCalled();
+    await remote!.commands.refresh();
+    await nextTick();
+    expect(request).toHaveBeenCalledOnce();
+    expect(remote!.query?.rows.value).toEqual([{ id: "2" }]);
+    remote!.query?.selectAllMatching();
+    await nextTick();
+    expect(remote!.selectedCount.value).toBe(1);
+    remoteApp.unmount();
   });
 });

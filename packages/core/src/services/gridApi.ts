@@ -6,7 +6,7 @@ import type { ApplyGridStateOptions, GridState, GridStateSection } from "../type
 import type { Column } from "./column";
 import { EVENT_TYPES } from "../types/events";
 import type { ColDefOrGroup, ColumnState, FilterModel, SortModel } from "../types/colDef";
-import { DEFAULT_COL_DEF, GRID_SIZE_PRESETS } from "../core/resolveOptions";
+import { DEFAULT_COL_DEF, GRID_SIZE_PRESETS, rowIdFromKey } from "../core/resolveOptions";
 import { buildCsv } from "../lib/csv";
 import { parseCsv, toTsv } from "../lib/clipboard";
 import { escapeHtml } from "../lib/download";
@@ -85,6 +85,10 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   whenReady(): Promise<import("../types/api").GridApi<TData>> {
     return this.core.whenReady();
+  }
+
+  getRootElement(): HTMLElement | null {
+    return this.core.isDestroyed() ? null : this.core.skeleton.root;
   }
 
   setRowData(rows: TData[] | null | undefined): void {
@@ -864,6 +868,11 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.columnLayout = options.columnLayout === "fit" ? "fit" : "normal";
       effects.needsRelayout = true;
     }
+    if (options.domLayout != null && options.domLayout !== resolved.domLayout) {
+      resolved.domLayout = options.domLayout === "autoHeight" ? "autoHeight" : "normal";
+      this.core.skeleton.applyDomLayout(resolved.domLayout);
+      effects.needsPoolRebuild = true;
+    }
     if (options.multiSort != null) resolved.multiSort = options.multiSort;
     if (detailHeight !== undefined) {
       resolved.detailRowHeight = detailHeight;
@@ -1077,12 +1086,16 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (hasOwnOption(options, "overlayLoadingTemplate")) {
       resolved.overlayLoadingTemplate = options.overlayLoadingTemplate ?? "";
     }
+    if (hasOwnOption(options, "overlayErrorTemplate")) {
+      resolved.overlayErrorTemplate = options.overlayErrorTemplate ?? "";
+    }
     if (options.allowUnsafeOverlayHtml != null) resolved.allowUnsafeOverlayHtml = options.allowUnsafeOverlayHtml;
     if (hasOwnOption(options, "className")) {
       resolved.className = options.className ?? "";
       this.core.skeleton.setCustomClass(resolved.className);
     }
     if (options.loading != null) resolved.loading = options.loading;
+    if (hasOwnOption(options, "error")) resolved.error = options.error ?? null;
   }
 
   private updateRowModelOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -1120,6 +1133,16 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.getRowId = options.getRowId;
       effects.needsRowRebuild = true;
     }
+    if (hasOwnOption(options, "rowKey")) {
+      resolved.rowKey = options.rowKey;
+      if (!hasOwnOption(options, "getRowId")) {
+        const rowKey = options.rowKey;
+        resolved.getRowId = rowKey
+          ? ({ data }) => rowIdFromKey(rowKey, data)
+          : undefined;
+      }
+      effects.needsRowRebuild = true;
+    }
   }
 
   private updateHierarchyOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -1155,6 +1178,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   private updateExtensionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.options;
+    let reloadGridState = false;
     if (hasOwnOption(options, "aggFuncs")) {
       resolved.aggFuncs = options.aggFuncs;
       effects.needsRowRebuild = true;
@@ -1179,6 +1203,17 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.columnStateKey = options.columnStateKey ?? null;
       effects.needsStateLoad = true;
     }
+    if (hasOwnOption(options, "stateStore")) {
+      resolved.stateStore = options.stateStore;
+      reloadGridState = true;
+    }
+    if (hasOwnOption(options, "stateKey")) {
+      resolved.stateKey = options.stateKey ?? null;
+      reloadGridState = true;
+    }
+    const stateDebounce = normalizeFinite(options.stateSaveDebounceMs, 0, true);
+    if (stateDebounce !== undefined) resolved.stateSaveDebounceMs = stateDebounce;
+    if (reloadGridState) this.core.loadPersistedGridState();
   }
 
   private updateDatasourceOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -1379,7 +1414,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     return this.core.getDiagnostics();
   }
 
-  setOverlay(type: "loading" | "noRows" | null): void {
+  setOverlay(type: "loading" | "noRows" | "error" | null): void {
     if (type === "loading") {
       this.core.skeleton.showOverlay(
         "loading",
@@ -1389,6 +1424,9 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     } else if (type === "noRows") {
       const content = this.core.options.overlayNoRowsTemplate || this.core.buildDefaultEmptyState();
       this.core.skeleton.showOverlay("noRows", content, this.core.options.allowUnsafeOverlayHtml);
+    } else if (type === "error") {
+      const content = this.core.options.overlayErrorTemplate || this.core.buildDefaultErrorState();
+      this.core.skeleton.showOverlay("error", content, this.core.options.allowUnsafeOverlayHtml);
     } else {
       this.core.skeleton.hideOverlay();
     }

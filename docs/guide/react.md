@@ -47,11 +47,7 @@ React 不注册全局组件，但可以用 `MachTableProvider` 统一配置。Pr
 import { MachTableProvider } from "@agile-team/mach-table-react";
 
 root.render(
-  <MachTableProvider defaults={{
-    size: "compact",
-    pagination: false,
-    defaultColDef: { sortable: true, resizable: true, filter: true }
-  }}>
+  <MachTableProvider config={machTableConfig}>
     <App />
   </MachTableProvider>
 );
@@ -83,7 +79,8 @@ export default function Page() {
         columnDefs={columnDefs}
         rowData={rows}
         rowSelection="multiple"
-        getRowId={(p) => p.data.id}
+        rowKey="id"
+        stateKey="employees-list"
         stripedRows
         onSelectionChanged={(e) => setCount(e.selectedRows.length)}
         onCellValueChanged={(e) => console.log(e.colDef.field, e.oldValue, "→", e.newValue)}
@@ -148,6 +145,35 @@ import { reactDetailRenderer } from "@agile-team/mach-table-react";
 ```
 
 展开时挂载、收起时卸载，`destroy` 自动调用。
+
+## 远程查询、编辑与标准工具栏
+
+页面工作流从独立子入口按需加载。React Hooks 必须无条件调用，因此先创建 query，再传给 controller：
+
+```tsx
+import { MachTable, MachTableToolbar } from "@agile-team/mach-table-react";
+import { useMachTableQuery, useMachTableController } from "@agile-team/mach-table-react/workflows";
+
+const query = useMachTableQuery<Order, Filters>({
+  query: filters,
+  queryKey: filters,
+  rowKey: "id",
+  request: orderApi.page,
+  mode: "manual"
+});
+const controller = useMachTableController<Order>({ query });
+
+<MachTableToolbar
+  api={controller.table.api}
+  commands={controller.commands}
+  search={controller.search}
+  onSearchChange={controller.setSearch}
+  loading={controller.busy}
+/>;
+<MachTable apiRef={controller.table.apiRef} {...controller.bindings} />;
+```
+
+详见[控制器与标准工具栏](/recipes/controller-toolbar)和[远程查询](/recipes/remote-query)。
 
 ## useMachGrid Hook（推荐）
 

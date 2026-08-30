@@ -6,8 +6,10 @@
       "@agile-team/mach-table": ["../../packages/core/dist/index.d.ts"],
       "@agile-team/mach-table-vue": ["../../packages/vue/dist/index.d.ts"],
       "@agile-team/mach-table-vue/workflows": ["../../packages/vue/dist/workflows.d.ts"],
+      "@agile-team/mach-table-vue/ui": ["../../packages/vue/dist/ui.d.ts"],
       "@agile-team/mach-table-vue/editors": ["../../packages/vue/dist/editors.d.ts"],
       "@agile-team/mach-table-react": ["../../packages/react/dist/index.d.ts"],
+      "@agile-team/mach-table-react/workflows": ["../../packages/react/dist/workflows.d.ts"],
       "@agile-team/mach-table-xlsx": ["../../packages/xlsx/dist/index.d.ts"]
     },
     "jsx": "react-jsx",

@@ -51,6 +51,29 @@ function closestOption(input: string): string | undefined {
   return distance <= threshold ? closest : undefined;
 }
 
+function validateIdentityAndLayout(source: Record<string, unknown>): GridValidationIssue[] {
+  const issues: GridValidationIssue[] = [];
+  if (source.rowKey != null && typeof source.rowKey !== "string" && typeof source.rowKey !== "function") {
+    issues.push({
+      code: "INVALID_OPTION_VALUE",
+      option: "rowKey",
+      message: "rowKey 必须是字段路径或返回稳定业务主键的函数"
+    });
+  }
+  if (source.domLayout === "autoHeight" && source.datasource != null) {
+    issues.push({
+      code: "OPTION_CONFLICT",
+      option: "domLayout",
+      message: "autoHeight 会渲染全部已加载行，不适用于 datasource 无限滚动模式"
+    });
+  }
+  return issues;
+}
+
+function hasStableRowId(source: Record<string, unknown>): boolean {
+  return typeof source.getRowId === "function" || source.rowKey != null;
+}
+
 /** Runtime validation for JavaScript, JSON/schema driven and dynamic options. */
 export function validateGridOptions(options: Partial<GridOptions<any>> | Record<string, unknown>): GridValidationIssue[] {
   const source = options as Record<string, unknown>;
@@ -81,7 +104,7 @@ export function validateGridOptions(options: Partial<GridOptions<any>> | Record<
   }
   if (pagination && typeof pagination === "object") {
     const config = pagination as Record<string, unknown>;
-    if (config.mode === "server" && typeof source.getRowId !== "function") {
+    if (config.mode === "server" && !hasStableRowId(source)) {
       issues.push({
         code: "MISSING_STABLE_ROW_ID",
         option: "getRowId",
@@ -105,5 +128,6 @@ export function validateGridOptions(options: Partial<GridOptions<any>> | Record<
       message: "treeData 与 masterDetail 不能同时启用，主从明细将被忽略"
     });
   }
+  issues.push(...validateIdentityAndLayout(source));
   return issues;
 }

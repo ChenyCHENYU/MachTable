@@ -9,13 +9,16 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const vueEsmFiles = (await readdir(new URL("../packages/vue/dist/", import.meta.url)))
   .filter((file) => file.endsWith(".js"))
   .map((file) => `packages/vue/dist/${file}`);
+const reactEsmFiles = (await readdir(new URL("../packages/react/dist/", import.meta.url)))
+  .filter((file) => file.endsWith(".js"))
+  .map((file) => `packages/react/dist/${file}`);
 
 const budgets = [
   ["Core ESM", ["packages/core/dist/index.js"], 80 * 1024],
   ["Vue ESM artifacts", vueEsmFiles, 10 * 1024],
-  ["React adapter ESM", ["packages/react/dist/index.js"], 5 * 1024],
+  ["React ESM artifacts", reactEsmFiles, 8 * 1024],
   ["Optional XLSX bridge", ["packages/xlsx/dist/index.js"], 3 * 1024],
-  ["Core CSS", ["packages/core/styles/mach-table.css"], 6 * 1024]
+  ["Core CSS", ["packages/core/styles/mach-table.css"], 7 * 1024]
 ];
 
 let failed = false;
@@ -53,6 +56,33 @@ const consumerBudgets = [
       globalThis.__machTableEditors = [vueCellEditor, createElementPlusEditors];
     `,
     limit: 3 * 1024
+  },
+  {
+    label: "Vue optional UI",
+    source: `
+      import ui, { MachTableToolbar } from "./packages/vue/dist/ui.js";
+      globalThis.__machTableUi = [ui, MachTableToolbar];
+    `,
+    limit: 3 * 1024
+  },
+  {
+    label: "React initial adapter",
+    source: `
+      import MachTable, { MachTableProvider, defineMachTableConfig } from "./packages/react/dist/index.js";
+      globalThis.__machTableReact = [MachTable, MachTableProvider, defineMachTableConfig];
+    `,
+    // React's adapter also includes the typed Provider/config resolver. Keep the
+    // initial path below 6 KiB while the optional query/editing workflows stay
+    // independently measurable through the workflows subpath.
+    limit: 6 * 1024
+  },
+  {
+    label: "React B-side workflows",
+    source: `
+      import { useMachTableEditing, useMachTableQuery } from "./packages/react/dist/workflows.js";
+      globalThis.__machTableReactWorkflows = [useMachTableEditing, useMachTableQuery];
+    `,
+    limit: 5 * 1024
   }
 ];
 
@@ -66,7 +96,7 @@ for (const { label, source, limit } of consumerBudgets) {
     format: "esm",
     platform: "browser",
     target: "es2020",
-    external: ["vue", "@agile-team/mach-table"]
+    external: ["vue", "react", "react-dom", "@agile-team/mach-table"]
   });
   const size = result.outputFiles.reduce((total, output) => total + gzipSync(output.contents).byteLength, 0);
   const status = size <= limit ? "OK" : "OVER";

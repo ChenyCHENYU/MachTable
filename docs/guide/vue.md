@@ -104,7 +104,7 @@ app.use(AsyncMachTablePlugin, {
 </template>
 ```
 
-主题 CSS 只有约 5 KB gzip，建议始终在应用入口同步引入，避免异步组件出现无样式闪烁。`preloadMachTable()` 使用浏览器模块缓存，多次调用是安全的。
+主题 CSS 约 6.4 KB gzip，建议始终在应用入口同步引入，避免异步组件出现无样式闪烁。`preloadMachTable()` 使用浏览器模块缓存，多次调用是安全的。
 
 ## 基础用法
 
@@ -116,7 +116,6 @@ import { MachTable } from "@agile-team/mach-table-vue";
 import type {
   CellValueChangedEvent,
   ColDef,
-  GetRowIdParams,
   GridApi,
   SelectionChangedEvent
 } from "@agile-team/mach-table-vue";
@@ -134,7 +133,6 @@ const columnDefs: ColDef<Order>[] = [
   { field: "region", headerName: "区域", width: 110, filter: "set" }
 ];
 
-const getRowId = ({ data }: GetRowIdParams<Order>) => data.id;
 const onSelectionChanged = (event: SelectionChangedEvent<Order>) => {
   selectedCount.value = event.selectedRows.length;
 };
@@ -150,7 +148,8 @@ const onCellValueChanged = (event: CellValueChangedEvent<Order>) => {
       :column-defs="columnDefs"
       :row-data="rowData"
       row-selection="multiple"
-      :get-row-id="getRowId"
+      row-key="id"
+      state-key="orders-list"
       striped-rows
       @selection-changed="onSelectionChanged"
       @cell-value-changed="onCellValueChanged"
@@ -200,6 +199,35 @@ function exportCsv() {
   <span v-if="mt.ready.value">共 {{ mt.api.value?.getTotalRowCount() }} 行</span>
 </template>
 ```
+
+## 组合控制器与可选工具栏
+
+`useMachTableController` 把 API 就绪、查询、编辑、选择、忙碌/错误状态和常用命令组合为一个页面控制器。工具栏从独立 `/ui` 入口加载，不增加第二个安装依赖：
+
+```ts
+// main.ts：需要全局标准工具栏时
+import MachTableUiPlugin from "@agile-team/mach-table-vue/ui";
+app.use(MachTableUiPlugin);
+```
+
+```vue
+<script setup lang="ts">
+import { useMachTableController } from "@agile-team/mach-table-vue/workflows";
+const controller = useMachTableController<Order>();
+</script>
+
+<template>
+  <MachTableToolbar
+    v-model="controller.search.value"
+    :api="controller.table.api.value"
+    :commands="controller.commands"
+    :selected-count="controller.selectedCount.value"
+  />
+  <MachTable :ref="controller.table.ref" :row-data="rows" :column-defs="columns" row-key="id" />
+</template>
+```
+
+详见[控制器与标准工具栏](/recipes/controller-toolbar)。
 
 ## 适配器上下文自动继承
 

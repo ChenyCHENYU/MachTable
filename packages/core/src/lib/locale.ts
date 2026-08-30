@@ -47,7 +47,16 @@ export const DEFAULT_LOCALE = {
   pageFirst: "首页",
   pagePrev: "上一页",
   pageNext: "下一页",
-  pageLast: "末页"
+  pageLast: "末页",
+  requestFailed: "数据加载失败",
+  requestFailedHint: "请检查网络后重试",
+  actionView: "查看",
+  actionEdit: "编辑",
+  actionDelete: "删除",
+  actionConfirm: "确认",
+  actionSave: "保存",
+  actionCancel: "取消",
+  actionMore: "更多操作"
 } as const;
 
 export type RgLocaleKey = keyof typeof DEFAULT_LOCALE;
@@ -102,7 +111,16 @@ export const LOCALE_EN: RgLocale = {
   pageFirst: "First",
   pagePrev: "Previous",
   pageNext: "Next",
-  pageLast: "Last"
+  pageLast: "Last",
+  requestFailed: "Unable to load data",
+  requestFailedHint: "Check your connection and try again",
+  actionView: "View",
+  actionEdit: "Edit",
+  actionDelete: "Delete",
+  actionConfirm: "Confirm",
+  actionSave: "Save",
+  actionCancel: "Cancel",
+  actionMore: "More actions"
 };
 
 const MATCH_LOCALE_KEYS: Record<string, RgLocaleKey> = {

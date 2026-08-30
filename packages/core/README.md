@@ -20,7 +20,8 @@ const api = createGrid(document.querySelector("#grid")!, {
     { field: "name", headerName: "Name", flex: 1, editable: true }
   ],
   rowData: [{ id: "1", name: "MachTable" }],
-  getRowId: ({ data }) => data.id
+  rowKey: "id",
+  stateKey: "customer-list"
 });
 
 // Required for native integrations when the host is removed.
@@ -39,7 +40,7 @@ await api.applyTransactionAsync({ update: realtimeRows });
 api.applyState(state);
 ```
 
-0.13 adds a built-in/headless column workbench and cancellable lazy trees:
+0.13 added a built-in/headless column workbench and cancellable lazy trees:
 
 ```ts
 api.openColumnWorkbench();
@@ -70,6 +71,20 @@ const options = {
 ```
 
 Cell mode remains the default and renders a subtle pencil plus inline confirm/cancel controls. Use `editableIndicator: "always" | "hover" | "none"` to match the page density.
+
+0.14 removes common page glue with automatic GridState persistence, an explicit error overlay, compact row keys and framework-neutral toolbar commands:
+
+```ts
+import { createMachTableCommands } from "@agile-team/mach-table";
+
+const commands = createMachTableCommands({ getApi: () => api });
+commands.search("pending");
+await commands.refresh();
+
+api.setOverlay("error", () => "Request failed. Please retry.");
+```
+
+`rowKey: "id"` is shorthand for a stable field path; `getRowId` remains available for derived IDs and wins when both are present. `domLayout: "autoHeight"` is intended only for small client-side tables—normal virtual layout remains the large-data default.
 
 For framework applications use the official adapters:
 

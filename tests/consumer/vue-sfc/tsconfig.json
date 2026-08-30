@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@agile-team/mach-table": ["../../../packages/core/dist/index.d.ts"],
+      "@agile-team/mach-table-vue": ["../../../packages/vue/dist/index.d.ts"],
+      "@agile-team/mach-table-vue/ui": ["../../../packages/vue/dist/ui.d.ts"],
+      "vue": ["../../../packages/vue/node_modules/vue"]
+    },
+    "noEmit": true
+  },
+  "include": ["App.vue"]
+}

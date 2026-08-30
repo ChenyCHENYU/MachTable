@@ -7,6 +7,7 @@
 | 方法 | 说明 |
 | --- | --- |
 | `setRowData(rows)` | 全量替换（清空撤销栈；有 `getRowId` 时选中态按 id 保留） |
+| `getRootElement()` | 返回当前表格根元素，销毁后为 `null`；用于 Portal、测量和自定义全屏目标 |
 | `applyTransaction({ add?, addIndex?, remove?, update? })` | 增量事务。remove 按行引用或 `getRowId` 匹配；树形 remove 递归删整棵子树；update 后局部刷新 |
 | `applyTransactionAsync(transaction): Promise<void>` | 高频事务排队；默认 16ms 内按调用顺序合并并只刷新一次数据管线 |
 | `flushAsyncTransactions()` | 立即提交队列，不等待时间窗 |

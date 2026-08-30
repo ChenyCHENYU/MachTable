@@ -57,6 +57,8 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   pageSize?: number;
   pageSizeOptions?: readonly number[];
   immediate?: boolean;
+  /** auto reloads when query/grid criteria change; manual waits for reload/reset. */
+  mode?: "auto" | "manual";
   debounceMs?: number;
   keepPreviousData?: boolean;
   /** `query` additionally enables compact select-all-matching rules. */
@@ -64,7 +66,7 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   /** Defaults true: a different business/filter query cannot inherit stale selections. */
   clearSelectionOnQueryChange?: boolean;
   quickFilterText?: Ref<string | null>;
-  /** Replaces the no-rows layer while the latest request is in an error state. */
+  /** Renders inside the first-class error overlay for the latest failed request. */
   errorOverlay?(context: { error: unknown; retry(): Promise<void> }): OverlayContent;
   emptyOverlay?: OverlayTemplate;
   onSuccess?(result: MachTablePageResult<TData>): void;
@@ -134,6 +136,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const selectedById = new Map<string, TData>();
   const quickFilterText = options.quickFilterText ?? ref<string | null>(null);
   const selectionScope = options.selectionScope ?? "preserve";
+  const automatic = options.mode !== "manual";
   const allMatching = ref(false);
   const selectionRevision = ref(0);
   const pageSizes = [...new Set((options.pageSizeOptions ?? [10, 20, 50, 100]).map((value) => normalizePositive(value, 0)).filter(Boolean))];
@@ -293,18 +296,20 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (event.page === page.value && event.pageSize === pageSize.value) return;
     page.value = event.page;
     pageSize.value = event.pageSize;
-    void load();
+    if (automatic) void load();
   };
   const onSortChanged = (event: SortChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
     sortModel.value = event.sortModel.map((item) => ({ ...item }));
-    scheduleLoad(true);
+    if (automatic) scheduleLoad(true);
+    else page.value = 1;
   };
   const onFilterChanged = (event: FilterChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
     filterModel.value = { ...event.filterModel };
     if (options.clearSelectionOnQueryChange !== false) clearSelection();
-    scheduleLoad(true);
+    if (automatic) scheduleLoad(true);
+    else page.value = 1;
   };
   const onSelectionChanged = (event: SelectionChangedEvent<TData>): void => {
     if (suppressSelectionEvents) return;
@@ -342,13 +347,15 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const gridProps = computed<GridOptions<TData>>(() => ({
     rowData: rows.value,
     loading: loading.value,
-    getRowId: ({ data }) => rowId(data),
+    rowKey: rowId,
     manualSorting: true,
     manualFiltering: true,
     quickFilterText: quickFilterText.value,
-    overlayNoRowsTemplate: error.value
+    error: error.value,
+    overlayErrorTemplate: error.value
       ? () => options.errorOverlay?.({ error: error.value, retry: load }) ?? "Remote request failed. Please retry."
-      : options.emptyOverlay,
+      : undefined,
+    overlayNoRowsTemplate: options.emptyOverlay,
     pagination: {
       mode: "server",
       page: page.value,
@@ -430,13 +437,15 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     () => readSource(options.query),
     () => {
       if (options.clearSelectionOnQueryChange !== false) clearSelection();
-      scheduleLoad(true);
+      if (automatic) scheduleLoad(true);
+      else page.value = 1;
     },
-    { deep: true, immediate: options.immediate !== false }
+    { deep: true, immediate: automatic && options.immediate !== false }
   );
   watch(quickFilterText, () => {
     if (options.clearSelectionOnQueryChange !== false) clearSelection();
-    scheduleLoad(true);
+    if (automatic) scheduleLoad(true);
+    else page.value = 1;
   });
   watch(selectedKeys, (keys) => {
     if (updatingSelectedRefs) return;

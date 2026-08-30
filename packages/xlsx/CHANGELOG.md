@@ -1,5 +1,16 @@
 # @agile-team/mach-table-xlsx
 
+## 0.14.0
+
+### Minor Changes
+
+- Deliver the 0.14 usability release: shared application configuration, compact row keys, automatic full-state persistence, explicit error and auto-height layouts, framework-neutral commands, resilient row-action saves, Vue/React controllers and remote workflows, optional standard toolbars, stronger consumer type gates, and synchronized examples and documentation.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.14.0
+
 ## 0.13.0
 
 ### Minor Changes

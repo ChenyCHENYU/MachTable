@@ -140,6 +140,20 @@
 | `ariaDescribedBy` | `string` | `""` | 外部操作说明元素 id |
 | 事件回调 | `onCellClicked`、`onGridError` 等 | — | 见 [事件](/api/events)；用户回调异常会被隔离并上报 |
 
+## 0.14 使用体验配置
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `rowKey` | `FieldPath<TData> \| (row) => string \| number` | — | 稳定行主键简写；支持点路径。与 `getRowId` 同时配置时后者优先 |
+| `domLayout` | `"normal" \| "autoHeight"` | `"normal"` | 自动高度会渲染全部客户端行，只用于小表；不能与 `datasource` 混用 |
+| `error` | `unknown \| null` | `null` | 一等请求/页面错误状态；非空时显示错误 overlay，优先级高于 empty |
+| `overlayErrorTemplate` | `OverlayTemplate` | 内置可访问错误提示 | 错误 overlay；字符串仍按纯文本安全渲染 |
+| `stateKey` | `string \| null` | `null` | 自动加载和防抖保存完整 GridState |
+| `stateStore` | `GridStateStore` | 安全 localStorage store | 可替换为后端、IndexedDB 或测试内存 store；支持异步 |
+| `stateSaveDebounceMs` | `number` | `160` | 自动状态保存防抖时间；销毁前会刷新待保存内容 |
+
+默认虚拟布局必须给宿主容器明确高度。`autoHeight` 的意义是免高度的小型详情表，不是大数据表性能开关。状态 key 应包含用户/租户/视图维度，避免不同主体共享选择和筛选状态。
+
 ## 类型速查
 
 ```ts

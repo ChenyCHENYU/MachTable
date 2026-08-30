@@ -17,6 +17,7 @@ const PANES: PaneType[] = ["left", "center", "right"];
 type BodyContext = Pick<
   GridCore<any>,
   | "buildDefaultEmptyState"
+  | "buildDefaultErrorState"
   | "columnModel"
   | "contextMenuService"
   | "editingService"
@@ -231,12 +232,17 @@ export class BodyRenderer {
       container.style.height = `${totalHeight}px`;
       if (pane === "center") container.style.width = `${centerWidth}px`;
     }
+    this.applyDomLayoutHeight(totalHeight);
 
     sk.root.setAttribute("aria-rowcount", String(rowCount + sk.getHeaderRowCount()));
   }
 
   invalidateRowHeight(node: RowNode<any>): void {
     this.rowHeightCache.delete(node);
+  }
+
+  private applyDomLayoutHeight(totalHeight: number): void {
+    this.core.skeleton.bodyEl.style.height = this.core.options.domLayout === "autoHeight" ? `${totalHeight}px` : "";
   }
 
   invalidateAllRowHeights(): void {
@@ -322,7 +328,9 @@ export class BodyRenderer {
       minRowHeight = Math.min(minRowHeight, this.lastMinRowHeight);
     }
     const visible = Math.ceil(viewport.clientHeight / Math.max(1, minRowHeight));
-    const needed = visible + this.core.options.rowBuffer * 2 + 1;
+    const needed = this.core.options.domLayout === "autoHeight"
+      ? this.core.rowModel.getDisplayedRowCount()
+      : visible + this.core.options.rowBuffer * 2 + 1;
     const colWindowChanged = this.computeColWindow();
     if (colWindowChanged) {
       for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
@@ -514,10 +522,7 @@ export class BodyRenderer {
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     const buffer = this.core.options.rowBuffer;
     const colWindowChanged = this.computeColWindow();
-    if (colWindowChanged) {
-      for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
-      this.applyCellLayout();
-    }
+    this.reconcileColumnWindow(colWindowChanged);
 
     if (rowCount === 0) {
       for (const slot of this.pool) this.hideSlot(slot);
@@ -525,6 +530,8 @@ export class BodyRenderer {
       this.lastExcl = 0;
       return;
     }
+
+    if (this.renderAutoHeightRange(rowCount, force)) return;
 
     const scrollTop = viewport.scrollTop;
     const viewBottom = scrollTop + viewport.clientHeight;
@@ -557,6 +564,26 @@ export class BodyRenderer {
       }
       this.assignSlot(slot, i);
     }
+  }
+
+  private reconcileColumnWindow(changed: boolean): void {
+    if (!changed) return;
+    for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
+    this.applyCellLayout();
+  }
+
+  private renderAutoHeightRange(rowCount: number, force: boolean): boolean {
+    if (this.core.options.domLayout !== "autoHeight") return false;
+    if (!force && this.first === 0 && this.lastExcl === rowCount) return true;
+    this.first = 0;
+    this.lastExcl = rowCount;
+    for (let index = 0; index < rowCount; index++) {
+      const node = this.core.rowModel.getDisplayedRow(index);
+      const slot = this.pool[index];
+      if (!slot || !node) continue;
+      if (force || slot.index !== index || slot.nodeId !== node.id) this.assignSlot(slot, index);
+    }
+    return true;
   }
 
   private hideSlot(slot: RowSlot): void {
@@ -1041,6 +1068,11 @@ export class BodyRenderer {
     const options = this.core.options;
     if (options.loading) {
       this.core.skeleton.showOverlay("loading", options.overlayLoadingTemplate, options.allowUnsafeOverlayHtml);
+      return;
+    }
+    if (options.error != null) {
+      const template = options.overlayErrorTemplate || this.core.buildDefaultErrorState();
+      this.core.skeleton.showOverlay("error", template, options.allowUnsafeOverlayHtml);
       return;
     }
     if (this.core.rowModel.getDisplayedRowCount() === 0 && !options.suppressNoRowsOverlay) {

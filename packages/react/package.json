@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-react",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Official React 18+ adapter for the MachTable enterprise data grid",
   "keywords": [
     "react",
@@ -39,6 +39,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./workflows": {
+      "import": {
+        "types": "./dist/workflows.d.ts",
+        "default": "./dist/workflows.js"
+      },
+      "require": {
+        "types": "./dist/workflows.d.cts",
+        "default": "./dist/workflows.cjs"
       }
     },
     "./styles.css": {

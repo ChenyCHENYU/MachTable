@@ -19,3 +19,5 @@ export type {
   UseMachTableQueryOptions,
   UseMachTableQueryReturn
 } from "./useMachTableQuery";
+export { useMachTableController } from "./useMachTableController";
+export type { UseMachTableControllerOptions, UseMachTableControllerReturn } from "./useMachTableController";

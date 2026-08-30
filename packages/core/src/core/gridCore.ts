@@ -24,6 +24,7 @@ import { PinnedRowsRenderer } from "../render/pinnedRowsRenderer";
 import { StatusBarService } from "../render/statusBarService";
 import { getByPath, setByPath } from "../lib/path";
 import { loadColumnState, saveColumnState } from "../lib/columnStateStore";
+import { loadGridState, saveGridState } from "../lib/gridStateStore";
 import { registerBuiltinRenderers } from "../lib/presetRenderers";
 import {
   ensureCellRenderer,
@@ -52,6 +53,7 @@ import type {
 } from "../types/colDef";
 
 const DATA_SOURCE_ERROR_PREFIXES = ["datasource", "treeData"] as const;
+const STATE_ERROR_PREFIXES = ["columnState.", "gridState."] as const;
 
 type ColumnStateLike = ColumnState;
 
@@ -96,6 +98,8 @@ export class GridCore<TData = any> {
   private lastColumnLayoutSignature = "";
   private activeFeatures = new Map<string, { feature: GridFeature<TData>; cleanups: Array<() => void> }>();
   private recentErrors: GridDiagnosticError[] = [];
+  private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private gridStateLoadToken = 0;
 
   constructor(container: HTMLElement, options: GridOptions<TData>) {
     let settleReady!: (api: GridApi<TData>) => void;
@@ -159,6 +163,7 @@ export class GridCore<TData = any> {
         this.rowModel.setRowData(this.options.rowData);
       }
       if (this.options.initialState) this.api.applyState(this.options.initialState, { emitEvents: false });
+      this.loadPersistedGridState();
       this.relayout();
       this.pinnedRowsRenderer.setData(this.options.pinnedTopRowData, this.options.pinnedBottomRowData);
       this.setFeatures(this.options.features);
@@ -514,7 +519,7 @@ export class GridCore<TData = any> {
     const event = { type, api: this.api, ...extra } as GridEventMap<TData>[K];
     this.eventBus.emit(type, event);
     const handlerKey = ("on" + type.charAt(0).toUpperCase() + type.slice(1)) as keyof ResolvedGridOptions<TData>;
-    const handler = this.options[handlerKey] as unknown as
+    const handler = this.options[handlerKey] as
       | ((event: GridEventMap<TData>[K]) => void)
       | undefined;
     if (typeof handler === "function") {
@@ -525,6 +530,11 @@ export class GridCore<TData = any> {
         else this.reportError(error, `eventHandler.${String(handlerKey)}`, { eventType: type });
       }
     }
+    if (
+      type === "selectionChanged" || type === "sortChanged" || type === "filterChanged" ||
+      type === "columnResized" || type === "columnMoved" || type === "columnVisibilityChanged" ||
+      type === "displayedColumnsChanged" || type === "paginationChanged" || type === "detailToggled"
+    ) this.scheduleGridStateSave();
     return event;
   }
 
@@ -551,7 +561,7 @@ export class GridCore<TData = any> {
     ) return "RENDERER_ERROR";
     if (source.toLowerCase().includes("editor") || source === "editable") return "EDITOR_ERROR";
     if (source.startsWith("feature.")) return "FEATURE_ERROR";
-    if (source.startsWith("columnState.")) return "STATE_ERROR";
+    if (STATE_ERROR_PREFIXES.some((prefix) => source.startsWith(prefix))) return "STATE_ERROR";
     if (source.startsWith("eventBus.") || source.startsWith("eventHandler.")) return "EVENT_HANDLER_ERROR";
     return "GRID_ERROR";
   }
@@ -628,10 +638,10 @@ export class GridCore<TData = any> {
     return this.rowModel.toggleDetail(rowId);
   }
 
-  private stateLoadToken = 0;
+  private columnStateLoadToken = 0;
 
   loadPersistedColumnState(): void {
-    const token = ++this.stateLoadToken;
+    const token = ++this.columnStateLoadToken;
     if (!this.options.columnStateKey) return;
     let saved: ColumnStateLike[] | null | Promise<ColumnStateLike[] | null>;
     try {
@@ -646,7 +656,7 @@ export class GridCore<TData = any> {
     if (!Array.isArray(saved)) {
       Promise.resolve(saved)
         .then((states) => {
-          if (this.destroyed || token !== this.stateLoadToken || !states || states.length === 0) return;
+          if (this.destroyed || token !== this.columnStateLoadToken || !states || states.length === 0) return;
           this.columnModel.applyColumnState(states);
           if (this.rowModel.isInfinite) void this.rowModel.onServerParamsChanged();
           else this.rowModel.refreshPipeline();
@@ -673,6 +683,65 @@ export class GridCore<TData = any> {
     } catch (error) {
       this.reportError(error, "columnState.save");
     }
+  }
+
+  loadPersistedGridState(): void {
+    const token = ++this.gridStateLoadToken;
+    const key = this.options.stateKey;
+    if (!key) return;
+    let saved: import("../types/state").GridState | null | Promise<import("../types/state").GridState | null>;
+    try {
+      saved = this.options.stateStore ? this.options.stateStore.load(key) : loadGridState(key);
+    } catch (error) {
+      this.reportError(error, "gridState.load");
+      return;
+    }
+    const apply = (state: import("../types/state").GridState | null): void => {
+      if (this.destroyed || token !== this.gridStateLoadToken || !state) return;
+      this.api.applyState(state, { emitEvents: false });
+    };
+    if (saved && typeof (saved as Promise<unknown>).then === "function") {
+      void Promise.resolve(saved).then(apply).catch((error) => this.reportError(error, "gridState.load"));
+    } else {
+      apply(saved as import("../types/state").GridState | null);
+    }
+  }
+
+  scheduleGridStateSave(): void {
+    if (!this.options.stateKey || this.destroyed) return;
+    if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer);
+    this.stateSaveTimer = setTimeout(() => {
+      this.stateSaveTimer = null;
+      this.persistGridState();
+    }, this.options.stateSaveDebounceMs);
+  }
+
+  persistGridState(): void {
+    const key = this.options.stateKey;
+    if (!key || this.destroyed) return;
+    try {
+      const result = this.options.stateStore
+        ? this.options.stateStore.save(key, this.api.getState())
+        : saveGridState(key, this.api.getState());
+      if (result && typeof result.catch === "function") {
+        void result.catch((error) => this.reportError(error, "gridState.save"));
+      }
+    } catch (error) {
+      this.reportError(error, "gridState.save");
+    }
+  }
+
+  buildDefaultErrorState(): HTMLElement {
+    const error = document.createElement("div");
+    error.className = "mach-empty mach-empty--error";
+    const title = document.createElement("div");
+    title.className = "mach-empty__title";
+    title.textContent = this.getLocaleText("requestFailed");
+    const hint = document.createElement("div");
+    hint.className = "mach-empty__hint";
+    hint.textContent = this.getLocaleText("requestFailedHint");
+    error.append(title, hint);
+    return error;
   }
 
   buildDefaultEmptyState(): HTMLElement {
@@ -800,6 +869,11 @@ export class GridCore<TData = any> {
 
   destroy(): void {
     if (this.destroyed) return;
+    if (this.stateSaveTimer) {
+      clearTimeout(this.stateSaveTimer);
+      this.stateSaveTimer = null;
+      this.persistGridState();
+    }
     this.destroyed = true;
     if (this.readyRafId) cancelAnimationFrame(this.readyRafId);
     this.readyRafId = 0;

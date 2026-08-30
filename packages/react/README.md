@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-Official React 18+ adapter for MachTable 0.13. It provides `<MachTable>`, `MachTableProvider`, `useMachGrid`, React cell/detail renderer factories, the complete workbench/lazy-tree/semantic-column/action/state Core API, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official React 18+ adapter for MachTable 0.14. It provides a generic `<MachTable>`, full app/route configuration, remote query and editing workflows, a cohesive controller, a standard toolbar, React cell/detail renderer factories, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 
@@ -39,7 +39,8 @@ export function App({ rows }: { rows: Row[] }) {
         apiRef={grid.apiRef}
         rowData={rows}
         columnDefs={columns}
-        getRowId={({ data }) => data.id}
+        rowKey="id"
+        stateKey="customer-list"
       />
     </div>
   );
@@ -68,21 +69,59 @@ When the page itself is route-lazy, a normal named import inside that page alrea
 
 ## Application and route defaults
 
-Providers can be nested; the nearest defaults are merged and table props win:
+Keep table conventions in one file. Providers can be nested; the nearest configuration is merged, named presets are reusable, and explicit table props win:
 
 ```tsx
-import { MachTableProvider } from "@agile-team/mach-table-react";
+// mach-table.config.ts
+import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-react";
+export default defineMachTableConfig({
+  defaults: {
+    size: "compact",
+    defaultColDef: { sortable: true, resizable: true, filter: true }
+  },
+  defaultPreset: "list",
+  presets: {
+    list: defineMachTablePreset({ pagination: false }),
+    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+  }
+});
 
-<MachTableProvider defaults={{
-  size: "compact",
-  pagination: false,
-  defaultColDef: { sortable: true, resizable: true, filter: true }
-}}>
+// main.tsx
+<MachTableProvider config={machTableConfig}>
   <App />
 </MachTableProvider>
 ```
 
 The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `react >= 18` and `react-dom >= 18` remain peer dependencies supplied by the host application.
+
+## Remote lists and standard workflows
+
+Import heavier page workflows from the tree-shakeable subpath:
+
+```tsx
+import { useMachTableQuery, useMachTableController } from "@agile-team/mach-table-react/workflows";
+import { MachTable, MachTableToolbar } from "@agile-team/mach-table-react";
+
+const query = useMachTableQuery({
+  query: filters,
+  queryKey: filters,
+  rowKey: "id",
+  request: orderApi.page,
+  mode: "manual"
+});
+const controller = useMachTableController({ query });
+
+<MachTableToolbar
+  api={controller.table.api}
+  commands={controller.commands}
+  search={controller.search}
+  onSearchChange={controller.setSearch}
+  loading={controller.busy}
+/>;
+<MachTable apiRef={controller.table.apiRef} {...controller.bindings} />;
+```
+
+The query hook cancels superseded requests, ignores stale responses, exposes an error overlay and supports cross-page or select-all-matching selection. `useMachTableEditing()` adds dirty state, guarded saves, rollback and reveal helpers.
 
 ## Cell and full-row editing
 

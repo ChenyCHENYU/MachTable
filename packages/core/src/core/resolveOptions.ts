@@ -1,5 +1,6 @@
 import type { GridOptions, GridSize, ResolvedGridOptions } from "../types/options";
 import type { ColDef } from "../types/colDef";
+import { getByPath } from "../lib/path";
 
 export const DEFAULT_COL_DEF: Partial<ColDef> = {
   sortable: true,
@@ -48,6 +49,22 @@ function resolvePageSizeOptions<TData>(options: GridOptions<TData>, pageSize: nu
   return values.sort((left, right) => left - right);
 }
 
+export function rowIdFromKey<TData>(rowKey: NonNullable<GridOptions<TData>["rowKey"]>, data: TData): string {
+  const value = typeof rowKey === "function" ? rowKey(data) : getByPath(data, rowKey);
+  return value == null ? "" : String(value);
+}
+
+function resolveRowIdentity<TData>(options: GridOptions<TData>): Pick<ResolvedGridOptions<TData>, "getRowId" | "rowKey"> {
+  const rowKey = options.rowKey;
+  const getRowId = options.getRowId ?? (rowKey
+    ? ({ data }: { data: TData }) => rowIdFromKey(rowKey, data)
+    : undefined);
+  return {
+    ...(getRowId ? { getRowId } : {}),
+    ...(rowKey ? { rowKey } : {})
+  };
+}
+
 function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize) {
   const preset = GRID_SIZE_PRESETS[size];
   return {
@@ -55,10 +72,12 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
     rowData: Array.isArray(options.rowData) ? options.rowData : [],
     defaultColDef: { ...DEFAULT_COL_DEF, ...(options.defaultColDef ?? {}) },
     columnTypes: options.columnTypes ?? {},
+    ...resolveRowIdentity(options),
     rowHeight: finiteAtLeast(options.rowHeight, preset.rowHeight, 1),
     headerHeight: finiteAtLeast(options.headerHeight, preset.headerHeight, 1),
     rowBuffer: finiteAtLeast(options.rowBuffer, 8, 0, true),
     columnLayout: options.columnLayout === "fit" ? "fit" as const : "normal" as const,
+    domLayout: options.domLayout === "autoHeight" ? "autoHeight" as const : "normal" as const,
     rowSelection:
       options.rowSelection === "single" || options.rowSelection === "multiple"
         ? options.rowSelection
@@ -81,6 +100,7 @@ function resolveAppearance(options: GridOptions) {
     suppressNoRowsOverlay: options.suppressNoRowsOverlay ?? false,
     suppressHeaderFocus: options.suppressHeaderFocus ?? false,
     loading: options.loading ?? false,
+    error: options.error ?? null,
     className: options.className ?? ""
   };
 }
@@ -151,6 +171,7 @@ function resolveInteraction(options: GridOptions) {
   return {
     columnMenu: options.columnMenu ?? false,
     columnStateKey: options.columnStateKey ?? null,
+    ...resolveStatePersistence(options),
     locale: options.locale ?? {},
     suppressWarnings: options.suppressWarnings ?? false,
     enableRangeSelection: options.enableRangeSelection ?? false,
@@ -165,6 +186,13 @@ function resolveInteraction(options: GridOptions) {
       typeof options.statusBar === "object" && options.statusBar?.panels
         ? options.statusBar.panels
         : ["rowCount", "selectedRowCount", "rangeAggregate"] as const
+  };
+}
+
+function resolveStatePersistence(options: GridOptions) {
+  return {
+    stateKey: options.stateKey ?? null,
+    stateSaveDebounceMs: finiteAtLeast(options.stateSaveDebounceMs, 160, 0, true)
   };
 }
 
@@ -184,12 +212,13 @@ function resolveAccessibility(options: GridOptions) {
     ariaDescribedBy: options.ariaDescribedBy ?? "",
     overlayNoRowsTemplate: options.overlayNoRowsTemplate ?? "",
     overlayLoadingTemplate: options.overlayLoadingTemplate ?? "",
+    overlayErrorTemplate: options.overlayErrorTemplate ?? "",
     allowUnsafeOverlayHtml: options.allowUnsafeOverlayHtml ?? false
   };
 }
 
 const OPTIONAL_OPTION_KEYS = [
-  "getRowId",
+  "stateStore",
   "detailRowRenderer",
   "isRowExpandable",
   "columnStateStore",

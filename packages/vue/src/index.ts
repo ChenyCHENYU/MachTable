@@ -2,7 +2,7 @@ import { MachTable, RobotGrid } from "./MachTable";
 import { MachTablePlugin } from "./plugin";
 
 export { MachTable, RobotGrid };
-export type { MachTableVueProps, RobotGridVueProps } from "./MachTable";
+export type { MachTableVueComponent, MachTableVueExposed, MachTableVueProps, RobotGridVueProps } from "./MachTable";
 export {
   vueCellEditorSlot,
   vueCellRenderer,
@@ -28,6 +28,8 @@ export type {
   UseMachTableQueryOptions,
   UseMachTableQueryReturn
 } from "./useMachTableQuery";
+export { useMachTableController } from "./useMachTableController";
+export type { UseMachTableControllerOptions, UseMachTableControllerReturn } from "./useMachTableController";
 export type { VueCellRendererProps } from "./adapters";
 export type { VueCellEditorSlotProps } from "./adapters";
 export { applyVueSlots, createVueSlotEnhancer } from "./slots";

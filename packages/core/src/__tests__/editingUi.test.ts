@@ -120,11 +120,11 @@ describe("polished editing UI", () => {
       getRowId: (params) => params.data.id
     });
 
-    host.querySelector<HTMLButtonElement>('[aria-label="Edit row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
     const inputs = host.querySelectorAll<HTMLInputElement>(".mach-row-editor-shell .mach-editor-input");
     inputs[0].value = "Should not leak";
     inputs[1].value = "12";
-    host.querySelector<HTMLButtonElement>('[aria-label="Save row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
     expect(api.isRowEditing(0)).toBe(true);
     expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
@@ -132,7 +132,7 @@ describe("polished editing UI", () => {
 
     inputs[1].value = "22";
     inputs[1].dispatchEvent(new Event("input", { bubbles: true }));
-    host.querySelector<HTMLButtonElement>('[aria-label="Save row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
     expect(api.isRowEditing()).toBe(false);
     expect(api.getNodeById("1")?.data).toMatchObject({ name: "Should not leak", age: 22 });
@@ -158,11 +158,11 @@ describe("polished editing UI", () => {
       getRowId: (params) => params.data.id
     });
 
-    host.querySelector<HTMLButtonElement>('[aria-label="Edit row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
     const inputs = host.querySelectorAll<HTMLInputElement>(".mach-row-editor-shell .mach-editor-input");
     inputs[0].value = "Supervisor";
     inputs[1].value = "19";
-    host.querySelector<HTMLButtonElement>('[aria-label="Save row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
     expect(validator).toHaveBeenCalledOnce();
     expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
@@ -170,7 +170,7 @@ describe("polished editing UI", () => {
 
     inputs[1].value = "21";
     inputs[1].dispatchEvent(new Event("input", { bubbles: true }));
-    host.querySelector<HTMLButtonElement>('[aria-label="Save row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
     expect(api.getNodeById("1")?.data).toMatchObject({ name: "Supervisor", age: 21 });
     api.destroy();
@@ -200,11 +200,11 @@ describe("polished editing UI", () => {
       onCellValueChanged: changed
     });
 
-    host.querySelector<HTMLButtonElement>('[aria-label="Edit row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
     const inputs = host.querySelectorAll<HTMLInputElement>(".mach-row-editor-shell .mach-editor-input");
     inputs[0].value = "Must roll back";
     inputs[1].value = "13";
-    host.querySelector<HTMLButtonElement>('[aria-label="Save row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
     expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
     expect(api.isRowEditing(0)).toBe(true);
@@ -212,7 +212,7 @@ describe("polished editing UI", () => {
 
     inputs[1].value = "23";
     inputs[1].dispatchEvent(new Event("input", { bubbles: true }));
-    host.querySelector<HTMLButtonElement>('[aria-label="Save row"]')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
     expect(api.getNodeById("1")?.data).toMatchObject({ name: "Must roll back", age: 23 });
     expect(changed).toHaveBeenCalledTimes(2);
@@ -265,7 +265,7 @@ describe("action column modes", () => {
       ],
       rowData: [{ id: "1", name: "A", age: 20, status: "active" }]
     });
-    const more = host.querySelector<HTMLButtonElement>('[aria-label="More actions"]')!;
+    const more = host.querySelector<HTMLButtonElement>('[aria-label="更多操作"]')!;
     more.click();
     expect(document.querySelector('[role="dialog"][aria-label="更多操作"]')).toBeTruthy();
     expect(more.getAttribute("aria-expanded")).toBe("true");

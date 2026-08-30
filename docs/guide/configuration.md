@@ -113,7 +113,7 @@ createApp(App).use(AsyncMachTablePlugin, machTableConfig).mount("#app");
   preset="crud"
   :column-defs="columns"
   :row-data="rows"
-  :get-row-id="({ data }) => data.orderId"
+  row-key="orderId"
 />
 ```
 
@@ -175,3 +175,20 @@ tableRef.value?.explainOption("pagination");
 这能回答“为什么这张表是 50 条一页”“是谁关闭了过滤”等企业项目中很常见的问题。
 
 远程 B 端列表不要把请求逻辑塞进全局配置；使用 [`useMachTableQuery`](/recipes/remote-query) 把页面查询、分页、竞态取消和跨页选择组合起来。
+
+## React 使用同一份配置模型
+
+`defineMachTableConfig`、命名 preset、语义列类型和覆盖顺序由 Core 统一实现，Vue 与 React 不存在两套规则：
+
+```tsx
+import { MachTableProvider } from "@agile-team/mach-table-react";
+import machTableConfig from "@/config/mach-table.config";
+
+root.render(
+  <MachTableProvider config={machTableConfig}>
+    <App />
+  </MachTableProvider>
+);
+```
+
+React 路由可再次嵌套 Provider 覆盖配置；组件 `preset` 与 props 的优先级和 Vue 相同。配置对象应在模块级导出或用 `useMemo` 保持引用稳定。

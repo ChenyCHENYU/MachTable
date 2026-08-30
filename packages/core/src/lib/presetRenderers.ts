@@ -1,6 +1,8 @@
 import type { CellRendererParams } from "../types/params";
 import type { CellRendererFn } from "../types/colDef";
 import type { ActionPolicyContext } from "../types/options";
+import type { GridChange } from "../types/api";
+import { DEFAULT_LOCALE } from "./locale";
 
 export type TagVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
@@ -81,7 +83,7 @@ export function linkRenderer(params: CellRendererParams): string | HTMLElement {
   return link;
 }
 
-const ICON_PATHS: Record<string, string> = {
+const ICON_PATHS = {
   edit: '<path d="M11.5 2.5l2 2L5 13H3v-2l8.5-8.5z"/>',
   delete: '<path d="M3 5h10M6 5V3h4v2M5 5l.7 8h4.6L11 5"/>',
   view: '<path d="M1.5 8s2.4-4.2 6.5-4.2S14.5 8 14.5 8s-2.4 4.2-6.5 4.2S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="1.8"/>',
@@ -93,9 +95,11 @@ const ICON_PATHS: Record<string, string> = {
   plus: '<path d="M8 2.5v11M2.5 8h11"/>',
   search: '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/>',
   more: '<circle cx="3" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r=".9" fill="currentColor" stroke="none"/>'
-};
+} as const;
 
-function iconSvg(name: string, size = 14): string {
+export type BuiltInActionIcon = keyof typeof ICON_PATHS;
+
+function iconSvg(name: BuiltInActionIcon, size = 14): string {
   const path = ICON_PATHS[name] ?? "";
   return `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 }
@@ -106,7 +110,7 @@ export type ActionOverflowMode = "menu" | "drawer" | "inline";
 export interface ActionItem<TData = any> {
   /** Stable identifier used by permission, telemetry and error policies. */
   id?: string;
-  icon?: string;
+  icon?: BuiltInActionIcon;
   label?: string;
   title?: string;
   /** Backwards-compatible shorthand for variant="danger". */
@@ -134,10 +138,15 @@ export interface ActionButtonsConfig<TData = any> {
 export interface RowActionsConfig<TData = any> extends Omit<ActionButtonsConfig<TData>, "actions"> {
   onView?: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
   onDelete?: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
+  /** Persists the just-validated row. Failures reopen row editing and keep the change dirty. */
+  onSave?: (
+    params: CellRendererParams<TData>,
+    changes: readonly GridChange<TData>[]
+  ) => unknown | Promise<unknown>;
   /** Set false when this table has no full-row edit workflow. */
   edit?: boolean;
   extraActions?: ActionItem<TData>[];
-  labels?: Partial<Record<"view" | "edit" | "delete" | "save" | "cancel", string>>;
+  labels?: Partial<Record<"view" | "edit" | "delete" | "confirm" | "save" | "cancel", string>>;
   permissions?: Partial<Record<"view" | "edit" | "delete", string | readonly string[]>>;
   /** Defaults to the translated delete label when true. */
   confirmDelete?: boolean | string | ((params: CellRendererParams<TData>) => boolean | string | Promise<boolean | string>);
@@ -192,7 +201,7 @@ function onActionSurfaceKeyDown(event: KeyboardEvent): void {
 
 interface SurfaceItem {
   label: string;
-  icon?: string;
+  icon?: BuiltInActionIcon;
   variant?: ActionVariant;
   disabled?: boolean;
   pick: (button: HTMLButtonElement) => void;
@@ -329,15 +338,19 @@ function canAccessAction<TData>(action: ActionItem<TData>, params: CellRendererP
   }
 }
 
+function visibleActions<TData>(actions: readonly ActionItem<TData>[], params: CellRendererParams<TData>): ActionItem<TData>[] {
+  return actions.filter((action) => {
+    if (!canAccessAction(action, params)) return false;
+    if (!action.show) return true;
+    try { return action.show(params); } catch { return false; }
+  });
+}
+
 export function createActionButtonsRenderer<TData = any>(config: ActionButtonsConfig<TData>): CellRendererFn {
   const max = Math.max(0, config.max ?? 3);
   const overflowMode = config.overflow ?? "menu";
   return (params: CellRendererParams<TData>) => {
-    const visible = config.actions.filter((action) => {
-      if (!canAccessAction(action, params)) return false;
-      if (!action.show) return true;
-      try { return action.show(params); } catch { return false; }
-    });
+    const visible = visibleActions(config.actions, params);
     if (visible.length === 0) return "";
 
     const wrap = document.createElement("div");
@@ -403,7 +416,8 @@ export function createActionButtonsRenderer<TData = any>(config: ActionButtonsCo
       const more = document.createElement("button");
       more.type = "button";
       more.className = "mach-action-btn mach-action-btn--icon";
-      const moreLabel = config.moreLabel ?? "More actions";
+      const locale = params.api.getGridOption("locale") ?? {};
+      const moreLabel = config.moreLabel ?? locale.actionMore ?? DEFAULT_LOCALE.actionMore;
       more.title = moreLabel;
       more.setAttribute("aria-label", moreLabel);
       more.setAttribute("aria-haspopup", overflowMode === "drawer" ? "dialog" : "menu");
@@ -437,54 +451,94 @@ export function createActionButtonsRenderer<TData = any>(config: ActionButtonsCo
   };
 }
 
+interface RowActionLabels {
+  view: string;
+  edit: string;
+  delete: string;
+  confirm: string;
+  save: string;
+  cancel: string;
+}
+
+function actionLabel(configured: string | undefined, localized: string | undefined, fallback: string): string {
+  return configured ?? localized ?? fallback;
+}
+
+function resolveRowActionLabels<TData>(
+  config: RowActionsConfig<TData>,
+  params: CellRendererParams<TData>
+): RowActionLabels {
+  const locale = params.api.getGridOption("locale") ?? {};
+  return {
+    view: actionLabel(config.labels?.view, locale.actionView, DEFAULT_LOCALE.actionView),
+    edit: actionLabel(config.labels?.edit, locale.actionEdit, DEFAULT_LOCALE.actionEdit),
+    delete: actionLabel(config.labels?.delete, locale.actionDelete, DEFAULT_LOCALE.actionDelete),
+    confirm: actionLabel(config.labels?.confirm, locale.actionConfirm, DEFAULT_LOCALE.actionConfirm),
+    save: actionLabel(config.labels?.save, locale.actionSave, DEFAULT_LOCALE.actionSave),
+    cancel: actionLabel(config.labels?.cancel, locale.actionCancel, DEFAULT_LOCALE.actionCancel)
+  };
+}
+
+function renderRowEditingActions<TData>(
+  config: RowActionsConfig<TData>,
+  params: CellRendererParams<TData>,
+  labels: RowActionLabels
+): ReturnType<CellRendererFn> {
+  const confirm = async (): Promise<void> => {
+    const committed = await params.api.stopEditingRow(false);
+    if (!committed || !config.onSave) return;
+    const changes = params.api.getChanges().filter((change) => change.rowId === params.node.id);
+    try {
+      await config.onSave(params, changes);
+      params.api.markChangesSaved([params.node.id]);
+    } catch (error) {
+      params.api.startEditingRow(params.rowIndex);
+      throw error;
+    }
+  };
+  const confirmTitle = config.onSave
+    ? labels.save
+    : (config.labels?.confirm ?? config.labels?.save ?? labels.confirm);
+  return createActionButtonsRenderer<TData>({
+    actions: [
+      { icon: "check", title: confirmTitle, variant: "primary", onClick: confirm },
+      { icon: "close", title: labels.cancel, onClick: () => params.api.stopEditingRow(true).then(() => undefined) }
+    ],
+    overflow: "inline"
+  })(params);
+}
+
+function buildRowActions<TData>(
+  config: RowActionsConfig<TData>,
+  params: CellRendererParams<TData>,
+  labels: RowActionLabels
+): ActionItem<TData>[] {
+  const actions: ActionItem<TData>[] = [];
+  if (config.onView) actions.push({
+    id: "view", icon: "view", title: labels.view, variant: "primary",
+    ...(config.permissions?.view ? { permission: config.permissions.view } : {}),
+    onClick: config.onView
+  });
+  if (config.edit !== false) actions.push({
+    id: "edit", icon: "edit", title: labels.edit, variant: "warning",
+    ...(config.permissions?.edit ? { permission: config.permissions.edit } : {}),
+    onClick: () => { params.api.startEditingRow(params.rowIndex); }
+  });
+  if (config.onDelete) actions.push({
+    id: "delete", icon: "delete", title: labels.delete, variant: "danger",
+    ...(config.permissions?.delete ? { permission: config.permissions.delete } : {}),
+    ...(config.confirmDelete ? { confirm: config.confirmDelete === true ? labels.delete : config.confirmDelete } : {}),
+    onClick: config.onDelete
+  });
+  actions.push(...(config.extraActions ?? []));
+  return actions;
+}
+
 export function createRowActionsRenderer<TData = any>(config: RowActionsConfig<TData> = {}): CellRendererFn {
   return (params: CellRendererParams<TData>) => {
-    const labels = {
-      view: config.labels?.view ?? "View",
-      edit: config.labels?.edit ?? "Edit row",
-      delete: config.labels?.delete ?? "Delete",
-      save: config.labels?.save ?? "Save row",
-      cancel: config.labels?.cancel ?? "Cancel row edit"
-    };
-    if (params.api.isRowEditing(params.rowIndex)) {
-      return createActionButtonsRenderer<TData>({
-        actions: [
-          { icon: "check", title: labels.save, variant: "primary", onClick: () => params.api.stopEditingRow(false).then(() => undefined) },
-          { icon: "close", title: labels.cancel, onClick: () => params.api.stopEditingRow(true).then(() => undefined) }
-        ],
-        overflow: "inline"
-      })(params);
-    }
-
-    const actions: ActionItem<TData>[] = [];
-    if (config.onView) actions.push({
-      id: "view",
-      icon: "view",
-      title: labels.view,
-      variant: "primary",
-      ...(config.permissions?.view ? { permission: config.permissions.view } : {}),
-      onClick: config.onView
-    });
-    if (config.edit !== false) {
-      actions.push({
-        id: "edit",
-        icon: "edit",
-        title: labels.edit,
-        variant: "warning",
-        ...(config.permissions?.edit ? { permission: config.permissions.edit } : {}),
-        onClick: () => { params.api.startEditingRow(params.rowIndex); }
-      });
-    }
-    if (config.onDelete) actions.push({
-      id: "delete",
-      icon: "delete",
-      title: labels.delete,
-      variant: "danger",
-      ...(config.permissions?.delete ? { permission: config.permissions.delete } : {}),
-      ...(config.confirmDelete ? { confirm: config.confirmDelete === true ? labels.delete : config.confirmDelete } : {}),
-      onClick: config.onDelete
-    });
-    actions.push(...(config.extraActions ?? []));
+    const labels = resolveRowActionLabels(config, params);
+    if (params.api.isRowEditing(params.rowIndex)) return renderRowEditingActions(config, params, labels);
+    const actions = buildRowActions(config, params, labels);
     return createActionButtonsRenderer<TData>({
       actions,
       max: config.max,

@@ -163,13 +163,22 @@ import type {
 } from "@agile-team/mach-table";
 ```
 
+## 0.14 配置、状态与命令
+
+| 导出 | 说明 |
+| --- | --- |
+| `defineMachTableConfig` / `normalizeMachTableConfig` / `mergeMachTableConfig` / `resolveMachTableGridOptions` | Vue/React 共享的应用配置、命名 preset 和来源解释内核 |
+| `createMachTableCommands` | 搜索、刷新、列工作台、密度、重置、撤销/重做、CSV、全屏的框架无关命令面 |
+| `createLocalGridStateStore` / `loadGridState` / `saveGridState` / `clearGridState` | 版本化、安全、可替换的完整 GridState 存储 |
+| `FieldPath<T>` / `FieldPathValue<T, P>` | `rowKey` 与字段路径的类型推断 |
+
 ## Vue 包附加导出
 
-根入口导出 `MachTable` / `MachTableVueProps` / `MachTablePlugin` / `provideMachTableDefaults` / `useMachTableDefaults` / `vueCellRenderer` / `vueDetailRenderer` / `useMachTable`（`{ ref, api, ready }`）。异步子路径导出 `AsyncMachTablePlugin` / `createAsyncMachTable` / `preloadMachTable`；`workflows` 子路径导出远程查询和编辑保存 composable；`editors` 子路径导出 `vueCellEditor` / `createElementPlusEditors`，不增加第二个安装依赖。另重导出完整 Core；`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
+根入口导出 `MachTable` / `MachTableVueProps` / `MachTablePlugin` / `provideMachTableConfig` / `useMachTableConfig` / `useMachTable`。异步子路径导出 `AsyncMachTablePlugin` / `createAsyncMachTable` / `preloadMachTable`；`workflows` 子路径导出 `useMachTableQuery` / `useMachTableEditing` / `useMachTableController`；`ui` 子路径导出 `MachTableToolbar` / `MachTableUiPlugin`；`editors` 子路径导出 `vueCellEditor` / `createElementPlusEditors`。这些都是同一安装包的按需入口。另重导出完整 Core；`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
 
 ## React 包附加导出
 
-`MachTable` / `MachTableReactProps` / `MachTableProvider` / `useMachTableDefaults` / `reactCellRenderer` / `reactDetailRenderer` / `useMachGrid`（`{ apiRef, api, ready }`），并重导出完整 Core。`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
+`MachTable` / `MachTableReactProps` / `MachTableProvider` / `useMachTableConfig` / `useMachTableDefaults` / `MachTableToolbar` / `reactCellRenderer` / `reactDetailRenderer` / `useMachGrid`，并重导出完整 Core。`workflows` 子路径导出 `useMachTableQuery` / `useMachTableEditing` / `useMachTableController`。`RobotGrid` 及旧 Props 类型仅为 0.x 弃用别名。
 
 ## 可选 XLSX 包
 

@@ -30,20 +30,20 @@ Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的
 Vue：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.13.0
+pnpm add @agile-team/mach-table-vue@^0.14.0
 ```
 
 React：
 
 ```bash
-pnpm add @agile-team/mach-table-react@^0.13.0
+pnpm add @agile-team/mach-table-react@^0.14.0
 ```
 
 npm / Yarn：
 
 ```bash
-npm install @agile-team/mach-table-vue@^0.13.0
-yarn add @agile-team/mach-table-vue@^0.13.0
+npm install @agile-team/mach-table-vue@^0.14.0
+yarn add @agile-team/mach-table-vue@^0.14.0
 ```
 
 Core、Vue、React 与可选 XLSX 包采用同版本联动。适配器会锁定匹配版本的 Core，普通业务项目仍只需升级自己的适配器并提交 lockfile；未使用 Excel 时不要安装 XLSX 包。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
@@ -278,7 +278,13 @@ export function AppDataGrid<TData extends object>(props: AppDataGridProps<TData>
 
 ## 6. 稳定行 ID
 
-正式项目必须提供业务稳定且唯一的 `getRowId`：
+正式项目必须提供业务稳定且唯一的 `rowKey` 或 `getRowId`。简单字段首选：
+
+```ts
+rowKey: "id"
+```
+
+派生主键再使用：
 
 ```ts
 getRowId: ({ data }) => data.id
@@ -503,7 +509,7 @@ await expect(grid).toBeFocused();
 - [ ] 已按页面覆盖面选择局部、全局同步或全局异步策略
 - [ ] 异步模式的 chunk 路径、CSP 与错误监控已在生产环境验证
 - [ ] 容器在桌面、弹窗、Tab、全屏模式都有确定高度
-- [ ] 所有生产表格提供稳定 `getRowId`
+- [ ] 所有生产表格提供稳定 `rowKey` 或 `getRowId`
 - [ ] 服务端数据源透传 `AbortSignal`
 - [ ] 复杂编辑页已覆盖异步校验、保存失败与回滚
 - [ ] 需要恢复工作区的页面已设计 `GridState` 版本迁移

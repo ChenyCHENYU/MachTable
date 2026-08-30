@@ -1,11 +1,12 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   MachTable,
+  MachTableToolbar,
   reactCellRenderer,
-  type GridApi,
-  type ColDef,
-  type CellClickEvent
+  type CellClickEvent,
+  type ColDef
 } from "@agile-team/mach-table-react";
+import { useMachTableController } from "@agile-team/mach-table-react/workflows";
 
 interface Employee {
   id: string;
@@ -19,66 +20,60 @@ const DEPARTMENTS = ["研发部", "生产部", "质量部", "安全部", "市场
 const LEVELS = ["P4", "P5", "P6", "P7", "M1", "M2"];
 
 function makeRows(count: number): Employee[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `E${i + 1}`,
-    name: `员工-${i + 1}`,
-    department: DEPARTMENTS[i % DEPARTMENTS.length],
-    salary: 8000 + ((i * 137) % 22000),
-    level: LEVELS[i % LEVELS.length]
+  return Array.from({ length: count }, (_, index) => ({
+    id: `E${index + 1}`,
+    name: `员工-${index + 1}`,
+    department: DEPARTMENTS[index % DEPARTMENTS.length],
+    salary: 8_000 + ((index * 137) % 22_000),
+    level: LEVELS[index % LEVELS.length]
   }));
 }
 
-function SalaryCell(props: { value: number }) {
-  const color = props.value > 25000 ? "#dc2626" : props.value > 15000 ? "#d97706" : "#16a34a";
-  return <strong style={{ color }}>¥{props.value.toLocaleString()}</strong>;
+function SalaryCell({ value }: { value: number }) {
+  const color = value > 25_000 ? "#dc2626" : value > 15_000 ? "#d97706" : "#16a34a";
+  return <strong style={{ color }}>¥{value.toLocaleString()}</strong>;
 }
 
 export default function App() {
-  const [rowData, setRowData] = useState<Employee[]>(() => makeRows(5000));
-  const [selectedCount, setSelectedCount] = useState(0);
+  const [rows, setRows] = useState<Employee[]>(() => makeRows(5_000));
   const [clicked, setClicked] = useState("");
-  const apiRef = useRef<GridApi<Employee> | null>(null);
-
-  const columnDefs = useMemo<ColDef<Employee>[]>(
-    () => [
-      { colId: "select", headerName: "", width: 46, checkboxSelection: true, sortable: false, resizable: false, movable: false },
-      { field: "id", headerName: "工号", width: 110 },
-      { field: "name", headerName: "姓名", flex: 1, editable: true, filter: "text" },
-      { field: "department", headerName: "部门", width: 130, filter: "set" },
-      {
-        field: "salary",
-        headerName: "薪资",
-        width: 140,
-        filter: "number",
-        cellRenderer: reactCellRenderer(SalaryCell)
-      },
-      { field: "level", headerName: "职级", width: 100, editable: true, cellEditor: "select", cellEditorParams: { values: LEVELS } }
-    ],
-    []
-  );
+  const controller = useMachTableController<Employee>();
+  const columns = useMemo<ColDef<Employee>[]>(() => [
+    { colId: "select", headerName: "", width: 46, checkboxSelection: true, sortable: false, resizable: false, movable: false },
+    { field: "id", headerName: "工号", width: 110 },
+    { field: "name", headerName: "姓名", flex: 1, editable: true, filter: "text" },
+    { field: "department", headerName: "部门", width: 130, filter: "set" },
+    { field: "salary", headerName: "薪资", width: 140, filter: "number", cellRenderer: reactCellRenderer(SalaryCell) },
+    { field: "level", headerName: "职级", width: 100, editable: true, cellEditor: "select", cellEditorParams: { values: LEVELS } }
+  ], []);
 
   return (
-    <div style={{ padding: 16, fontFamily: "system-ui, sans-serif" }}>
-      <h3 style={{ marginBottom: 12 }}>MachTable React 集成示例</h3>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => setRowData(makeRows(rowData.length + 1000))}>加载更多（+1000）</button>
-        <button onClick={() => apiRef.current?.deselectAll()}>清除选择</button>
-        <button onClick={() => apiRef.current?.getDataAsCsv() && alert("CSV 已生成，见控制台")}>打印 CSV</button>
-        <span style={{ color: "#64748b" }}>选中 {selectedCount} 行 {clicked && `· 点击了 ${clicked}`}</span>
-      </div>
+    <main style={{ display: "grid", gap: 12, padding: 16, fontFamily: "system-ui, sans-serif" }}>
+      <h1 style={{ margin: 0, fontSize: 20 }}>MachTable React 集成示例</h1>
+      <MachTableToolbar<Employee>
+        api={controller.table.api}
+        commands={controller.commands}
+        search={controller.search}
+        onSearchChange={controller.setSearch}
+        loading={controller.busy}
+        selectedCount={controller.selectedCount}
+        onClearSelection={() => controller.table.apiRef.current?.deselectAll()}
+        start={<button onClick={() => setRows(makeRows(rows.length + 1_000))}>追加 1,000 行</button>}
+      />
       <div style={{ height: "70vh", minHeight: 400 }}>
         <MachTable<Employee>
-          apiRef={apiRef}
-          columnDefs={columnDefs}
-          rowData={rowData}
-          rowSelection="multiple"
+          apiRef={controller.table.apiRef}
+          preset="crud"
+          editType="cell"
           editableIndicator="always"
-          getRowId={(p) => p.data.id}
-          onSelectionChanged={(e) => setSelectedCount(e.selectedRows.length)}
-          onCellClicked={(e: CellClickEvent<Employee>) => setClicked(`${e.colDef.field}:${e.value}`)}
-          onCellValueChanged={(e) => console.log("cell changed", e.colDef.field, e.newValue)}
+          columnDefs={columns}
+          rowData={rows}
+          rowKey="id"
+          stateKey="react-employees"
+          onCellClicked={(event: CellClickEvent<Employee>) => setClicked(`${event.colDef.field}:${event.value}`)}
         />
       </div>
-    </div>
+      {clicked && <small>最近点击：{clicked}</small>}
+    </main>
   );
 }

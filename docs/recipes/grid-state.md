@@ -2,6 +2,21 @@
 
 `GridState` 是带版本号的可序列化视图快照，覆盖列状态、排序、列过滤、快速搜索、分页、选择、树/分组展开。它适合页签恢复、路由返回、保存视图和用户工作区。
 
+## 零胶水自动持久化
+
+大多数页面只需一个稳定 key：
+
+```ts
+const options: GridOptions<Order> = {
+  rowKey: "id",
+  stateKey: "orders-workspace"
+};
+```
+
+MachTable 会在初始化前读取版本化状态，在列、排序、过滤、分页、选择和展开状态变化后防抖保存，并在销毁前刷新待保存内容。无效 JSON、版本不兼容、超限内容和存储异常会安全忽略，不会让表格白屏。
+
+跨账号、租户或工作空间时应把维度写入 `stateKey`。需要后端/IndexedDB 时注入 `stateStore: { load, save, clear? }`；`stateSaveDebounceMs` 控制防抖，默认值适合普通交互。`columnStateKey` 仅保存列偏好，`stateKey` 保存完整工作区，通常二选一。
+
 ## 保存与恢复
 
 ```ts
@@ -44,4 +59,4 @@ interface StoredWorkspace {
 }
 ```
 
-选择与展开状态依赖稳定 `getRowId`。无限模式恢复选择时，尚未加载的行 ID 会保留，数据块到达后自动同步。
+选择与展开状态依赖稳定 `rowKey` 或 `getRowId`。无限模式恢复选择时，尚未加载的行 ID 会保留，数据块到达后自动同步。

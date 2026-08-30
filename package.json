@@ -1,6 +1,6 @@
 {
   "name": "mach-table",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "private": true,
   "type": "module",
   "description": "MachTable - high performance, framework-agnostic data grid (monorepo)",
@@ -37,7 +37,8 @@
     "check:docs": "node scripts/check-doc-links.mjs",
     "check:license": "node scripts/check-license.mjs",
     "check:size": "node scripts/check-size.mjs",
-    "check:exports": "tsc -p tests/consumer/tsconfig.json && node scripts/check-package-exports.mjs",
+    "check:exports": "tsc -p tests/consumer/tsconfig.json && pnpm check:vue-sfc && node scripts/check-package-exports.mjs",
+    "check:vue-sfc": "vue-tsc --noEmit -p tests/consumer/vue-sfc/tsconfig.json",
     "check:complexity": "node scripts/check-complexity.mjs",
     "check:deps": "knip --production --dependencies --cycles --cache",
     "commit": "czg",
@@ -69,6 +70,7 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "8.68.0",
     "vitepress": "^1.6.4",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "vue-tsc": "3.0.0"
   }
 }
