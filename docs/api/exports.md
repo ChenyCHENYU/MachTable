@@ -11,6 +11,24 @@
 | `EventBus` | 事件总线类 |
 | `version` | 版本号字符串 |
 
+## 0.19 性能与治理导出
+
+Worker 运行时代码位于可选 `/worker` 子路径，Vue/React 适配包提供同名代理入口；普通页面不会下载它：
+
+```ts
+import { createWorkerDataProcessor } from "@agile-team/mach-table-vue/worker";
+```
+
+| 导出 | 说明 |
+| --- | --- |
+| `createWorkerDataProcessor(factory, options?)` | 把宿主 Worker 适配为 `GridDataProcessor`；懒创建、取消转发、默认随 Grid 终止 |
+| `installGridDataWorker(scope)` | 在 Worker 模块安装标准字段过滤/排序协议 |
+| `processFieldDataRequest(payload, options?)` | 可测试、可自定义组合的字段路径处理函数 |
+| `GridDataProcessor*` / `GridWorker*` | Processor 请求、结果、消息与 Worker scope 类型 |
+| `RefreshCellsParams` / `GridAsyncOptions` | 脏单元格刷新和 AbortSignal 异步命令类型 |
+| `GridRowsApi` 等领域类型 | `rows/columns/selection/editing/state/diagnostics` facade 类型 |
+| `RemoteBlockCacheSnapshot` / `GridUpdateSchedulerSnapshot` | 缓存和更新合并诊断类型 |
+
 ## 注册表
 
 ```ts

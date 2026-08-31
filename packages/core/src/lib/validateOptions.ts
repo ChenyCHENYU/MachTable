@@ -68,11 +68,53 @@ function validateIdentityAndLayout(source: Record<string, unknown>): GridValidat
       message: "autoHeight 会渲染全部已加载行，不适用于 datasource 无限滚动模式"
     });
   }
+  issues.push(...validateBlockDatasource(source));
   if (source.enableColumnResize != null && typeof source.enableColumnResize !== "boolean") {
     issues.push({
       code: "INVALID_OPTION_VALUE",
       option: "enableColumnResize",
       message: "enableColumnResize 必须是 boolean；未配置时默认关闭"
+    });
+  }
+  return issues;
+}
+
+function validateBlockDatasource(source: Record<string, unknown>): GridValidationIssue[] {
+  if (source.datasourceMode !== "block") return [];
+  const issues: GridValidationIssue[] = [];
+  if (source.datasource == null) {
+    issues.push({
+      code: "OPTION_CONFLICT",
+      option: "datasourceMode",
+      message: "datasourceMode='block' requires a datasource"
+    });
+  }
+  if (typeof source.getRowHeight === "function") {
+    issues.push({
+      code: "OPTION_CONFLICT",
+      option: "getRowHeight",
+      message: "Random-access block rows require fixed rowHeight so unloaded offsets remain deterministic"
+    });
+  }
+  if (source.masterDetail === true) {
+    issues.push({
+      code: "OPTION_CONFLICT",
+      option: "masterDetail",
+      message: "masterDetail is not supported by the sparse random-access block row model"
+    });
+  }
+  if (source.treeData === true) {
+    issues.push({
+      code: "OPTION_CONFLICT",
+      option: "treeData",
+      message: "treeData requires the local/tree row model and cannot use random-access blocks"
+    });
+  }
+  if (!hasStableRowId(source)) {
+    issues.push({
+      code: "MISSING_STABLE_ROW_ID",
+      option: "getRowId",
+      message: "Random-access blocks require rowKey/getRowId to preserve selection and identity after eviction"
     });
   }
   return issues;

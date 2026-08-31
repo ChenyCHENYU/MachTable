@@ -65,6 +65,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-variant-numeric: tabular-nums;
+  contain: layout style;
 }
 
 .mach-root.mach-dom-layout--auto-height {
@@ -560,6 +561,29 @@
   text-overflow: ellipsis;
   cursor: default;
   line-height: calc(var(--mach-row-h) - 2px);
+}
+
+.mach-cell--loading {
+  pointer-events: none;
+}
+
+.mach-cell-loading-bar {
+  display: block;
+  height: 8px;
+  max-width: 132px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--mach-row-hover-bg), var(--mach-border-color), var(--mach-row-hover-bg));
+  background-size: 200% 100%;
+  animation: mach-cell-loading 1.25s ease-in-out infinite;
+}
+
+@keyframes mach-cell-loading {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mach-cell-loading-bar { animation: none; }
 }
 
 .mach-cell--num {

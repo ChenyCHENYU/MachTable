@@ -65,6 +65,47 @@ export interface GridPerformanceSnapshot {
   renderedRows: number;
   renderedColumns: number;
   renderedCells: number;
+  layoutSampleCount: number;
+  p95LayoutMs: number;
+  modelSampleCount: number;
+  p95ModelMs: number;
+  longTaskCount: number;
+  longTaskTotalMs: number;
+  usedHeapBytes: number | null;
+}
+
+export interface GridUpdateSchedulerSnapshot {
+  batchDepth: number;
+  flushCount: number;
+  requestCount: number;
+  coalescedRequestCount: number;
+  pending: boolean;
+}
+
+export interface RemoteBlockCacheSnapshot {
+  cachedBlockCount: number;
+  loadingBlockCount: number;
+  cachedRowCount: number;
+  hitCount: number;
+  missCount: number;
+  evictionCount: number;
+}
+
+export interface GridAsyncOptions {
+  signal?: AbortSignal;
+}
+
+export interface RefreshCellsParams {
+  /** Stable row identifiers. Omit together with rowIndexes to target every rendered row. */
+  rowIds?: readonly string[];
+  /** Displayed row indexes. Omit together with rowIds to target every rendered row. */
+  rowIndexes?: readonly number[];
+  /** Column IDs. Omit to target every rendered column in matching rows. */
+  columns?: readonly string[];
+  /** Bypasses renderer refresh hooks and recreates matching cell content. */
+  force?: boolean;
+  /** Also refreshes pinned rows. Defaults to true only for an unscoped refresh. */
+  includePinned?: boolean;
 }
 
 export interface ColumnWorkbenchItem {
@@ -90,7 +131,56 @@ export interface GridDiagnostics {
   dirtyRowCount: number;
   activeFeatures: ReadonlyArray<{ key: string; version?: string }>;
   performance: GridPerformanceSnapshot;
+  updates: GridUpdateSchedulerSnapshot;
   recentErrors: readonly GridDiagnosticError[];
+}
+
+export interface GridRowsApi<TData = any> {
+  setData(rows: TData[] | null | undefined): void;
+  apply(transaction: RowTransaction<TData>): void;
+  applyAsync(transaction: RowTransaction<TData>, options?: GridAsyncOptions): Promise<void>;
+  getDisplayedCount(): number;
+  getById(id: string): RowNode<TData> | undefined;
+  scrollTo(index: number, position?: "top" | "bottom" | "middle" | "nearest"): void;
+  ensureLoaded(startRow: number, endRow: number, options?: GridAsyncOptions): Promise<void>;
+  purgeCache(): void;
+  getCacheSnapshot(): RemoteBlockCacheSnapshot;
+}
+
+export interface GridColumnsApi {
+  getState(): ColumnState[];
+  setState(state: ColumnState[]): void;
+  resetState(): void;
+  setVisible(colId: string, visible: boolean): void;
+  setWidth(colId: string, width: number): boolean;
+}
+
+export interface GridSelectionApi<TData = any> {
+  getRows(): TData[];
+  getIds(): string[];
+  selectAll(filteredOnly?: boolean): void;
+  clear(): void;
+}
+
+export interface GridEditingApi<TData = any> {
+  getChanges(): GridChange<TData>[];
+  rollback(rowIds?: readonly string[]): boolean;
+  save(
+    handler: SaveChangesHandler<TData>,
+    rowIds?: readonly string[]
+  ): Promise<GridBatchSaveResult<TData>>;
+  stop(cancel?: boolean): Promise<boolean>;
+}
+
+export interface GridStateApi {
+  get(): GridState;
+  apply(state: GridStateInput, options?: ApplyGridStateOptions): void;
+}
+
+export interface GridDiagnosticsApi {
+  get(): GridDiagnostics;
+  getPerformance(): GridPerformanceSnapshot;
+  resetPerformance(): void;
 }
 
 export interface SaveChangeIssue {
@@ -129,6 +219,17 @@ export interface ScrollToIndexPosition {
 }
 
 export interface GridApi<TData = any> {
+  /** Optional namespaced facade. Existing flat methods remain supported. */
+  readonly rows: GridRowsApi<TData>;
+  readonly columns: GridColumnsApi;
+  readonly selection: GridSelectionApi<TData>;
+  readonly editing: GridEditingApi<TData>;
+  readonly state: GridStateApi;
+  readonly diagnostics: GridDiagnosticsApi;
+  /** Coalesces model/layout/render work from nested synchronous API calls. */
+  batch<TResult>(callback: (api: GridApi<TData>) => TResult): TResult;
+  /** Flushes deferred work; normally only needed by tests and imperative measurements. */
+  flushUpdates(): void;
   /** Resolves after the first layout frame and gridReady emission. */
   whenReady(): Promise<GridApi<TData>>;
   /** Stable grid root for portals, measurements and fullscreen targets; null after destroy. */
@@ -140,7 +241,7 @@ export interface GridApi<TData = any> {
   setRowData(rows: TData[] | null | undefined): void;
   applyTransaction(transaction: RowTransaction<TData>): void;
   /** Coalesces rapid transactions and refreshes the row pipeline once per batch. */
-  applyTransactionAsync(transaction: RowTransaction<TData>): Promise<void>;
+  applyTransactionAsync(transaction: RowTransaction<TData>, options?: GridAsyncOptions): Promise<void>;
   /** Immediately applies transactions currently waiting in the async queue. */
   flushAsyncTransactions(): void;
 
@@ -246,7 +347,12 @@ export interface GridApi<TData = any> {
   refreshLayout(): void;
 
   isInfinite(): boolean;
-  reload(): Promise<void>;
+  reload(options?: GridAsyncOptions): Promise<void>;
+  /** Ensures an inclusive/exclusive remote row range is cached in random-access block mode. */
+  ensureRowsLoaded(startRow: number, endRow: number, options?: GridAsyncOptions): Promise<void>;
+  /** Aborts block requests and removes all random-access datasource blocks. */
+  purgeDatasourceCache(): void;
+  getDatasourceCacheSnapshot(): RemoteBlockCacheSnapshot;
 
   paginationEnabled(): boolean;
   setPaginationEnabled(enabled: boolean): void;
@@ -271,7 +377,7 @@ export interface GridApi<TData = any> {
   /** Explicit full-row counterpart; aliases stopEditingAsync when a row is active. */
   stopEditingRow(cancel?: boolean): Promise<boolean>;
 
-  refreshCells(): void;
+  refreshCells(params?: RefreshCellsParams): void;
   updateOptions(options: Partial<GridOptions<TData>>): void;
 
   getDataAsCsv(params?: CsvExportParams): string;

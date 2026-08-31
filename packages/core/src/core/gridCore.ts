@@ -15,6 +15,7 @@ import { WatermarkService } from "../services/watermarkService";
 import { UndoRedoService } from "../services/undoRedoService";
 import { ChangeTrackingService } from "../services/changeTrackingService";
 import { PerformanceMonitor } from "../services/performanceMonitor";
+import { GridUpdateScheduler, type GridUpdateRequest } from "../services/updateScheduler";
 import { GridApiImpl } from "../services/gridApi";
 import { GridSkeleton } from "../render/skeleton";
 import { HeaderRenderer } from "../render/headerRenderer";
@@ -34,7 +35,7 @@ import {
 } from "../lib/componentRegistry";
 import { validateColumnDefs } from "../lib/validateDefs";
 import { validateGridOptions } from "../lib/validateOptions";
-import { resolveGridFeatures } from "../lib/featureManifest";
+import { normalizeFeatureRequirements, resolveGridFeatures } from "../lib/featureManifest";
 import { toTsv, parseTsv, writeClipboard } from "../lib/clipboard";
 import { formatCellValueWith } from "../render/cellContent";
 import { DEFAULT_LOCALE, type RgLocale, type RgLocaleKey } from "../lib/locale";
@@ -91,6 +92,7 @@ export class GridCore<TData = any> {
   readonly undoService: UndoRedoService;
   readonly changeTracker: ChangeTrackingService<TData>;
   readonly performanceMonitor: PerformanceMonitor;
+  readonly updateScheduler: GridUpdateScheduler;
   readonly filterPopup: FilterPopupService;
   readonly columnMenu: ColumnMenuService;
   readonly contextMenuService: ContextMenuService;
@@ -140,6 +142,7 @@ export class GridCore<TData = any> {
     this.editingService = new EditingService(this);
     this.undoService = new UndoRedoService(this);
     this.performanceMonitor = new PerformanceMonitor();
+    this.updateScheduler = new GridUpdateScheduler((request) => this.applyScheduledUpdate(request));
     this.filterPopup = new FilterPopupService(this);
     this.columnMenu = new ColumnMenuService(this);
     this.contextMenuService = new ContextMenuService(this);
@@ -174,7 +177,7 @@ export class GridCore<TData = any> {
       this.loadPersistedColumnState();
       this.headerRenderer.build();
       if (this.options.datasource) {
-        void this.rowModel.startInfinite();
+        void this.rowModel.startInfinite().catch(() => undefined);
       } else {
         this.rowModel.setRowData(this.options.rowData);
       }
@@ -228,9 +231,9 @@ export class GridCore<TData = any> {
   }
 
   private inactiveFeatureDependency(feature: GridFeature<TData>): string | undefined {
-    return feature.requires
-      ?.map((dependency) => dependency.trim())
-      .find((dependency) => dependency.length > 0 && !this.activeFeatures.has(dependency));
+    return normalizeFeatureRequirements(feature.requires)
+      .map((dependency) => dependency.key)
+      .find((dependency) => !this.activeFeatures.has(dependency));
   }
 
   setFeatures(features: readonly GridFeature<TData>[] | null | undefined): void {
@@ -611,6 +614,7 @@ export class GridCore<TData = any> {
         ...(active.feature.version ? { version: active.feature.version } : {})
       })),
       performance: this.performanceMonitor.snapshot(),
+      updates: this.updateScheduler.snapshot(),
       recentErrors: this.recentErrors.map((entry) => ({
         ...entry,
         ...(entry.context ? { context: { ...entry.context } } : {})
@@ -632,7 +636,7 @@ export class GridCore<TData = any> {
       return;
     }
     this.rowModel.refreshPipeline();
-    this.bodyRenderer.onDataChanged();
+    this.requestUpdate({ data: true });
   }
 
   applyColumnFilter(column: Column, filter: ColumnFilter | null): void {
@@ -650,7 +654,7 @@ export class GridCore<TData = any> {
       return;
     }
     this.rowModel.refreshPipeline();
-    this.bodyRenderer.onDataChanged();
+    this.requestUpdate({ data: true });
   }
 
   applyQuickFilter(): void {
@@ -663,7 +667,7 @@ export class GridCore<TData = any> {
       return;
     }
     this.rowModel.refreshPipeline();
-    this.bodyRenderer.onDataChanged();
+    this.requestUpdate({ data: true });
   }
 
   moveColumn(colId: string, toIndex: number): void {
@@ -869,6 +873,35 @@ export class GridCore<TData = any> {
   }
 
   onColumnsStructureChanged(): void {
+    this.updateScheduler.schedule({ columns: true });
+  }
+
+  requestUpdate(request: GridUpdateRequest): void {
+    this.updateScheduler.schedule(request);
+  }
+
+  batchUpdates<TResult>(callback: () => TResult): TResult {
+    return this.updateScheduler.batch(callback);
+  }
+
+  private applyScheduledUpdate(request: GridUpdateRequest): void {
+    if (this.destroyed) return;
+    if (request.columns) this.applyColumnsStructureChanged();
+    else {
+      if (request.header) this.headerRenderer.build();
+      if (request.pool) this.bodyRenderer.rebuildPool();
+      else if (request.layout) this.relayout();
+    }
+    if (request.data && !request.pool && !request.columns) this.bodyRenderer.onDataChanged();
+    else if (request.cells) {
+      this.bodyRenderer.refreshCells(request.cells === true ? undefined : request.cells);
+    }
+    if (request.pinned) this.pinnedRowsRenderer.refresh();
+    if (request.summary) this.summaryRenderer.refresh();
+    if (request.overlays) this.bodyRenderer.refreshOverlays();
+  }
+
+  private applyColumnsStructureChanged(): void {
     this.checkWarnings();
     this.validateDefs(this.columnModel.getColumnDefs());
     this.bodyRenderer.invalidateAllRowHeights();
@@ -882,6 +915,7 @@ export class GridCore<TData = any> {
 
   relayout(): void {
     if (this.destroyed) return;
+    const startedAt = this.performanceMonitor.start();
     this.refreshAriaState();
     this.columnModel.computeLayout(this.skeleton.measureViewportWidth());
     const widthSignature = this.columnModel.getOrderedVisible()
@@ -896,6 +930,7 @@ export class GridCore<TData = any> {
     this.bodyRenderer.relayout();
     this.pinnedRowsRenderer.applyLayout();
     this.summaryRenderer.refresh();
+    this.performanceMonitor.recordLayout(startedAt);
   }
 
   refreshAriaState(): void {
@@ -943,6 +978,8 @@ export class GridCore<TData = any> {
       }
     };
     safely("grid event", () => this.emit("gridDestroyed", {}));
+    safely("updateScheduler", () => this.updateScheduler.destroy());
+    safely("performanceMonitor", () => this.performanceMonitor.destroy());
     safely("features", () => this.destroyFeatures());
     safely("changeTracker", () => this.changeTracker.destroy());
     safely("rowModel", () => this.rowModel.destroy());

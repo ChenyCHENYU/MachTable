@@ -5,6 +5,7 @@ export default defineConfig({
     index: "src/index.ts",
     async: "src/async.ts",
     workflows: "src/workflows.ts",
+    worker: "src/worker.ts",
     ui: "src/ui.ts",
     editors: "src/editors.ts"
   },
@@ -15,7 +16,7 @@ export default defineConfig({
   clean: true,
   minify: true,
   target: "es2020",
-  external: ["vue", "@agile-team/mach-table"],
+  external: ["vue", "@agile-team/mach-table", "@agile-team/mach-table/worker"],
   outExtension({ format }) {
     return { js: format === "esm" ? ".js" : ".cjs" };
   }

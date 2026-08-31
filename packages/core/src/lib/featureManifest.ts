@@ -1,4 +1,5 @@
-import type { GridFeature } from "../types/options";
+import type { GridFeature, GridFeatureRequirement } from "../types/options";
+import { satisfiesVersionRange } from "./semver";
 
 export type GridFeatureIssueCode =
   | "DUPLICATE_FEATURE"
@@ -6,7 +7,8 @@ export type GridFeatureIssueCode =
   | "FEATURE_CYCLE"
   | "FEATURE_DEPENDENCY_SETUP_FAILED"
   | "INVALID_FEATURE_KEY"
-  | "MISSING_FEATURE_DEPENDENCY";
+  | "MISSING_FEATURE_DEPENDENCY"
+  | "UNSUPPORTED_FEATURE_VERSION";
 
 export interface GridFeatureIssue {
   code: GridFeatureIssueCode;
@@ -22,6 +24,19 @@ export interface ResolvedGridFeatures<TData = any> {
 
 function normalizedKeys(values: readonly string[] | undefined): string[] {
   return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))];
+}
+
+export function normalizeFeatureRequirements(
+  values: readonly (string | GridFeatureRequirement)[] | undefined
+): GridFeatureRequirement[] {
+  const byKey = new Map<string, GridFeatureRequirement>();
+  for (const value of values ?? []) {
+    const key = (typeof value === "string" ? value : value?.key ?? "").trim();
+    if (!key || byKey.has(key)) continue;
+    const version = typeof value === "object" ? value.version?.trim() : undefined;
+    byKey.set(key, { key, ...(version ? { version } : {}) });
+  }
+  return [...byKey.values()];
 }
 
 /**
@@ -46,15 +61,25 @@ export function resolveGridFeatures<TData>(input: readonly GridFeature<TData>[])
 
   const invalid = new Set<string>();
   for (const [key, feature] of byKey) {
-    for (const dependency of normalizedKeys(feature.requires)) {
-      if (byKey.has(dependency)) continue;
-      invalid.add(key);
-      issues.push({
-        code: "MISSING_FEATURE_DEPENDENCY",
-        feature: key,
-        dependency,
-        message: `GridFeature "${key}" requires missing feature "${dependency}"`
-      });
+    for (const requirement of normalizeFeatureRequirements(feature.requires)) {
+      const dependency = byKey.get(requirement.key);
+      if (!dependency) {
+        invalid.add(key);
+        issues.push({
+          code: "MISSING_FEATURE_DEPENDENCY",
+          feature: key,
+          dependency: requirement.key,
+          message: `GridFeature "${key}" requires missing feature "${requirement.key}"`
+        });
+      } else if (!satisfiesVersionRange(dependency.version, requirement.version)) {
+        invalid.add(key);
+        issues.push({
+          code: "UNSUPPORTED_FEATURE_VERSION",
+          feature: key,
+          dependency: requirement.key,
+          message: `GridFeature "${key}" requires "${requirement.key}" ${requirement.version}, received ${dependency.version ?? "unversioned"}`
+        });
+      }
     }
     for (const conflict of normalizedKeys(feature.conflicts)) {
       if (!byKey.has(conflict)) continue;
@@ -83,8 +108,8 @@ export function resolveGridFeatures<TData>(input: readonly GridFeature<TData>[])
     if (!feature || invalid.has(key)) return false;
     visiting.add(key);
     let valid = true;
-    for (const dependency of normalizedKeys(feature.requires)) {
-      if (!visit(dependency)) valid = false;
+    for (const dependency of normalizeFeatureRequirements(feature.requires)) {
+      if (!visit(dependency.key)) valid = false;
     }
     visiting.delete(key);
     visited.add(key);

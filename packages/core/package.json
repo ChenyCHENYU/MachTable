@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table",
-  "version": "0.18.1",
+  "version": "0.19.0",
   "description": "Enterprise-grade, framework-agnostic TypeScript data grid with virtualization, editing, grouping and extensibility",
   "keywords": [
     "data-grid",
@@ -41,6 +41,16 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./worker": {
+      "import": {
+        "types": "./dist/worker.d.ts",
+        "default": "./dist/worker.js"
+      },
+      "require": {
+        "types": "./dist/worker.d.cts",
+        "default": "./dist/worker.cjs"
       }
     },
     "./styles/mach-table.css": {

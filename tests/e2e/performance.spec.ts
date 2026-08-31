@@ -35,6 +35,7 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   await page.evaluate(() => {
     const api = (window as any).__MACH_BENCH__.api;
     api.resetPerformanceMetrics();
+    api.refreshLayout();
     const viewport = document.querySelector("#host .mach-body-viewport--scroll") as HTMLElement;
     viewport.scrollTop = viewport.scrollHeight;
     viewport.dispatchEvent(new Event("scroll"));
@@ -49,4 +50,9 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   expect(performanceSnapshot.renderedRows).toBeLessThan(100);
   expect(performanceSnapshot.renderedCells).toBeLessThan(2_000);
   expect(performanceSnapshot.p95RenderMs).toBeLessThan(process.env.CI ? 1_000 : 500);
+  expect(performanceSnapshot.layoutSampleCount).toBeGreaterThan(0);
+  expect(performanceSnapshot.p95LayoutMs).toBeLessThan(process.env.CI ? 1_000 : 500);
+  expect(performanceSnapshot.modelSampleCount).toBeGreaterThanOrEqual(0);
+  expect(performanceSnapshot.longTaskCount).toBeGreaterThanOrEqual(0);
+  expect(performanceSnapshot.usedHeapBytes == null || performanceSnapshot.usedHeapBytes > 0).toBe(true);
 });

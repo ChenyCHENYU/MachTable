@@ -12,6 +12,9 @@
 | `applyTransactionAsync(transaction): Promise<void>` | 高频事务排队；默认 16ms 内按调用顺序合并并只刷新一次数据管线 |
 | `flushAsyncTransactions()` | 立即提交队列，不等待时间窗 |
 | `reload(): Promise<void>` | 无限模式重新从第 0 行加载并等待首块完成；客户端模式重放 rowData |
+| `ensureRowsLoaded(start, end, { signal? })` | 随机块模式主动加载 `[start, end)`；重复/重叠块请求自动复用 |
+| `purgeDatasourceCache()` | 中止随机块请求并释放 LRU 中的远程行 |
+| `getDatasourceCacheSnapshot()` | 读取缓存块、加载块、缓存行、命中、未命中和淘汰计数 |
 | `isInfinite()` | 是否无限滚动模式 |
 | `importCsv(text, { mode?, separator?, headerRowIndex? })` | CSV 导入：`replace` 替换 / `append` 追加 / `paste` 走粘贴管线（可撤销），表头自动映射列，数值自动转型 |
 | `print({ title?, includeHeader? })` | 新窗口打印全部数据（跨页、过滤排序后），弹窗被拦截返回 false |
@@ -106,13 +109,29 @@
 | 方法 | 说明 |
 | --- | --- |
 | `scrollToIndex(rowIndex, position?)` | 滚动到行（top/bottom/middle/nearest，变高行精确） |
-| `refreshCells()` | 强制重渲染可见单元格 + 固定行 + 合计行 |
+| `refreshCells({ rowIds?, rowIndexes?, columns?, force?, includePinned? })` | 无参刷新全部可见单元格；传参时只刷新脏行/列，`force` 强制重建 renderer |
 | `refreshLayout()` | 重测量尺寸（弹窗/Tab 切换后调用） |
 | `updateOptions(partial)` | 运行时改配置（尺寸/视觉/行为类选项） |
 | `setOverlay("loading" \| "noRows" \| null)` / `hideOverlays()` | 覆盖层控制 |
 | `getDataAsCsv(params?)` | CSV 导出；参数 `{ includeHeader, columnSeparator, prependBOM, onlySelected, protectFormulas }`，默认防公式注入 |
 
 ## 事件与生命周期
+
+### 领域入口与批处理（0.19）
+
+| API | 说明 |
+| --- | --- |
+| `batch(callback)` | 合并回调内的同步模型、布局和渲染工作；支持嵌套，最外层退出时提交 |
+| `flushUpdates()` | 立即提交等待中的更新，主要用于测试和命令后同步测量 |
+| `rows / columns / selection / editing / state / diagnostics` | 对现有平面方法的稳定领域 facade，不维护第二套状态 |
+
+```ts
+api.batch((grid) => {
+  grid.rows.apply({ update: rows });
+  grid.columns.setVisible("cost", canViewCost);
+  grid.refreshCells({ rowIds: rows.map((row) => row.id), columns: ["status"] });
+});
+```
 
 | 方法 | 说明 |
 | --- | --- |
@@ -121,5 +140,5 @@
 | `whenReady(): Promise<GridApi>` | 首次布局帧与 `gridReady` 完成后 resolve；Vue/React Hook 的 `ready` 基于它 |
 | `getState()` / `applyState(state, options?)` | 读取/恢复 GridState v2；自动迁移 v1，输入先有界归一化；`emitEvents: false` 可静默恢复 |
 | `getDiagnostics()` | 返回版本、加载/虚拟 DOM/行列/选择/脏数据、Feature 清单、性能和最近结构化错误，不包含业务行数据 |
-| `getPerformanceSnapshot()` / `resetPerformanceMetrics()` | 读取/清空最近 120 次视口渲染的平均、P95、最大耗时、长帧和实际渲染范围 |
+| `getPerformanceSnapshot()` / `resetPerformanceMetrics()` | 读取/清空有界渲染、布局、模型 P95，长帧/Long Task、实际 DOM 范围与浏览器可用堆内存指标 |
 | `destroy()` / `isDestroyed()` | 销毁 / 状态查询 |

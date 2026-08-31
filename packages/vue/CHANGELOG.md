@@ -1,5 +1,17 @@
 # @agile-team/mach-table-vue
 
+## 0.19.0
+
+### Minor Changes
+
+- Expose Core 0.19 domain APIs, batched updates, scoped refresh, random block datasources and optional Worker processing through the existing one-package Vue installation.
+- Keep Vue props, global/async plugins, native slots and controller workflows compatible while synchronizing the complete public type surface.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.19.0
+
 ## 0.18.1
 
 ### Patch Changes

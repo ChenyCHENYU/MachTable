@@ -30,6 +30,7 @@ export class SelectionService {
   }
 
   isSelectable(node: RowNode<any>): boolean {
+    if (node.loading) return false;
     const column = this.findSelectableColumn(node);
     const check = column?.colDef.selectable;
     if (!column || !check) return true;

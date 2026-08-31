@@ -52,13 +52,19 @@ export interface GridFeatureContext<TData = any> {
   reportError(error: unknown, source: string, context?: Record<string, unknown>): void;
 }
 
+export interface GridFeatureRequirement {
+  key: string;
+  /** Semver range, for example `>=0.18 <1`, `^0.18.0` or an exact version. */
+  version?: string;
+}
+
 /** Composable extension point; feature instances are scoped to one grid. */
 export interface GridFeature<TData = any> {
   readonly key: string;
   /** Informational extension version exposed through diagnostics. */
   readonly version?: string;
   /** Feature keys that must be initialised before this feature. */
-  readonly requires?: readonly string[];
+  readonly requires?: readonly (string | GridFeatureRequirement)[];
   /** Mutually exclusive feature keys. Conflicting features are not initialised. */
   readonly conflicts?: readonly string[];
   setup(context: GridFeatureContext<TData>): void | (() => void);
@@ -92,6 +98,40 @@ export interface InfiniteGetRowsParams<TData = any> {
 
 export interface GridDatasource<TData = any> {
   getRows(params: InfiniteGetRowsParams<TData>): void | Promise<void>;
+}
+
+export type DatasourceMode = "sequential" | "block";
+
+export interface GridDataProcessorColumn {
+  colId: string;
+  /** Serializable field path when the column has one. */
+  field?: string;
+}
+
+export interface GridDataProcessorRow<TData = any> {
+  id: string;
+  data: TData;
+}
+
+export interface GridDataProcessorRequest<TData = any> {
+  rows: readonly GridDataProcessorRow<TData>[];
+  columns: readonly GridDataProcessorColumn[];
+  sortModel: SortModel;
+  filterModel: FilterModel;
+  advancedFilterModel: AdvancedFilterModel | null;
+  quickFilterText: string | null;
+  signal: AbortSignal;
+}
+
+export interface GridDataProcessorResult {
+  /** Filtered and sorted stable row IDs, in final display order. */
+  rowIds: readonly string[];
+}
+
+/** Optional async/Worker boundary for expensive local filtering and sorting. */
+export interface GridDataProcessor<TData = any> {
+  process(request: GridDataProcessorRequest<TData>): Promise<GridDataProcessorResult>;
+  destroy?(): void;
 }
 
 export type EventHandlers<TData = any> = {
@@ -264,8 +304,20 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   fillHandle?: boolean;
   statusBar?: boolean | StatusBarConfig;
   datasource?: GridDatasource<TData>;
+  /** Sequential append is the compatibility default; block enables random-access cached loading. */
+  datasourceMode?: DatasourceMode;
   blockSize?: number;
   infiniteBufferRows?: number;
+  /** Maximum retained blocks in random-access mode. */
+  maxBlocksInCache?: number;
+  /** Number of adjacent blocks prefetched around a requested viewport. */
+  blockPrefetch?: number;
+  /** Optional initial total enables immediate scrollbar range before the first response. */
+  datasourceRowCount?: number;
+  /** Opt-in async processor for large local filter/sort pipelines. */
+  dataProcessor?: GridDataProcessor<TData>;
+  /** Minimum local row count before dataProcessor is used. Defaults to 5,000. */
+  dataProcessorMinRows?: number;
   /** Number of automatic retries after an infinite datasource request fails. */
   datasourceRetryCount?: number;
   /** Base retry delay in milliseconds. Retries use capped exponential backoff. */
@@ -374,8 +426,14 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   statusBarEnabled: boolean;
   statusBarPanels: StatusBarPanel[];
   datasource?: GridDatasource<TData>;
+  datasourceMode: DatasourceMode;
   blockSize: number;
   infiniteBufferRows: number;
+  maxBlocksInCache: number;
+  blockPrefetch: number;
+  datasourceRowCount: number | null;
+  dataProcessor?: GridDataProcessor<TData>;
+  dataProcessorMinRows: number;
   datasourceRetryCount: number;
   datasourceRetryDelay: number;
   suppressCellFocus: boolean;

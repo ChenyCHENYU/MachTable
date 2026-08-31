@@ -24,14 +24,20 @@ for (const name of packages) {
 const require = createRequire(import.meta.url);
 const coreEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/index.js")));
 const coreCjs = require(resolve(root, "packages/core/dist/index.cjs"));
+const coreWorkerEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/worker.js")));
+const coreWorkerCjs = require(resolve(root, "packages/core/dist/worker.cjs"));
 const vueEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/index.js")));
 const vueCjs = require(resolve(root, "packages/vue/dist/index.cjs"));
 const vueWorkflowsEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/workflows.js")));
 const vueWorkflowsCjs = require(resolve(root, "packages/vue/dist/workflows.cjs"));
 const vueEditorsEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/editors.js")));
 const vueEditorsCjs = require(resolve(root, "packages/vue/dist/editors.cjs"));
+const vueWorkerEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/worker.js")));
+const vueWorkerCjs = require(resolve(root, "packages/vue/dist/worker.cjs"));
 const reactEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/index.js")));
 const reactCjs = require(resolve(root, "packages/react/dist/index.cjs"));
+const reactWorkerEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/worker.js")));
+const reactWorkerCjs = require(resolve(root, "packages/react/dist/worker.cjs"));
 const xlsxEsm = await import(pathToFileURL(resolve(root, "packages/xlsx/dist/index.js")));
 const xlsxCjs = require(resolve(root, "packages/xlsx/dist/index.cjs"));
 
@@ -39,6 +45,10 @@ for (const entry of [coreEsm, coreCjs]) {
   assert.equal(typeof entry.createGrid, "function");
   assert.equal(typeof entry.createColumnHelper, "function");
   assert.equal(typeof entry.createEnterprisePreset, "function");
+}
+for (const entry of [coreWorkerEsm, coreWorkerCjs, vueWorkerEsm, vueWorkerCjs, reactWorkerEsm, reactWorkerCjs]) {
+  assert.equal(typeof entry.createWorkerDataProcessor, "function");
+  assert.equal(typeof entry.installGridDataWorker, "function");
 }
 for (const entry of [vueEsm, vueCjs]) {
   assert.equal(typeof entry.MachTable, "object");

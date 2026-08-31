@@ -69,6 +69,7 @@ export default defineConfig({
             { text: "行分组 / 树形数据", link: "/recipes/grouping-tree" },
             { text: "主从明细", link: "/recipes/master-detail" },
             { text: "无限滚动", link: "/recipes/infinite-scroll" },
+            { text: "随机访问远程数据源", link: "/recipes/random-access-datasource" },
             { text: "分页 / 导入导出 / 打印 / 水印", link: "/recipes/pagination-io" },
             { text: "固定首末行", link: "/recipes/pinned-rows" },
             { text: "撤销 / 重做", link: "/recipes/undo-redo" },
@@ -86,6 +87,8 @@ export default defineConfig({
           items: [
             { text: "主题与密度", link: "/advanced/theming" },
             { text: "性能指南", link: "/advanced/performance" },
+            { text: "Worker 数据处理", link: "/advanced/worker-processing" },
+            { text: "API 治理", link: "/advanced/api-governance" },
             { text: "国际化 i18n", link: "/advanced/i18n" },
             { text: "可访问性与键盘", link: "/advanced/accessibility" },
             { text: "架构说明", link: "/advanced/architecture" },

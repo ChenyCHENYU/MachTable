@@ -93,8 +93,24 @@ export type {
   PaginationConfig,
   WatermarkConfig,
   ActionPolicy,
-  ActionPolicyContext
+  ActionPolicyContext,
+  DatasourceMode,
+  GridDataProcessor,
+  GridDataProcessorColumn,
+  GridDataProcessorRequest,
+  GridDataProcessorResult,
+  GridDataProcessorRow
 } from "./types/options";
+export type {
+  GridWorkerProcessMessage,
+  GridWorkerCancelMessage,
+  GridWorkerRequestMessage,
+  GridWorkerResponseMessage,
+  WorkerDataProcessorOptions,
+  GridDataProcessorPayload,
+  FieldDataProcessorOptions,
+  GridDataWorkerScope
+} from "./lib/workerDataProcessor";
 export { GRID_SIZE_PRESETS } from "./core/resolveOptions";
 export type { GridSizePreset } from "./core/resolveOptions";
 export { GRID_OPTION_META, GRID_OPTION_KEYS, DIRECT_GRID_OPTION_KEYS } from "./core/gridOptionMetadata";
@@ -210,6 +226,16 @@ export type {
   GridDiagnosticError,
   GridDiagnostics,
   GridPerformanceSnapshot,
+  GridUpdateSchedulerSnapshot,
+  RemoteBlockCacheSnapshot,
+  GridAsyncOptions,
+  RefreshCellsParams,
+  GridRowsApi,
+  GridColumnsApi,
+  GridSelectionApi,
+  GridEditingApi,
+  GridStateApi,
+  GridDiagnosticsApi,
   ColumnWorkbenchItem,
   SaveChangesResult,
   SaveChangesHandler,

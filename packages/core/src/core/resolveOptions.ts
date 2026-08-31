@@ -201,8 +201,15 @@ function resolveStatePersistence(options: GridOptions) {
 
 function resolveDatasource(options: GridOptions) {
   return {
+    datasourceMode: options.datasourceMode === "block" ? "block" as const : "sequential" as const,
     blockSize: finiteAtLeast(options.blockSize, 100, 1, true),
     infiniteBufferRows: finiteAtLeast(options.infiniteBufferRows, 40, 0, true),
+    maxBlocksInCache: finiteAtLeast(options.maxBlocksInCache, 12, 1, true),
+    blockPrefetch: finiteAtLeast(options.blockPrefetch, 1, 0, true),
+    datasourceRowCount: options.datasourceRowCount == null
+      ? null
+      : finiteAtLeast(options.datasourceRowCount, 0, 0, true),
+    dataProcessorMinRows: finiteAtLeast(options.dataProcessorMinRows, 5_000, 1, true),
     datasourceRetryCount: finiteAtLeast(options.datasourceRetryCount, 2, 0, true),
     datasourceRetryDelay: finiteAtLeast(options.datasourceRetryDelay, 300, 0, true)
   };
@@ -236,7 +243,8 @@ const OPTIONAL_OPTION_KEYS = [
   "initialState",
   "rowEditValidator",
   "isTreeRowExpandable",
-  "loadTreeChildren"
+  "loadTreeChildren",
+  "dataProcessor"
 ] as const;
 
 function copyOptionalOptions<TData>(

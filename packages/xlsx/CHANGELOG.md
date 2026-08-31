@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.19.0
+
+### Patch Changes
+
+- Keep the optional XLSX bridge synchronized with the 0.19 Core API line without adding workbook code to the default grid bundle.
+- Updated dependencies:
+  - @agile-team/mach-table@0.19.0
+
 ## 0.18.1
 
 ### Patch Changes

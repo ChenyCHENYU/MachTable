@@ -1,5 +1,15 @@
 # @agile-team/mach-table
 
+## 0.19.0
+
+### Minor Changes
+
+- Add coalesced `api.batch()` updates, targeted `refreshCells`, discoverable domain APIs and a checked public API snapshot while retaining all flat 0.x methods.
+- Replace linear horizontal and variable-row geometry work with prefix/binary and Fenwick indexes; add root containment, stronger teardown and layout/model/long-task/heap diagnostics.
+- Add opt-in random-access datasource blocks with request deduplication, cancellation, retry, adjacent prefetch, LRU eviction, loading rows and cache diagnostics.
+- Add an optional CSP-safe `/worker` data processor subpath, standard serializable field processor and feature dependency semver ranges without putting Worker runtime code in the default entry.
+- Expand performance, complexity, API, unit, package and documentation gates for the 0.19 contracts.
+
 ## 0.18.1
 
 ### Patch Changes

@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.18.1-2563eb" alt="Source version 0.18.1" />
+  <img src="https://img.shields.io/badge/source-0.19.0-2563eb" alt="Source version 0.19.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
@@ -153,6 +153,46 @@ api.destroy();
 ```
 
 > 默认布局的容器必须有明确高度，并且必须引入主题 CSS。小数据详情表可使用 `domLayout: "autoHeight"` 由内容撑开；不要将自动高度用于虚拟大表或远程无限数据源。完整的生产项目配置、SSR、错误治理、状态持久化和上线检查见[企业级项目接入手册](./docs/guide/enterprise-integration.md)。
+
+## 0.19：性能内核与 API 治理闭环
+
+0.19 聚焦“外部更简单、内部更便宜、扩展更可控”，现有 0.x 平面 API 保持兼容：
+
+- `api.batch()` 合并同一业务动作中的模型、布局和渲染更新；`refreshCells({ rowIds, rowIndexes, columns })` 精确刷新脏单元格。
+- `api.rows / columns / selection / editing / state / diagnostics` 提供可发现的领域入口，平面方法继续可用，业务可渐进迁移。
+- 横向虚拟列使用前缀宽度 + 二分窗口，变量行高使用 Fenwick 增量索引；单行高度变化不再重建整张偏移表。
+- `datasourceMode: "block"` 提供随机区块访问、并发去重、AbortSignal、重试、相邻预取、LRU 淘汰与加载骨架行；默认仍是兼容的顺序追加模式。
+- 大型本地排序/过滤可通过 `dataProcessor` 移入 Worker；标准桥接不使用 Blob/eval，适配严格 CSP。
+- 性能快照新增布局、模型、Long Task 与可用堆内存指标；API surface snapshot 会阻止未经评审的公开接口漂移。
+
+```ts
+api.batch((grid) => {
+  grid.rows.apply({ update: changedRows });
+  grid.columns.setVisible("internalNote", false);
+  grid.refreshCells({ rowIds: changedIds, columns: ["status"] });
+});
+```
+
+百万级远程数据按块访问：
+
+```ts
+const options = defineGridOptions<Order>({
+  columnDefs,
+  rowData: [],
+  rowKey: "id",
+  datasource,
+  datasourceMode: "block",
+  datasourceRowCount: 1_000_000,
+  blockSize: 200,
+  maxBlocksInCache: 12,
+  blockPrefetch: 1
+});
+
+await api.rows.ensureLoaded(40_000, 40_200, { signal });
+console.info(api.rows.getCacheSnapshot());
+```
+
+详见[随机访问数据源](./docs/recipes/random-access-datasource.md)、[Worker 数据处理](./docs/advanced/worker-processing.md)、[性能指南](./docs/advanced/performance.md)与 [API 治理](./docs/advanced/api-governance.md)。
 
 ## 0.18：可治理、可迁移、可诊断的业务工作区
 
@@ -401,7 +441,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前源码版本为 `0.18.1`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前源码版本为 `0.19.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

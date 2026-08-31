@@ -1,5 +1,17 @@
 # @agile-team/mach-table-react
 
+## 0.19.0
+
+### Minor Changes
+
+- Expose Core 0.19 domain APIs, batched updates, scoped refresh, random block datasources and optional Worker processing through the existing one-package React installation.
+- Preserve Provider, hooks, lazy loading and renderer lifecycle compatibility while synchronizing public types.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.19.0
+
 ## 0.18.1
 
 ### Patch Changes

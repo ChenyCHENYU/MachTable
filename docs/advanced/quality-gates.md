@@ -21,6 +21,7 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 | `pnpm lint` / `pnpm lint:fix` | ESLint 全量检查 / 自动修复 |
 | `pnpm typecheck` | Core、Vue、React 严格类型检查 |
 | `pnpm check:complexity` | 圈复杂度增量门禁 |
+| `pnpm check:api` / `pnpm check:api:update` | 校验公开 export、Grid API/Options/Event 成员签名快照 / 评审后更新快照 |
 | `pnpm check:deps` | 生产依赖、未声明引用、无法解析引用和循环依赖检查 |
 | `pnpm test` / `pnpm test:coverage` | 单元测试 / 覆盖率阈值 |
 | `pnpm quality:quick` | 推送前的快速代码检查 |
@@ -39,6 +40,8 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 复杂度基线是迁移机制，不是永久豁免。当前最高风险的配置更新、配置解析、键盘导航、状态恢复和 Vue 远程查询已先行拆分；剩余渲染与交互热点按业务改动就近偿还。若确实存在算法不可避免的高分支，必须在评审中说明不拆分的理由与覆盖用例，不能直接提高全局阈值。
 
 ## 类型与异步安全
+
+公开 API 结构由 `api/public-api.snapshot.json` 锁定。任何删除、改名、新增或参数/返回值签名变化都会让 `check:api` 失败；贡献者必须先确认兼容策略、同步 Changelog/升级文档，再显式更新快照。它和 TypeScript consumer fixture 互补：前者检查结构漂移，后者检查真实 ESM/CJS/Vue SFC 消费。
 
 生产源码启用 TypeScript ESLint 的类型感知规则，重点阻止：
 

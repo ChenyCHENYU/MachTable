@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。Core、Vue、React 与可选 XLSX 包固定版本
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.18.1
+pnpm up @agile-team/mach-table-vue@^0.19.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,19 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.18.1 → 0.19.0
+
+0.19 保持 0.18 的平面 API 和默认行为兼容。新能力均为渐进采用：
+
+- 新代码可使用 `api.rows/columns/selection/editing/state/diagnostics`；旧方法无需迁移。
+- 多个同步命令可放入 `api.batch()`，减少重复布局与渲染。`refreshCells()` 仍可无参调用，也可传 `rowIds/rowIndexes/columns` 精确刷新。
+- `datasource` 默认仍为 `datasourceMode: "sequential"`。只有显式选择 `"block"` 才启用随机访问 LRU；建议同时提供 `datasourceRowCount` 与稳定 `rowKey/getRowId`。
+- 随机块占位行的 `data` 为 `null` 且 `loading: true`，renderer/editor 不会执行；遍历和导出只覆盖当前缓存真实行。
+- `dataProcessor` 默认未配置。启用 Worker 时，标准处理器只处理可序列化 `field`；自定义 valueGetter/comparator 需要预计算字段或自定义 Processor。
+- `GridFeature.requires` 继续接受字符串，同时可改为 `{ key, version }`；未声明版本的旧 Feature 不受影响。
+
+升级后建议运行 `pnpm check:api`（库贡献者）和真实项目的远程排序/过滤、选择、编辑回归。详细配置见[随机访问数据源](/recipes/random-access-datasource)、[Worker 数据处理](/advanced/worker-processing)和 [API 治理](/advanced/api-governance)。
 
 ## 0.18.0 → 0.18.1
 

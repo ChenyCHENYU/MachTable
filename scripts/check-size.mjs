@@ -14,7 +14,10 @@ const reactEsmFiles = (await readdir(new URL("../packages/react/dist/", import.m
   .map((file) => `packages/react/dist/${file}`);
 
 const budgets = [
-  ["Core ESM", ["packages/core/dist/index.js"], 80 * 1024],
+  // 0.19 adds random block caching, indexed geometry and API scheduling. The
+  // Worker runtime remains a separate subpath; keep the default Core below 84 KiB.
+  ["Core ESM", ["packages/core/dist/index.js"], 84 * 1024],
+  ["Optional Worker", ["packages/core/dist/worker.js"], 8 * 1024],
   ["Vue ESM artifacts", vueEsmFiles, 10.5 * 1024],
   ["React ESM artifacts", reactEsmFiles, 8 * 1024],
   ["Optional XLSX bridge", ["packages/xlsx/dist/index.js"], 3 * 1024],

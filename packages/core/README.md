@@ -41,7 +41,41 @@ await api.applyTransactionAsync({ update: realtimeRows });
 api.applyState(state);
 ```
 
-0.18 adds governed runtime APIs, nested filters, named views, conflict-aware saves and performance evidence:
+0.19 adds a lower-cost rendering pipeline and a smaller, more discoverable imperative surface without removing the flat 0.x API:
+
+```ts
+api.batch((grid) => {
+  grid.rows.apply({ update: changedRows });
+  grid.columns.setVisible("internalNote", false);
+  grid.refreshCells({ rowIds: changedIds, columns: ["status"] });
+});
+
+console.info(api.diagnostics.get().updates);
+```
+
+For very large remote datasets, opt into random-access blocks. Sequential infinite loading remains the compatibility default:
+
+```ts
+const options = {
+  datasource,
+  datasourceMode: "block" as const,
+  datasourceRowCount: 1_000_000,
+  blockSize: 200,
+  maxBlocksInCache: 12,
+  blockPrefetch: 1
+};
+
+await api.rows.ensureLoaded(40_000, 40_200, { signal });
+console.info(api.rows.getCacheSnapshot());
+```
+
+Worker runtime helpers are intentionally split from the default entry:
+
+```ts
+import { createWorkerDataProcessor, installGridDataWorker } from "@agile-team/mach-table/worker";
+```
+
+0.18 added governed runtime APIs, nested filters, named views, conflict-aware saves and performance evidence:
 
 ```ts
 const views = createGridViewManager(api, { scope: "tenant:user:orders" });

@@ -3,8 +3,11 @@ import type { PaneType } from "../services/columnModel";
 import type { Column } from "../services/column";
 import { hasColumnType } from "../core/resolveOptions";
 import type { RowNode } from "../types/row";
+import type { RefreshCellsParams } from "../types/api";
 import { RangeSelectionModel, type NormalizedRange } from "../services/rangeSelectionModel";
 import { RowDragController } from "../services/rowDragController";
+import { ColumnViewportIndex } from "../services/columnViewportIndex";
+import { VariableSizeIndex } from "../services/variableSizeIndex";
 import { el, clamp } from "../lib/dom";
 import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
 import {
@@ -58,17 +61,6 @@ export interface FocusedCell {
   colId: string;
 }
 
-function lowerBound(positions: Float64Array, y: number, count: number): number {
-  let lo = 0;
-  let hi = count;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (positions[mid + 1] <= y) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
 export class BodyRenderer {
   private pool: RowSlot[] = [];
   private poolSize = 0;
@@ -76,7 +68,8 @@ export class BodyRenderer {
   private lastExcl = -1;
   private rafId = 0;
   private hoverIndex = -1;
-  private positions = new Float64Array(1);
+  private rowSizes = new VariableSizeIndex<RowNode<any>>();
+  private columnViewport = new ColumnViewportIndex();
   private rangeSelection = new RangeSelectionModel();
   private rangeDragging = false;
   private colFirst = 0;
@@ -85,7 +78,11 @@ export class BodyRenderer {
   private rowDragController: RowDragController;
 
   constructor(private core: BodyContext) {
-    this.rowDragController = new RowDragController(core, () => this.positions);
+    this.rowDragController = new RowDragController(
+      core,
+      (index) => this.rowTop(index),
+      (offset) => this.rowAtOffset(offset, this.core.rowModel.getDisplayedRowCount())
+    );
   }
 
   init(): void {
@@ -128,6 +125,13 @@ export class BodyRenderer {
     }
     this.fillHandleEl?.remove();
     this.fillDragIndicator?.remove();
+    this.pool = [];
+    this.poolSize = 0;
+    this.pendingFlash = [];
+    this.dirtyHeightNodes.clear();
+    this.rowSizes.reset([], () => this.core.options.rowHeight);
+    this.columnViewport.update([]);
+    this.measureCanvas = null;
   }
 
   paneForColumn(column: Column): PaneType {
@@ -163,69 +167,52 @@ export class BodyRenderer {
     return widths;
   }
 
-  private positionsBuf = new Float64Array(new ArrayBuffer(64 * 8));
   private lastMinRowHeight = 0;
   private rowHeightCache = new WeakMap<RowNode<any>, number>();
+  private dirtyHeightNodes = new Set<RowNode<any>>();
+  private rowLayoutSignature = "";
   private pendingFlash: Array<[number, string]> = [];
   private measureCanvas: HTMLCanvasElement | null = null;
 
   applyContainerSizes(): void {
     const sk = this.core.skeleton;
     const widths = this.paneWidths();
+    this.columnViewport.update(this.core.columnModel.getPaneColumns("center"));
+    widths.center = this.columnViewport.totalWidth();
     const viewport = sk.bodyViewports.center;
     const displayed = this.core.rowModel.getDisplayedRows();
     const rowCount = this.core.rowModel.getDisplayTotalCount();
     const positionedCount = Math.min(rowCount, displayed.length);
     const rowHeight = this.core.options.rowHeight;
-    const detailHeight = this.core.options.detailRowHeight;
-    const getRowHeight = this.core.options.getRowHeight;
-    const api = this.core.getApi();
-
-    if (this.positionsBuf.length < positionedCount + 1) {
-      let cap = this.positionsBuf.length;
-      while (cap < positionedCount + 1) cap *= 2;
-      this.positionsBuf = new Float64Array(new ArrayBuffer(cap * 8));
-    }
-    const positions = this.positionsBuf;
     const autoHeightCols = this.core.options.masterDetail ? [] : this.collectAutoHeightColumns();
-    let y = 0;
-    let minH = rowHeight;
-    for (let i = 0; i < positionedCount; i++) {
-      positions[i] = y;
-      const node = i < displayed.length ? displayed[i] : undefined;
-      let h: number;
-      if (node?.isDetail) {
-        h = detailHeight;
-      } else if (node && (getRowHeight || autoHeightCols.length > 0)) {
-        const cached = this.rowHeightCache.get(node);
-        if (cached !== undefined) {
-          h = cached;
-        } else {
-          h = rowHeight;
-          if (getRowHeight) {
-            try {
-              const requested = getRowHeight({ data: node.data, node, api });
-              h = Number.isFinite(requested) ? Math.max(1, requested || rowHeight) : rowHeight;
-            } catch (error) {
-              this.core.reportError(error, "getRowHeight", { rowId: node.id });
-            }
-          }
-          if (autoHeightCols.length > 0) {
-            const measured = this.measureAutoHeight(node, autoHeightCols);
-            if (measured > h) h = measured;
-          }
-          this.rowHeightCache.set(node, h);
-        }
-        if (h < minH) minH = h;
-      } else {
-        h = rowHeight;
+    // Sparse random-access blocks cannot materialize a variable-height prefix for every remote row.
+    const variable = this.core.options.datasourceMode !== "block" && (
+      this.core.options.masterDetail || this.core.options.getRowHeight != null || autoHeightCols.length > 0
+    );
+    const signature = variable
+      ? `${this.core.rowModel.getDisplayRevision()}|${rowHeight}|${this.core.options.detailRowHeight}|${autoHeightCols.map((column) => `${column.id}:${column.currentWidth}`).join(",")}`
+      : `fixed|${rowHeight}`;
+    if (!variable) {
+      if (this.rowSizes.length > 0) this.rowSizes.reset([], () => rowHeight);
+      this.rowLayoutSignature = signature;
+      this.dirtyHeightNodes.clear();
+      this.lastMinRowHeight = rowHeight;
+    } else if (signature !== this.rowLayoutSignature || this.rowSizes.length !== positionedCount) {
+      const positioned = displayed.slice(0, positionedCount);
+      this.rowSizes.reset(positioned, (node) => this.resolveRowHeight(node, autoHeightCols));
+      this.rowLayoutSignature = signature;
+      this.dirtyHeightNodes.clear();
+      this.lastMinRowHeight = this.rowSizes.minimumSize() || rowHeight;
+    } else if (this.dirtyHeightNodes.size > 0) {
+      for (const node of this.dirtyHeightNodes) {
+        const index = this.rowSizes.indexOf(node);
+        if (index >= 0) this.rowSizes.update(index, this.resolveRowHeight(node, autoHeightCols));
       }
-      y += h;
+      this.dirtyHeightNodes.clear();
+      this.lastMinRowHeight = this.rowSizes.minimumSize() || rowHeight;
     }
-    positions[positionedCount] = y;
-    const totalHeight = y + Math.max(0, rowCount - positionedCount) * rowHeight;
-    this.lastMinRowHeight = minH;
-    this.positions = positions.subarray(0, positionedCount + 1);
+    const positionedHeight = variable ? this.rowSizes.totalSize() : positionedCount * rowHeight;
+    const totalHeight = positionedHeight + Math.max(0, rowCount - positionedCount) * rowHeight;
 
     const centerAvailable = Math.max(0, viewport.clientWidth - widths.left - widths.right);
     const centerWidth = Math.max(widths.center, centerAvailable);
@@ -242,6 +229,7 @@ export class BodyRenderer {
 
   invalidateRowHeight(node: RowNode<any>): void {
     this.rowHeightCache.delete(node);
+    this.dirtyHeightNodes.add(node);
   }
 
   private applyDomLayoutHeight(totalHeight: number): void {
@@ -250,6 +238,43 @@ export class BodyRenderer {
 
   invalidateAllRowHeights(): void {
     this.rowHeightCache = new WeakMap();
+    this.dirtyHeightNodes.clear();
+    this.rowLayoutSignature = "";
+  }
+
+  private resolveRowHeight(node: RowNode<any>, autoHeightCols: Column[]): number {
+    if (node.isDetail) return this.core.options.detailRowHeight;
+    const cached = this.rowHeightCache.get(node);
+    if (cached !== undefined) return cached;
+    let height = this.core.options.rowHeight;
+    const getRowHeight = this.core.options.getRowHeight;
+    if (getRowHeight) {
+      try {
+        const requested = getRowHeight({ data: node.data, node, api: this.core.getApi() });
+        height = Number.isFinite(requested) ? Math.max(1, requested || height) : height;
+      } catch (error) {
+        this.core.reportError(error, "getRowHeight", { rowId: node.id });
+      }
+    }
+    if (autoHeightCols.length > 0) height = Math.max(height, this.measureAutoHeight(node, autoHeightCols));
+    this.rowHeightCache.set(node, height);
+    return height;
+  }
+
+  private rowTop(index: number): number {
+    const positioned = this.rowSizes.length;
+    if (positioned === 0) return Math.max(0, index) * this.core.options.rowHeight;
+    if (index <= positioned) return this.rowSizes.offsetAt(index);
+    return this.rowSizes.totalSize() + (index - positioned) * this.core.options.rowHeight;
+  }
+
+  private rowAtOffset(offset: number, rowCount: number): number {
+    if (rowCount <= 0) return 0;
+    const positioned = this.rowSizes.length;
+    const positionedHeight = this.rowSizes.totalSize();
+    if (positioned > 0 && offset < positionedHeight) return this.rowSizes.findIndex(offset);
+    const index = positioned + Math.floor(Math.max(0, offset - positionedHeight) / this.core.options.rowHeight);
+    return Math.max(0, Math.min(index, rowCount - 1));
   }
 
   private collectAutoHeightColumns(): Column[] {
@@ -454,7 +479,8 @@ export class BodyRenderer {
       const lefts: number[] = [];
       if (pane === "center" && cols.length > 0) {
         const first = allPaneCols.indexOf(cols[0]);
-        for (let i = 0; i < first; i++) x += allPaneCols[i].currentWidth;
+        this.columnViewport.update(allPaneCols);
+        x = this.columnViewport.offsetAt(first);
       }
       for (const col of cols) {
         lefts.push(x);
@@ -486,38 +512,13 @@ export class BodyRenderer {
     const cols = this.core.columnModel.getPaneColumns("center");
     const prevFirst = this.colFirst;
     const prevLast = this.colLastExcl;
-    let first = 0;
-    let last = cols.length;
-
-    if (cols.length > 20) {
-      const width = viewport.clientWidth;
-      let total = 0;
-      for (const col of cols) total += col.currentWidth;
-      if (width > 0 && total > width) {
-        const scrollLeft = viewport.scrollLeft;
-        let x = 0;
-        for (let i = 0; i < cols.length; i++) {
-          if (x + cols[i].currentWidth <= scrollLeft) first = i + 1;
-          else break;
-          x += cols[i].currentWidth;
-        }
-        let acc = x;
-        for (let i = first; i < cols.length; i++) {
-          acc += cols[i].currentWidth;
-          if (acc >= scrollLeft + width) {
-            last = i + 1;
-            break;
-          }
-        }
-        if (last > cols.length) last = cols.length;
-        first = Math.max(0, first - 2);
-        last = Math.min(cols.length, last + 2);
-      }
-    }
-
-    this.colFirst = first;
-    this.colLastExcl = last;
-    return first !== prevFirst || last !== prevLast;
+    this.columnViewport.update(cols);
+    const range = cols.length > 20
+      ? this.columnViewport.visibleRange(viewport.scrollLeft, viewport.clientWidth, 2)
+      : { first: 0, lastExcl: cols.length };
+    this.colFirst = range.first;
+    this.colLastExcl = range.lastExcl;
+    return range.first !== prevFirst || range.lastExcl !== prevLast;
   }
 
   updateRange(force = false): void {
@@ -561,9 +562,9 @@ export class BodyRenderer {
     rowCount: number,
     buffer: number
   ): { first: number; lastExcl: number } {
-    const firstVisible = lowerBound(this.positions, viewport.scrollTop, rowCount);
+    const firstVisible = this.rowAtOffset(viewport.scrollTop, rowCount);
     const viewBottom = viewport.scrollTop + viewport.clientHeight;
-    const lastVisible = Math.min(rowCount, lowerBound(this.positions, viewBottom, rowCount) + 1);
+    const lastVisible = Math.min(rowCount, this.rowAtOffset(viewBottom, rowCount) + 1);
     return {
       first: clamp(firstVisible - buffer, 0, rowCount - 1),
       lastExcl: clamp(lastVisible + buffer, 1, rowCount)
@@ -636,8 +637,8 @@ export class BodyRenderer {
     }
     slot.index = index;
     slot.nodeId = node.id;
-    const y = this.positions[index];
-    const h = this.positions[index + 1] - this.positions[index];
+    const y = this.rowTop(index);
+    const h = this.rowTop(index + 1) - y;
 
     if (node.isDetail) {
       slot.kind = "detail";
@@ -809,6 +810,19 @@ export class BodyRenderer {
   }
 
   private renderCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
+    if (node.loading) {
+      cleanupCellContent(this.core, cell);
+      cell.className = "mach-cell mach-cell--loading";
+      cell.setAttribute("aria-readonly", "true");
+      cell.setAttribute("aria-busy", "true");
+      const bar = document.createElement("span");
+      bar.className = "mach-cell-loading-bar";
+      bar.style.width = `${34 + (column.id.length * 13 + node.rowIndex * 7) % 44}%`;
+      cell.replaceChildren(bar);
+      this.resetSpanStyle(cell);
+      return;
+    }
+    cell.removeAttribute("aria-busy");
     cell.setAttribute("aria-readonly", this.core.editingService.isEditable(node, column) ? "false" : "true");
     cell.removeAttribute("aria-expanded");
     cell.removeAttribute("aria-level");
@@ -982,8 +996,8 @@ export class BodyRenderer {
     if (cell.style.display === "none") cell.style.display = "";
     cell.removeAttribute("aria-hidden");
     if (value > 1) {
-      const end = Math.min(idx + value, this.positions.length - 1);
-      const height = this.positions[end] - this.positions[idx];
+      const end = Math.min(idx + value, this.core.rowModel.getDisplayedRowCount());
+      const height = this.rowTop(end) - this.rowTop(idx);
       cell.style.height = `${height > 0 ? height : value * this.core.options.rowHeight}px`;
       cell.style.zIndex = "1";
       cell.setAttribute("aria-rowspan", String(value));
@@ -1067,23 +1081,71 @@ export class BodyRenderer {
   }
 
   refreshAllCells(): void {
+    this.refreshCells();
+  }
+
+  refreshCells(params: RefreshCellsParams = {}): void {
     if (this.core.isDestroyed()) return;
+    const rowIds = params.rowIds == null ? null : new Set(params.rowIds);
+    const rowIndexes = params.rowIndexes == null ? null : new Set(params.rowIndexes);
+    const columns = params.columns == null ? null : new Set(params.columns);
     for (const slot of this.pool) {
-      if (slot.index < 0) continue;
       const node = this.core.rowModel.getDisplayedRow(slot.index);
-      if (!node) continue;
-      if (slot.kind === "detail") {
-        if (slot.detailRow) this.renderDetailContent(slot.detailRow, node);
-        continue;
-      }
-      for (const pane of PANES) {
-        const cells = slot.cells[pane];
-        if (!cells) continue;
-        this.renderPaneCells(slot, node, pane);
-      }
+      if (!node || !this.matchesRefreshRow(slot, node, rowIds, rowIndexes)) continue;
+      this.refreshSlotCells(slot, node, columns, params.force === true);
     }
     this.applyFocusClass();
     this.flushFlash();
+  }
+
+  private matchesRefreshRow(
+    slot: RowSlot,
+    node: RowNode<any>,
+    rowIds: ReadonlySet<string> | null,
+    rowIndexes: ReadonlySet<number> | null
+  ): boolean {
+    if (slot.index < 0) return false;
+    if (rowIds == null && rowIndexes == null) return true;
+    return rowIds?.has(node.id) === true || rowIndexes?.has(slot.index) === true;
+  }
+
+  private refreshSlotCells(
+    slot: RowSlot,
+    node: RowNode<any>,
+    columns: ReadonlySet<string> | null,
+    force: boolean
+  ): void {
+    if (slot.kind === "detail") {
+      if (columns == null && slot.detailRow) this.renderDetailContent(slot.detailRow, node);
+      return;
+    }
+    const refreshPane = columns == null || this.core.columnModel.hasColSpan();
+    for (const pane of PANES) {
+      if (refreshPane) this.renderPaneCells(slot, node, pane);
+      else this.refreshPaneCells(slot, node, pane, columns, force);
+    }
+  }
+
+  private refreshPaneCells(
+    slot: RowSlot,
+    node: RowNode<any>,
+    pane: PaneType,
+    columns: ReadonlySet<string>,
+    force: boolean
+  ): void {
+    const paneColumns = this.activePaneColumns(pane);
+    const cells = slot.cells[pane];
+    if (!cells) return;
+    for (let index = 0; index < paneColumns.length; index++) {
+      const column = paneColumns[index];
+      if (!columns.has(column.id)) continue;
+      const cell = cells[index];
+      if (!cell) continue;
+      if (this.core.editingService.renderEditor(slot.index, node, column, cell)) continue;
+      if (force) cleanupCellContent(this.core, cell);
+      this.renderCell(cell, node, column);
+      this.applyRangeClass(cell, slot.index, column);
+    }
   }
 
   onDataChanged(): void {
@@ -1300,9 +1362,9 @@ export class BodyRenderer {
       return;
     }
     const local = range.c2 - leftCount;
-    let x = 0;
-    for (let i = 0; i <= local && i < centerCols.length; i++) x += centerCols[i].currentWidth;
-    const bottom = this.positions[Math.min(range.r2 + 1, this.positions.length - 1)] ?? (range.r2 + 1) * this.core.options.rowHeight;
+    this.columnViewport.update(centerCols);
+    const x = this.columnViewport.offsetAt(local + 1);
+    const bottom = this.rowTop(Math.min(range.r2 + 1, this.core.rowModel.getDisplayedRowCount()));
     handle.style.display = "";
     handle.style.left = `${x - 4}px`;
     handle.style.top = `${bottom - 4}px`;
@@ -1336,7 +1398,7 @@ export class BodyRenderer {
     const rect = container.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
-    const row = lowerBound(this.positions, y, rowCount);
+    const row = this.rowAtOffset(y, rowCount);
     return Math.max(this.fillDrag!.r2, Math.min(row, rowCount - 1));
   }
 
@@ -1347,11 +1409,12 @@ export class BodyRenderer {
     const cm = this.core.columnModel;
     const leftCount = cm.getPaneColumns("left").length;
     const centerCols = cm.getPaneColumns("center");
-    let acc = 0;
-    for (let i = 0; i < centerCols.length; i++) {
-      if (x < acc + centerCols[i].currentWidth / 2) return leftCount + i;
-      acc += centerCols[i].currentWidth;
-    }
+    this.columnViewport.update(centerCols);
+    const local = this.columnViewport.indexAt(x);
+    if (local < 0) return leftCount;
+    const midpoint = this.columnViewport.offsetAt(local) + centerCols[local].currentWidth / 2;
+    if (x < midpoint) return leftCount + local;
+    if (local + 1 < centerCols.length) return leftCount + local + 1;
     return leftCount + centerCols.length - 1;
   }
 
@@ -1620,11 +1683,9 @@ export class BodyRenderer {
     const column = this.core.columnModel.getColumn(this.focusedCell.colId);
     if (!column || column.pinned) return;
     const viewport = this.core.skeleton.bodyViewports.center;
-    let x = 0;
-    for (const col of this.core.columnModel.getPaneColumns("center")) {
-      if (col.id === column.id) break;
-      x += col.currentWidth;
-    }
+    const centerColumns = this.core.columnModel.getPaneColumns("center");
+    this.columnViewport.update(centerColumns);
+    const x = this.columnViewport.offsetAt(centerColumns.indexOf(column));
     const left = viewport.scrollLeft;
     const width = viewport.clientWidth;
     if (x < left) viewport.scrollLeft = x;
@@ -1640,8 +1701,8 @@ export class BodyRenderer {
     const index = clamp(rowIndex, 0, rowCount - 1);
     const viewportHeight = viewport.clientHeight;
     const scrollTop = viewport.scrollTop;
-    const rowTop = this.positions[index];
-    const rowBottom = this.positions[index + 1];
+    const rowTop = this.rowTop(index);
+    const rowBottom = this.rowTop(index + 1);
 
     let target = scrollTop;
     if (position === "top") {
@@ -1655,7 +1716,7 @@ export class BodyRenderer {
       else if (rowBottom > scrollTop + viewportHeight) target = rowBottom - viewportHeight;
     }
 
-    const maxScroll = Math.max(0, this.positions[rowCount] - viewportHeight);
+    const maxScroll = Math.max(0, this.rowTop(rowCount) - viewportHeight);
     viewport.scrollTop = clamp(target, 0, maxScroll);
   }
 

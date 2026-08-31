@@ -5,15 +5,25 @@
 | 机制 | 说明 |
 | --- | --- |
 | 行虚拟化 | 行池复用（`index % poolSize` 槽位 + `index+nodeId` 双校验），滚动只更新 diff |
-| 列虚拟化 | 20+ 列自动启用可视列窗口（±2 列缓冲），离窗富组件主动卸载 |
-| 变高行前缀和 | `Float64Array` 缓冲复用（几何扩容，滚动零分配）+ 二分定位 |
+| 列虚拟化 | 20+ 列自动启用；前缀宽度索引 + 二分窗口定位（±2 列缓冲），不随总列数线性扫描 |
+| 变高行索引 | Fenwick 树维护高度与偏移；单行变化 O(log n) 更新、O(log n) 定位，无需重建完整前缀数组 |
 | 预取值排序 | Schwartzian 变换预提取排序键，避免 O(n log n) 次 valueGetter |
 | 合帧与去重 | rAF 滚动合帧、className/title/style 写入前比较、`contain: layout style` |
 | 范围缓存 | 框选坐标帧内缓存（8 个变更点失效），高亮零额外分配 |
 | Renderer 原地刷新 | 同一行/列/renderer 优先调用 `refresh(params)`；Vue/React 更新现有组件 root，失败才安全重建 |
-| 有界性能诊断 | 最近 120 次视口渲染滚动窗口，公开平均/P95/最大耗时、长帧数和实际 DOM 范围 |
+| 原子更新调度 | `api.batch()` 合并列/行池/布局/数据/脏单元格/固定行/合计/overlay；诊断公开请求与合并次数 |
+| 有界性能诊断 | 最近 120 次渲染/布局/模型窗口，公开 P95、长帧、Long Task、DOM 范围和可用 JS 堆指标 |
+| 布局隔离与释放 | Root/Row 使用 `contain: layout style`，销毁时主动释放行池、几何缓存、Worker、Observer 和请求 |
 
 ## 数据侧最佳实践
+
+### 远程大数据优先使用随机块模式
+
+需要滚动条任意跳转时使用 `datasourceMode: "block"`，并配置 `datasourceRowCount`、稳定 `rowKey`、有界 `maxBlocksInCache`。它按可见块请求、相邻预取并以 LRU 释放远端行；普通“继续加载”列表保持默认 `sequential` 即可。详见[随机访问远程数据源](/recipes/random-access-datasource)。
+
+### 大型本地计算按证据启用 Worker
+
+`dataProcessor` 只在超过 `dataProcessorMinRows` 且发生本地排序/过滤时启用。标准字段 Processor 不序列化函数，适合普通 `field`；复杂 valueGetter/comparator 应预计算或使用自定义 Processor。Worker 有数据复制成本，不要把它作为所有表格的默认配置。详见[Worker 数据处理](/advanced/worker-processing)。
 
 ### 1. 一定要提供 getRowId
 
@@ -52,6 +62,16 @@ await Promise.all(messages.map((row) =>
 
 默认 16ms 内的事务保持顺序执行，但过滤/排序/分组/布局管线只刷新一次。可用 `asyncTransactionWaitMillis` 调整窗口，或调用 `flushAsyncTransactions()` 立即提交。
 
+同一个用户动作还会修改列、数据和视图时，使用同步 `api.batch()`：
+
+```ts
+api.batch((grid) => {
+  grid.rows.apply({ update: rows });
+  grid.columns.setVisible("cost", canViewCost);
+  grid.refreshCells({ rowIds, columns: ["status"] });
+});
+```
+
 ## 渲染侧调优
 
 | 手段 | 说明 |
@@ -79,7 +99,9 @@ api.resetPerformanceMetrics();
 // 执行需要测量的滚动或批量更新
 const metrics = api.getPerformanceSnapshot();
 // { sampleCount, averageRenderMs, p95RenderMs, maxRenderMs,
-//   longRenderCount, renderedRows, renderedColumns, renderedCells }
+//   layoutSampleCount, p95LayoutMs, modelSampleCount, p95ModelMs,
+//   longRenderCount, longTaskCount, longTaskTotalMs, usedHeapBytes,
+//   renderedRows, renderedColumns, renderedCells }
 ```
 
 `getDiagnostics().performance` 返回同一份指标，适合接入内部诊断面板。它是轻量观测，不替代 Chrome trace、内存 profile 或真实业务 UAT。绝对耗时受硬件、浏览器、renderer 与数据形态影响，请在目标设备用业务列模型复测，不把 README 数字当 SLA。
@@ -90,10 +112,11 @@ const metrics = api.getPerformanceSnapshot();
 
 | 产物 | gzip 上限 |
 | --- | ---: |
-| `@agile-team/mach-table` ESM | 80 KB |
+| `@agile-team/mach-table` ESM | 84 KB |
+| 可选 `/worker` ESM | 8 KB |
 | Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10.5 KB / 6.75 KB / 5 KB / 3 KB |
 | React 全部 ESM / 默认入口 / 工作流入口 | 8 KB / 6.25 KB / 5 KB |
-| Core CSS | 6 KB |
+| Core CSS | 7 KB |
 
 框架包把 Vue、React、ReactDOM 和 Core 声明为 external/peer dependency，因此 Vue 应用不会打入 React 适配代码，反之亦然。
 

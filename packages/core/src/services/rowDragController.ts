@@ -18,7 +18,8 @@ export class RowDragController {
 
   constructor(
     private core: RowDragContext,
-    private getPositions: () => Float64Array
+    private getRowTop: (index: number) => number,
+    private findRowAt: (offset: number) => number
   ) {}
 
   start(event: PointerEvent, node: RowNode<any>): void {
@@ -49,20 +50,16 @@ export class RowDragController {
     const container = this.core.skeleton.rowContainers.center;
     const y = event.clientY - container.getBoundingClientRect().top;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
-    const positions = this.getPositions();
-    let targetIndex = rowCount;
-    let indicatorY = positions[rowCount] ?? 0;
-    for (let index = 0; index < rowCount; index++) {
-      const node = this.core.rowModel.getDisplayedRow(index);
-      if (!node || node.isDetail || node.isGroup) continue;
-      const top = positions[index];
-      const bottom = positions[index + 1];
-      if (y < top + (bottom - top) / 2) {
-        targetIndex = index;
-        indicatorY = top;
-        break;
-      }
+    let targetIndex = Math.max(0, Math.min(this.findRowAt(y), rowCount));
+    while (targetIndex < rowCount) {
+      const candidate = this.core.rowModel.getDisplayedRow(targetIndex);
+      if (candidate && !candidate.isDetail && !candidate.isGroup) break;
+      targetIndex++;
     }
+    const top = this.getRowTop(targetIndex);
+    const bottom = this.getRowTop(Math.min(rowCount, targetIndex + 1));
+    if (targetIndex < rowCount && y >= top + (bottom - top) / 2) targetIndex++;
+    const indicatorY = this.getRowTop(targetIndex);
     drag.targetIndex = targetIndex;
     drag.indicator.style.top = `${indicatorY}px`;
   };

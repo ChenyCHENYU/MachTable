@@ -1,5 +1,7 @@
 # 无限滚动（服务端分页）
 
+本页描述默认 `datasourceMode: "sequential"` 的顺序追加模型。需要滚动条任意跳转、并发区块与 LRU 缓存时，改用[随机访问远程数据源](/recipes/random-access-datasource)；两种模式共享 `GridDatasource` 请求协议。
+
 滚动条按**服务端总行数**撑满，滚动到已加载区末尾附近自动预取下一块——用户感知是一张完整的大表。
 
 ## 数据源协议

@@ -1,5 +1,17 @@
 import type { GridCore } from "../core/gridCore";
-import type { CsvExportParams, ImportCsvOptions, RowTransaction } from "../types/api";
+import type {
+  CsvExportParams,
+  GridAsyncOptions,
+  GridColumnsApi,
+  GridDiagnosticsApi,
+  GridEditingApi,
+  GridRowsApi,
+  GridSelectionApi,
+  GridStateApi,
+  ImportCsvOptions,
+  RefreshCellsParams,
+  RowTransaction
+} from "../types/api";
 import type { GridApi } from "../types/api";
 import type { GridOptions } from "../types/options";
 import type { ApplyGridStateOptions, GridState, GridStateInput, GridStateSection } from "../types/state";
@@ -16,6 +28,7 @@ import { formatCellValue } from "../render/cellContent";
 import { sanitizeGridOptionPatch } from "../core/gridOptionRuntime";
 import { migrateGridState } from "../lib/gridState";
 import { createSaveSnapshot, normalizeBatchSaveResult } from "../lib/batchSave";
+import { createGridApiDomains } from "./gridApiDomains";
 
 interface OptionUpdateEffects {
   datasourceChanged: boolean;
@@ -34,6 +47,32 @@ interface OptionUpdateEffects {
 interface CsvFieldBinding {
   field: string;
   index: number;
+}
+
+interface AsyncTransactionEntry<TData> {
+  transaction: RowTransaction<TData>;
+  resolve(): void;
+  reject(reason: Error): void;
+  signal?: AbortSignal;
+  onAbort?: () => void;
+  aborted: boolean;
+}
+
+function abortError(signal?: AbortSignal): Error {
+  if (signal?.reason instanceof Error) return signal.reason;
+  const error = new Error(typeof signal?.reason === "string" ? signal.reason : "The operation was aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function withAbort<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return task;
+  if (signal.aborted) return Promise.reject(abortError(signal));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+    void task.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
 }
 
 function createOptionUpdateEffects(): OptionUpdateEffects {
@@ -71,12 +110,31 @@ function changedFinite(
 }
 
 export class GridApiImpl<TData = any> implements GridApi<TData> {
+  readonly rows: GridRowsApi<TData>;
+  readonly columns: GridColumnsApi;
+  readonly selection: GridSelectionApi<TData>;
+  readonly editing: GridEditingApi<TData>;
+  readonly state: GridStateApi;
+  readonly diagnostics: GridDiagnosticsApi;
   private measureCanvas: HTMLCanvasElement | null = null;
-  private asyncTransactions: RowTransaction<TData>[] = [];
+  private asyncTransactions: AsyncTransactionEntry<TData>[] = [];
   private asyncTransactionTimer: ReturnType<typeof setTimeout> | null = null;
-  private asyncTransactionResolvers: Array<() => void> = [];
 
-  constructor(private core: GridCore<TData>) {}
+  constructor(private core: GridCore<TData>) {
+    const domains = createGridApiDomains(this);
+    this.rows = domains.rows;
+    this.columns = domains.columns;
+    this.selection = domains.selection;
+    this.editing = domains.editing;
+    this.state = domains.state;
+    this.diagnostics = domains.diagnostics;
+  }
+
+  batch<TResult>(callback: (api: GridApi<TData>) => TResult): TResult {
+    return this.core.batchUpdates(() => callback(this));
+  }
+
+  flushUpdates(): void { this.core.updateScheduler.flush(); }
 
   whenReady(): Promise<import("../types/api").GridApi<TData>> {
     return this.core.whenReady();
@@ -91,39 +149,59 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     this.core.options.rowData = rows ?? [];
     if (this.core.rowModel.isInfinite) return;
     this.core.rowModel.setRowData(rows);
-    this.core.bodyRenderer.onDataChanged();
+    this.core.requestUpdate({ data: true });
   }
 
   applyTransaction(transaction: RowTransaction<TData>): void {
     if (this.core.isDestroyed() || this.core.rowModel.isInfinite) return;
     this.core.rowModel.applyTransaction(transaction);
-    this.core.bodyRenderer.onDataChanged();
+    this.core.requestUpdate({ data: true });
   }
 
-  applyTransactionAsync(transaction: RowTransaction<TData>): Promise<void> {
+  applyTransactionAsync(transaction: RowTransaction<TData>, options: GridAsyncOptions = {}): Promise<void> {
     if (this.core.isDestroyed() || this.core.rowModel.isInfinite) return Promise.resolve();
-    this.asyncTransactions.push(transaction);
+    if (options.signal?.aborted) return Promise.reject(abortError(options.signal));
+    const promise = new Promise<void>((resolve, reject) => {
+      const entry: AsyncTransactionEntry<TData> = {
+        transaction,
+        resolve,
+        reject,
+        signal: options.signal,
+        aborted: false
+      };
+      if (options.signal) {
+        entry.onAbort = () => {
+          if (entry.aborted) return;
+          entry.aborted = true;
+          reject(abortError(options.signal));
+        };
+        options.signal.addEventListener("abort", entry.onAbort, { once: true });
+      }
+      this.asyncTransactions.push(entry);
+    });
     if (this.asyncTransactionTimer == null) {
       this.asyncTransactionTimer = setTimeout(
         () => this.flushAsyncTransactions(),
         this.core.options.asyncTransactionWaitMillis
       );
     }
-    return new Promise((resolve) => this.asyncTransactionResolvers.push(resolve));
+    return promise;
   }
 
   flushAsyncTransactions(): void {
     if (this.asyncTransactionTimer != null) clearTimeout(this.asyncTransactionTimer);
     this.asyncTransactionTimer = null;
-    const transactions = this.asyncTransactions;
-    const resolvers = this.asyncTransactionResolvers;
+    const entries = this.asyncTransactions;
     this.asyncTransactions = [];
-    this.asyncTransactionResolvers = [];
+    const transactions = entries.filter((entry) => !entry.aborted).map((entry) => entry.transaction);
     if (transactions.length > 0 && !this.core.isDestroyed() && !this.core.rowModel.isInfinite) {
       this.core.rowModel.applyTransactions(transactions);
-      this.core.bodyRenderer.onDataChanged();
+      this.core.requestUpdate({ data: true });
     }
-    for (const resolve of resolvers) resolve();
+    for (const entry of entries) {
+      if (entry.signal && entry.onAbort) entry.signal.removeEventListener("abort", entry.onAbort);
+      if (!entry.aborted) entry.resolve();
+    }
   }
 
   getColumnDefs(): ColDefOrGroup<TData>[] | null {
@@ -139,7 +217,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (this.core.rowModel.isInfinite) void this.core.rowModel.onServerParamsChanged();
     else {
       this.core.rowModel.refreshPipeline();
-      this.core.bodyRenderer.onDataChanged();
+      this.core.requestUpdate({ data: true });
     }
   }
 
@@ -289,7 +367,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       return;
     }
     this.core.rowModel.refreshPipeline();
-    this.core.bodyRenderer.onDataChanged();
+    this.core.requestUpdate({ data: true });
   }
 
   getAdvancedFilterModel(): AdvancedFilterModel | null {
@@ -304,7 +382,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       return;
     }
     this.core.rowModel.refreshPipeline();
-    this.core.bodyRenderer.onDataChanged();
+    this.core.requestUpdate({ data: true });
   }
 
   private emitFilterChanged(): void {
@@ -608,15 +686,33 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     return this.core.rowModel.isInfinite;
   }
 
-  reload(): Promise<void> {
+  reload(options: GridAsyncOptions = {}): Promise<void> {
     if (this.core.isDestroyed()) return Promise.resolve();
+    if (options.signal?.aborted) return Promise.reject(abortError(options.signal));
     if (this.core.rowModel.isInfinite) {
-      return this.core.rowModel.reloadInfinite();
+      return withAbort(this.core.rowModel.reloadInfinite(options.signal), options.signal);
     } else {
       this.core.rowModel.setRowData(this.core.options.rowData);
-      this.core.bodyRenderer.onDataChanged();
+      this.core.requestUpdate({ data: true });
       return Promise.resolve();
     }
+  }
+
+  ensureRowsLoaded(startRow: number, endRow: number, options: GridAsyncOptions = {}): Promise<void> {
+    if (this.core.isDestroyed()) return Promise.resolve();
+    return withAbort(
+      this.core.rowModel.ensureRowsLoaded(startRow, endRow, options.signal),
+      options.signal
+    );
+  }
+
+  purgeDatasourceCache(): void {
+    if (this.core.isDestroyed()) return;
+    this.core.rowModel.purgeDatasourceCache();
+  }
+
+  getDatasourceCacheSnapshot(): import("../types/api").RemoteBlockCacheSnapshot {
+    return this.core.rowModel.getDatasourceCacheSnapshot();
   }
 
   paginationEnabled(): boolean {
@@ -676,7 +772,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     } else {
       this.core.rowModel.setRowData(records as unknown as TData[]);
     }
-    this.core.bodyRenderer.onDataChanged();
+    this.core.requestUpdate({ data: true });
     return true;
   }
 
@@ -806,10 +902,15 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     return this.core.editingService.stopRowAsync(cancel ?? false);
   }
 
-  refreshCells(): void {
-    this.core.bodyRenderer.refreshAllCells();
-    this.core.pinnedRowsRenderer.refresh();
-    this.core.summaryRenderer.refresh();
+  refreshCells(params?: RefreshCellsParams): void {
+    const unscoped = params == null || (
+      params.rowIds == null && params.rowIndexes == null && params.columns == null
+    );
+    this.core.requestUpdate({
+      cells: params ?? true,
+      pinned: params?.includePinned ?? unscoped,
+      summary: unscoped
+    });
   }
 
   getGridOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K] {
@@ -1210,7 +1311,6 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   private updateExtensionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.options;
-    let reloadGridState = false;
     if (hasOwnOption(options, "aggFuncs")) {
       resolved.aggFuncs = options.aggFuncs;
       effects.needsRowRebuild = true;
@@ -1227,6 +1327,27 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.features = Array.isArray(options.features) ? options.features : [];
       this.core.setFeatures(resolved.features);
     }
+    this.updateProcessorOptions(options, effects);
+    this.updatePersistenceOptions(options, effects);
+  }
+
+  private updateProcessorOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
+    if (hasOwnOption(options, "dataProcessor") && options.dataProcessor !== resolved.dataProcessor) {
+      resolved.dataProcessor?.destroy?.();
+      resolved.dataProcessor = options.dataProcessor;
+      effects.needsRowRebuild = true;
+    }
+    const processorRows = normalizeFinite(options.dataProcessorMinRows, 1, true);
+    if (processorRows !== undefined && processorRows !== resolved.dataProcessorMinRows) {
+      resolved.dataProcessorMinRows = processorRows;
+      effects.needsRowRebuild = true;
+    }
+  }
+
+  private updatePersistenceOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
+    let reloadGridState = false;
     if (hasOwnOption(options, "columnStateStore")) {
       resolved.columnStateStore = options.columnStateStore;
       effects.needsStateLoad = true;
@@ -1249,17 +1370,52 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
   }
 
   private updateDatasourceOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    this.updateDatasourceTuning(options, effects);
+    this.updateDatasourceMode(options, effects);
+    this.updateDatasourceReference(options, effects);
+    this.updatePinnedRows(options);
+  }
+
+  private updateDatasourceTuning(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.options;
     const blockSize = normalizeFinite(options.blockSize, 1, true);
     const bufferRows = normalizeFinite(options.infiniteBufferRows, 0, true);
+    const maxBlocks = normalizeFinite(options.maxBlocksInCache, 1, true);
+    const blockPrefetch = normalizeFinite(options.blockPrefetch, 0, true);
     const retryCount = normalizeFinite(options.datasourceRetryCount, 0, true);
     const retryDelay = normalizeFinite(options.datasourceRetryDelay, 0, true);
-    if (blockSize !== undefined) resolved.blockSize = blockSize;
+    if (blockSize !== undefined && blockSize !== resolved.blockSize) {
+      resolved.blockSize = blockSize;
+      effects.datasourceChanged = effects.datasourceChanged || resolved.datasourceMode === "block";
+    }
     if (bufferRows !== undefined) resolved.infiniteBufferRows = bufferRows;
+    if (maxBlocks !== undefined && maxBlocks !== resolved.maxBlocksInCache) {
+      resolved.maxBlocksInCache = maxBlocks;
+      effects.datasourceChanged = effects.datasourceChanged || resolved.datasourceMode === "block";
+    }
+    if (blockPrefetch !== undefined) resolved.blockPrefetch = blockPrefetch;
     if (retryCount !== undefined) resolved.datasourceRetryCount = retryCount;
     if (retryDelay !== undefined) resolved.datasourceRetryDelay = retryDelay;
-    this.updateDatasourceReference(options, effects);
-    this.updatePinnedRows(options);
+  }
+
+  private updateDatasourceMode(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    const resolved = this.core.options;
+    if (hasOwnOption(options, "datasourceMode")) {
+      const mode = options.datasourceMode === "block" ? "block" : "sequential";
+      if (mode !== resolved.datasourceMode) {
+        resolved.datasourceMode = mode;
+        effects.datasourceChanged = true;
+      }
+    }
+    if (hasOwnOption(options, "datasourceRowCount")) {
+      const rowCount = options.datasourceRowCount == null
+        ? null
+        : normalizeFinite(options.datasourceRowCount, 0, true) ?? null;
+      if (rowCount !== resolved.datasourceRowCount) {
+        resolved.datasourceRowCount = rowCount;
+        effects.datasourceChanged = true;
+      }
+    }
   }
 
   private updateDatasourceReference(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -1315,24 +1471,25 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
         if (this.core.rowModel.isInfinite) void this.core.rowModel.onServerParamsChanged();
         else {
           this.core.rowModel.refreshPipeline();
-          this.core.bodyRenderer.onDataChanged();
+          this.core.requestUpdate({ data: true });
         }
       }
     }
     if (effects.needsRelayout) {
       this.core.skeleton.updateHeights(resolved.rowHeight, resolved.headerHeight);
-      this.core.relayout();
-      this.core.relayoutColumns(false);
     }
     if (options.columnMenu != null && options.columnMenu !== previousColumnMenu) {
       effects.needsHeaderRebuild = true;
     }
-    if (effects.needsHeaderRebuild) this.core.headerRenderer.build();
-    if (effects.needsPoolRebuild) this.core.bodyRenderer.rebuildPool();
-    else if (effects.needsCellRefresh) this.refreshCells();
-    if (effects.needsSummaryRefresh) this.core.summaryRenderer.refresh();
     if (effects.stateToApply) this.applyState(effects.stateToApply);
-    this.core.bodyRenderer.refreshOverlays();
+    this.core.requestUpdate({
+      layout: effects.needsRelayout,
+      header: effects.needsHeaderRebuild,
+      pool: effects.needsPoolRebuild,
+      cells: effects.needsCellRefresh && !effects.needsPoolRebuild ? true : undefined,
+      summary: effects.needsSummaryRefresh,
+      overlays: true
+    });
   }
 
   private applyRowUpdateEffect(effects: OptionUpdateEffects): void {
@@ -1346,7 +1503,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       return;
     }
     this.core.rowModel.setRowData(this.core.options.rowData);
-    this.core.bodyRenderer.onDataChanged();
+    this.core.requestUpdate({ data: true });
   }
 
   getDataAsCsv(params: CsvExportParams = {}): string {
@@ -1435,7 +1592,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       void this.core.rowModel.onServerParamsChanged();
     } else {
       this.core.rowModel.refreshPipeline();
-      this.core.bodyRenderer.onDataChanged();
+      this.core.requestUpdate({ data: true });
     }
     this.core.headerRenderer.refreshSortIndicators();
     this.core.headerRenderer.refreshFilterIcons();
@@ -1507,10 +1664,12 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
   destroy(): void {
     if (this.asyncTransactionTimer != null) clearTimeout(this.asyncTransactionTimer);
     this.asyncTransactionTimer = null;
+    const entries = this.asyncTransactions;
     this.asyncTransactions = [];
-    const resolvers = this.asyncTransactionResolvers;
-    this.asyncTransactionResolvers = [];
-    for (const resolve of resolvers) resolve();
+    for (const entry of entries) {
+      if (entry.signal && entry.onAbort) entry.signal.removeEventListener("abort", entry.onAbort);
+      if (!entry.aborted) entry.resolve();
+    }
     this.core.destroy();
   }
 

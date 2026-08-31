@@ -22,7 +22,7 @@ AG 的 [`moduleRegistry.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f
 - 模块自己的运行时校验与注册钩子；
 - Grid 销毁后的作用域模块清理。
 
-MachTable 0.18 已为 `GridFeature` 增加 `version/requires/conflicts`，初始化前执行依赖排序、缺失/冲突/循环隔离，并在 `getDiagnostics().activeFeatures` 暴露 per-grid 清单。它仍不照搬 AG 的 Bean/Module 规模，也暂不执行 semver 握手；未来只有独立扩展包形成真实生态时再增加兼容范围协议。
+MachTable 0.19 的 `GridFeature` 已支持 `version/requires/conflicts` 和依赖 semver 范围，初始化前执行依赖排序、缺失/版本不兼容/冲突/循环隔离，并在 `getDiagnostics().activeFeatures` 暴露 per-grid 清单。它仍不照搬 AG 的 Bean/Module 规模：扩展只获得稳定 Context，生命周期资源由宿主统一托管。
 
 ### 2. 生命周期治理是 AG 稳定性的关键
 
@@ -53,7 +53,7 @@ AG Community 的 [`InfiniteCache`](https://github.com/ag-grid/ag-grid/blob/b51ca
 - 未知总数的虚拟尾部与最终 rowCount 收敛；
 - 可观察的块状态。
 
-MachTable 当前 `datasource` 是可靠的顺序追加模型，已有 AbortSignal、乱序隔离、重试和预取，但不是随机访问块缓存。`useMachTableQuery` 则很好地覆盖普通 B 端分页。二者不能包装成“完整 Remote Row Model”。如真实项目需要随机块访问，0.13 之后应单独设计 `RemoteBlockStore`，而不是继续给 `RowModel` 增加条件分支。
+MachTable 0.19 保留可靠的顺序追加默认模型，并新增显式 `datasourceMode: "block"`：按任意块请求、并发去重、AbortSignal、指数退避、相邻预取、LRU 淘汰、占位骨架与缓存诊断。`useMachTableQuery` 继续覆盖普通 B 端分页。它已解决 Infinite Model 的高频随机跳转问题，但仍不宣称等同 AG SSRM：服务端分组/聚合/事务更新和分层 Store 协议尚未实现。
 
 ### 5. SSRM 的难点是层级 Store，不是一个 getRows
 
@@ -144,6 +144,7 @@ MachTable 0.18 将 `GridState` 升级为 v2，自动迁移 v1，并对列、排�
 - 0.15：显式可控且可恢复的列宽交互；
 - 0.16—0.17 能力并入 0.18 统一发布：高级过滤 AST、命名视图、详细批量保存与冲突协议；
 - 0.18：Option/Feature 治理、GridState v2 迁移、renderer 原地刷新和可复现性能诊断。
+- 0.19：随机块远程模型、Worker 处理边界、增量行高/二分列索引、更新调度器、领域 API 与 API 快照门禁。
 
 ### 1.0：暂不上
 
