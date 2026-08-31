@@ -66,7 +66,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitest/coverage-v8": "4.1.11",
     "czg": "1.14.0",
-    "esbuild": "0.27.2",
+    "esbuild": "0.28.2",
     "eslint": "10.9.1",
     "husky": "9.1.7",
     "jsdom": "^30.0.1",
@@ -75,10 +75,10 @@
     "publint": "0.3.24",
     "rimraf": "^6.0.1",
     "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
+    "typescript": "^7.0.2",
     "typescript-eslint": "8.68.0",
     "vitepress": "^1.6.4",
     "vitest": "^4.1.11",
-    "vue-tsc": "3.0.0"
+    "vue-tsc": "3.3.11"
   }
 }
