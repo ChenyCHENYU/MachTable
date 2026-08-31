@@ -138,7 +138,7 @@ jobs:
         env:
           CI: true
       - run: pnpm build:release
-      - uses: changesets/action@v1
+      - uses: changesets/action@v2
         with:
           publish: pnpm changeset publish
         env:
