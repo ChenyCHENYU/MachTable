@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.24 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、状态持久化和可诊断扩展系统。
+MachTable 0.25 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -38,6 +38,8 @@ console.info(api.diagnostics.get());
 // 原生宿主卸载时必须销毁；Vue/React 适配器会自动处理。
 api.destroy();
 ```
+
+`persistence.sections` 同时约束进入 store 的数据与恢复范围；异步 store 写入有序，晚到加载不会覆盖加载期间的用户操作。
 
 公共命令按 `rows`、`columns`、`selection`、`editing`、`filtering`、`sorting`、`pagination`、`hierarchy`、`view`、`state`、`io`、`diagnostics` 划分。完整签名见 [GridApi](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/api/grid-api.md)。
 

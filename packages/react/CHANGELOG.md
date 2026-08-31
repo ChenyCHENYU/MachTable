@@ -1,5 +1,18 @@
 # @agile-team/mach-table-react
 
+## 0.25.0
+
+### Minor Changes
+
+- Reset sorting plus regular, advanced and quick filters through one canonical remote-query action.
+- Keep cleared row state internally consistent while loading and invoke Provider event observers alongside the latest component callback.
+- Strengthen runtime export and documented import contracts for integration readiness.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.25.0
+
 ## 0.24.0
 
 ### Minor Changes

@@ -94,7 +94,7 @@ const table = useMachTableQuery({
 await table.reload({ resetPage: true });
 ```
 
-`retry()` 重放失败状态，`reset()` 清空表格排序/过滤后执行一次请求，`reload()` 始终显式请求。React 版本 API 等价；对象 query 应通过 `useMemo` 或 `queryKey` 声明变更依赖。
+`retry()` 重放失败状态，`reset()` 清空表格排序、普通/高级/快速过滤后执行且只执行一次请求，`reload()` 始终显式请求。React 版本 API 等价；对象 query 应通过 `useMemo` 或 `queryKey` 声明变更依赖。
 
 ## 请求协议
 
@@ -127,7 +127,7 @@ interface MachTablePageRequest<TQuery> {
 - `reload()` 刷新当前页。
 - `reload({ resetPage: true })` 从第一页刷新。
 - `retry()` 重试最后的当前状态。
-- `reset()` 清空表格排序、普通/高级过滤并回到第一页；业务查询表单由页面按自己的产品规则重置。
+- `reset()` 清空表格排序、普通/高级/快速过滤并回到第一页；业务查询表单由页面按自己的产品规则重置。
 - `abort()` 主动取消请求，组件作用域销毁时也会自动取消。
 
 ## 跨页选择

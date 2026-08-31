@@ -162,12 +162,16 @@ cellEditor: (params) => {
 
 挂 UI 库组件（el-select / n-date-picker 等）见 [Element Plus 集成](/guide/element-plus) / [Naive UI 集成](/guide/naive-ui)。
 
-高频编辑器建议注册后用字符串引用（配置可序列化）：
+高频编辑器建议集中放进组件注册表，再用字符串引用：
 
 ```ts
-registerCellEditor("qtyEditor", myEditor);
+const tableOptions = {
+  components: { cellEditors: { qtyEditor: myEditor } }
+};
 { field: "qty", editable: true, cellEditor: "qtyEditor" }
 ```
+
+应用级复用时把同一份 `components.cellEditors` 放到 `mach-table.config.ts`；单页特例则只传当前表格，避免隐式全局污染。
 
 ## 键盘流
 

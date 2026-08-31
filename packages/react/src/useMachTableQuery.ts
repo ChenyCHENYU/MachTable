@@ -206,7 +206,10 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     const generation = ++generationRef.current;
     setLoading(true);
     setError(null);
-    if (optionsRef.current.keepPreviousData === false) setRows([]);
+    if (optionsRef.current.keepPreviousData === false) {
+      stateRef.current.rows = [];
+      setRows([]);
+    }
     const current = stateRef.current;
     try {
       const result = await optionsRef.current.request({
@@ -314,12 +317,14 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     stateRef.current.sortModel = [];
     stateRef.current.filterModel = {};
     stateRef.current.advancedFilterModel = null;
-    setPage(1); setSortModel([]); setFilterModel({}); setAdvancedFilterModel(null); clearSelection();
+    stateRef.current.quickFilterText = null;
+    setPage(1); setSortModel([]); setFilterModel({}); setAdvancedFilterModel(null); setQuickFilterText(null); clearSelection();
     suppressGrid.current = true;
     try {
       apiRef.current?.sorting.setModel(null);
       apiRef.current?.filtering.setModel(null);
       apiRef.current?.filtering.setAdvancedModel(null);
+      apiRef.current?.filtering.setQuickText(null);
     }
     finally { suppressGrid.current = false; }
     await load();
@@ -395,7 +400,12 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     setQuickFilterText(value) {
       stateRef.current.quickFilterText = value;
       setQuickFilterText(value);
-      apiRef.current?.filtering.setQuickText(value);
+      suppressGrid.current = true;
+      try { apiRef.current?.filtering.setQuickText(value); }
+      finally { suppressGrid.current = false; }
+      if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
+      if (optionsRef.current.mode !== "manual") scheduleLoad(true);
+      else { stateRef.current.page = 1; setPage(1); }
     },
     selectedKeys, selectedRows, selectionState, bindings,
     reload, retry: load, reset, abort, clearSelection, selectAllMatching, applySelectionState

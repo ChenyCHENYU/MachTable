@@ -1,5 +1,14 @@
 # @agile-team/mach-table
 
+## 0.25.0
+
+### Minor Changes
+
+- Enforce persistence sections before both storage and restoration, keep column layout independent from sorting, ignore late async loads after user interaction, and serialize/coalesce asynchronous saves.
+- Report invalid v2 state through stable diagnostics and remove the obsolete column-only store implementation so GridState remains the only persistence contract.
+- Remove the pre-adoption `ActionItem.danger` and implicit dark-theme class aliases in favor of the canonical `variant` and `theme` options.
+- Expand API governance to snapshot high-risk configuration, column, state, action and framework workflow contracts.
+
 ## 0.24.0
 
 ### Minor Changes

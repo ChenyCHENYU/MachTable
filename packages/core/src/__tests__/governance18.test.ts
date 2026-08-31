@@ -187,7 +187,12 @@ describe("0.17 advanced filters and saved views", () => {
       columns: [{ colId: "name" }],
       sortModel: [{ colId: "name", direction: "desc" }]
     }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const onGridError = vi.fn();
     const api = createRowsGrid();
+    api.on("gridError", onGridError);
+    api.state.apply(legacy as never);
+    expect(onGridError).toHaveBeenCalledWith(expect.objectContaining({ source: "gridState.apply" }));
     api.state.apply(current);
     expect(api.state.get().version).toBe(2);
     api.filtering.setAdvancedModel({
@@ -196,6 +201,7 @@ describe("0.17 advanced filters and saved views", () => {
     });
     expect(api.state.get().advancedFilterModel).toEqual(expect.objectContaining({ version: 1 }));
     api.destroy();
+    consoleError.mockRestore();
   });
 
   it("saves named views without capturing business selection", async () => {

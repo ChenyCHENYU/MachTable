@@ -60,14 +60,18 @@ const api = createGrid(host, {
 Schema 覆盖通用映射；特殊列用**注册名**表达，整份列配置可存 JSON：
 
 ```ts
-// 应用启动时注册一次
-registerCellRenderer("statusBadge", (p) => renderStatusBadge(p.value));
-registerCellEditor("ep-select", epSelectEditor());
+// 专用配置文件集中维护代码侧能力
+const components = {
+  cellRenderers: { statusBadge: (p) => renderStatusBadge(p.value) },
+  cellEditors: { "ep-select": epSelectEditor() }
+};
 
 // Schema 的字段级扩展：构建后追加
 const defs = buildColDefsFromSchema(schema);
 defs[2].cellRenderer = "statusBadge";   // 或在 fields 元数据中约定 renderer: "statusBadge" 后映射
 ```
+
+把 `components` 放进 `defineMachTableConfig({ components })` 可供全应用复用；也可以只传给当前表格。Schema 只保存稳定注册名，不保存函数。
 
 ## 动态 Schema（设计器联动）
 

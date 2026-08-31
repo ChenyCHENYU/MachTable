@@ -104,7 +104,7 @@ createGrid(host, { className: "brand-grid" });
 .tenant-orange { /* 覆盖全部变量 */ }
 ```
 
-暗色：`className: "mach-theme-dark"`（含语义色/阴影/滚动条 color-scheme 适配，跟随 EP `html.dark` 的桥接见 [Element Plus 集成](/guide/element-plus)）。
+暗色使用唯一配置入口 `theme: "dark"`（内部会维护 `.mach-theme-dark` 结构类，含语义色/阴影/滚动条 color-scheme 适配；跟随 EP `html.dark` 的桥接见 [Element Plus 集成](/guide/element-plus)）。
 
 ### 深度三：结构类名精修（兜底）
 

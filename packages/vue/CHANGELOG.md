@@ -1,5 +1,19 @@
 # @agile-team/mach-table-vue
 
+## 0.25.0
+
+### Minor Changes
+
+- Reset sorting plus regular, advanced and quick filters with one deterministic remote request.
+- Keep controlled quick-filter refs synchronized with Grid API changes while issuing exactly one remote request.
+- Preserve both application-level event observers and page listeners, and align optional toolbar global types with the `/ui` plugin boundary.
+- Add documentation import validation and correct all config-center, editor and renderer examples.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.25.0
+
 ## 0.24.0
 
 ### Minor Changes

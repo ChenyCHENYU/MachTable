@@ -156,7 +156,7 @@ interface GridBatchSaveResult<T> {
 | `get()` | 获取版本化 `GridState` |
 | `apply(state, { sections?, emitEvents? })` | 原子恢复全部或指定状态区段 |
 
-可选区段：`columns`、`sort`、`filter`、`pagination`、`selection`、`expansion`。自动持久化使用同一契约：
+可选区段：`columns`、`sort`、`filter`、`pagination`、`selection`、`expansion`。`columns` 不会隐式修改 `sort`；自动持久化使用同一契约：
 
 ```ts
 persistence: {

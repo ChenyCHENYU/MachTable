@@ -1,6 +1,6 @@
 # API 治理
 
-0.24 使用 API Governance V4：公开能力必须有唯一职责、稳定类型、语义测试和明确入口。目标不是机械减少数量，而是消除同义方法、内部泄漏和框架差异。
+0.25 使用 API Governance V5：公开能力必须有唯一职责、稳定类型、语义测试和明确入口。目标不是机械减少数量，而是消除同义方法、内部泄漏和框架差异。
 
 ## 公共层级
 
@@ -53,6 +53,7 @@
 - 当前 `GridState.version` 固定为 `2`。
 - `initialState`、`api.state.apply()` 和 `persistence` 使用同一输入契约。
 - 自动持久化只有 `persistence: { key, sections?, store?, debounceMs? }`。
+- `sections` 同时约束写入和恢复；未获准区段在进入自定义 store 前已被清空。
 - `normalizeGridState()` 只接收当前 schema；未来跨版本迁移必须有显式工具和测试。
 
 ## 发布门禁
@@ -62,7 +63,7 @@
 - Core 根、adapter、worker 导出。
 - Vue/React 根和所有子入口。
 - XLSX 导出。
-- `GridApi` 全部领域、`GridOptions`、`GridFeature`、数据处理器和事件接口。
+- `GridApi` 全部领域、`GridOptions`、`ColDef`、状态/持久化、动作列、配置中心、Vue/React 组件与远程查询等高风险契约。
 
 任何导出或签名变化都会让 CI 失败。维护者必须先评审设计、更新测试和迁移说明，再显式执行：
 
@@ -70,8 +71,8 @@
 pnpm check:api:update
 ```
 
-`api/public-api-policy.json` 同时限制根成员数量、领域清单和稳定级别。复杂度、依赖循环、包体和真实消费端构建提供第二层防回归。
+`api/public-api-policy.json` 同时限制根成员数量、领域清单和稳定级别。复杂度、依赖循环、包体和真实消费端构建提供第二层防回归。文档门禁还会逐个校验 README/指南中的包名、子入口和具名导入，过期示例不能通过 CI。
 
 ## 0.x 演进策略
 
-项目尚未冻结 1.0。0.24 利用正式规模接入前的窗口，删除了旧别名、平面 API、重复持久化参数和重复 Hook，而不是建立永久 deprecated 兼容层。后续破坏性变化只能出现在 minor 版本，并必须提供升级说明；patch 版本不得破坏已发布契约。
+项目尚未冻结 1.0。0.25 完成正式规模接入前终审，删除旧别名、平面 API、重复持久化参数和重复 Hook，而不是建立永久 deprecated 兼容层。后续破坏性变化只能出现在 minor 版本，并必须提供升级说明；patch 版本不得破坏已发布契约。

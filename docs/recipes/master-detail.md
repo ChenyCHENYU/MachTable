@@ -64,7 +64,7 @@ import { vueDetailRenderer } from "@agile-team/mach-table-vue/adapters";
 detailRowRenderer: vueDetailRenderer(OrderDetailPanel)
 
 // React
-import { reactDetailRenderer } from "@agile-team/mach-table-react";
+import { reactDetailRenderer } from "@agile-team/mach-table-react/adapters";
 detailRowRenderer: reactDetailRenderer(OrderDetailPanel)
 ```
 

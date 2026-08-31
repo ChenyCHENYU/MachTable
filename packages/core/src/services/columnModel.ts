@@ -285,8 +285,7 @@ export class ColumnModel {
 
   getColumnState(): ColumnState[] {
     return this.columns.map((c) => {
-      const sortIndex = this.sortModel.findIndex((s) => s.colId === c.id);
-      const state: ColumnState = {
+      return {
         colId: c.id,
         hide: c.hide,
         width: c.manualWidth ?? c.currentWidth,
@@ -294,14 +293,6 @@ export class ColumnModel {
         widthMode: c.manualWidth == null ? "auto" : "manual",
         pinned: c.pinned
       };
-      if (sortIndex >= 0) {
-        state.sort = this.sortModel[sortIndex].direction;
-        state.sortIndex = sortIndex;
-      } else {
-        state.sort = null;
-        state.sortIndex = null;
-      }
-      return state;
     });
   }
 
@@ -311,7 +302,6 @@ export class ColumnModel {
       const s = stateById.get(c.id);
       if (s) this.applyColumnViewState(c, s);
     }
-    this.sortModel = this.sortModelFromState(states);
     this.applyStateOrder(states);
     this.regroup();
   }
@@ -331,22 +321,6 @@ export class ColumnModel {
     if (state.pinned === "left" || state.pinned === "right" || state.pinned === null) {
       column.pinned = state.pinned;
     }
-  }
-
-  private sortModelFromState(states: ColumnState[]): SortModelItem[] {
-    const knownIds = new Set(this.columns.map((column) => column.id));
-    const seenIds = new Set<string>();
-    const nextSort: { colId: string; direction: SortDirection; sortIndex: number }[] = [];
-    for (const s of states) {
-      if ((s.sort !== "asc" && s.sort !== "desc") || !knownIds.has(s.colId) || seenIds.has(s.colId)) continue;
-      seenIds.add(s.colId);
-      const sortIndex = typeof s.sortIndex === "number" && Number.isInteger(s.sortIndex) && s.sortIndex >= 0
-        ? s.sortIndex
-        : nextSort.length;
-      nextSort.push({ colId: s.colId, direction: s.sort, sortIndex });
-    }
-    nextSort.sort((a, b) => a.sortIndex - b.sortIndex);
-    return nextSort.map(({ colId, direction }) => ({ colId, direction }));
   }
 
   private applyStateOrder(states: ColumnState[]): void {
@@ -385,7 +359,6 @@ export class ColumnModel {
       const p = c.colDef.pinned;
       c.pinned = p === true ? "left" : p === false || p == null ? null : p;
     }
-    this.sortModel = [];
     this.regroup();
   }
 

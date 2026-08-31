@@ -1,5 +1,5 @@
 import type { ColumnState, SortModel } from "../types/colDef";
-import type { GridState, GridStateInput } from "../types/state";
+import type { GridState, GridStateInput, GridStateSection } from "../types/state";
 import { normalizeAdvancedFilterModel, normalizeFilterModel } from "./advancedFilter";
 
 const MAX_COLUMNS = 2_000;
@@ -38,14 +38,6 @@ function addColumnLayout(state: ColumnState, source: Record<string, unknown>): v
   if (source.pinned === null || source.pinned === "left" || source.pinned === "right") state.pinned = source.pinned;
 }
 
-function addColumnSort(state: ColumnState, source: Record<string, unknown>): void {
-  if (source.sort === null || source.sort === "asc" || source.sort === "desc") state.sort = source.sort;
-  if (source.sortIndex === null) state.sortIndex = null;
-  else if (typeof source.sortIndex === "number" && Number.isInteger(source.sortIndex) && source.sortIndex >= 0) {
-    state.sortIndex = source.sortIndex;
-  }
-}
-
 function normalizeColumnEntry(input: unknown, seen: Set<string>): ColumnState | null {
   if (input == null || typeof input !== "object") return null;
   const source = input as Record<string, unknown>;
@@ -55,7 +47,6 @@ function normalizeColumnEntry(input: unknown, seen: Set<string>): ColumnState | 
   const state: ColumnState = { colId };
   addColumnLayout(state, source);
   addColumnSizing(state, source);
-  addColumnSort(state, source);
   return state;
 }
 
@@ -112,5 +103,33 @@ export function normalizeGridState(input: unknown): GridState | null {
     selectedRowIds: stringIds(state.selectedRowIds),
     expandedRowIds: stringIds(state.expandedRowIds),
     expandedGroupIds: stringIds(state.expandedGroupIds)
+  };
+}
+
+/**
+ * Produces a bounded snapshot that contains only the sections a persistence
+ * store is allowed to retain. The result stays a valid GridState so custom
+ * stores never need a second partial-state schema.
+ */
+export function selectGridStateSections(
+  state: GridStateInput,
+  sections: readonly GridStateSection[]
+): GridState {
+  const normalized = normalizeGridState(state);
+  if (!normalized) throw new TypeError("[MachTable] Cannot persist an invalid GridState snapshot.");
+  const selected = new Set(sections);
+  return {
+    version: 2,
+    columns: selected.has("columns") ? normalized.columns : [],
+    sortModel: selected.has("sort") ? normalized.sortModel : [],
+    filterModel: selected.has("filter") ? normalized.filterModel : {},
+    advancedFilterModel: selected.has("filter") ? normalized.advancedFilterModel : null,
+    quickFilterText: selected.has("filter") ? normalized.quickFilterText : null,
+    pagination: selected.has("pagination")
+      ? normalized.pagination
+      : { enabled: false, page: 1, pageSize: 20 },
+    selectedRowIds: selected.has("selection") ? normalized.selectedRowIds : [],
+    expandedRowIds: selected.has("expansion") ? normalized.expandedRowIds : [],
+    expandedGroupIds: selected.has("expansion") ? normalized.expandedGroupIds : []
   };
 }

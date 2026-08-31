@@ -31,7 +31,7 @@ features:
   - icon: 🛠
     title: 工程化
     details: TypeScript 字段路径类型、版本化状态、稳定错误码与诊断、i18n、Schema、CSV 防注入、消费端契约与 CI 发布流。
-footer: Source-available · Prior written authorization required | MachTable v0.24.0
+footer: Source-available · Prior written authorization required | MachTable v0.25.0
 ---
 
 ## 30 秒上手

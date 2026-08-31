@@ -27,7 +27,7 @@ persistence: {
 }
 ```
 
-合法区段：`columns`、`sort`、`filter`、`pagination`、`selection`、`expansion`。只要列偏好时使用 `sections: ["columns"]`。
+合法区段：`columns`、`sort`、`filter`、`pagination`、`selection`、`expansion`。`columns` 仅表示布局，排序独立属于 `sort`。`sections` 在写入 store 前和恢复时都会执行，未选择区段不会携带真实业务状态。
 
 ## 自定义 store
 
@@ -41,7 +41,7 @@ const store: GridStateStore = {
 persistence: { key, store, debounceMs: 250 }
 ```
 
-store 可以同步或异步。加载失败或非法快照会报告稳定错误并回退当前默认状态。
+store 可以同步或异步。加载失败或非法快照会报告稳定错误并回退当前默认状态；晚到的加载不会覆盖加载期间的用户操作，异步保存按顺序执行并合并为最新待写快照。
 
 ## 手动快照
 

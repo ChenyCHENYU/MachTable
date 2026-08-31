@@ -73,7 +73,7 @@ export default defineMachTableConfig({
 
   /** 应用级 renderer/editor 名称，可被单表 components 覆盖。 */
   components: {
-    statusTag: StatusTagRenderer
+    cellRenderers: { statusTag: StatusTagRenderer }
   },
 
   onConfigWarning: (warning) => telemetry.captureMessage(warning.message)
@@ -134,6 +134,8 @@ root.render(
   :persistence="{ key: `${tenantId}:${userId}:orders` }"
 />
 ```
+
+配置中心的 `onGridError`、`onCellClicked` 等事件回调适合作为应用级观察器；Vue 当前页面监听器或 React 当前组件回调仍会各执行一次，不会被全局观察器覆盖。
 
 ## 覆盖优先级
 

@@ -3,7 +3,6 @@ import type {
   CellRendererFn,
   ColDef,
   ColDefGroup,
-  ColumnState,
   FilterModel,
   SortModel
 } from "./colDef";
@@ -14,11 +13,6 @@ import type { RowNode } from "./row";
 import type { GridStateInput, GridStateSection } from "./state";
 import type { FieldPath } from "./path";
 
-export interface ColumnStateStore {
-  load(key: string): ColumnState[] | null | Promise<ColumnState[] | null>;
-  save(key: string, state: ColumnState[]): void | Promise<void>;
-}
-
 export interface GridStateStore {
   load(key: string): GridStateInput | null | Promise<GridStateInput | null>;
   save(key: string, state: GridStateInput): void | Promise<void>;
@@ -28,7 +22,7 @@ export interface GridStateStore {
 export interface GridPersistenceOptions {
   /** Stable storage key; namespace it by application, user and table. */
   key: string;
-  /** Restored state sections. Defaults to every section. */
+  /** Saved and restored state sections. Defaults to every section. */
   sections?: readonly GridStateSection[];
   store?: GridStateStore;
   debounceMs?: number;

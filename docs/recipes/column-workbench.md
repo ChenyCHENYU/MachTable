@@ -33,12 +33,12 @@ api.columns.resetState();
 在具体表格设置列区段持久化后，工作台的显隐、顺序、固定和宽度会自动保存：
 
 ```ts
-export default defineMachTableConfig({
-  defaults: {
-    persistence: { key: "tenant:user:orders:v3", sections: ["columns"] }
-  }
-});
+const tableOptions = {
+  persistence: { key: "tenant:user:orders:v3", sections: ["columns"] }
+};
 ```
+
+`persistence` 含用户/页面身份，必须留在当前表格，配置中心会拒绝它。应用级配置只统一 `enableColumnResize`、`columnMenu` 等无身份默认值。
 
 多租户应用应按 `${appId}:${tenantId}:${userId}:${route}:v${schemaVersion}` 生成隔离的 `persistence.key`。列 ID 或结构发生破坏性变化时提升 `schemaVersion`，不要继续回放不兼容状态。
 

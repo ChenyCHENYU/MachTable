@@ -313,6 +313,14 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (suppressGridEvents) return;
     filterModel.value = { ...event.filterModel };
     advancedFilterModel.value = normalizeAdvancedFilterModel(event.advancedFilterModel);
+    const gridQuickFilterText = event.api.filtering.getQuickText();
+    if (quickFilterText.value !== gridQuickFilterText) {
+      // Keep a controlled quick-filter ref in sync with changes initiated
+      // through GridApi without scheduling a duplicate remote request.
+      suppressGridEvents = true;
+      try { quickFilterText.value = gridQuickFilterText; }
+      finally { suppressGridEvents = false; }
+    }
     if (options.clearSelectionOnQueryChange !== false) clearSelection();
     if (automatic) scheduleLoad(true);
     else page.value = 1;
@@ -384,16 +392,21 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     await load();
   };
   const reset = async (): Promise<void> => {
-    page.value = 1;
-    sortModel.value = [];
-    filterModel.value = {};
-    advancedFilterModel.value = null;
-    clearSelection();
     suppressGridEvents = true;
     try {
+      page.value = 1;
+      sortModel.value = [];
+      filterModel.value = {};
+      advancedFilterModel.value = null;
+      quickFilterText.value = null;
+      clearSelection();
       api?.sorting.setModel(null);
       api?.filtering.setModel(null);
       api?.filtering.setAdvancedModel(null);
+      api?.filtering.setQuickText(null);
+      // Vue's criteria watchers flush asynchronously. Keep them suppressed so
+      // reset owns the single deterministic request below.
+      await nextTick();
     } finally {
       suppressGridEvents = false;
     }
@@ -452,10 +465,11 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     { deep: true, immediate: automatic && options.immediate !== false }
   );
   watch(quickFilterText, () => {
+    if (suppressGridEvents) return;
     if (options.clearSelectionOnQueryChange !== false) clearSelection();
     if (automatic) scheduleLoad(true);
     else page.value = 1;
-  });
+  }, { flush: "sync" });
   watch(selectedKeys, (keys) => {
     if (updatingSelectedRefs) return;
     allMatching.value = false;

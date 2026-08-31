@@ -3,10 +3,20 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.24.0
+pnpm up @agile-team/mach-table-vue@^0.25.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.24.0
+pnpm up @agile-team/mach-table-react@^0.25.0
 ```
+
+## 0.24 → 0.25
+
+0.25 是正式接入前的契约终审版本：
+
+- `persistence.sections` 现在同时限制写入与恢复；`columns` 不再隐式携带排序，异步 store 写入保持顺序并合并为最新快照。
+- `useMachTableQuery().reset()` 同时清空普通、高级和快速过滤，且只发起一次请求。
+- 应用配置中的事件观察器会与 Vue 页面监听器/React 组件回调各执行一次。
+- Vue 全局 `MachTableToolbar` 类型只在导入 `/ui` 后生效，与可选插件的实际注册边界一致。
+- `ActionItem.danger` 改为唯一入口 `variant: "danger"`；暗色配置统一使用 `theme: "dark"`，不再从 `className` 推断。
 
 ## 0.23 → 0.24
 
@@ -62,7 +72,7 @@ persistence: { key: "tenant:user:orders" }
 ```ts
 persistence: {
   key: "tenant:user:orders",
-  sections: ["columns"],
+  sections: ["columns", "sort"],
   store: customStore,
   debounceMs: 160
 }
@@ -94,7 +104,7 @@ React 使用相同的 `/workflows`、`/ui`、`/adapters`、`/worker` 结构。Vu
 
 ```ts
 defineMachTableConfig({
-  components: { statusTag: StatusTagRenderer }
+  components: { cellRenderers: { statusTag: StatusTagRenderer } }
 });
 ```
 

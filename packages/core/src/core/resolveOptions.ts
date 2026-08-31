@@ -35,7 +35,7 @@ function resolveSize(value: GridOptions["size"]): GridSize {
 
 function resolveTheme(options: GridOptions): ResolvedGridOptions["theme"] {
   if (options.theme === "light" || options.theme === "dark" || options.theme === "auto") return options.theme;
-  return options.className?.includes("mach-theme-dark") ? "dark" : "light";
+  return "light";
 }
 
 function resolvePageSizeOptions<TData>(options: GridOptions<TData>, pageSize: number): number[] {

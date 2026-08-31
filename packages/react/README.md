@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.24 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.25 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 ```bash
 pnpm add @agile-team/mach-table-react
@@ -94,7 +94,7 @@ import { reactCellRenderer } from "@agile-team/mach-table-react/adapters";
 import { createWorkerDataProcessor } from "@agile-team/mach-table-react/worker";
 ```
 
-- `/workflows`：请求取消、防过期覆盖、服务端分页、跨页选择、脏数据和冲突保存。
+- `/workflows`：请求取消、防过期覆盖、服务端分页、跨页选择、脏数据和冲突保存；`reset()` 清空全部表格过滤且只请求一次。
 - `/ui`：可选标准工具栏。
 - `/adapters`：自定义 React cell/detail renderer 桥接。
 - `/worker`：大型本地过滤/排序的独立 Worker 能力。

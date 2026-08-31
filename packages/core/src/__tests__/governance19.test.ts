@@ -63,7 +63,7 @@ describe("0.19 update and API governance", () => {
     expect(scheduler.snapshot()).toEqual(expect.objectContaining({ flushCount: 1, coalescedRequestCount: 1 }));
   });
 
-  it("keeps flat APIs compatible while exposing discoverable domains", () => {
+  it("keeps domain APIs coherent while batching cross-domain updates", () => {
     const api = createGrid<Row>(host(), {
       columnDefs: [{ field: "name" }, { field: "amount" }],
       rowData: [{ id: "1", name: "A", amount: 1 }],

@@ -1,13 +1,11 @@
 import type { App, Component } from "vue";
 import type { MachTable } from "./MachTable";
-import type { MachTableToolbar } from "./MachTableToolbar";
 import { createMachTableConfigRef, MACH_TABLE_CONFIG_KEY } from "./defaults";
 import type { MachTableRuntimeConfig } from "./configuration";
 
 declare module "vue" {
   export interface GlobalComponents {
     MachTable: typeof MachTable;
-    MachTableToolbar: typeof MachTableToolbar;
   }
 }
 

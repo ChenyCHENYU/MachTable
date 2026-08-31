@@ -28,6 +28,26 @@ function interfaceMembers(file, names) {
   return result;
 }
 
+const printer = ts.createPrinter({ removeComments: true });
+function declarationSignatures(file, names, prefix = "") {
+  const result = {};
+  const found = new Set();
+  for (const statement of file.statements) {
+    if (
+      (!ts.isInterfaceDeclaration(statement) && !ts.isTypeAliasDeclaration(statement)) ||
+      !names.includes(statement.name.text)
+    ) continue;
+    found.add(statement.name.text);
+    result[`${prefix}${statement.name.text}`] = printer
+      .printNode(ts.EmitHint.Unspecified, statement, file)
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  const missing = names.filter((name) => !found.has(name));
+  if (missing.length > 0) throw new Error(`Missing governed declaration(s): ${missing.join(", ")}`);
+  return result;
+}
+
 function indexExports(file) {
   const names = new Set();
   for (const statement of file.statements) {
@@ -55,8 +75,16 @@ function indexExports(file) {
 const apiSource = source("packages/core/src/types/api.ts");
 const optionSource = source("packages/core/src/types/options.ts");
 const eventSource = source("packages/core/src/types/events.ts");
+const colDefSource = source("packages/core/src/types/colDef.ts");
+const stateSource = source("packages/core/src/types/state.ts");
+const configurationSource = source("packages/core/src/lib/configuration.ts");
+const rendererSource = source("packages/core/src/lib/presetRenderers.ts");
+const vueComponentSource = source("packages/vue/src/MachTable.ts");
+const vueQuerySource = source("packages/vue/src/useMachTableQuery.ts");
+const reactComponentSource = source("packages/react/src/MachTable.tsx");
+const reactQuerySource = source("packages/react/src/useMachTableQuery.ts");
 const current = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   policy: JSON.parse(fs.readFileSync(policyPath, "utf8")),
   coreExports: indexExports(source("packages/core/src/index.ts")),
   coreAdapter: indexExports(source("packages/core/src/adapter.ts")),
@@ -67,6 +95,7 @@ const current = {
     vueWorkflows: indexExports(source("packages/vue/src/workflows.ts")),
     vueAdapters: indexExports(source("packages/vue/src/adapterEntry.ts")),
     vueUi: indexExports(source("packages/vue/src/ui.ts")),
+    vueEditors: indexExports(source("packages/vue/src/editors.ts")),
     react: indexExports(source("packages/react/src/index.ts")),
     reactWorkflows: indexExports(source("packages/react/src/workflows.ts")),
     reactAdapters: indexExports(source("packages/react/src/adapterEntry.ts")),
@@ -82,6 +111,20 @@ const current = {
     ]),
     ...interfaceMembers(optionSource, ["GridOptions", "GridFeature", "GridDataProcessor"]),
     ...interfaceMembers(eventSource, ["GridEventMap"])
+  },
+  contracts: {
+    ...declarationSignatures(optionSource, [
+      "GridOptions", "GridPersistenceOptions", "GridStateStore", "GridComponents",
+      "GridDatasource", "PaginationConfig", "GridFeature", "GridDataProcessor"
+    ], "core."),
+    ...declarationSignatures(colDefSource, ["ColDef", "ColDefGroup", "ColumnState", "SortModel"], "core."),
+    ...declarationSignatures(stateSource, ["GridState", "GridStateSection", "ApplyGridStateOptions"], "core."),
+    ...declarationSignatures(configurationSource, ["MachTableRuntimeConfig", "MachTableDefaults"], "core."),
+    ...declarationSignatures(rendererSource, ["ActionItem", "ActionButtonsConfig", "RowActionsConfig"], "core."),
+    ...declarationSignatures(vueComponentSource, ["MachTableVueProps", "MachTableVueExposed"], "vue."),
+    ...declarationSignatures(vueQuerySource, ["UseMachTableQueryOptions", "UseMachTableQueryReturn"], "vue."),
+    ...declarationSignatures(reactComponentSource, ["MachTableReactProps"], "react."),
+    ...declarationSignatures(reactQuerySource, ["UseMachTableQueryOptions", "UseMachTableQueryReturn"], "react.")
   }
 };
 const serialized = `${JSON.stringify(current, null, 2)}\n`;

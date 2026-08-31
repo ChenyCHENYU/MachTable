@@ -68,6 +68,8 @@ for (const entry of [vueEsm, vueCjs]) {
   assert.equal(typeof entry.MachTable, "object");
   assert.equal(typeof entry.MachTablePlugin.install, "function");
   assert.equal(typeof entry.defineMachTableConfig, "function");
+  assert.equal(typeof entry.createGrid, "function");
+  assert.equal(entry.default, entry.MachTablePlugin);
   assert.equal("provideMachTableDefaults" in entry, false);
 }
 for (const entry of [vueWorkflowsEsm, vueWorkflowsCjs]) {
@@ -87,6 +89,8 @@ for (const entry of [vueUiEsm, vueUiCjs]) {
 for (const entry of [reactEsm, reactCjs]) {
   assert.equal(typeof entry.MachTable, "function");
   assert.equal(typeof entry.MachTableProvider, "function");
+  assert.equal(typeof entry.createGrid, "function");
+  assert.equal(entry.default, entry.MachTable);
 }
 for (const entry of [reactAdaptersEsm, reactAdaptersCjs]) {
   assert.equal(typeof entry.reactCellRenderer, "function");

@@ -196,6 +196,4 @@ export interface ColumnState {
   /** Distinguishes responsive/definition width from an explicit user or API override. */
   widthMode?: "auto" | "manual";
   pinned?: "left" | "right" | null;
-  sort?: SortDirection | null;
-  sortIndex?: number | null;
 }

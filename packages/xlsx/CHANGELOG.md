@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.25.0
+
+### Patch Changes
+
+- Keep the optional XLSX extension aligned with the 0.25 state and API contracts.
+- Updated dependencies:
+  - @agile-team/mach-table@0.25.0
+
 ## 0.24.0
 
 ### Patch Changes

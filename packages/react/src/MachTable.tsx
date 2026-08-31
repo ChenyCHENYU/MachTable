@@ -93,8 +93,17 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
     for (const eventType of EVENT_TYPES) {
       const handlerKey = handlerNameOf(eventType);
       options[handlerKey] = (event: unknown) => {
-        const handler = (propsRef.current as Record<string, unknown>)[handlerKey];
-        if (typeof handler === "function") (handler as (value: unknown) => void)(event);
+        const defaultHandler = (effectiveRef.current as Record<string, unknown>)[handlerKey];
+        const propHandler = (propsRef.current as Record<string, unknown>)[handlerKey];
+        try {
+          if (typeof defaultHandler === "function") {
+            (defaultHandler as (value: unknown) => void)(event);
+          }
+        } finally {
+          if (typeof propHandler === "function" && propHandler !== defaultHandler) {
+            (propHandler as (value: unknown) => void)(event);
+          }
+        }
       };
     }
 

@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.24.0-2563eb" alt="Source version 0.24.0" />
+  <img src="https://img.shields.io/badge/source-0.25.0-2563eb" alt="Source version 0.25.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -189,7 +189,7 @@ app.use(MachTablePlugin, machTableConfig);
 
 ## 领域化 API：找到能力，不记方法海洋
 
-0.24 只保留一套公共命令模型。根级仅负责生命周期、配置、事件和批处理；业务命令进入 12 个职责明确的领域。
+0.25 只保留一套公共命令模型。根级仅负责生命周期、配置、事件和批处理；业务命令进入 12 个职责明确的领域。
 
 ```ts
 api.batch((grid) => {
@@ -240,12 +240,12 @@ Vue 可按项目覆盖率选择局部导入、同步全局插件或异步全局�
 ```ts
 const options = {
   enableColumnResize: true,
-  // 只保存列宽、顺序、显隐、固定和排序
+  // 只保存列宽、顺序、显隐和固定；排序使用独立 "sort" 区段
   persistence: { key: "tenant:user:orders", sections: ["columns"] }
 };
 ```
 
-需要恢复完整工作区时省略 `sections`；可通过 `store` 接入后端或 IndexedDB，通过 `debounceMs` 调整保存节奏。持久化、`initialState` 与手动 `api.state.apply()` 均走同一份 GridState 契约。
+需要恢复完整工作区时省略 `sections`；可通过 `store` 接入后端或 IndexedDB，通过 `debounceMs` 调整保存节奏。`sections` 同时限制写入与恢复，异步保存保持顺序，晚到加载不会覆盖用户刚完成的操作。持久化、`initialState` 与手动 `api.state.apply()` 均走同一份 GridState 契约。
 
 ## 编辑与复杂业务工作流
 
@@ -297,7 +297,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.24.0`，仍处于 0.x 产品打磨期，尚未冻结 1.0 API。0.24 已移除项目尚未正式接入前积累的旧别名和重复入口，公共 API 只保留文档中的规范名称。
+当前源码版本为 `0.25.0`，仍处于 0.x 产品打磨期，尚未冻结 1.0 API。0.25 完成正式接入前终审：持久化区段、异步顺序、框架事件与查询重置契约均有语义测试，旧别名、死代码和过期文档示例已经清理。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

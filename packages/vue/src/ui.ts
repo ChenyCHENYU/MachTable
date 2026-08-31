@@ -1,6 +1,12 @@
 import type { App } from "vue";
 import { MachTableToolbar } from "./MachTableToolbar";
 
+declare module "vue" {
+  export interface GlobalComponents {
+    MachTableToolbar: typeof MachTableToolbar;
+  }
+}
+
 /** Optional UI layer. Install once only when the standard toolbar is desired. */
 export const MachTableUiPlugin = {
   install(app: App): void {

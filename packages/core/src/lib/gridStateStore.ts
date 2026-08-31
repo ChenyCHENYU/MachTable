@@ -53,10 +53,17 @@ export function createLocalGridStateStore(options: LocalGridStateStoreOptions = 
     load(key) {
       try {
         const raw = (options.storage ?? currentStorage())?.getItem(storageKey(key));
-        if (!raw || storageBytes(raw) > maxBytes) return null;
+        if (!raw) return null;
+        if (storageBytes(raw) > maxBytes) {
+          throw new RangeError(`[MachTable] Stored grid state for "${key}" exceeds ${maxBytes} bytes.`);
+        }
         const parsed = JSON.parse(raw) as { schemaVersion?: unknown; state?: unknown };
-        if (parsed?.schemaVersion !== 2) return null;
-        return normalizeGridState(parsed.state);
+        if (parsed?.schemaVersion !== 2) {
+          throw new TypeError(`[MachTable] Stored grid state for "${key}" uses an unsupported schema.`);
+        }
+        const normalized = normalizeGridState(parsed.state);
+        if (!normalized) throw new TypeError(`[MachTable] Stored grid state for "${key}" is invalid.`);
+        return normalized;
       } catch (error) {
         report(error, "load", key);
         return null;

@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.24 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.25 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 ```bash
 pnpm add @agile-team/mach-table-vue
@@ -97,8 +97,8 @@ import { createElementPlusEditors } from "@agile-team/mach-table-vue/editors";
 import { createWorkerDataProcessor } from "@agile-team/mach-table-vue/worker";
 ```
 
-- `/workflows`：请求取消、防过期覆盖、服务端分页、跨页选择、脏数据和冲突保存。
-- `/ui`：可选标准工具栏；需要全局组件时另行 `app.use(MachTableUiPlugin)`。
+- `/workflows`：请求取消、防过期覆盖、服务端分页、跨页选择、脏数据和冲突保存；`reset()` 清空全部表格过滤且只请求一次。
+- `/ui`：可选标准工具栏；需要全局组件时另行 `app.use(MachTableUiPlugin)`，其全局组件类型也只在导入该子入口后生效。
 - `/adapters`：自定义 Vue renderer/editor/detail/overlay 桥接。
 - `/editors`：可选 Element Plus 编辑器，Element Plus 由宿主注入。
 - `/worker`：大型本地过滤/排序的独立 Worker 能力。

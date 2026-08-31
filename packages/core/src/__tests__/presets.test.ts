@@ -115,7 +115,7 @@ describe("preset renderers", () => {
             max: 2,
             actions: [
               { icon: "edit", title: "编辑", onClick: () => clicks.push("edit") },
-              { icon: "delete", title: "删除", danger: true, onClick: () => clicks.push("delete") },
+              { icon: "delete", title: "删除", variant: "danger", onClick: () => clicks.push("delete") },
               { label: "复制", onClick: () => clicks.push("copy") },
               { label: "导出", onClick: () => clicks.push("export") }
             ]

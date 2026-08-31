@@ -43,14 +43,12 @@ const ep = createElementPlusEditors(
 );
 
 export default defineMachTableConfig({
-  defaults: {
-    components: {
-      cellEditors: {
-        "ep-input": ep.input!,
-        "ep-number": ep.number!,
-        "ep-select": ep.select!,
-        "ep-date": ep.date!
-      }
+  components: {
+    cellEditors: {
+      "ep-input": ep.input!,
+      "ep-number": ep.number!,
+      "ep-select": ep.select!,
+      "ep-date": ep.date!
     }
   }
 });

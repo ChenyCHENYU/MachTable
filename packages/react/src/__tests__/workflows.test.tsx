@@ -319,9 +319,12 @@ describe("React B-side workflows", () => {
       filterModel: { id: { type: "contains", filter: "1" } },
       api: { filtering: { getQuickText: () => null } }
     } as never));
+    act(() => query!.setQuickFilterText("urgent"));
     await act(async () => { await query!.reset(); });
     expect(query!.sortModel).toEqual([]);
     expect(query!.filterModel).toEqual({});
+    expect(query!.quickFilterText).toBeNull();
+    expect(request.mock.lastCall?.[0]).toEqual(expect.objectContaining({ quickFilterText: null }));
 
     let pending!: Promise<void>;
     act(() => { pending = query!.reload(); });
@@ -330,6 +333,36 @@ describe("React B-side workflows", () => {
     await act(async () => pending);
     expect(query!.loading).toBe(false);
     expect(onError).toHaveBeenCalledTimes(2);
+    await act(async () => root.unmount());
+  });
+
+  it("loads a changed quick filter once even before a grid API is mounted", async () => {
+    const request = vi.fn(async ({ quickFilterText }: { quickFilterText: string | null }) => ({
+      rows: [{ id: quickFilterText ?? "none" }],
+      total: 1
+    }));
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const criteria = {};
+    let query: UseMachTableQueryReturn<{ id: string }> | null = null;
+    function Harness() {
+      query = useMachTableQuery({
+        query: criteria,
+        rowKey: "id",
+        request,
+        immediate: false
+      });
+      return null;
+    }
+    await act(async () => root.render(createElement(Harness)));
+
+    await act(async () => {
+      query!.setQuickFilterText("urgent");
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.lastCall?.[0]).toEqual(expect.objectContaining({ quickFilterText: "urgent" }));
+    expect(query!.rows).toEqual([{ id: "urgent" }]);
     await act(async () => root.unmount());
   });
 });

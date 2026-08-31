@@ -133,13 +133,20 @@ const MachTableImpl = defineComponent({
 
     onMounted(() => {
       if (!host.value) return;
-      const options = collectOptions() as Record<string, unknown>;
+      // Keep the resolved configuration immutable: event bridges consult the
+      // latest resolution while the core receives one stable mount snapshot.
+      const options = { ...collectOptions() } as Record<string, unknown>;
       for (const type of EVENT_TYPES) {
         const handlerName = handlerNameOf(type);
-        const defaultHandler = options[handlerName];
         options[handlerName] = (event: unknown) => {
-          if (typeof defaultHandler === "function") (defaultHandler as (value: unknown) => void)(event);
-          emit(type, event);
+          const defaultHandler = (lastResolution?.options as Record<string, unknown> | undefined)?.[handlerName];
+          try {
+            if (typeof defaultHandler === "function") {
+              (defaultHandler as (value: unknown) => void)(event);
+            }
+          } finally {
+            emit(type, event);
+          }
         };
       }
       api = createGrid(host.value, options as GridOptions<any>);

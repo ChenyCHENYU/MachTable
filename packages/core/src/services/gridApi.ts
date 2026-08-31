@@ -257,14 +257,12 @@ export class GridApiImpl<TData = any> {
     if (this.core.isDestroyed()) return;
     this.core.columnModel.applyColumnState(state);
     this.core.onColumnsStructureChanged();
-    this.core.applySortModel();
   }
 
   resetColumnState(): void {
     if (this.core.isDestroyed()) return;
     this.core.columnModel.resetColumnState();
     this.core.onColumnsStructureChanged();
-    this.core.applySortModel();
   }
 
   setColumnVisibility(colId: string, visible: boolean): void {
@@ -1553,7 +1551,10 @@ export class GridApiImpl<TData = any> {
   applyState(input: GridStateInput, options: ApplyGridStateOptions = {}): void {
     if (this.core.isDestroyed()) return;
     const state = normalizeGridState(input);
-    if (!state) return;
+    if (!state) {
+      this.core.reportError(new TypeError("[MachTable] GridState must use the current version 2 schema."), "gridState.apply");
+      return;
+    }
     const all: readonly GridStateSection[] = ["columns", "sort", "filter", "pagination", "selection", "expansion"];
     const sections = new Set(options.sections ?? all);
     this.core.editingService.stop(true);
@@ -1564,7 +1565,9 @@ export class GridApiImpl<TData = any> {
   }
 
   private restoreStateSections(state: GridState, sections: ReadonlySet<GridStateSection>): void {
-    if (sections.has("columns")) this.core.columnModel.applyColumnState(state.columns ?? []);
+    if (sections.has("columns")) {
+      this.core.columnModel.applyColumnState(state.columns ?? []);
+    }
     if (sections.has("sort")) this.core.columnModel.applySortModel(state.sortModel ?? []);
     if (sections.has("filter")) {
       this.core.rowModel.setFilterModel(state.filterModel ?? {});

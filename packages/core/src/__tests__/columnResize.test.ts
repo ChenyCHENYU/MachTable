@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGrid, validateGridOptions } from "../index";
-import type { ColDef, ColumnState, GridPersistenceOptions, GridState } from "../index";
-import { createLocalColumnStateStore } from "../lib/columnStateStore";
-import type { ColumnStateStore } from "../types/options";
+import { createGrid, createLocalGridStateStore, validateGridOptions } from "../index";
+import type { ColDef, ColumnState, GridPersistenceOptions, GridState, GridStateStore } from "../index";
 
 interface Row {
   id: string;
@@ -43,35 +41,17 @@ function setViewportWidth(host: HTMLElement, width: number): void {
   });
 }
 
-function requireStoredState(state: ColumnState[] | null): ColumnState[] {
+function requireStoredState(state: GridState | null): ColumnState[] {
   expect(state).not.toBeNull();
-  return state ?? [];
+  return state?.columns ?? [];
 }
 
-function columnPersistence(key: string, store: ColumnStateStore): GridPersistenceOptions {
-  const wrap = (columns: ColumnState[] | null): GridState | null => columns ? {
-    version: 2,
-    columns,
-    sortModel: [],
-    filterModel: {},
-    advancedFilterModel: null,
-    quickFilterText: null,
-    pagination: { enabled: false, page: 1, pageSize: 20 },
-    selectedRowIds: [],
-    expandedRowIds: [],
-    expandedGroupIds: []
-  } : null;
+function columnPersistence(key: string, store: GridStateStore): GridPersistenceOptions {
   return {
     key,
     sections: ["columns"],
     debounceMs: 0,
-    store: {
-      load: (storageKey) => {
-        const value = store.load(storageKey);
-        return value instanceof Promise ? value.then(wrap) : wrap(value);
-      },
-      save: (storageKey, state) => store.save(storageKey, state.columns)
-    }
+    store
   };
 }
 
@@ -130,11 +110,11 @@ describe("opt-in column resizing", () => {
   });
 
   it("clamps pointer widths and saves exactly once after pointerup", () => {
-    let stored: ColumnState[] | null = null;
-    const save = vi.fn((_key: string, state: ColumnState[]) => {
-      stored = state.map((entry) => ({ ...entry }));
+    let stored: GridState | null = null;
+    const save = vi.fn((_key: string, state: GridState) => {
+      stored = state;
     });
-    const store: ColumnStateStore = { load: () => stored, save };
+    const store: GridStateStore = { load: () => stored, save };
     const host = createHost();
     const resized = vi.fn();
     const api = createGrid(host, {
@@ -239,12 +219,60 @@ describe("opt-in column resizing", () => {
     api.destroy();
   });
 
+  it("never writes state outside the explicitly allowed persistence sections", () => {
+    const save = vi.fn();
+    const host = createHost();
+    const api = createGrid(host, {
+      columnDefs: defs,
+      rowData: rows,
+      rowKey: "id",
+      pagination: false,
+      persistence: {
+        key: "private-orders",
+        sections: ["columns"],
+        debounceMs: 0,
+        store: { load: () => null, save }
+      }
+    });
+
+    api.selection.setRows(rows);
+    api.sorting.setModel([{ colId: "name", direction: "desc" }]);
+    api.filtering.setQuickText("Alpha");
+
+    const saved = save.mock.lastCall?.[1] as GridState;
+    expect(saved.columns.length).toBeGreaterThan(0);
+    expect(saved.sortModel).toEqual([]);
+    expect(saved.filterModel).toEqual({});
+    expect(saved.advancedFilterModel).toBeNull();
+    expect(saved.quickFilterText).toBeNull();
+    expect(saved.selectedRowIds).toEqual([]);
+    expect(saved.expandedRowIds).toEqual([]);
+    expect(saved.expandedGroupIds).toEqual([]);
+    expect(saved.pagination).toEqual({ enabled: false, page: 1, pageSize: 20 });
+    api.destroy();
+  });
+
+  it("restores column layout without mutating the independent sort section", () => {
+    const host = createHost();
+    const api = createGrid(host, { columnDefs: defs, rowData: rows, pagination: false });
+    api.sorting.setModel([{ colId: "amount", direction: "asc" }]);
+    const state = api.state.get();
+
+    api.state.apply({
+      ...state,
+      sortModel: [{ colId: "name", direction: "desc" }]
+    }, { sections: ["columns"] });
+
+    expect(api.sorting.getModel()).toEqual([{ colId: "amount", direction: "asc" }]);
+    api.destroy();
+  });
+
   it("restores persisted widths while keeping untouched flex columns responsive", () => {
-    let stored: ColumnState[] | null = null;
-    const store: ColumnStateStore = {
+    let stored: GridState | null = null;
+    const store: GridStateStore = {
       load: () => stored,
       save: (_key, state) => {
-        stored = state.map((entry) => ({ ...entry }));
+        stored = state;
       }
     };
     const firstHost = createHost(800);
@@ -281,11 +309,11 @@ describe("opt-in column resizing", () => {
   });
 
   it("keeps a dragged column exact in fit layout and lets untouched columns fill the remainder", () => {
-    let stored: ColumnState[] | null = null;
-    const store: ColumnStateStore = {
+    let stored: GridState | null = null;
+    const store: GridStateStore = {
       load: () => stored,
       save: (_key, state) => {
-        stored = state.map((entry) => ({ ...entry }));
+        stored = state;
       }
     };
     const firstHost = createHost();
@@ -333,39 +361,53 @@ describe("opt-in column resizing", () => {
 
     expect(api.columns.setWidth("name", Number.NaN)).toBe(false);
     expect(api.columns.setWidth("missing", 180)).toBe(false);
+    api.sorting.setModel([{ colId: "amount", direction: "asc" }]);
     api.columns.setState([{
       colId: "name",
       width: Number.NaN,
-      pinned: "invalid",
-      sort: "invalid"
+      pinned: "invalid"
     }] as any);
     expect(api.columns.getState().find((state) => state.colId === "name")).toMatchObject({
       width: 120,
-      pinned: null,
-      sort: null
+      pinned: null
     });
+    expect(api.sorting.getModel()).toEqual([{ colId: "amount", direction: "asc" }]);
+    api.columns.resetState();
+    expect(api.sorting.getModel()).toEqual([{ colId: "amount", direction: "asc" }]);
     expect(api.columns.setWidth("name", 10)).toBe(true);
     expect(api.columns.getState().find((state) => state.colId === "name")?.width).toBe(100);
     expect(resized).toHaveBeenCalledWith(expect.objectContaining({ width: 100, finished: true }));
     api.destroy();
   });
 
-  it("sanitizes flex metadata in the built-in persistent store", () => {
+  it("sanitizes flex metadata in the built-in persistent store", async () => {
     const values = new Map<string, string>();
-    const store = createLocalColumnStateStore({
+    const store = createLocalGridStateStore({
       storage: {
         getItem: (key) => values.get(key) ?? null,
         setItem: (key, value) => values.set(key, value),
         removeItem: (key) => values.delete(key)
       }
     });
-    store.save("orders", [
-      { colId: "responsive", width: 420, flex: 2 },
-      { colId: "fixed", width: 160, flex: null },
-      { colId: "invalid", width: 120, flex: Number.NaN }
-    ]);
+    store.save("orders", {
+      version: 2,
+      columns: [
+        { colId: "responsive", width: 420, flex: 2 },
+        { colId: "fixed", width: 160, flex: null },
+        { colId: "invalid", width: 120, flex: Number.NaN }
+      ],
+      sortModel: [],
+      filterModel: {},
+      advancedFilterModel: null,
+      quickFilterText: null,
+      pagination: { enabled: false, page: 1, pageSize: 20 },
+      selectedRowIds: [],
+      expandedRowIds: [],
+      expandedGroupIds: []
+    });
 
-    expect(store.load("orders")).toEqual([
+    const loaded = await store.load("orders");
+    expect(loaded?.columns).toEqual([
       { colId: "responsive", width: 420, flex: 2 },
       { colId: "fixed", width: 160, flex: null },
       { colId: "invalid", width: 120 }

@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ChenyCHENYU/MachTable/main/assets/mach-table-logo.svg" alt="MachTable" width="760" />
+</p>
+
 # @agile-team/mach-table-xlsx
 
-MachTable 的可选 XLSX 导入导出扩展。工作簿引擎由宿主动态注入，因此普通表格页面不会下载 Excel 代码。
+MachTable 0.25 的可选 XLSX 导入导出扩展。工作簿引擎由宿主动态注入，因此普通表格页面不会下载 Excel 代码。
 
 ```bash
 pnpm add @agile-team/mach-table-xlsx xlsx

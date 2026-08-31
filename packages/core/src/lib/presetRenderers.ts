@@ -113,8 +113,6 @@ export interface ActionItem<TData = any> {
   icon?: BuiltInActionIcon;
   label?: string;
   title?: string;
-  /** Backwards-compatible shorthand for variant="danger". */
-  danger?: boolean;
   variant?: ActionVariant;
   show?: (params: CellRendererParams<TData>) => boolean;
   disabled?: boolean | ((params: CellRendererParams<TData>) => boolean);
@@ -290,7 +288,7 @@ function resolveActionFlag<TData>(
 }
 
 function actionVariant(action: ActionItem): ActionVariant {
-  return action.danger ? "danger" : (action.variant ?? "default");
+  return action.variant ?? "default";
 }
 
 function actionPermissions<TData>(action: ActionItem<TData>): readonly string[] {

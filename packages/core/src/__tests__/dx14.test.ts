@@ -7,7 +7,8 @@ import {
   defineMachTableConfig,
   validateGridOptions,
   type ColDef,
-  type GridApi
+  type GridApi,
+  type GridState
 } from "../index";
 import { mergeMachTableConfig, normalizeMachTableConfig, resolveMachTableGridOptions } from "../lib/configuration";
 
@@ -108,6 +109,69 @@ describe("0.14 progressive DX", () => {
     expect(second.sorting.getModel()).toEqual([{ colId: "name", direction: "desc" }]);
     expect(second.selection.getIds()).toEqual(["b"]);
     second.destroy();
+  });
+
+  it("does not let a late persistence load overwrite a newer user change", async () => {
+    let resolveLoad!: (state: GridState | null) => void;
+    const load = new Promise<GridState | null>((resolve) => { resolveLoad = resolve; });
+    const api = createGrid(host(), {
+      columnDefs: columns,
+      rowData: rows,
+      pagination: false,
+      persistence: {
+        key: "late-state",
+        sections: ["sort"],
+        debounceMs: 0,
+        store: { load: () => load, save: vi.fn() }
+      }
+    });
+    api.sorting.setModel([{ colId: "name", direction: "asc" }]);
+    resolveLoad({
+      version: 2,
+      columns: [],
+      sortModel: [{ colId: "name", direction: "desc" }],
+      filterModel: {},
+      advancedFilterModel: null,
+      quickFilterText: null,
+      pagination: { enabled: false, page: 1, pageSize: 20 },
+      selectedRowIds: [],
+      expandedRowIds: [],
+      expandedGroupIds: []
+    });
+
+    await load;
+    await Promise.resolve();
+    expect(api.sorting.getModel()).toEqual([{ colId: "name", direction: "asc" }]);
+    api.destroy();
+  });
+
+  it("serializes asynchronous persistence writes and coalesces to the latest state", async () => {
+    let finishFirst!: () => void;
+    const firstWrite = new Promise<void>((resolve) => { finishFirst = resolve; });
+    const save = vi.fn()
+      .mockImplementationOnce(() => firstWrite)
+      .mockImplementation(() => undefined);
+    const api = createGrid(host(), {
+      columnDefs: columns,
+      rowData: rows,
+      pagination: false,
+      persistence: {
+        key: "ordered-state",
+        sections: ["sort"],
+        debounceMs: 0,
+        store: { load: () => null, save }
+      }
+    });
+
+    api.sorting.setModel([{ colId: "name", direction: "desc" }]);
+    api.sorting.setModel([{ colId: "name", direction: "asc" }]);
+    expect(save).toHaveBeenCalledOnce();
+    finishFirst();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.lastCall?.[1]).toEqual(expect.objectContaining({
+      sortModel: [{ colId: "name", direction: "asc" }]
+    }));
+    api.destroy();
   });
 
   it("rejects oversized state payloads and diagnoses unsafe layout combinations", () => {

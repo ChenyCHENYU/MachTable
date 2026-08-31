@@ -146,6 +146,29 @@ describe("Vue adapter", () => {
     app.unmount();
   });
 
+  it("runs application event observers and page listeners exactly once", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const applicationObserver = vi.fn();
+    const pageListener = vi.fn();
+    const app = createApp({
+      render: () => h(MachTable, {
+        columnDefs: [{ field: "name" }],
+        rowData: [{ name: "Ada" }],
+        pagination: false,
+        onCellClicked: pageListener
+      })
+    });
+    app.use(MachTablePlugin, { defaults: { onCellClicked: applicationObserver } });
+    app.mount(host);
+    await nextTick();
+
+    host.querySelector<HTMLElement>('.mach-cell[data-col-id="name"]')!.click();
+    expect(applicationObserver).toHaveBeenCalledOnce();
+    expect(pageListener).toHaveBeenCalledOnce();
+    app.unmount();
+  });
+
   it("loads a dedicated config with named presets and exposes option provenance", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -774,8 +797,13 @@ describe("Vue adapter", () => {
 
     remote!.bindings.value.onSortChanged?.({ sortModel: [{ colId: "name", sort: "asc" }] } as any);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
-    remote!.bindings.value.onFilterChanged?.({ filterModel: { name: { type: "contains", filter: "x" } } } as any);
+    remote!.bindings.value.onFilterChanged?.({
+      filterModel: { name: { type: "contains", filter: "x" } },
+      api: { filtering: { getQuickText: () => "from-grid" } }
+    } as any);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(3));
+    expect(quickFilterText.value).toBe("from-grid");
+    expect(request.mock.lastCall?.[0]).toEqual(expect.objectContaining({ quickFilterText: "from-grid" }));
     quickFilterText.value = "fast";
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(4));
     query.value = { status: "enabled" };
@@ -783,7 +811,9 @@ describe("Vue adapter", () => {
     await remote!.reset();
     expect(remote!.sortModel.value).toEqual([]);
     expect(remote!.filterModel.value).toEqual({});
+    expect(quickFilterText.value).toBeNull();
     expect(request).toHaveBeenCalledTimes(6);
+    expect(request.mock.lastCall?.[0]).toEqual(expect.objectContaining({ quickFilterText: null }));
     app.unmount();
   });
 
@@ -808,6 +838,7 @@ describe("Vue adapter", () => {
     remote!.bindings.value.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
     remote!.bindings.value.onFilterChanged?.({
       filterModel: {},
+      api: { filtering: { getQuickText: () => null } },
       advancedFilterModel: {
         version: 1,
         root: {

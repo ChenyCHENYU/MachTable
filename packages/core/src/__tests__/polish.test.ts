@@ -232,7 +232,7 @@ describe("preset columns", () => {
       actionsColumn({
         actions: [
           { icon: "edit", title: "编辑", onClick: (p) => clicked.push(p.data!.id) },
-          { icon: "delete", title: "删除", danger: true, onClick: () => clicked.push("del") }
+          { icon: "delete", title: "删除", variant: "danger", onClick: () => clicked.push("del") }
         ]
       })
     ];

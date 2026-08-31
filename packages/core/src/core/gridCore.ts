@@ -26,6 +26,7 @@ import { PinnedRowsRenderer } from "../render/pinnedRowsRenderer";
 import { StatusBarService } from "../render/statusBarService";
 import { getByPath, setByPath } from "../lib/path";
 import { loadGridState, saveGridState } from "../lib/gridStateStore";
+import { selectGridStateSections } from "../lib/gridState";
 import { BUILTIN_CELL_RENDERERS } from "../lib/presetRenderers";
 import { validateColumnDefs } from "../lib/validateDefs";
 import { validateGridOptions } from "../lib/validateOptions";
@@ -36,7 +37,8 @@ import { DEFAULT_LOCALE, type MachTableLocale, type MachTableLocaleKey } from ".
 import packageJson from "../../package.json";
 import type { ResolvedGridOptions } from "../types/options";
 import type { GridApi, GridDiagnosticError, GridDiagnostics } from "../types/api";
-import type { GridFeature, GridFeatureContext, GridOptions } from "../types/options";
+import type { GridFeature, GridFeatureContext, GridOptions, GridStateStore } from "../types/options";
+import type { GridState } from "../types/state";
 import type { Column } from "../services/column";
 import type { RowNode } from "../types/row";
 import type { GridErrorCode, GridEventMap, GridEventType } from "../types/events";
@@ -103,6 +105,10 @@ export class GridCore<TData = any> {
   private recentErrors: GridDiagnosticError[] = [];
   private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private gridStateLoadToken = 0;
+  private gridStateMutationVersion = 0;
+  private applyingPersistedGridState = false;
+  private stateSaveInFlight = false;
+  private pendingStateSave: { key: string; store?: GridStateStore; state: GridState } | null = null;
 
   constructor(container: HTMLElement, options: GridOptions<TData>) {
     let settleReady!: (api: GridApi<TData>) => void;
@@ -675,6 +681,7 @@ export class GridCore<TData = any> {
 
   loadPersistedGridState(): void {
     const token = ++this.gridStateLoadToken;
+    const mutationVersion = this.gridStateMutationVersion;
     const persistence = this.options.persistence;
     if (!persistence) return;
     const { key, store, sections } = persistence;
@@ -686,8 +693,16 @@ export class GridCore<TData = any> {
       return;
     }
     const apply = (state: import("../types/state").GridStateInput | null): void => {
-      if (this.destroyed || token !== this.gridStateLoadToken || !state) return;
-      this.api.state.apply(state, { emitEvents: false, ...(sections ? { sections } : {}) });
+      if (
+        this.destroyed || token !== this.gridStateLoadToken ||
+        mutationVersion !== this.gridStateMutationVersion || !state
+      ) return;
+      this.applyingPersistedGridState = true;
+      try {
+        this.api.state.apply(state, { emitEvents: false, ...(sections ? { sections } : {}) });
+      } finally {
+        this.applyingPersistedGridState = false;
+      }
     };
     if (saved && typeof (saved as Promise<unknown>).then === "function") {
       void Promise.resolve(saved).then(apply).catch((error) => this.reportError(error, "gridState.load"));
@@ -698,7 +713,8 @@ export class GridCore<TData = any> {
 
   scheduleGridStateSave(): void {
     const persistence = this.options.persistence;
-    if (!persistence || this.destroyed) return;
+    if (!persistence || this.destroyed || this.applyingPersistedGridState) return;
+    this.gridStateMutationVersion++;
     if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer);
     if (persistence.debounceMs === 0) {
       this.stateSaveTimer = null;
@@ -714,12 +730,32 @@ export class GridCore<TData = any> {
   persistGridState(): void {
     const persistence = this.options.persistence;
     if (!persistence || this.destroyed) return;
-    const { key, store } = persistence;
+    const { key, store, sections } = persistence;
+    const currentState = this.api.state.get();
+    const state = sections ? selectGridStateSections(currentState, sections) : currentState;
+    const request = { key, ...(store ? { store } : {}), state };
+    if (this.stateSaveInFlight) {
+      this.pendingStateSave = request;
+      return;
+    }
+    this.writeGridState(request);
+  }
+
+  private writeGridState(request: { key: string; store?: GridStateStore; state: GridState }): void {
     try {
-      const result = store ? store.save(key, this.api.state.get()) : saveGridState(key, this.api.state.get());
-      if (result && typeof result.catch === "function") {
-        void result.catch((error) => this.reportError(error, "gridState.save"));
-      }
+      const result = request.store
+        ? request.store.save(request.key, request.state)
+        : saveGridState(request.key, request.state);
+      if (!result || typeof result.then !== "function") return;
+      this.stateSaveInFlight = true;
+      void Promise.resolve(result)
+        .catch((error) => this.reportError(error, "gridState.save"))
+        .finally(() => {
+          this.stateSaveInFlight = false;
+          const pending = this.pendingStateSave;
+          this.pendingStateSave = null;
+          if (pending) this.writeGridState(pending);
+        });
     } catch (error) {
       this.reportError(error, "gridState.save");
     }

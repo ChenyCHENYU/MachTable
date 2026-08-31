@@ -102,6 +102,29 @@ describe("React adapter", () => {
     await act(async () => root.unmount());
   });
 
+  it("runs provider event observers and component callbacks exactly once", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const applicationObserver = vi.fn();
+    const pageCallback = vi.fn();
+
+    await act(async () => root.render(
+      createElement(MachTableProvider, { config: { defaults: { onCellClicked: applicationObserver } } },
+        createElement(MachTable, {
+          columnDefs: [{ field: "name" }],
+          rowData: [{ name: "Ada" }],
+          pagination: false,
+          onCellClicked: pageCallback
+        })
+      )
+    ));
+    host.querySelector<HTMLElement>('.mach-cell[data-col-id="name"]')!.click();
+    expect(applicationObserver).toHaveBeenCalledOnce();
+    expect(pageCallback).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+  });
+
   it("updates a replacement apiRef and clears both refs safely", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);

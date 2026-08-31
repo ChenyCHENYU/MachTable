@@ -18,7 +18,7 @@ columnDefs: [
     actions: [
       { icon: "view", title: "查看", onClick: (p) => openDetail(p.rowNode.id) },
       { icon: "edit", title: "编辑", onClick: (p) => startEdit(p.rowNode) },
-      { icon: "delete", title: "删除", danger: true, onClick: (p) => confirmRemove(p.data) }
+      { icon: "delete", title: "删除", variant: "danger", onClick: (p) => confirmRemove(p.data) }
     ]
   })
 ]
@@ -97,7 +97,7 @@ const columnDefs = [
       actions: [
         { icon: "view", title: "查看", onClick: (p) => openDetail(p.rowNode.id) },
         { icon: "edit", title: "编辑", onClick: (p) => startEdit(p.rowNode) },
-        { icon: "delete", title: "删除", danger: true, onClick: (p) => confirmRemove(p.data) },
+        { icon: "delete", title: "删除", variant: "danger", onClick: (p) => confirmRemove(p.data) },
         { label: "复制", onClick: (p) => copyRow(p.data) },
         {
           label: "导出",
@@ -116,7 +116,7 @@ const columnDefs = [
 | --- | --- |
 | `icon` | 内置图标名：`edit` `delete` `view` `copy` `download` `refresh` `close` `check` `plus` `search`；缺省渲染 `label` 文本按钮 |
 | `label` / `title` | 文本 / tooltip |
-| `variant` | `default / primary / warning / success / danger` 语义色；`danger` 是兼容简写 |
+| `variant` | `default / primary / warning / success / danger` 唯一语义色入口 |
 | `show` | `(params) => boolean` 行级条件显示 |
 | `disabled` / `loading` | boolean 或 `(params) => boolean`；异步动作也会自动进入 loading |
 | `onClick` | 可返回 Promise；params 含 `rowNode / data / rowIndex / api / rendererParams` |
@@ -192,17 +192,19 @@ myRenderer = (params) => { params.rendererParams.anything; /* true */ }
 ## 注册复用（低代码/多表统一）
 
 ```ts
-// 应用入口注册一次，全部表格共用
-import { registerCellRenderer, createActionButtonsRenderer } from "@agile-team/mach-table";
+// mach-table.config.ts：配置一次，全部框架表格共用
+import { defineMachTableConfig, createActionButtonsRenderer } from "@agile-team/mach-table";
 
 const ops = createActionButtonsRenderer({ actions: [...] });
-registerCellRenderer("table-ops", ops);
+export default defineMachTableConfig({
+  components: { cellRenderers: { "table-ops": ops } }
+});
 
 // 任意列配置（可来自 Schema JSON）
 { colId: "op", cellRenderer: "table-ops", pinned: "right", width: 120 }
 ```
 
-内置注册名：`statusTag` / `progressBar` / `link`（随第一个 grid 实例自动注册）。
+内置注册名：`statusTag` / `progressBar` / `link`。业务注册表由 `components.cellRenderers` 显式维护，不存在隐式全局可变状态。
 
 ## 完整示例（后台列表页典型列组）
 

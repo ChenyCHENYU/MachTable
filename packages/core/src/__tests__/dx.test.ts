@@ -139,18 +139,6 @@ describe("theme option", () => {
     void mm;
   });
 
-  it("legacy className mach-theme-dark still works without theme option", () => {
-    const host = createHost();
-    const api: GridApi<Row> = createGrid<Row>(host, {
-      columnDefs: [{ field: "name", headerName: "名称" }],
-      rowData: rows,
-      pagination: false,
-      className: "mach-theme-dark"
-    });
-    const root = host.querySelector(".mach-root") as HTMLElement;
-    expect(root.classList.contains("mach-theme-dark")).toBe(true);
-    api.destroy();
-  });
 });
 
 describe("status bar with pagination", () => {

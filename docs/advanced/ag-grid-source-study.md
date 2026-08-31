@@ -53,7 +53,7 @@ AG Community 的 [`InfiniteCache`](https://github.com/ag-grid/ag-grid/blob/b51ca
 - 未知总数的虚拟尾部与最终 rowCount 收敛；
 - 可观察的块状态。
 
-MachTable 0.24 保留可靠的顺序追加默认模型，并通过显式 `datasourceMode: "block"` 提供任意块请求、并发上限、优先队列、请求去重、AbortSignal、带抖动退避、滚动方向预取、LRU 淘汰、占位骨架与缓存诊断。`useMachTableQuery` 继续覆盖普通 B 端分页。它已解决 Infinite Model 的高频随机跳转与请求风暴问题，但仍不宣称等同 AG SSRM：服务端分组/聚合/事务更新和分层 Store 协议尚未实现。
+MachTable 0.25 保留可靠的顺序追加默认模型，并通过显式 `datasourceMode: "block"` 提供任意块请求、并发上限、优先队列、请求去重、AbortSignal、带抖动退避、滚动方向预取、LRU 淘汰、占位骨架与缓存诊断。`useMachTableQuery` 继续覆盖普通 B 端分页。它已解决 Infinite Model 的高频随机跳转与请求风暴问题，但仍不宣称等同 AG SSRM：服务端分组/聚合/事务更新和分层 Store 协议尚未实现。
 
 ### 5. SSRM 的难点是层级 Store，不是一个 getRows
 
@@ -77,7 +77,7 @@ MachTable 的 Core renderer/editor 契约更小，Vue 已有原生 cell/header/e
 
 AG 官方 [Grid State](https://www.ag-grid.com/javascript-data-grid/grid-state/) 包含版本，并在载入旧状态时迁移；还覆盖列、筛选、选择、展开、分页、固定行、滚动和工具面板。
 
-MachTable 的 `GridState` 当前为 v2，并对列、排序、普通/高级过滤、搜索与 ID 集合做有界净化；销毁前会刷新自动状态保存。命名视图刻意排除选择、当前页和展开状态，避免偏好与业务会话混淆。0.24 在尚无正式接入时删除 v1 迁移负担；未来跨版本变化必须配套显式迁移工具和契约测试。
+MachTable 的 `GridState` 当前为 v2，并对列、排序、普通/高级过滤、搜索与 ID 集合做有界净化；0.25 进一步让区段同时约束写入和恢复，并保证异步写入有序、晚到加载不覆盖用户操作。命名视图刻意排除选择、当前页和展开状态，避免偏好与业务会话混淆；未来跨版本变化必须配套显式迁移工具和契约测试。
 
 ## wl 项目真实使用画像
 
@@ -145,7 +145,7 @@ MachTable 的 `GridState` 当前为 v2，并对列、排序、普通/高级过�
 - 0.16—0.17 能力并入 0.18 统一发布：高级过滤 AST、命名视图、详细批量保存与冲突协议；
 - 0.18：Option/Feature 治理、GridState v2 迁移、renderer 原地刷新和可复现性能诊断。
 - 0.19：随机块远程模型、Worker 处理边界、增量行高/二分列索引、更新调度器、领域 API 与 API 快照门禁。
-- 0.20—0.24：冻结领域 facade、update-only 管线失效、远程并发/优先级、共享 Observer、统一持久化、发布产物与 500 列/生命周期门禁。
+- 0.20—0.25：冻结领域 facade、update-only 管线失效、远程并发/优先级、共享 Observer、区段隔离持久化、发布产物与 500 列/生命周期门禁。
 
 ### 1.0：暂不上
 

@@ -197,6 +197,8 @@ import MachTableUiPlugin from "@agile-team/mach-table-vue/ui";
 app.use(MachTableUiPlugin);
 ```
 
+只有导入 `/ui` 后 TypeScript 才会声明全局 `<MachTableToolbar>`，与实际插件注册边界一致；主插件只注册 `<MachTable>`。
+
 ## 自定义 renderer 和 editor
 
 框架桥接函数从 `/adapters` 按需导入：

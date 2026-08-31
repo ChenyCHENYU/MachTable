@@ -42,7 +42,7 @@ api.view.getPinnedRows("bottom");
 ## 语义边界（设计为只读）
 
 - 不参与选择、编辑、排序、过滤、分组
-- 不计入 `getDisplayedRowCount()` 与序号列
+- 不计入 `api.rows.getCount()` 与序号列
 - CSV 导出不包含固定行
 - 行高跟随 `rowHeight`（暂不支持 `getRowHeight` 单独定制固定行）
 

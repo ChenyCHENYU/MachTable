@@ -110,9 +110,13 @@ function naiveEditor(component: any, props: Record<string, any> = {}) {
   };
 }
 
-import { registerCellEditor } from "@agile-team/mach-table-vue";
-registerCellEditor("n-select", naiveEditor(NSelect));
-registerCellEditor("n-date", naiveEditor(NDatePicker, { type: "datetime" }));
+const naiveEditors = {
+  "n-select": naiveEditor(NSelect),
+  "n-date": naiveEditor(NDatePicker, { type: "datetime" })
+};
+
+// 放在专用配置文件的 components.cellEditors，或仅传给当前表格。
+const tableOptions = { components: { cellEditors: naiveEditors } };
 ```
 
 ## 4. 组件库级集成（给 @robot-admin/naive-ui-components 加表格能力）
@@ -166,6 +170,6 @@ function descToColDef(desc: TableColumnDesc): ColDef<any> {
 | 关注点 | 说明 |
 | --- | --- |
 | 样式作用域 | `.mach-root` 封闭，不影响 Naive 组件 |
-| 暗色模式 | 跟随 `n-config-provider`（方式 B）或独立 `mach-theme-dark` 类 |
+| 暗色模式 | 跟随 `n-config-provider`（方式 B）或显式设置 `theme: "dark"` |
 | 适配器上下文 | 在组件 `setup` 内调用适配器工厂会自动继承宿主 appContext（ConfigProvider 注入随单元格生效）；在模块顶层调用时可显式传 `{ appContext }` |
 | 依赖 | 互不依赖，无版本冲突 |
