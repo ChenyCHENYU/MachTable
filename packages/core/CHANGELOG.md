@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.19.1
+
+### Patch Changes
+
+- Embed the synchronized package README into npm registry metadata and add a release gate that prevents empty package-page documentation.
+
 ## 0.19.0
 
 ### Minor Changes

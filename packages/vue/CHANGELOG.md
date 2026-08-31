@@ -1,5 +1,13 @@
 # @agile-team/mach-table-vue
 
+## 0.19.1
+
+### Patch Changes
+
+- Publish the complete Vue installation and Worker guidance as npm registry README metadata.
+- Updated dependencies:
+  - @agile-team/mach-table@0.19.1
+
 ## 0.19.0
 
 ### Minor Changes

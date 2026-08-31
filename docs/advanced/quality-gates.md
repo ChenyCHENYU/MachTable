@@ -23,6 +23,7 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 | `pnpm check:complexity` | 圈复杂度增量门禁 |
 | `pnpm check:api` / `pnpm check:api:update` | 校验公开 export、Grid API/Options/Event 成员签名快照 / 评审后更新快照 |
 | `pnpm check:deps` | 生产依赖、未声明引用、无法解析引用和循环依赖检查 |
+| `pnpm check:package-readmes` | 校验 npm README 嵌入开关、包名与授权说明，防止包页面文档为空或漂移 |
 | `pnpm test` / `pnpm test:coverage` | 单元测试 / 覆盖率阈值 |
 | `pnpm quality:quick` | 推送前的快速代码检查 |
 | `pnpm verify` | 不含浏览器 E2E 的完整仓库验证 |

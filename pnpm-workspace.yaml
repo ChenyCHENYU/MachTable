@@ -2,6 +2,9 @@ packages:
   - "packages/*"
   - "examples/*"
 
+# Embed package docs into registry metadata so npmjs.com renders them.
+embedReadme: true
+
 allowBuilds:
   esbuild: true
 

@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。Core、Vue、React 与可选 XLSX 包固定版本
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.19.0
+pnpm up @agile-team/mach-table-vue@^0.19.1
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,10 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.19.0 → 0.19.1
+
+`0.19.1` 不改变运行时 API，只修正 npm 发布元数据：四个包的 README 现在会嵌入 registry manifest，npm 包页面可直接呈现与仓库同步的接入文档。发布门禁会同时检查 workspace 的 `embedReadme` 配置和每个包的 README 完整性。
 
 ## 0.18.1 → 0.19.0
 
