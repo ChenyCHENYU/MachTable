@@ -1,6 +1,5 @@
 import {
   createBusinessColumnTypes,
-  createLocalColumnStateStore,
   defineMachTableConfig,
   defineMachTablePreset,
   LOCALE_EN
@@ -11,11 +10,6 @@ const businessColumnTypes = createBusinessColumnTypes({
   currency: "CNY",
   timeZone: "Asia/Shanghai",
   emptyText: "—"
-});
-
-const columnStateStore = createLocalColumnStateStore({
-  namespace: "mach-demo:column-layout",
-  version: 1
 });
 
 // Demo fallback. Production projects should delegate to their permission store.
@@ -37,7 +31,6 @@ export const machTableConfig = defineMachTableConfig({
     enableColumnResize: true,
     stripedRows: true,
     columnMenu: true,
-    columnStateStore,
     pagination: {
       pageSize: 20,
       pageSizeOptions: [20, 50, 100, 200],

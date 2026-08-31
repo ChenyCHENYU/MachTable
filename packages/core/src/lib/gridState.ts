@@ -86,11 +86,11 @@ function normalizeSortModel(value: unknown): SortModel {
   return output;
 }
 
-/** Migrates and bounds persisted state before it mutates a live grid. */
-export function migrateGridState(input: unknown): GridState | null {
+/** Validates and bounds persisted state before it mutates a live grid. */
+export function normalizeGridState(input: unknown): GridState | null {
   if (input == null || typeof input !== "object") return null;
   const state = input as Partial<GridStateInput> & Record<string, unknown>;
-  if (state.version !== 1 && state.version !== 2) return null;
+  if (state.version !== 2) return null;
   if (!Array.isArray(state.columns) || !Array.isArray(state.sortModel)) return null;
   const pagination = state.pagination != null && typeof state.pagination === "object"
     ? state.pagination as Record<string, unknown>
@@ -100,9 +100,7 @@ export function migrateGridState(input: unknown): GridState | null {
     columns: normalizeColumns(state.columns),
     sortModel: normalizeSortModel(state.sortModel),
     filterModel: normalizeFilterModel(state.filterModel),
-    advancedFilterModel: state.version === 2
-      ? normalizeAdvancedFilterModel(state.advancedFilterModel)
-      : null,
+    advancedFilterModel: normalizeAdvancedFilterModel(state.advancedFilterModel),
     quickFilterText: typeof state.quickFilterText === "string" && state.quickFilterText.trim()
       ? state.quickFilterText.slice(0, MAX_QUICK_FILTER_LENGTH)
       : null,

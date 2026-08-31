@@ -26,7 +26,7 @@ createGrid(host, {
   datasourceRetryCount: 2,   // 瞬时故障自动重试
   datasourceRetryDelay: 300, // 300ms、600ms 后重试
   statusBar: true,           // 行数面板显示 "已加载 / 总数"
-  getRowId: (p) => p.data.id
+  rowKey: "id"
 });
 ```
 
@@ -53,13 +53,13 @@ createGrid(host, {
 
 ## 选中保持
 
-选中按 `getRowId` 跨块保留；`reload()` / 排序过滤重载后依然有效：
+选中按 `rowKey` 跨块保留；`api.rows.reload()` / 排序过滤重载后依然有效：
 
 ```ts
-api.selectNodeById("r5");
-await api.reload();
-api.getNodeById("r5")?.selected;   // true（若该块被重新加载）
-api.getSelectedIds();              // 完整选中集合（含未加载块）
+api.selection.setById("r5");
+await api.rows.reload();
+api.rows.getById("r5")?.selected;   // true（若该块被重新加载）
+api.selection.getIds();              // 完整选中集合（含未加载块）
 ```
 
 ## 语义边界
@@ -69,15 +69,15 @@ api.getSelectedIds();              // 完整选中集合（含未加载块）
 | 表头全选 | 仅选已加载行；未加载完呈半选态 |
 | CSV 导出 | 仅已加载行（全量导出请走后端） |
 | 行合并 / 行分组 | 无限模式暂不支持 |
-| `setRowData` / `applyTransaction` | 无限模式忽略，请用 `reload()` |
+| `rows.setData` / `rows.transact` | 无限模式忽略，请用 `api.rows.reload()` |
 | 编辑 / 粘贴 / 填充 | 正常（仅作用于已加载行），撤销栈通用 |
 | 未加载行行高 | 固定 `rowHeight`（`getRowHeight` 仅对已加载行生效） |
 
 ## API
 
 ```ts
-api.isInfinite();      // 是否无限模式
-await api.reload();    // 从第 0 行重载并等待首块完成（沿用当前排序/过滤）
+api.rows.isRemote();      // 是否无限模式
+await api.rows.reload();    // 从第 0 行重载并等待首块完成（沿用当前排序/过滤）
 ```
 
 ## UI 反馈

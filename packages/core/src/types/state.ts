@@ -16,11 +16,6 @@ interface GridStateBase {
   expandedGroupIds: string[];
 }
 
-/** Read-only compatibility shape accepted from MachTable 0.14/0.15. */
-export interface LegacyGridStateV1 extends GridStateBase {
-  version: 1;
-}
-
 /** Serializable snapshot of user-visible grid state. */
 export interface GridState extends GridStateBase {
   /** State schema version, independent from the package version. */
@@ -28,7 +23,7 @@ export interface GridState extends GridStateBase {
   advancedFilterModel: AdvancedFilterModel | null;
 }
 
-export type GridStateInput = GridState | LegacyGridStateV1;
+export type GridStateInput = GridState;
 
 export type GridStateSection =
   | "columns"

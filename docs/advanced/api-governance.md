@@ -1,94 +1,77 @@
 # API 治理
 
-0.23 建立 API Governance V3：公开能力必须有唯一职责、稳定契约、语义测试和兼容策略。目标不是追求 API 数量最少，而是让每个入口都能回答“归谁负责、何时使用、与谁重复、如何演进”。
+0.24 使用 API Governance V4：公开能力必须有唯一职责、稳定类型、语义测试和明确入口。目标不是机械减少数量，而是消除同义方法、内部泄漏和框架差异。
 
-## 到底需要多少 API
+## 公共层级
 
-当前 `GridApi` 有 126 个公开成员，其中包含 8 个领域入口；其余为 0.x 平面兼容面，覆盖数据、列、过滤、分页、选择、编辑、树/分组、范围、状态、导入导出、诊断和生命周期。这个数字不是推荐用户逐个记忆的产品界面。
-
-新代码只需先认识 8 个稳定领域：
-
-| 领域 | 唯一职责 | 不负责 |
+| 层级 | 承诺 | 示例 |
 | --- | --- | --- |
-| `rows` | 行数据、事务、定位、远程块缓存 | 列状态、宿主请求参数 |
-| `columns` | 列状态、显隐、宽度 | 过滤模型、业务权限 |
-| `selection` | 已选数据与 ID、全选/清空 | 跨查询规则；由框架 Query 工作流负责 |
-| `editing` | 脏数据、保存、回滚、结束编辑 | 请求 UI 和业务冲突决策 |
-| `filtering` | 普通/高级/快速过滤状态 | 发起后端请求 |
-| `pagination` | 页码、页大小、总量和开关 | 拉取页面数据 |
-| `state` | 版本化工作区快照 | 命名视图的存储策略 |
-| `diagnostics` | 无业务行数据的健康与性能快照 | 日志上传和用户数据采集 |
+| 根稳定入口 | 高频、跨场景、受 API 快照与语义测试保护 | `createGrid`、`GridOptions`、`GridApi` |
+| 明确子入口 | 可选能力，单独进入 chunk | `/workflows`、`/ui`、`/adapters`、`/worker` |
+| 扩展契约 | 允许业务组合，不暴露内部实现 | `GridFeature`、`GridComponents`、renderer/editor 契约 |
+| 内部实现 | 可重构，不从 package exports 暴露 | `GridCore`、service、layout、registry |
 
-领域 facade 按第一次访问惰性创建，只转发到同一实现，不复制状态。0.x 平面方法继续兼容；1.0 前不做无迁移窗口的删除。
+## GridApi 规则
 
-```ts
-api.rows.apply({ update: changedRows });
-api.columns.setWidth("amount", 180);
-api.filtering.setQuickText(keyword);
-api.pagination.setPage(2);
-api.editing.getChanges();
-api.state.get();
-api.diagnostics.get();
+根级固定为：
+
+- 12 个领域：`rows`、`columns`、`selection`、`editing`、`filtering`、`sorting`、`pagination`、`hierarchy`、`view`、`state`、`io`、`diagnostics`。
+- 7 个横切能力：`batch`、`whenReady`、`getOption`、`updateOptions`、`on`、`destroy`、`isDestroyed`。
+
+领域对象按需创建、引用稳定并被冻结。内部 `GridApiImpl` 不会逃逸到消费者；同一命令不再同时维护根级和领域级两种名称。
+
+新增 API 必须回答：
+
+1. 它属于哪个唯一领域？
+2. 是否能用现有配置、事件或 Feature 组合完成？
+3. 是否是跨项目高频能力，而非单一业务便利函数？
+4. 同步/异步、取消、失败和销毁后的语义是什么？
+5. 是否有类型、语义测试、文档和迁移说明？
+
+## GridOptions 规则
+
+每个非事件 Option 必须登记在 `GRID_OPTION_META`：
+
+- 值类别和运行时校验规则。
+- Vue/React 更新策略。
+- 是否可进入应用 defaults/preset。
+- 修改后需要触发的模型、布局或视图失效级别。
+
+应用配置中心只接受无实例身份的稳定约定。`rowData`、`columnDefs`、请求状态、初始状态和 `persistence` 等字段在默认严格模式下直接拒绝；`components` 与 `columnTypes` 使用顶层专用注册字段。
+
+## 框架一致性
+
+- Vue 与 React 都使用 `MachTable`、`useMachTable`、`bindings`。
+- 两个适配包都从 `/workflows`、`/ui`、`/adapters`、`/worker` 获取可选能力。
+- Vue 额外提供 `/async`、`/editors` 和原生 slots；React 遵循模块导入与路由 lazy。
+- 适配包自动依赖 Core，业务只安装一个框架包。
+
+框架差异只出现在平台能力，不制造同义业务 API。
+
+## 状态治理
+
+- 当前 `GridState.version` 固定为 `2`。
+- `initialState`、`api.state.apply()` 和 `persistence` 使用同一输入契约。
+- 自动持久化只有 `persistence: { key, sections?, store?, debounceMs? }`。
+- `normalizeGridState()` 只接收当前 schema；未来跨版本迁移必须有显式工具和测试。
+
+## 发布门禁
+
+`scripts/check-api-surface.mjs` 从 TypeScript AST 生成 `api/public-api.snapshot.json`，覆盖：
+
+- Core 根、adapter、worker 导出。
+- Vue/React 根和所有子入口。
+- XLSX 导出。
+- `GridApi` 全部领域、`GridOptions`、`GridFeature`、数据处理器和事件接口。
+
+任何导出或签名变化都会让 CI 失败。维护者必须先评审设计、更新测试和迁移说明，再显式执行：
+
+```bash
+pnpm check:api:update
 ```
 
-## 新增、保留与拒绝规则
+`api/public-api-policy.json` 同时限制根成员数量、领域清单和稳定级别。复杂度、依赖循环、包体和真实消费端构建提供第二层防回归。
 
-新增公开 API 必须同时满足：
+## 0.x 演进策略
 
-1. 对至少一个高频 B 端场景形成完整闭环，而不是仅暴露内部实现细节。
-2. 不能由既有领域操作、`GridOptions`、事件或 `GridFeature` 清晰表达。
-3. 有确定的输入边界、返回语义、销毁/取消行为和错误策略。
-4. Core、Vue、React 的类型/运行时边界一致，并更新文档、签名快照和语义测试。
-5. 默认路径不引入可选重能力；实验能力先放独立 subpath 或 `GridFeature`。
-
-仅为了缩短一行调用的别名、同时读写多个无关领域的“万能方法”、返回内部 Service/DOM 池对象的逃生口，一律不进入稳定 API。
-
-机器可读策略位于 `api/public-api-policy.json`：
-
-- `stable`：文档化并通过签名与语义门禁。
-- `experimental`：仅存在于显式子入口或 Feature，升级时可调整但必须写迁移说明。
-- `internal`：不得从包入口导出。
-- `deprecated`：给出唯一替代项和至少一个 minor 兼容窗口；当前只有 `openColumnPanel → openColumnWorkbench`。
-
-## 原子配置提交与增量失效
-
-`updateOptions(patch)` 先逐项净化整个 patch，再在一个更新调度批次内应用合法子集。未知字段或运行时类型错误只报告且丢弃；同一 patch 引发的列、布局、单元格、合计和覆盖层工作只提交一次视图刷新。
-
-`applyTransaction({ update })` 会先判断失效范围：没有本地排序/过滤、分组、树、主从、变高或行合并时，仅替换行引用并刷新对应可见单元格；任何会改变顺序、成员、几何或合并关系的场景自动执行完整管线。优化不会要求使用侧维护“脏字段”提示，也不会因错误提示造成数据错位。
-
-需要组合多个命令时使用显式同步批处理：
-
-```ts
-api.batch((grid) => {
-  grid.rows.apply({ update: changedRows });
-  grid.columns.setVisible("cost", canViewCost);
-  grid.refreshCells({
-    rowIds: changedRows.map((row) => row.id),
-    columns: ["status", "cost"]
-  });
-});
-```
-
-异步网络工作应先完成，再把结果放进同步 `batch`；不要把 `async` 回调传给 `batch`。
-
-## 配置单一事实源
-
-`GridOptions` 每新增一个非事件字段，TypeScript 强制要求在 `GRID_OPTION_META` 声明值类别和框架更新策略。Vue/React 动态 props、`setGridOption`、`updateOptions` 与 JavaScript/低代码 JSON 净化共同消费该 registry，避免“类型有字段、适配器不更新”。
-
-应用级默认配置仍建议放在独立 `mach-table.config.ts`，通过 Vue `app.use(MachTablePlugin, config)` 或 React `MachTableProvider` 一次注入；页面 props 只覆盖差异项。配置层级与来源解释见[配置系统](/guide/configuration)。
-
-## Feature 版本契约
-
-可选业务能力优先使用 `GridFeature`。`version/requires/conflicts` 支持 exact、比较符、`^`、`~`、AND 与 `||` OR；缺失、版本不满足、冲突或循环会在 setup 副作用前隔离，并以稳定 issue code 写入诊断。
-
-## 自动化门禁
-
-`pnpm check:api` 同时检查：
-
-- Core 与 Worker 入口导出；
-- Vue/React 主入口和工作流/异步入口导出；
-- XLSX 可选入口导出；
-- `GridApi`、8 个领域 API、`GridOptions`、Feature、Processor 与事件签名；
-- API 生命周期策略文件。
-
-签名变化必须先完成兼容评审、Changelog 和升级说明，再显式执行 `pnpm check:api:update`。此外 `governance23.test.ts` 验证领域对象稳定性、配置单次提交、增量管线安全回退、请求并发/优先级和 Observer 生命周期。快照阻止无意识漂移，语义测试阻止“签名没变、行为变了”。
+项目尚未冻结 1.0。0.24 利用正式规模接入前的窗口，删除了旧别名、平面 API、重复持久化参数和重复 Hook，而不是建立永久 deprecated 兼容层。后续破坏性变化只能出现在 minor 版本，并必须提供升级说明；patch 版本不得破坏已发布契约。

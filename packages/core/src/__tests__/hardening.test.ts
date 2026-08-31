@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  clearComponentRegistries,
   createGrid,
-  getCellRenderer,
-  registerCellRenderer,
   sanitizeFormulaCell,
   setByPath,
   toTsv
@@ -23,7 +20,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearComponentRegistries();
   document.body.textContent = "";
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -93,8 +89,7 @@ describe("security hardening", () => {
 });
 
 describe("extension boundaries", () => {
-  it("uses per-grid components before global components", () => {
-    const unregister = registerCellRenderer("badge", () => "global");
+  it("isolates named components between grid instances", () => {
     const localHost = host();
     const localApi = createGrid(localHost, {
       columnDefs: [{ field: "status", cellRenderer: "badge" }],
@@ -104,20 +99,28 @@ describe("extension boundaries", () => {
     });
     expect(localHost.querySelector(".mach-cell[data-col-id='status']")?.textContent).toBe("local");
 
-    const globalHost = host();
-    const globalApi = createGrid(globalHost, {
+    const isolatedHost = host();
+    const isolatedApi = createGrid(isolatedHost, {
       columnDefs: [{ field: "status", cellRenderer: "badge" }],
       rowData: [{ status: "ok" }],
       pagination: false
     });
-    expect(globalHost.querySelector(".mach-cell[data-col-id='status']")?.textContent).toBe("global");
-    unregister();
-    expect(getCellRenderer("badge")).toBeUndefined();
+    expect(isolatedHost.querySelector(".mach-cell[data-col-id='status']")?.textContent).toBe("ok");
     localApi.destroy();
-    globalApi.destroy();
+    isolatedApi.destroy();
   });
 
-  it("restores built-in renderers after the global registry is cleared", () => {
+  it("keeps built-in renderers immutable across grid instances", () => {
+    const overrideHost = host();
+    const overrideApi = createGrid(overrideHost, {
+      columnDefs: [{ field: "status", cellRenderer: "statusTag" }],
+      rowData: [{ status: "active" }],
+      components: { cellRenderers: { statusTag: () => "override" } },
+      pagination: false
+    });
+    expect(overrideHost.querySelector(".mach-cell")?.textContent).toBe("override");
+    overrideApi.destroy();
+
     const gridHost = host();
     const api = createGrid(gridHost, {
       columnDefs: [{ field: "status", cellRenderer: "statusTag" }],
@@ -125,8 +128,7 @@ describe("extension boundaries", () => {
       pagination: false
     });
     expect(gridHost.querySelector(".mach-tag")).toBeTruthy();
-    clearComponentRegistries();
-    api.refreshCells();
+    api.view.refreshCells();
     expect(gridHost.querySelector(".mach-tag")).toBeTruthy();
     api.destroy();
   });
@@ -195,7 +197,7 @@ describe("extension boundaries", () => {
     vi.advanceTimersByTime(100);
     expect(domEvent).toHaveBeenCalledOnce();
     expect(timer).not.toHaveBeenCalled();
-    api.setRowData([{ id: 2 }]);
+    api.rows.setData([{ id: 2 }]);
     expect(gridEvent).not.toHaveBeenCalled();
     api.destroy();
     vi.useRealTimers();
@@ -234,9 +236,9 @@ describe("lifecycle and error isolation", () => {
       rowData: [{ id: 1 }],
       pagination: false
     });
-    api.refreshCells();
-    expect(api.startEditingCell({ rowIndex: 0, colId: "id" })).toBe(true);
-    api.stopEditing(true);
+    api.view.refreshCells();
+    expect(api.editing.startCell({ rowIndex: 0, colId: "id" })).toBe(true);
+    api.editing.stop({ cancel: true });
     api.destroy();
     expect(mounted).toBeGreaterThan(0);
     expect(destroyed).toBe(mounted);
@@ -281,7 +283,7 @@ describe("infinite datasource state machine", () => {
     viewport.dispatchEvent(new Event("scroll"));
     await new Promise((resolve) => window.setTimeout(resolve, 5));
     expect(calls).toHaveLength(2);
-    expect(api.getTotalRowCount()).toBe(3);
+    expect(api.pagination.getTotalRowCount()).toBe(3);
     api.destroy();
   });
 
@@ -292,7 +294,7 @@ describe("infinite datasource state machine", () => {
       pagination: false,
       datasource: { getRows: (params) => { calls.push(params); } }
     });
-    const reload = api.reload();
+    const reload = api.rows.reload();
     expect(calls[0].signal.aborted).toBe(true);
     expect(calls).toHaveLength(2);
     calls[1].onSuccess([], 0);
@@ -308,10 +310,10 @@ describe("infinite datasource state machine", () => {
       datasource: { getRows: (params) => { calls.push(params); } }
     });
     const filter = { type: "number" as const, conditions: [{ match: "greaterThan" as const, value: 5 }] };
-    api.setFilterModel({ id: filter });
+    api.filtering.setModel({ id: filter });
     expect(calls[0].signal.aborted).toBe(true);
     expect(calls[1].filterModel.id).toEqual(filter);
-    api.setQuickFilter("urgent");
+    api.filtering.setQuickText("urgent");
     expect(calls[1].signal.aborted).toBe(true);
     expect(calls[2].quickFilterText).toBe("urgent");
     calls[2].onSuccess([], 0);
@@ -326,8 +328,8 @@ describe("CSV import", () => {
       rowData: [],
       pagination: false
     });
-    expect(api.importCsv("\uFEFFname,ignored,code,user.city\r\nAda,x,001,Paris")).toBe(true);
-    expect(api.getRowNode(0)?.data).toEqual({ name: "Ada", code: "001", user: { city: "Paris" } });
+    expect(api.io.importCsv("\uFEFFname,ignored,code,user.city\r\nAda,x,001,Paris")).toBe(true);
+    expect(api.rows.getAt(0)?.data).toEqual({ name: "Ada", code: "001", user: { city: "Paris" } });
     api.destroy();
   });
 });

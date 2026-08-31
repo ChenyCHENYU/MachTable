@@ -98,14 +98,14 @@ const api: GridApi<MachineRow> = createGrid<MachineRow>(host, {
   columnDefs,
   rowData: makeRows(10000),
   rowSelection: "multiple",
-  getRowId: (params) => params.data.id,
+  rowKey: (row) => row.id,
   rowBuffer: 10,
   size: "compact",
   stripedRows: true,
   pagination: false,
   columnMenu: true,
   enableColumnResize: true,
-  columnStateKey: "demo-main-grid",
+  persistence: { key: "demo-main-grid", sections: ["columns"] },
   enableRangeSelection: true,
   contextMenu: true,
   statusBar: true,
@@ -127,7 +127,7 @@ const api: GridApi<MachineRow> = createGrid<MachineRow>(host, {
     appendLog(`排序变更: ${e.sortModel.map((s) => `${s.colId}:${s.direction}`).join(", ") || "无"}`);
   },
   onFilterChanged: () => {
-    appendLog(`过滤后剩余 ${api.getDisplayedRowCount()} 行`);
+    appendLog(`过滤后剩余 ${api.rows.getCount()} 行`);
   }
 });
 
@@ -140,12 +140,12 @@ function appendLog(text: string) {
 
 document.getElementById("quickFilter")!.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
-    api.setQuickFilter((e.target as HTMLInputElement).value);
+    api.filtering.setQuickText((e.target as HTMLInputElement).value);
   }
 });
 
 document.getElementById("btnCsv")!.addEventListener("click", () => {
-  const csv = api.getDataAsCsv({ prependBOM: true });
+  const csv = api.io.exportCsv({ prependBOM: true });
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -167,10 +167,10 @@ document.getElementById("bordersChk")!.addEventListener("change", (e) => {
   api.updateOptions({ showCellBorders: (e.target as HTMLInputElement).checked });
 });
 
-document.getElementById("btnAutoSize")!.addEventListener("click", () => api.autoSizeAllColumns());
-document.getElementById("btnReset")!.addEventListener("click", () => api.resetColumnState());
-document.getElementById("btnSelectAll")!.addEventListener("click", () => api.selectAll(true));
-document.getElementById("btnClearSort")!.addEventListener("click", () => api.setSortModel([]));
+document.getElementById("btnAutoSize")!.addEventListener("click", () => api.columns.autoSizeAll());
+document.getElementById("btnReset")!.addEventListener("click", () => api.columns.resetState());
+document.getElementById("btnSelectAll")!.addEventListener("click", () => api.selection.selectAll(true));
+document.getElementById("btnClearSort")!.addEventListener("click", () => api.sorting.setModel([]));
 
 document.getElementById("btnTheme")!.addEventListener("click", (e) => {
   theme = theme === "light" ? "dark" : "light";
@@ -181,7 +181,7 @@ document.getElementById("btnTheme")!.addEventListener("click", (e) => {
   (e.target as HTMLElement).textContent = theme === "light" ? "深色模式" : "浅色模式";
 });
 
-infoEl.textContent = `共 ${api.getDisplayedRowCount()} 行`;
+infoEl.textContent = `共 ${api.rows.getCount()} 行`;
 
 interface WorkItem {
   itemId: string;
@@ -228,11 +228,11 @@ const schemaHost = document.getElementById("schemaHost")!;
 const schemaApi: GridApi<WorkItem> = createGrid<WorkItem>(schemaHost, {
   columnDefs: buildColDefsFromSchema<WorkItem>(workSchema as any),
   rowData: makeWorkRows(300),
-  getRowId: (p) => p.data.itemId,
+  rowKey: (row) => row.itemId,
   size: "compact",
   stripedRows: true,
   columnMenu: true,
-  columnStateKey: "demo-schema-grid",
+  persistence: { key: "demo-schema-grid", sections: ["columns"] },
   enableRangeSelection: true,
   contextMenu: true,
   masterDetail: true,

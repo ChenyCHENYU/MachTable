@@ -1,13 +1,14 @@
 import { useMemo, useState, type MutableRefObject } from "react";
 import type { GridApi } from "@agile-team/mach-table";
 
-export interface UseMachGridReturn<TData = any> {
+export interface UseMachTableReturn<TData = any> {
   apiRef: MutableRefObject<GridApi<TData> | null>;
   api: GridApi<TData> | null;
   ready: boolean;
 }
 
-export function useMachGrid<TData = any>(): UseMachGridReturn<TData> {
+/** Reactive access to the table lifecycle and command API. */
+export function useMachTable<TData = any>(): UseMachTableReturn<TData> {
   const [api, setApi] = useState<GridApi<TData> | null>(null);
   const [ready, setReady] = useState(false);
   const apiRef = useMemo(() => {

@@ -1,6 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import { el } from "../lib/dom";
-import { DEFAULT_LOCALE, formatText, type RgLocaleKey } from "../lib/locale";
+import { DEFAULT_LOCALE, formatText, type MachTableLocaleKey } from "../lib/locale";
 import type { StatusBarPanel } from "../types/options";
 
 type AnyLocale = Record<string, string | undefined>;
@@ -63,7 +63,7 @@ export class StatusBarService {
     if (!options.statusBarEnabled) return;
 
     const locale: AnyLocale = { ...DEFAULT_LOCALE, ...options.locale };
-    const text = (key: RgLocaleKey, value?: number | string): string => {
+    const text = (key: MachTableLocaleKey, value?: number | string): string => {
       const template = locale[key] ?? DEFAULT_LOCALE[key];
       return value === undefined ? template : formatText(template, typeof value === "number" ? value : parseFloat(String(value)) || 0);
     };

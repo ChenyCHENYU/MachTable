@@ -38,7 +38,7 @@ function createStandardGrid(): { api: GridApi<Row>; host: HTMLElement } {
     rowData: makeRows(100),
     rowSelection: "multiple",
     pagination: false,
-    getRowId: (p) => p.data.id
+    rowKey: (row) => row.id
   });
   return { api, host };
 }
@@ -61,19 +61,19 @@ describe("grid smoke (jsdom)", () => {
     const firstRow = host.querySelector('.mach-row[data-index="0"]');
     expect(firstRow?.textContent).toContain("row-100");
 
-    expect(api.getDisplayedRowCount()).toBe(100);
+    expect(api.rows.getCount()).toBe(100);
     api.destroy();
   });
 
   it("sorts via api and updates rendered cells", () => {
     const { api, host } = createStandardGrid();
 
-    api.setSortModel([{ colId: "score", direction: "asc" }]);
-    expect(api.getSortModel()).toEqual([{ colId: "score", direction: "asc" }]);
+    api.sorting.setModel([{ colId: "score", direction: "asc" }]);
+    expect(api.sorting.getModel()).toEqual([{ colId: "score", direction: "asc" }]);
     const firstRow = host.querySelector('.mach-row[data-index="0"]');
     expect(firstRow?.textContent).toContain("row-1");
 
-    api.setSortModel([]);
+    api.sorting.setModel([]);
     const restored = host.querySelector('.mach-row[data-index="0"]');
     expect(restored?.textContent).toContain("row-100");
     api.destroy();
@@ -82,69 +82,69 @@ describe("grid smoke (jsdom)", () => {
   it("filters rows by column filter and quick filter", () => {
     const { api, host } = createStandardGrid();
 
-    api.setFilterModel({ score: { type: "number", conditions: [{ match: "lessThan", value: 10 }] } });
-    expect(api.getDisplayedRowCount()).toBe(9);
+    api.filtering.setModel({ score: { type: "number", conditions: [{ match: "lessThan", value: 10 }] } });
+    expect(api.rows.getCount()).toBe(9);
     const overlayEl = host.querySelector(".mach-overlay") as HTMLElement | null;
     expect(overlayEl?.style.display || "none").toBe("none");
 
-    api.setFilterModel(null);
-    expect(api.getDisplayedRowCount()).toBe(100);
+    api.filtering.setModel(null);
+    expect(api.rows.getCount()).toBe(100);
 
-    api.setQuickFilter("row-5");
-    expect(api.getDisplayedRowCount()).toBe(11);
+    api.filtering.setQuickText("row-5");
+    expect(api.rows.getCount()).toBe(11);
 
-    api.setQuickFilter("no-such-value");
-    expect(api.getDisplayedRowCount()).toBe(0);
+    api.filtering.setQuickText("no-such-value");
+    expect(api.rows.getCount()).toBe(0);
     const overlay = host.querySelector(".mach-overlay") as HTMLElement;
     expect(overlay && overlay.style.display === "" || overlay?.style.display === "").toBeTruthy();
 
-    api.setQuickFilter(null);
-    expect(api.getDisplayedRowCount()).toBe(100);
+    api.filtering.setQuickText(null);
+    expect(api.rows.getCount()).toBe(100);
     api.destroy();
   });
 
   it("selects rows and reports selection events", () => {
     const { api } = createStandardGrid();
     const listener = vi.fn();
-    api.addEventListener("selectionChanged", listener);
+    api.on("selectionChanged", listener);
 
-    api.selectNodeById("5");
-    expect(api.getSelectedRows().length).toBe(1);
-    expect(api.getSelectedRows()[0].id).toBe("5");
+    api.selection.setById("5");
+    expect(api.selection.getRows().length).toBe(1);
+    expect(api.selection.getRows()[0].id).toBe("5");
     expect(listener).toHaveBeenCalled();
 
-    api.selectAll(true);
-    expect(api.getSelectedRows().length).toBe(100);
+    api.selection.selectAll(true);
+    expect(api.selection.getRows().length).toBe(100);
 
-    api.deselectAll();
-    expect(api.getSelectedRows().length).toBe(0);
+    api.selection.clear();
+    expect(api.selection.getRows().length).toBe(0);
     api.destroy();
   });
 
   it("edits a cell and updates data", () => {
     const { api } = createStandardGrid();
     const changeListener = vi.fn();
-    api.addEventListener("cellValueChanged", changeListener);
+    api.on("cellValueChanged", changeListener);
 
-    const ok = api.startEditingCell({ rowIndex: 0, colId: "name" });
+    const ok = api.editing.startCell({ rowIndex: 0, colId: "name" });
     expect(ok).toBe(true);
 
     const input = document.querySelector<HTMLInputElement>(".mach-editor-input");
     expect(input).toBeTruthy();
     input!.value = "edited";
-    api.stopEditing(false);
+    api.editing.stop();
 
     expect(changeListener).toHaveBeenCalledTimes(1);
     expect(changeListener.mock.calls[0][0].newValue).toBe("edited");
-    const node = api.getNodeById("0");
+    const node = api.rows.getById("0");
     expect(node?.data?.name).toBe("edited");
     api.destroy();
   });
 
   it("exports csv", () => {
     const { api } = createStandardGrid();
-    api.setSortModel([{ colId: "score", direction: "asc" }]);
-    const csv = api.getDataAsCsv();
+    api.sorting.setModel([{ colId: "score", direction: "asc" }]);
+    const csv = api.io.exportCsv();
     const lines = csv.split("\r\n");
     expect(lines[0]).toBe("ID,Name,Score");
     expect(lines[1]).toBe("99,row-1,1");
@@ -155,36 +155,36 @@ describe("grid smoke (jsdom)", () => {
   it("applies transactions add/update/remove", () => {
     const { api } = createStandardGrid();
 
-    api.applyTransaction({ update: [{ id: "0", name: "updated", score: 999 }] });
-    expect(api.getNodeById("0")?.data?.name).toBe("updated");
+    api.rows.transact({ update: [{ id: "0", name: "updated", score: 999 }] });
+    expect(api.rows.getById("0")?.data?.name).toBe("updated");
 
-    api.applyTransaction({ remove: [{ id: "0", name: "updated", score: 999 }] });
-    expect(api.getNodeById("0")).toBeUndefined();
-    expect(api.getDisplayedRowCount()).toBe(99);
+    api.rows.transact({ remove: [{ id: "0", name: "updated", score: 999 }] });
+    expect(api.rows.getById("0")).toBeUndefined();
+    expect(api.rows.getCount()).toBe(99);
 
-    api.applyTransaction({ add: [{ id: "new", name: "new-row", score: 1 }], addIndex: 0 });
-    expect(api.getDisplayedRowCount()).toBe(100);
-    expect(api.getRowNode(0)?.id).toBe("new");
+    api.rows.transact({ add: [{ id: "new", name: "new-row", score: 1 }], addIndex: 0 });
+    expect(api.rows.getCount()).toBe(100);
+    expect(api.rows.getAt(0)?.id).toBe("new");
     api.destroy();
   });
 
   it("manages column state: visibility, move, pin, width", () => {
     const { api, host } = createStandardGrid();
 
-    api.setColumnVisibility("name", false);
+    api.columns.setVisible("name", false);
     expect(host.querySelectorAll(".mach-header-cell").length).toBe(2);
 
-    api.setColumnVisibility("name", true);
-    api.moveColumn("score", 0);
-    expect(api.getColumnState()[0].colId).toBe("score");
+    api.columns.setVisible("name", true);
+    api.columns.move("score", 0);
+    expect(api.columns.getState()[0].colId).toBe("score");
 
-    api.setColumnPinned("score", "left");
-    const state = api.getColumnState();
+    api.columns.setPinned("score", "left");
+    const state = api.columns.getState();
     const scoreState = state.find((s) => s.colId === "score");
     expect(scoreState?.pinned).toBe("left");
 
-    api.autoSizeColumn("name");
-    expect(typeof api.getColumnState().find((s) => s.colId === "name")?.width).toBe("number");
+    api.columns.autoSize("name");
+    expect(typeof api.columns.getState().find((s) => s.colId === "name")?.width).toBe("number");
     api.destroy();
   });
 

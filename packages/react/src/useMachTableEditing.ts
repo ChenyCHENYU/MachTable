@@ -7,7 +7,7 @@ import {
   type SaveChangeIssue,
   type SaveChangesHandler
 } from "@agile-team/mach-table";
-import type { UseMachGridReturn } from "./useMachGrid";
+import type { UseMachTableReturn } from "./useMachTable";
 
 export interface UseMachTableEditingOptions<TData = any> {
   guardBeforeUnload?: boolean;
@@ -36,9 +36,9 @@ export interface UseMachTableEditingReturn<TData = any> {
   refresh(): void;
 }
 
-/** Reactive dirty/save workflow layered over useMachGrid(). */
+/** Reactive dirty/save workflow layered over useMachTable(). */
 export function useMachTableEditing<TData = any>(
-  table: UseMachGridReturn<TData>,
+  table: UseMachTableReturn<TData>,
   options: UseMachTableEditingOptions<TData> = {}
 ): UseMachTableEditingReturn<TData> {
   const [changes, setChanges] = useState<GridChange<TData>[]>([]);
@@ -55,14 +55,14 @@ export function useMachTableEditing<TData = any>(
       setChanges([]);
       return;
     }
-    setDirtyRowIds(api.getDirtyRowIds());
-    setChanges(api.getChanges());
+    setDirtyRowIds(api.editing.getDirtyRowIds());
+    setChanges(api.editing.getChanges());
   }, [table.apiRef]);
 
   useEffect(() => {
     const api = table.api;
     refresh();
-    return api && !api.isDestroyed() ? api.addEventListener("dirtyStateChanged", refresh) : undefined;
+    return api && !api.isDestroyed() ? api.on("dirtyStateChanged", refresh) : undefined;
   }, [table.api, refresh]);
 
   const saveDetailed = useCallback(async (
@@ -77,7 +77,7 @@ export function useMachTableEditing<TData = any>(
     setSaveError(null);
     setLastSaveResult(null);
     try {
-      const result = await api.saveChangesDetailed(handler, rowIds);
+      const result = await api.editing.save(handler, rowIds);
       setLastSaveResult(result);
       refresh();
       options.onSaveSuccess?.(result.saved);
@@ -112,20 +112,20 @@ export function useMachTableEditing<TData = any>(
   }, [lastSaveResult, refresh, table.apiRef]);
 
   const rollback = useCallback((rowIds?: readonly string[]): boolean => {
-    const changed = table.apiRef.current?.rollbackChanges(rowIds) ?? false;
+    const changed = table.apiRef.current?.editing.rollback(rowIds) ?? false;
     refresh();
     return changed;
   }, [refresh, table.apiRef]);
   const markSaved = useCallback((rowIds?: readonly string[]): void => {
-    table.apiRef.current?.markChangesSaved(rowIds);
+    table.apiRef.current?.editing.markSaved(rowIds);
     refresh();
   }, [refresh, table.apiRef]);
   const reveal = useCallback((rowId: string, colId?: string, edit = false): boolean => {
     const api = table.apiRef.current;
-    const node = api?.getNodeById(rowId);
+    const node = api?.rows.getById(rowId);
     if (!api || !node || node.rowIndex < 0) return false;
-    api.scrollToIndex(node.rowIndex, "middle");
-    return colId && edit ? api.startEditingCell({ rowIndex: node.rowIndex, colId }) : true;
+    api.view.scrollToRow(node.rowIndex, "middle");
+    return colId && edit ? api.editing.startCell({ rowIndex: node.rowIndex, colId }) : true;
   }, [table.apiRef]);
 
   useEffect(() => {

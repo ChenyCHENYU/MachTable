@@ -50,7 +50,7 @@ describe("fill handle", () => {
       ],
       rowData: makeRows(6),
       enableRangeSelection: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     return { api, host };
   }
@@ -58,7 +58,7 @@ describe("fill handle", () => {
   it("copies single value down", () => {
     const changed = vi.fn();
     const { api, host } = createFillGrid();
-    api.addEventListener("cellValueChanged", changed);
+    api.on("cellValueChanged", changed);
 
     selectRange(host, 0, "name", 0, "name");
     const handle = host.querySelector(".mach-fill-handle") as HTMLElement;
@@ -69,9 +69,9 @@ describe("fill handle", () => {
     window.dispatchEvent(new MouseEvent("mousemove", { clientY: 3 * 36 }));
     window.dispatchEvent(new MouseEvent("mouseup", { clientY: 3 * 36 }));
 
-    expect(api.getNodeById("r1")?.data?.name).toBe("n0");
-    expect(api.getNodeById("r2")?.data?.name).toBe("n0");
-    expect(api.getNodeById("r3")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r1")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r2")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r3")?.data?.name).toBe("n0");
     expect(changed).toHaveBeenCalledTimes(3);
     api.destroy();
   });
@@ -85,8 +85,8 @@ describe("fill handle", () => {
     window.dispatchEvent(new MouseEvent("mousemove", { clientY: 3 * 36 + 10 }));
     window.dispatchEvent(new MouseEvent("mouseup", { clientY: 3 * 36 + 10 }));
 
-    expect(api.getNodeById("r2")?.data?.score).toBe(3);
-    expect(api.getNodeById("r3")?.data?.score).toBe(4);
+    expect(api.rows.getById("r2")?.data?.score).toBe(3);
+    expect(api.rows.getById("r3")?.data?.score).toBe(4);
     api.destroy();
   });
 
@@ -99,8 +99,8 @@ describe("fill handle", () => {
     window.dispatchEvent(new MouseEvent("mousemove", { clientY: 3 * 36 + 10 }));
     window.dispatchEvent(new MouseEvent("mouseup", { clientY: 3 * 36 + 10 }));
 
-    expect(api.getNodeById("r2")?.data?.name).toBe("n0");
-    expect(api.getNodeById("r3")?.data?.name).toBe("n1");
+    expect(api.rows.getById("r2")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r3")?.data?.name).toBe("n1");
     api.destroy();
   });
 
@@ -110,7 +110,7 @@ describe("fill handle", () => {
     const handle = host.querySelector(".mach-fill-handle") as HTMLElement;
     expect(handle.style.display).toBe("");
 
-    api.clearRangeSelection();
+    api.selection.clearRange();
     expect(handle.style.display).toBe("none");
     api.destroy();
   });
@@ -123,7 +123,7 @@ describe("fill handle", () => {
     window.dispatchEvent(new MouseEvent("mousemove", { clientY: 2 * 36 }));
     window.dispatchEvent(new MouseEvent("mouseup", { clientY: 2 * 36 }));
 
-    expect(api.getNodeById("r1")?.data?.name).toBe("n1");
+    expect(api.rows.getById("r1")?.data?.name).toBe("n1");
     api.destroy();
   });
 });
@@ -140,15 +140,15 @@ describe("status bar", () => {
       rowSelection: "multiple",
       enableRangeSelection: true,
       statusBar: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const bar = host.querySelector(".mach-statusbar") as HTMLElement;
     expect(bar).toBeTruthy();
     expect(bar.textContent).toContain("共 6 行");
 
-    api.selectNodeById("r0", true, false);
-    api.selectNodeById("r1", true, false);
+    api.selection.setById("r0", true, false);
+    api.selection.setById("r1", true, false);
     expect(bar.textContent).toContain("已选 2 行");
 
     selectRange(host, 0, "score", 2, "score");
@@ -184,7 +184,7 @@ describe("infinite scroll datasource", () => {
       ],
       datasource,
       blockSize: PAGE,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     return { api, host };
   }
@@ -201,7 +201,7 @@ describe("infinite scroll datasource", () => {
     expect(capture.calls.length).toBe(1);
     expect(capture.calls[0].startRow).toBe(0);
     expect(capture.calls[0].endRow).toBe(PAGE);
-    expect(api.getDisplayedRowCount()).toBe(PAGE);
+    expect(api.rows.getCount()).toBe(PAGE);
 
     const container = host.querySelector(".mach-row-container") as HTMLElement;
     expect(container.style.height).toBe(`${TOTAL * 36}px`);
@@ -222,7 +222,7 @@ describe("infinite scroll datasource", () => {
 
     expect(capture.calls.length).toBeGreaterThanOrEqual(2);
     expect(capture.calls[1].startRow).toBe(PAGE);
-    expect(api.getDisplayedRowCount()).toBe(PAGE * 2);
+    expect(api.rows.getCount()).toBe(PAGE * 2);
     api.destroy();
   });
 
@@ -231,7 +231,7 @@ describe("infinite scroll datasource", () => {
     const { api } = createInfinite(capture);
     await flush();
 
-    api.setSortModel([{ colId: "name", direction: "desc" }]);
+    api.sorting.setModel([{ colId: "name", direction: "desc" }]);
     await flush();
 
     expect(capture.calls.length).toBe(2);
@@ -245,14 +245,14 @@ describe("infinite scroll datasource", () => {
     const { api } = createInfinite(capture);
     await flush();
 
-    api.selectNodeById("r5");
-    expect(api.getSelectedRows().length).toBe(1);
+    api.selection.setById("r5");
+    expect(api.selection.getRows().length).toBe(1);
 
-    api.reload();
+    void api.rows.reload();
     await flush();
 
-    expect(api.getNodeById("r5")?.selected).toBe(true);
-    expect(api.getSelectedRows().length).toBe(1);
+    expect(api.rows.getById("r5")?.selected).toBe(true);
+    expect(api.selection.getRows().length).toBe(1);
     api.destroy();
   });
 
@@ -265,7 +265,7 @@ describe("infinite scroll datasource", () => {
         { field: "id", headerName: "ID", width: 100 }
       ],
       blockSize: PAGE,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       datasource: {
         getRows(params) {
           capture.calls.push(params);
@@ -278,7 +278,7 @@ describe("infinite scroll datasource", () => {
 
     const row0 = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     const row1 = host.querySelector('.mach-row[data-index="1"]') as HTMLElement;
-    const row5Node = api.getNodeById("r5");
+    const row5Node = api.rows.getById("r5");
     expect(row0?.textContent?.trimStart().startsWith("1")).toBe(true);
     expect(row1?.textContent?.trimStart().startsWith("2")).toBe(true);
     expect(row0?.textContent).toContain("r0");
@@ -301,7 +301,7 @@ describe("infinite scroll datasource", () => {
       await flush();
     }
 
-    expect(api.getDisplayedRowCount()).toBe(TOTAL);
+    expect(api.rows.getCount()).toBe(TOTAL);
     const callsBefore = capture.calls.length;
 
     Object.defineProperty(viewport, "scrollTop", { value: 195 * 36, configurable: true });
@@ -320,7 +320,7 @@ describe("infinite scroll datasource", () => {
       blockSize: 10,
       datasourceRetryCount: 2,
       datasourceRetryDelay: 1,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       onGridError: (event) => errors.push(event.error),
       datasource: {
         getRows(params) {
@@ -333,7 +333,7 @@ describe("infinite scroll datasource", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(attempts).toBe(3);
-    expect(api.getDisplayedRowCount()).toBe(10);
+    expect(api.rows.getCount()).toBe(10);
     expect(errors).toEqual([]);
     api.destroy();
   });

@@ -90,14 +90,14 @@ export class RowModel<TData = any> {
   }
 
   resolveRowId(data: TData, index: number, fallback: string): string {
-    const getRowId = this.core.options.getRowId;
-    if (!getRowId) return fallback;
+    const resolveRowId = this.core.options.resolveRowId;
+    if (!resolveRowId) return fallback;
     try {
-      const id = getRowId({ data, index, api: this.core.getApi() });
+      const id = resolveRowId({ data, index, api: this.core.getApi() });
       if (typeof id === "string" && id.length > 0) return id;
-      this.core.reportError(new Error("getRowId must return a non-empty string"), "getRowId", { index });
+      this.core.reportError(new Error("rowKey must resolve to a non-empty identifier"), "rowKey", { index });
     } catch (error) {
-      this.core.reportError(error, "getRowId", { index });
+      this.core.reportError(error, "rowKey", { index });
     }
     return fallback;
   }
@@ -600,7 +600,7 @@ export class RowModel<TData = any> {
   setRowData(rows: TData[] | null | undefined): void {
     this.cancelTreeLoads();
     this.core.changeTracker.clear();
-    const getRowId = this.core.options.getRowId;
+    const resolveRowId = this.core.options.resolveRowId;
     const childrenKey = this.core.options.childrenKey;
     const next: RowNode<TData>[] = [];
     const roots: RowNode<TData>[] = [];
@@ -659,7 +659,7 @@ export class RowModel<TData = any> {
       }
     }
 
-    this.core.selectionService.onRowsRebuilt(getRowId != null);
+    this.core.selectionService.onRowsRebuilt(resolveRowId != null);
     this.refreshPipeline();
   }
 
@@ -762,14 +762,14 @@ export class RowModel<TData = any> {
       if (child != null) this.buildChildNodes(parent, child, depth);
     }
     this.reindexAll();
-    this.core.selectionService.onRowsRebuilt(this.core.options.getRowId != null);
+    this.core.selectionService.onRowsRebuilt(this.core.options.resolveRowId != null);
     this.refreshPipeline();
     this.core.requestUpdate({ data: true });
   }
 
   private validateTreeChildren(children: readonly TData[], replacedIds: ReadonlySet<string>): void {
-    const getRowId = this.core.options.getRowId;
-    const reserved = getRowId
+    const resolveRowId = this.core.options.resolveRowId;
+    const reserved = resolveRowId
       ? new Set([...this.nodesById.keys()].filter((id) => !replacedIds.has(id)))
       : null;
     const seenObjects = new WeakSet<object>();
@@ -782,10 +782,10 @@ export class RowModel<TData = any> {
         if (seenObjects.has(data)) throw new TypeError("[MachTable] Lazy tree children contain a cyclic object graph.");
         seenObjects.add(data);
       }
-      if (getRowId && reserved) {
-        const id = getRowId({ data, index: index++, api: this.core.getApi() });
+      if (resolveRowId && reserved) {
+        const id = resolveRowId({ data, index: index++, api: this.core.getApi() });
         if (typeof id !== "string" || id.length === 0) {
-          throw new TypeError("[MachTable] getRowId must return a non-empty string for lazy tree children.");
+          throw new TypeError("[MachTable] rowKey must resolve to a non-empty identifier for lazy tree children.");
         }
         if (reserved.has(id)) throw new Error(`Duplicate row id: ${id}`);
         reserved.add(id);
@@ -796,7 +796,7 @@ export class RowModel<TData = any> {
   }
 
   applyTransaction(transaction: RowTransaction<TData>, refresh = true): RowTransactionImpact {
-    const getRowId = this.core.options.getRowId;
+    const resolveRowId = this.core.options.resolveRowId;
     const touched: RowNode<TData>[] = [];
     const externallyReplacedIds: string[] = [];
 
@@ -804,7 +804,7 @@ export class RowModel<TData = any> {
       const removeIds = new Set<string>();
       const removeRefs = new Set<TData>();
       const collect = (data: TData) => {
-        if (getRowId) {
+        if (resolveRowId) {
           const id = this.resolveRowId(data, -1, `__missing_remove_${this.core.nextId()}`);
           const stack = [id];
           while (stack.length > 0) {
@@ -842,7 +842,7 @@ export class RowModel<TData = any> {
     if (transaction.update?.length) {
       for (const data of transaction.update) {
         let node: RowNode<TData> | undefined;
-        if (getRowId) {
+        if (resolveRowId) {
           node = this.nodesById.get(this.resolveRowId(data, -1, `__missing_update_${this.core.nextId()}`));
         } else {
           node = this.all.find((n) => n.data === data);

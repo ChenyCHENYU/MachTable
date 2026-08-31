@@ -69,4 +69,4 @@ getRowHeight: (p) => p.data?.heightOverride ?? 36
 | 无限滚动 | 未加载的行使用固定 `rowHeight`（前缀和按默认高预估，块加载后修正） |
 | 固定首末行 | 跟随 `rowHeight`，暂不支持单独定制 |
 | 行合并（rowSpan/autoRowSpan） | 兼容：合并格高度按被覆盖行的实际高度差计算 |
-| 动态高度变化（编辑后文本变长） | 调 `api.updateOptions({ getRowHeight })`（传同一函数引用即可触发重算）或 `api.refreshLayout()` |
+| 动态高度变化（编辑后文本变长） | 调 `api.updateOptions({ getRowHeight })`（传同一函数引用即可触发重算）或 `api.view.refreshLayout()` |

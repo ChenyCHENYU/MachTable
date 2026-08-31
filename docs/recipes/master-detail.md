@@ -14,7 +14,7 @@ createGrid(host, {
     { field: "customer", headerName: "客户", flex: 1 }
   ],
   rowData: orders,
-  getRowId: (p) => p.data.id
+  rowKey: "id"
 });
 ```
 
@@ -60,7 +60,7 @@ detailRowRenderer: (params) => {
 
 ```ts
 // Vue
-import { vueDetailRenderer } from "@agile-team/mach-table-vue";
+import { vueDetailRenderer } from "@agile-team/mach-table-vue/adapters";
 detailRowRenderer: vueDetailRenderer(OrderDetailPanel)
 
 // React
@@ -75,16 +75,18 @@ detailRowRenderer: reactDetailRenderer(OrderDetailPanel)
 isRowExpandable: (p) => p.data.hasDetail !== false
 
 // 编程式
-api.expandRow(id); api.collapseRow(id);
-api.toggleDetailRow(id); api.isRowExpanded(id);
-api.expandAllDetails(); api.collapseAllDetails();
+api.hierarchy.setRowExpanded(id, true);
+api.hierarchy.setRowExpanded(id, false);
+api.hierarchy.isRowExpanded(id);
+api.hierarchy.setAllDetailsExpanded(true);
+api.hierarchy.setAllDetailsExpanded(false);
 ```
 
 ## 行为细节
 
 | 关注点 | 行为 |
 | --- | --- |
-| 展开状态 | 数据过滤/排序后跟随行 id 保持；`setRowData` 清空 |
+| 展开状态 | 数据过滤/排序后跟随行 id 保持；`api.rows.setData()` 清空 |
 | 事件 | `detailToggled: { rowId, rowNode, expanded }` |
 | 高度 | 统一 `detailRowHeight`（变高明细请用 `getRowHeight` 按 `node.isDetail` 分支） |
 | 选中/编辑 | 明细行不可选不可编辑；CSV 导出自动跳过 |

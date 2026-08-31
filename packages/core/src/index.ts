@@ -1,12 +1,7 @@
 import packageJson from "../package.json";
 
 export { createGrid } from "./core/createGrid";
-export { GridCore } from "./core/gridCore";
-export { EventBus } from "./core/eventBus";
-export { defaultComparator } from "./lib/compare";
 export { getByPath, setByPath, isSafePath } from "./lib/path";
-export { computeColumnWidths, fitColumnWidths } from "./lib/layout";
-export type { WidthInput } from "./lib/layout";
 
 export type {
   ColDef,
@@ -57,7 +52,6 @@ export type {
   CellClassParams,
   EditableParams,
   CellEditorParams,
-  GetRowIdParams,
   GetRowHeightParams,
   HeaderComponentParams,
   ICellEditor,
@@ -84,8 +78,8 @@ export type {
   GridFeatureContext,
   OverlayContent,
   OverlayTemplate,
-  ColumnStateStore,
   GridStateStore,
+  GridPersistenceOptions,
   StatusBarPanel,
   StatusBarConfig,
   GridDatasource,
@@ -111,16 +105,6 @@ export type {
   FieldDataProcessorOptions,
   GridDataWorkerScope
 } from "./lib/workerDataProcessor";
-export { GRID_SIZE_PRESETS } from "./core/resolveOptions";
-export type { GridSizePreset } from "./core/resolveOptions";
-export { GRID_OPTION_META, GRID_OPTION_KEYS, DIRECT_GRID_OPTION_KEYS } from "./core/gridOptionMetadata";
-export { matchesGridOptionKind, sanitizeGridOptionPatch } from "./core/gridOptionRuntime";
-export type {
-  GridOptionKey,
-  GridOptionMetadata,
-  GridOptionUpdateMode,
-  GridOptionValueKind
-} from "./core/gridOptionMetadata";
 export { describeFilter } from "./lib/filterSummary";
 export { validateGridOptions } from "./lib/validateOptions";
 export type { GridValidationCode, GridValidationIssue } from "./lib/validateOptions";
@@ -128,46 +112,24 @@ export { resolveGridFeatures } from "./lib/featureManifest";
 export type { GridFeatureIssue, GridFeatureIssueCode, ResolvedGridFeatures } from "./lib/featureManifest";
 export { buildColDefsFromSchema } from "./lib/schema";
 export type { GridSchema, GridSchemaField, GridSchemaGroup, GridSchemaFieldType, SchemaSelectOption } from "./lib/schema";
-export {
-  saveColumnState,
-  loadColumnState,
-  clearColumnState,
-  createColumnStateKey,
-  createLocalColumnStateStore
-} from "./lib/columnStateStore";
 export { saveGridState, loadGridState, clearGridState, createLocalGridStateStore } from "./lib/gridStateStore";
-export type { LocalGridStateStoreOptions, ManagedGridStateStore, StoredGridState } from "./lib/gridStateStore";
-export type {
-  ColumnStateKeyParts,
-  ColumnStateStorage,
-  LocalColumnStateStoreOptions,
-  ManagedColumnStateStore,
-  StoredColumnState
-} from "./lib/columnStateStore";
+export type { GridStateStorage, LocalGridStateStoreOptions, ManagedGridStateStore, StoredGridState } from "./lib/gridStateStore";
 export { BUILTIN_AGG_FUNCS, createAggResolver } from "./lib/aggregate";
 export type { AggFunction, AggValues } from "./lib/aggregate";
 export { DEFAULT_LOCALE, LOCALE_EN, matchLocaleKey, formatText, formatTwo } from "./lib/locale";
-export type { RgLocale, RgLocaleKey } from "./lib/locale";
+export type { MachTableLocale, MachTableLocaleKey } from "./lib/locale";
 export { toTsv, parseTsv, parseCsv, parseDelimited } from "./lib/clipboard";
 export { escapeHtml, downloadFile } from "./lib/download";
 export { createMachTableCommands } from "./lib/controller";
 export type { MachTableCommandOptions, MachTableCommands } from "./lib/controller";
 export { sanitizeFormulaCell } from "./lib/csv";
 export {
-  registerCellRenderer,
-  registerCellEditor,
-  getCellRenderer,
-  getCellEditor,
-  clearComponentRegistries
-} from "./lib/componentRegistry";
-export {
   createStatusTagRenderer,
   createProgressBarRenderer,
   createActionButtonsRenderer,
   createRowActionsRenderer,
   linkRenderer,
-  resolveTagVariant,
-  registerBuiltinRenderers
+  resolveTagVariant
 } from "./lib/presetRenderers";
 export type {
   TagVariant,
@@ -185,19 +147,16 @@ export { createColumnHelper, defineColumns } from "./lib/columnHelper";
 export type { ColumnHelper } from "./lib/columnHelper";
 export type { FieldPath, FieldPathValue } from "./types/path";
 export { createMachTablePreset, createEnterprisePreset, defineMachTablePreset, defineGridOptions } from "./lib/presets";
-export {
-  defineMachTableConfig,
-  mergeMachTableConfig,
-  normalizeMachTableConfig,
-  resolveMachTableGridOptions
-} from "./lib/configuration";
+export { defineMachTableConfig } from "./lib/configuration";
 export type {
+  MachTableDefaults,
+  MachTableInstanceOptionKey,
   MachTableConfigWarning,
   MachTableOptionExplanation,
+  MachTablePreset,
   MachTablePresetSelection,
   MachTableRuntimeConfig,
-  ResolvedMachTableConfig,
-  ResolvedMachTableGridOptions
+  ResolvedMachTableConfig
 } from "./lib/configuration";
 export {
   createBusinessColumnTypes,
@@ -234,7 +193,13 @@ export type {
   GridColumnsApi,
   GridSelectionApi,
   GridEditingApi,
+  GridFilteringApi,
+  GridSortingApi,
+  GridPaginationApi,
+  GridHierarchyApi,
+  GridViewApi,
   GridStateApi,
+  GridIoApi,
   GridDiagnosticsApi,
   ColumnWorkbenchItem,
   SaveChangesResult,
@@ -242,16 +207,15 @@ export type {
   ImportCsvOptions,
   PrintOptions
 } from "./types/api";
-export { createSaveSnapshot, normalizeBatchSaveResult, resolveSaveConflict } from "./lib/batchSave";
+export { resolveSaveConflict } from "./lib/batchSave";
 export type { RowNode } from "./types/row";
 export type {
   GridState,
   GridStateInput,
-  LegacyGridStateV1,
   GridStateSection,
   ApplyGridStateOptions
 } from "./types/state";
-export { migrateGridState } from "./lib/gridState";
+export { normalizeGridState } from "./lib/gridState";
 export type {
   GridViewManager,
   GridViewState,
@@ -301,8 +265,4 @@ export type {
   DirtyStateChangedEvent
 } from "./types/events";
 export { EVENT_TYPES } from "./types/events";
-export { Column } from "./services/column";
-export { evaluateColumnFilter } from "./services/filterService";
-export { sortNodes } from "./services/sortService";
-
 export const version: string = packageJson.version;

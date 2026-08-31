@@ -1,5 +1,14 @@
 # @agile-team/mach-table
 
+## 0.24.0
+
+### Minor Changes
+
+- Replace the duplicate flat command surface with one frozen `GridApi` organized into twelve responsibility-focused domains; keep only lifecycle, configuration, events and batching at the root.
+- Unify stable row identity under `rowKey`, state restoration under GridState v2, and automatic persistence under `persistence: { key, sections, store, debounceMs }`.
+- Prevent instance data and persistence identity from entering application defaults/presets, remove mutable process-wide component registration, and expose a narrow adapter bridge for official framework packages.
+- Remove unused compatibility aliases and internal implementation exports before 1.0, while extending API signature and semantic governance tests.
+
 ## 0.23.0
 
 ### Minor Changes

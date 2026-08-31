@@ -25,6 +25,7 @@ function makeRows(count: number): Order[] {
 
 const rows = ref(makeRows(8_000));
 const controller = useMachTableController<Order>();
+const persistence = { key: "vue-orders" } as const;
 
 const columns: ColDef<Order>[] = [
   { field: "id", headerName: "订单号", width: 140, pinned: "left" },
@@ -67,7 +68,7 @@ const columns: ColDef<Order>[] = [
       :commands="controller.commands"
       :loading="controller.busy.value"
       :selected-count="controller.selectedCount.value"
-      @clear-selection="controller.table.api.value?.deselectAll()"
+      @clear-selection="controller.table.api.value?.selection.clear()"
     >
       <button type="button" @click="rows = makeRows(rows.length + 2_000)">追加 2,000 行</button>
     </MachTableToolbar>
@@ -79,7 +80,7 @@ const columns: ColDef<Order>[] = [
         :column-defs="columns"
         :row-data="rows"
         row-key="id"
-        state-key="vue-orders"
+        :persistence="persistence"
       />
     </div>
   </main>

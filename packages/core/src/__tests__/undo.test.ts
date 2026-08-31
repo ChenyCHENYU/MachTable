@@ -22,10 +22,10 @@ function createHost(): HTMLElement {
 }
 
 function editCell(api: GridApi<Row>, host: HTMLElement, row: number, colId: string, value: string): void {
-  api.startEditingCell({ rowIndex: row, colId });
+  api.editing.startCell({ rowIndex: row, colId });
   const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
   input.value = value;
-  api.stopEditing(false);
+  api.editing.stop();
 }
 
 function selectRange(host: HTMLElement, r1: number, c1: string, r2: number, c2: string): void {
@@ -51,7 +51,7 @@ function createUndoGrid() {
     columnDefs,
     rowData: makeRows(5),
     enableRangeSelection: true,
-    getRowId: (p) => p.data.id
+    rowKey: (row) => row.id
   });
   return { api, host };
 }
@@ -60,19 +60,19 @@ describe("undo/redo", () => {
   it("undoes and redoes a single cell edit", () => {
     const changed = vi.fn();
     const { api, host } = createUndoGrid();
-    api.addEventListener("cellValueChanged", changed);
+    api.on("cellValueChanged", changed);
 
-    expect(api.canUndo()).toBe(false);
+    expect(api.editing.canUndo()).toBe(false);
     editCell(api, host, 0, "name", "edited");
-    expect(api.getNodeById("r0")?.data?.name).toBe("edited");
-    expect(api.canUndo()).toBe(true);
+    expect(api.rows.getById("r0")?.data?.name).toBe("edited");
+    expect(api.editing.canUndo()).toBe(true);
 
-    expect(api.undo()).toBe(true);
-    expect(api.getNodeById("r0")?.data?.name).toBe("n0");
-    expect(api.canRedo()).toBe(true);
+    expect(api.editing.undo()).toBe(true);
+    expect(api.rows.getById("r0")?.data?.name).toBe("n0");
+    expect(api.editing.canRedo()).toBe(true);
 
-    expect(api.redo()).toBe(true);
-    expect(api.getNodeById("r0")?.data?.name).toBe("edited");
+    expect(api.editing.redo()).toBe(true);
+    expect(api.rows.getById("r0")?.data?.name).toBe("edited");
     expect(changed).toHaveBeenCalledTimes(3);
     api.destroy();
   });
@@ -85,13 +85,13 @@ describe("undo/redo", () => {
     window.dispatchEvent(new MouseEvent("mousemove", { clientY: 3 * 36 }));
     window.dispatchEvent(new MouseEvent("mouseup", { clientY: 3 * 36 }));
 
-    expect(api.getNodeById("r3")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r3")?.data?.name).toBe("n0");
 
-    expect(api.undo()).toBe(true);
-    expect(api.getNodeById("r1")?.data?.name).toBe("n1");
-    expect(api.getNodeById("r2")?.data?.name).toBe("n2");
-    expect(api.getNodeById("r3")?.data?.name).toBe("n3");
-    expect(api.canUndo()).toBe(false);
+    expect(api.editing.undo()).toBe(true);
+    expect(api.rows.getById("r1")?.data?.name).toBe("n1");
+    expect(api.rows.getById("r2")?.data?.name).toBe("n2");
+    expect(api.rows.getById("r3")?.data?.name).toBe("n3");
+    expect(api.editing.canUndo()).toBe(false);
     api.destroy();
   });
 
@@ -104,17 +104,17 @@ describe("undo/redo", () => {
     });
     (host.querySelector(".mach-root") as HTMLElement).dispatchEvent(pasteEv);
 
-    expect(api.getNodeById("r0")?.data?.name).toBe("a");
-    expect(api.getNodeById("r1")?.data?.name).toBe("b");
+    expect(api.rows.getById("r0")?.data?.name).toBe("a");
+    expect(api.rows.getById("r1")?.data?.name).toBe("b");
 
-    api.undo();
-    expect(api.getNodeById("r0")?.data?.name).toBe("n0");
-    expect(api.getNodeById("r0")?.data?.score).toBe(1);
-    expect(api.getNodeById("r1")?.data?.score).toBe(2);
+    api.editing.undo();
+    expect(api.rows.getById("r0")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r0")?.data?.score).toBe(1);
+    expect(api.rows.getById("r1")?.data?.score).toBe(2);
 
-    api.redo();
-    expect(api.getNodeById("r0")?.data?.name).toBe("a");
-    expect(api.getNodeById("r1")?.data?.score).toBe(2);
+    api.editing.redo();
+    expect(api.rows.getById("r0")?.data?.name).toBe("a");
+    expect(api.rows.getById("r1")?.data?.score).toBe(2);
     api.destroy();
   });
 
@@ -124,33 +124,33 @@ describe("undo/redo", () => {
     (host.querySelector(".mach-root") as HTMLElement).dispatchEvent(
       new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true })
     );
-    expect(api.getNodeById("r0")?.data?.name).toBeNull();
-    expect(api.getNodeById("r1")?.data?.score).toBeNull();
+    expect(api.rows.getById("r0")?.data?.name).toBeNull();
+    expect(api.rows.getById("r1")?.data?.score).toBeNull();
 
-    api.undo();
-    expect(api.getNodeById("r0")?.data?.name).toBe("n0");
-    expect(api.getNodeById("r1")?.data?.score).toBe(2);
+    api.editing.undo();
+    expect(api.rows.getById("r0")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r1")?.data?.score).toBe(2);
     api.destroy();
   });
 
   it("branches history on new edit after undo", () => {
     const { api, host } = createUndoGrid();
     editCell(api, host, 0, "name", "first");
-    api.undo();
+    api.editing.undo();
     editCell(api, host, 0, "name", "second");
 
-    expect(api.canRedo()).toBe(false);
-    expect(api.getNodeById("r0")?.data?.name).toBe("second");
+    expect(api.editing.canRedo()).toBe(false);
+    expect(api.rows.getById("r0")?.data?.name).toBe("second");
     api.destroy();
   });
 
   it("clears history when rowData is replaced", () => {
     const { api, host } = createUndoGrid();
     editCell(api, host, 0, "name", "x");
-    expect(api.canUndo()).toBe(true);
+    expect(api.editing.canUndo()).toBe(true);
 
-    api.setRowData(makeRows(5));
-    expect(api.canUndo()).toBe(false);
+    api.rows.setData(makeRows(5));
+    expect(api.editing.canUndo()).toBe(false);
     api.destroy();
   });
 
@@ -160,10 +160,10 @@ describe("undo/redo", () => {
       columnDefs: [{ field: "name", headerName: "Name", editable: true }],
       rowData: makeRows(2),
       undoStackSize: 0,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     editCell(api, host, 0, "name", "x");
-    expect(api.canUndo()).toBe(false);
+    expect(api.editing.canUndo()).toBe(false);
     api.destroy();
   });
 
@@ -171,8 +171,8 @@ describe("undo/redo", () => {
     const changed = vi.fn();
     const { api, host } = createUndoGrid();
     editCell(api, host, 0, "name", "x");
-    api.addEventListener("cellValueChanged", changed);
-    api.undo();
+    api.on("cellValueChanged", changed);
+    api.editing.undo();
     expect(changed).toHaveBeenCalledTimes(1);
     expect(changed.mock.calls[0][0].oldValue).toBe("x");
     expect(changed.mock.calls[0][0].newValue).toBe("n0");

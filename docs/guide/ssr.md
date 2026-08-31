@@ -47,7 +47,7 @@ const columns: ColDef<Row>[] = [{ field: "name", headerName: "名称", flex: 1 }
 </template>
 ```
 
-如果表格初次挂载在隐藏 Tab 或弹窗中，在其可见后的 `nextTick` 调用 `api.refreshLayout()`。
+如果表格初次挂载在隐藏 Tab 或弹窗中，在其可见后的 `nextTick` 调用 `api.view.refreshLayout()`。
 
 ## Next.js App Router
 
@@ -85,7 +85,7 @@ export function OrdersGrid({ rows }: { rows: Order[] }) {
       <MachTable<Order>
         rowData={rows}
         columnDefs={columns}
-        getRowId={({ data }) => data.id}
+        rowKey="id"
       />
     </div>
   );
@@ -118,5 +118,5 @@ if (typeof window !== "undefined") {
 
 - 服务端 fallback 与客户端表格不应共享同一个由 Core 管理的 DOM 节点。
 - 容器高度应在首屏 CSS 中确定，避免 hydration 后页面跳动。
-- 字体异步加载可能影响自动列宽；字体就绪后需要时调用 `autoSizeAllColumns()`。
+- 字体异步加载可能影响自动列宽；字体就绪后需要时调用 `api.columns.autoSizeAll()`。
 - 不要在服务端序列化 `GridApi`、DOM、renderer 函数或 Feature 实例。

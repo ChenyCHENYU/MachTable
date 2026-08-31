@@ -42,12 +42,12 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
   let removeSelectionListener: (() => void) | null = null;
 
   const syncSelection = (): void => {
-    selectedRows.value = query?.selectedRows.value ?? table.api.value?.getSelectedRows() ?? [];
+    selectedRows.value = query?.selectedRows.value ?? table.api.value?.selection.getRows() ?? [];
   };
   watch(table.api, (api) => {
     removeSelectionListener?.();
     removeSelectionListener = null;
-    if (api && !api.isDestroyed()) removeSelectionListener = api.addEventListener("selectionChanged", syncSelection);
+    if (api && !api.isDestroyed()) removeSelectionListener = api.on("selectionChanged", syncSelection);
     syncSelection();
   }, { immediate: true });
   if (query) watch(query.selectedRows, syncSelection, { deep: false });
@@ -56,8 +56,8 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
     if (query) await query.reload();
     else {
       const api = table.api.value;
-      if (api?.isInfinite()) await api.reload();
-      else api?.refreshCells();
+      if (api?.rows.isRemote()) await api.rows.reload();
+      else api?.view.refreshCells();
     }
   };
   const commands = createMachTableCommands<TData>({ getApi: () => table.api.value, reload });

@@ -80,7 +80,7 @@ export async function exportGridToXlsx<TData>(
 ): Promise<XlsxWorkbook> {
   const engine = await resolveEngine(source);
   const separator = safeSeparator(params.columnSeparator);
-  const csv = api.getDataAsCsv(params);
+  const csv = api.io.exportCsv(params);
   const rows = parseCsv(csv, separator).map((row, rowIndex) =>
     row.map((value, columnIndex) => params.transformCell?.(value, rowIndex, columnIndex) ?? value)
   );
@@ -140,7 +140,7 @@ export async function importGridFromXlsx<TData>(
     coerceNumbers: params.coerceNumbers,
     parseValue: params.parseValue
   };
-  return api.importCsv(csv, csvOptions);
+  return api.io.importCsv(csv, csvOptions);
 }
 
 export function createXlsxExtension(source: XlsxEngineSource) {

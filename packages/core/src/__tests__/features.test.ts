@@ -30,7 +30,7 @@ describe("index column", () => {
       ],
       rowData: [{ id: "1", name: "a" }, { id: "2", name: "b" }, { id: "3", name: "c" }],
       indexOffset: 10,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const firstRow = host.querySelector('.mach-row[data-index="0"]');
     expect(firstRow?.textContent?.trim().startsWith("11")).toBe(true);
@@ -50,15 +50,15 @@ describe("selectable rows", () => {
         { id: "2", name: "b", score: 2 }
       ],
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const checkboxes = host.querySelectorAll<HTMLInputElement>(".mach-row-checkbox");
     expect(checkboxes[0].disabled).toBe(true);
     expect(checkboxes[1].disabled).toBe(false);
 
-    api.selectAll(true);
-    expect(api.getSelectedRows().length).toBe(1);
-    expect(api.getSelectedRows()[0].id).toBe("2");
+    api.selection.selectAll(true);
+    expect(api.selection.getRows().length).toBe(1);
+    expect(api.selection.getRows()[0].id).toBe("2");
     api.destroy();
   });
 });
@@ -73,7 +73,7 @@ describe("singleClickEdit", () => {
       ],
       rowData: [{ id: "1", name: "a", score: 5 }],
       singleClickEdit: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const cell = host.querySelector('.mach-cell[data-col-id="name"]') as HTMLElement;
     cell.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -95,21 +95,21 @@ describe("validate on edit", () => {
         }
       ],
       rowData: [{ id: "1", name: "a", score: 5 }],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.startEditingCell({ rowIndex: 0, colId: "score" });
+    api.editing.startCell({ rowIndex: 0, colId: "score" });
     const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
     input.value = "200";
-    api.stopEditing(false);
+    api.editing.stop();
 
     const editorEl = host.querySelector(".mach-editor-invalid");
     expect(editorEl).toBeTruthy();
-    expect(api.getNodeById("1")?.data?.score).toBe(5);
+    expect(api.rows.getById("1")?.data?.score).toBe(5);
 
     input.value = "50";
     host.querySelector(".mach-editor-invalid")?.dispatchEvent(new Event("input", { bubbles: true }));
-    api.stopEditing(false);
-    expect(api.getNodeById("1")?.data?.score).toBe(50);
+    api.editing.stop();
+    expect(api.rows.getById("1")?.data?.score).toBe(50);
     api.destroy();
   });
 
@@ -127,27 +127,27 @@ describe("validate on edit", () => {
         }
       ],
       rowData: [{ id: "1", name: "before" }],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    api.editing.startCell({ rowIndex: 0, colId: "name" });
     const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
     input.value = "after";
-    const stopping = api.stopEditingAsync();
+    const stopping = api.editing.stop();
     expect(input.getAttribute("aria-busy")).toBe("true");
     expect(input.inert).toBe(true);
 
     resolveValidation?.("Already exists");
     await expect(stopping).resolves.toBe(false);
-    expect(api.getNodeById("1")?.data?.name).toBe("before");
+    expect(api.rows.getById("1")?.data?.name).toBe("before");
     expect(host.querySelector(".mach-editor-invalid")).toBe(input);
     expect(input.inert).toBe(false);
 
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    const secondStop = api.stopEditingAsync();
+    const secondStop = api.editing.stop();
     resolveValidation?.(true);
     await expect(secondStop).resolves.toBe(true);
-    expect(api.getNodeById("1")?.data?.name).toBe("after");
+    expect(api.rows.getById("1")?.data?.name).toBe("after");
     expect(host.querySelector(".mach-editor-input")).toBeNull();
     api.destroy();
   });
@@ -162,16 +162,16 @@ describe("validate on edit", () => {
         validate: () => new Promise<true>((resolve) => { resolveValidation = resolve; })
       }],
       rowData: [{ id: "1", name: "before" }],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    api.editing.startCell({ rowIndex: 0, colId: "name" });
     (host.querySelector(".mach-editor-input") as HTMLInputElement).value = "stale";
-    const validation = api.stopEditingAsync();
-    await expect(api.stopEditingAsync(true)).resolves.toBe(true);
+    const validation = api.editing.stop();
+    await expect(api.editing.stop({ cancel: true })).resolves.toBe(true);
     resolveValidation?.(true);
     await expect(validation).resolves.toBe(false);
-    expect(api.getNodeById("1")?.data?.name).toBe("before");
+    expect(api.rows.getById("1")?.data?.name).toBe("before");
     api.destroy();
   });
 });
@@ -189,7 +189,7 @@ describe("row span", () => {
         { id: "2", dept: "A", name: "b" },
         { id: "3", dept: "B", name: "c" }
       ],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const row0 = host.querySelector('.mach-row[data-index="0"]');
@@ -215,7 +215,7 @@ describe("row span", () => {
         { id: "2", name: "b", score: 2 },
         { id: "3", name: "c", score: 3 }
       ],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const row0 = host.querySelector('.mach-row[data-index="0"]');
     const nameCell = row0?.querySelectorAll(".mach-cell")[0] as HTMLElement;
@@ -241,13 +241,13 @@ describe("summary footer", () => {
         if (colId === "score") return `合计 ${values.reduce((a, v) => a + Number(v ?? 0), 0)}`;
         return "";
       },
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const footer = host.querySelector(".mach-footer") as HTMLElement;
     expect(footer.style.display).toBe("");
     expect(footer.textContent).toContain("合计 30");
 
-    api.setQuickFilter("a");
+    api.filtering.setQuickText("a");
     expect(footer.textContent).toContain("合计 10");
     api.destroy();
   });
@@ -269,17 +269,17 @@ describe("manual sorting / filtering (server mode)", () => {
       ],
       manualSorting: true,
       manualFiltering: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.addEventListener("sortChanged", sortListener);
+    api.on("sortChanged", sortListener);
 
-    api.setSortModel([{ colId: "score", direction: "asc" }]);
+    api.sorting.setModel([{ colId: "score", direction: "asc" }]);
     expect(sortListener).toHaveBeenCalled();
-    expect(api.getSortModel()).toEqual([{ colId: "score", direction: "asc" }]);
-    expect(api.getRowNode(0)?.data?.name).toBe("c");
+    expect(api.sorting.getModel()).toEqual([{ colId: "score", direction: "asc" }]);
+    expect(api.rows.getAt(0)?.data?.name).toBe("c");
 
-    api.setFilterModel({ score: { type: "number", conditions: [{ match: "equals", value: 1 }] } });
-    expect(api.getDisplayedRowCount()).toBe(3);
+    api.filtering.setModel({ score: { type: "number", conditions: [{ match: "equals", value: 1 }] } });
+    expect(api.rows.getCount()).toBe(3);
 
     api.destroy();
   });
@@ -299,15 +299,15 @@ describe("row drag", () => {
         { id: "2", name: "b" },
         { id: "3", name: "c" }
       ],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.addEventListener("rowDragEnd", dragListener);
+    api.on("rowDragEnd", dragListener);
 
     expect(host.querySelector(".mach-row-drag-handle")).toBeTruthy();
-    expect(api.reorderRows(0, 2)).toBe(true);
-    expect(api.getRowNode(0)?.data?.name).toBe("b");
-    expect(api.getRowNode(1)?.data?.name).toBe("c");
-    expect(api.getRowNode(2)?.data?.name).toBe("a");
+    expect(api.rows.reorder(0, 2)).toBe(true);
+    expect(api.rows.getAt(0)?.data?.name).toBe("b");
+    expect(api.rows.getAt(1)?.data?.name).toBe("c");
+    expect(api.rows.getAt(2)?.data?.name).toBe("a");
     api.destroy();
   });
 
@@ -322,7 +322,7 @@ describe("row drag", () => {
         { id: "1", name: "a" },
         { id: "2", name: "b" }
       ],
-      getRowId: (params) => params.data.id,
+      rowKey: (row) => row.id,
       pagination: false
     });
     const handle = host.querySelector(".mach-row-drag-handle")!;
@@ -369,19 +369,19 @@ describe("tree data", () => {
       columnDefs: treeDefs(),
       rowData: treeRows,
       treeData: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    expect(api.getDisplayedRowCount()).toBe(2);
+    expect(api.rows.getCount()).toBe(2);
 
-    api.expandRow("r1");
-    expect(api.getDisplayedRowCount()).toBe(4);
-    expect(api.getRowNode(1)?.data?.name).toBe("上海");
+    api.hierarchy.setRowExpanded("r1", true);
+    expect(api.rows.getCount()).toBe(4);
+    expect(api.rows.getAt(1)?.data?.name).toBe("上海");
 
-    api.collapseRow("r1");
-    expect(api.getDisplayedRowCount()).toBe(2);
+    api.hierarchy.setRowExpanded("r1", false);
+    expect(api.rows.getCount()).toBe(2);
 
-    api.expandAllDetails();
-    expect(api.getDisplayedRowCount()).toBe(5);
+    api.hierarchy.setAllDetailsExpanded(true);
+    expect(api.rows.getCount()).toBe(5);
     api.destroy();
   });
 
@@ -392,22 +392,22 @@ describe("tree data", () => {
       rowData: treeRows,
       treeData: true,
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.expandAllDetails();
+    api.hierarchy.setAllDetailsExpanded(true);
 
-    api.selectNodeById("c1", true, false);
+    api.selection.setById("c1", true, false);
     const findRowById = (id: string) =>
       Array.from(host.querySelectorAll<HTMLElement>(".mach-row")).find((r) => r.dataset.id === id);
     const r1Checkbox = findRowById("r1")?.querySelector<HTMLInputElement>(".mach-row-checkbox");
     expect(r1Checkbox?.checked).toBe(false);
     expect(r1Checkbox?.indeterminate).toBe(true);
 
-    api.selectNodeById("c2", true, false);
+    api.selection.setById("c2", true, false);
     const r1Checkbox2 = findRowById("r1")?.querySelector<HTMLInputElement>(".mach-row-checkbox");
     expect(r1Checkbox2?.checked).toBe(true);
     expect(r1Checkbox2?.indeterminate).toBe(false);
-    expect(api.getSelectedRows().length).toBe(3);
+    expect(api.selection.getRows().length).toBe(3);
     api.destroy();
   });
 
@@ -417,15 +417,15 @@ describe("tree data", () => {
       columnDefs: treeDefs(),
       rowData: treeRows,
       treeData: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.setQuickFilter("深圳");
-    expect(api.getDisplayedRowCount()).toBe(1);
-    expect(api.getRowNode(0)?.data?.name).toBe("华南");
+    api.filtering.setQuickText("深圳");
+    expect(api.rows.getCount()).toBe(1);
+    expect(api.rows.getAt(0)?.data?.name).toBe("华南");
 
-    api.expandRow("r2");
-    expect(api.getDisplayedRowCount()).toBe(2);
-    expect(api.getRowNode(1)?.data?.name).toBe("深圳");
+    api.hierarchy.setRowExpanded("r2", true);
+    expect(api.rows.getCount()).toBe(2);
+    expect(api.rows.getAt(1)?.data?.name).toBe("深圳");
     api.destroy();
   });
 
@@ -449,18 +449,18 @@ describe("tree data", () => {
       ],
       treeData: true,
       defaultExpandAll: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    expect(api.getDisplayedRowCount()).toBe(5);
+    expect(api.rows.getCount()).toBe(5);
 
-    const p1 = api.getNodeById("p1");
-    api.applyTransaction({ remove: [p1!.data!] });
+    const p1 = api.rows.getById("p1");
+    api.rows.transact({ remove: [p1!.data!] });
 
-    expect(api.getDisplayedRowCount()).toBe(1);
-    expect(api.getNodeById("c1")).toBeUndefined();
-    expect(api.getNodeById("g1")).toBeUndefined();
-    expect(api.getNodeById("g2")).toBeUndefined();
-    expect(api.getNodeById("p2")).toBeTruthy();
+    expect(api.rows.getCount()).toBe(1);
+    expect(api.rows.getById("c1")).toBeUndefined();
+    expect(api.rows.getById("g1")).toBeUndefined();
+    expect(api.rows.getById("g2")).toBeUndefined();
+    expect(api.rows.getById("p2")).toBeTruthy();
     api.destroy();
   });
 
@@ -471,10 +471,10 @@ describe("tree data", () => {
       columnDefs: [{ field: "name", headerName: "名称" }],
       rowData: [],
       treeData: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.applyTransaction({
+    api.rows.transact({
       add: [
         {
           id: "parent",
@@ -483,20 +483,20 @@ describe("tree data", () => {
         }
       ]
     });
-    api.expandRow("parent");
-    api.expandRow("child");
+    api.hierarchy.setRowExpanded("parent", true);
+    api.hierarchy.setRowExpanded("child", true);
 
-    expect(api.getDisplayedRowCount()).toBe(3);
-    expect(api.getRowNode(2)?.id).toBe("grandchild");
+    expect(api.rows.getCount()).toBe(3);
+    expect(api.rows.getAt(2)?.id).toBe("grandchild");
     const grandchildIndent = host.querySelector<HTMLElement>(
       '.mach-row[data-index="2"] .mach-tree-indent'
     );
     expect(grandchildIndent?.style.width).toBe("32px");
 
-    api.applyTransaction({
+    api.rows.transact({
       add: [{ id: "duplicate", name: "父", children: [{ id: "duplicate", name: "重复子" }] }]
     });
-    expect(api.getNodeById("duplicate")?.data?.name).toBe("父");
+    expect(api.rows.getById("duplicate")?.data?.name).toBe("父");
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining("transaction.add"),
       expect.any(Error)
@@ -515,15 +515,15 @@ describe("tree data", () => {
         { id: "r2", name: "A", score: 0 }
       ],
       treeData: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.setSortModel([{ colId: "name", direction: "asc" }]);
-    expect(api.getRowNode(0)?.data?.name).toBe("A");
+    api.sorting.setModel([{ colId: "name", direction: "asc" }]);
+    expect(api.rows.getAt(0)?.data?.name).toBe("A");
 
-    api.expandRow("r1");
-    expect(api.getRowNode(1)?.data?.name).toBe("B");
-    expect(api.getRowNode(2)?.data?.name).toBe("x");
-    expect(api.getRowNode(3)?.data?.name).toBe("y");
+    api.hierarchy.setRowExpanded("r1", true);
+    expect(api.rows.getAt(1)?.data?.name).toBe("B");
+    expect(api.rows.getAt(2)?.data?.name).toBe("x");
+    expect(api.rows.getAt(3)?.data?.name).toBe("y");
     api.destroy();
   });
 
@@ -536,25 +536,25 @@ describe("tree data", () => {
       columnDefs: [{ field: "name" }],
       rowData: [{ id: "parent", name: "Parent", hasChildren: true }],
       treeData: true,
-      getRowId: ({ data }) => data.id,
+      rowKey: (row) => row.id,
       isTreeRowExpandable: ({ data }) => data.hasChildren === true,
       loadTreeChildren,
       onTreeChildrenLoaded: loaded
     });
 
-    expect(api.expandRow("parent")).toBe(true);
-    expect(api.isTreeRowLoading("parent")).toBe(true);
-    const duplicate = api.loadTreeChildren("parent");
+    expect(api.hierarchy.setRowExpanded("parent", true)).toBe(true);
+    expect(api.hierarchy.isTreeRowLoading("parent")).toBe(true);
+    const duplicate = api.hierarchy.loadTreeChildren("parent");
     await Promise.resolve();
     expect(loadTreeChildren).toHaveBeenCalledTimes(1);
     resolveRequest([{ id: "child", name: "Child" }]);
     await duplicate;
 
-    expect(api.isTreeRowLoading("parent")).toBe(false);
-    expect(api.getDisplayedRowCount()).toBe(2);
-    expect(api.getNodeById("child")?.data?.name).toBe("Child");
+    expect(api.hierarchy.isTreeRowLoading("parent")).toBe(false);
+    expect(api.rows.getCount()).toBe(2);
+    expect(api.rows.getById("child")?.data?.name).toBe("Child");
     expect(loaded).toHaveBeenCalledTimes(1);
-    await api.loadTreeChildren("parent");
+    await api.hierarchy.loadTreeChildren("parent");
     expect(loadTreeChildren).toHaveBeenCalledTimes(1);
     api.destroy();
   });
@@ -571,18 +571,18 @@ describe("tree data", () => {
       columnDefs: [{ field: "name" }],
       rowData: [{ id: "parent", name: "Parent", hasChildren: true }],
       treeData: true,
-      getRowId: ({ data }) => data.id,
+      rowKey: (row) => row.id,
       isTreeRowExpandable: ({ data }) => data.hasChildren === true,
       loadTreeChildren,
       onTreeChildrenLoadFailed: failed
     });
 
-    await expect(api.loadTreeChildren("parent")).rejects.toBe(failure);
-    expect(api.getNodeById("parent")?.treeLoadError).toBe(failure);
+    await expect(api.hierarchy.loadTreeChildren("parent")).rejects.toBe(failure);
+    expect(api.rows.getById("parent")?.treeLoadError).toBe(failure);
     expect(failed).toHaveBeenCalledTimes(1);
-    await api.retryTreeChildren("parent");
-    expect(api.getNodeById("parent")?.treeLoadError).toBeUndefined();
-    expect(api.getNodeById("child")?.data?.name).toBe("Recovered");
+    await api.hierarchy.loadTreeChildren("parent", { force: true });
+    expect(api.rows.getById("parent")?.treeLoadError).toBeUndefined();
+    expect(api.rows.getById("child")?.data?.name).toBe("Recovered");
     api.destroy();
     consoleError.mockRestore();
   });
@@ -597,14 +597,14 @@ describe("tree data", () => {
         { id: "reserved", name: "Reserved root" }
       ],
       treeData: true,
-      getRowId: ({ data }) => data.id,
+      rowKey: (row) => row.id,
       isTreeRowExpandable: ({ data }) => data.id === "parent",
       loadTreeChildren: async () => [{ id: "reserved", name: "Duplicate" }]
     });
 
-    await expect(api.retryTreeChildren("parent")).rejects.toThrow("Duplicate row id: reserved");
-    expect(api.getNodeById("old")?.data?.name).toBe("Old child");
-    expect(api.getNodeById("reserved")?.data?.name).toBe("Reserved root");
+    await expect(api.hierarchy.loadTreeChildren("parent", { force: true })).rejects.toThrow("Duplicate row id: reserved");
+    expect(api.rows.getById("old")?.data?.name).toBe("Old child");
+    expect(api.rows.getById("reserved")?.data?.name).toBe("Reserved root");
     api.destroy();
     consoleError.mockRestore();
   });
@@ -615,13 +615,13 @@ describe("tree data", () => {
       columnDefs: [{ field: "name" }],
       rowData: [{ id: "leaf", name: "Leaf", hasChildren: true, children: [] }],
       treeData: true,
-      getRowId: ({ data }) => data.id,
+      rowKey: (row) => row.id,
       isTreeRowExpandable: ({ data }) => data.hasChildren === true,
       loadTreeChildren
     });
 
-    expect(api.expandRow("leaf")).toBe(false);
-    await expect(api.loadTreeChildren("leaf")).resolves.toEqual([]);
+    expect(api.hierarchy.setRowExpanded("leaf", true)).toBe(false);
+    await expect(api.hierarchy.loadTreeChildren("leaf")).resolves.toEqual([]);
     expect(loadTreeChildren).not.toHaveBeenCalled();
     api.destroy();
   });
@@ -637,10 +637,10 @@ describe("tree data", () => {
       isTreeRowExpandable: ({ data }) => data.hasChildren === true,
       loadTreeChildren: async () => [child]
     });
-    const parentId = api.getRowNode(0)!.id;
+    const parentId = api.rows.getAt(0)!.id;
 
-    await expect(api.loadTreeChildren(parentId)).rejects.toThrow("cyclic object graph");
-    expect(api.getDisplayedRowCount()).toBe(1);
+    await expect(api.hierarchy.loadTreeChildren(parentId)).rejects.toThrow("cyclic object graph");
+    expect(api.rows.getCount()).toBe(1);
     api.destroy();
     consoleError.mockRestore();
   });
@@ -653,7 +653,7 @@ describe("locale", () => {
       columnDefs: [{ field: "name", headerName: "Name", filter: "text" }],
       rowData: [{ id: "1", name: "a" }],
       locale: LOCALE_EN,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const filterBtn = host.querySelector(".mach-filter-btn") as HTMLButtonElement;
     filterBtn.click();
@@ -677,9 +677,9 @@ describe("column workbench", () => {
       ],
       rowData: [{ id: "1", name: "A", score: 1, dept: "R&D" }]
     });
-    expect(api.getColumnWorkbenchItems().map((item) => item.label)).toEqual(["Name", "Score", "Department"]);
+    expect(api.columns.getWorkbenchItems().map((item) => item.label)).toEqual(["Name", "Score", "Department"]);
 
-    api.openColumnWorkbench();
+    api.columns.openWorkbench();
     const panel = document.querySelector<HTMLElement>('.mach-column-panel[role="dialog"]')!;
     const search = panel.querySelector<HTMLInputElement>(".mach-column-workbench-search")!;
     search.value = "score";
@@ -689,8 +689,8 @@ describe("column workbench", () => {
     const pin = panel.querySelector<HTMLSelectElement>(".mach-column-workbench-pin")!;
     pin.value = "right";
     pin.dispatchEvent(new Event("change"));
-    expect(api.getColumnWorkbenchItems().find((item) => item.colId === "score")?.pinned).toBe("right");
-    api.closeColumnWorkbench();
+    expect(api.columns.getWorkbenchItems().find((item) => item.colId === "score")?.pinned).toBe("right");
+    api.columns.closeWorkbench();
     expect(document.querySelector(".mach-column-panel")).toBeNull();
     api.destroy();
   });

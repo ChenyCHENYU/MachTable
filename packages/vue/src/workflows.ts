@@ -3,7 +3,7 @@
  *
  * Importing from `@agile-team/mach-table-vue/workflows` lets bundlers avoid
  * evaluating the component/plugin entry when a module only needs composables.
- * The root entry keeps re-exporting these APIs for backwards compatibility.
+ * Keeping workflows on a dedicated subpath avoids loading them on simple tables.
  */
 export { useMachTableEditing } from "./useMachTableEditing";
 export type {

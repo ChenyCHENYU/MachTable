@@ -14,7 +14,7 @@ createGrid(host, {
   ],
   rowData,
   rowSelection: "multiple",        // 开启后行点击也可选中（Ctrl 加选、Shift 范围）
-  getRowId: (p) => p.data.id
+  rowKey: "id"
 });
 ```
 
@@ -51,26 +51,26 @@ rowSelection: "single"
 ## 编程式 API
 
 ```ts
-api.getSelectedRows();                       // 数据数组（含被过滤隐藏的选中行）
-api.getSelectedNodes();                      // 行节点
-api.getSelectedIds();                        // id 数组（无限模式未加载行也在内）
-api.getVisibleSelection();                   // 仅当前过滤可见的选中行
+api.selection.getRows();                     // 数据数组（含被过滤隐藏的选中行）
+api.selection.getNodes();                      // 行节点
+api.selection.getIds();                        // id 数组（无限模式未加载行也在内）
+api.selection.getVisibleRows();                   // 仅当前过滤可见的选中行
 
-api.selectNodeById("r5");                    // 选中（默认清除其他）
-api.selectNodeById("r6", true, false);       // 选中且不清除其他
-api.setSelection([rowA, rowB]);              // 按数据引用批量选中
-api.selectAll(true);                         // 全选过滤结果
-api.deselectAll();
+api.selection.setById("r5");                    // 选中（默认清除其他）
+api.selection.setById("r6", true, false);       // 选中且不清除其他
+api.selection.setRows([rowA, rowB]);              // 按数据引用批量选中
+api.selection.selectAll(true);                         // 全选过滤结果
+api.selection.clear();
 ```
 
 ## 与过滤/排序/数据替换的交互
 
 | 场景 | 行为 |
 | --- | --- |
-| 过滤隐藏选中行 | 选中保留（`getSelectedRows` 仍返回） |
+| 过滤隐藏选中行 | 选中保留（`api.selection.getRows()` 仍返回） |
 | 排序 | 选中跟随数据行 |
-| `setRowData` 全量替换 | 有 `getRowId`：按 id 保留选中；无：清空 |
-| `applyTransaction({ remove })` | 选中随行删除 |
+| `rows.setData` 全量替换 | 有稳定 `rowKey`：按 id 保留选中；无：清空 |
+| `api.rows.transact({ remove })` | 选中随行删除 |
 | 无限滚动翻块 / reload | 按 id 跨块保留 |
 
 ## 树形级联与分组级联
@@ -97,7 +97,7 @@ onSelectionChanged: (e) => {
 复选框由 `checkboxSelection` 列声明决定；`rowSelection` 只控制选中行为。两者都配置才有复选框列。
 
 **Q：跨页（无限模式）全选了 50 行，表头为什么是半选？**
-表头全选态以服务端总行数为分母；已加载行全选时呈半选。用 `getSelectedIds()` 获取完整选中集合。
+表头全选态以服务端总行数为分母；已加载行全选时呈半选。用 `api.selection.getIds()` 获取完整选中集合。
 
 **Q：不想让点击行选中，只要复选框？**
 暂不支持分离（可监听 `rowClicked` 忽略）；该行为与 AG Grid 一致。

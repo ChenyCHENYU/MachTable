@@ -2,9 +2,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   createGrid,
-  registerCellRenderer,
-  registerCellEditor,
-  clearComponentRegistries,
   sanitizeFormulaCell
 } from "../index";
 import type { GridApi } from "../index";
@@ -30,12 +27,12 @@ function createHost(): HTMLElement {
 }
 
 afterEach(() => {
-  clearComponentRegistries();
+  document.body.textContent = "";
 });
 
-describe("component registry", () => {
-  it("resolves cellRenderer by registered name", () => {
-    registerCellRenderer("bold-name", (params) => `【${params.value}】`);
+describe("scoped components", () => {
+  it("resolves a named cell renderer from grid components", () => {
+    const boldName = (params: any) => `【${params.value}】`;
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [
@@ -43,15 +40,16 @@ describe("component registry", () => {
         { field: "score", headerName: "Score" }
       ],
       rowData: makeRows(3),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id,
+      components: { cellRenderers: { "bold-name": boldName } }
     });
     const row0 = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     expect(row0.textContent).toContain("【n0】");
     api.destroy();
   });
 
-  it("resolves cellEditor by registered name", () => {
-    registerCellEditor("uppercase", (params) => {
+  it("resolves a named cell editor from grid components", () => {
+    const uppercase = (params: any) => {
       const input = document.createElement("input");
       input.className = "mach-editor-input custom-editor";
       input.value = String(params.value ?? "").toUpperCase();
@@ -60,19 +58,20 @@ describe("component registry", () => {
         getValue: () => input.value,
         focus: () => input.focus()
       };
-    });
+    };
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", editable: true, cellEditor: "uppercase" }],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id,
+      components: { cellEditors: { uppercase } }
     });
-    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    api.editing.startCell({ rowIndex: 0, colId: "name" });
     const editor = host.querySelector(".custom-editor") as HTMLInputElement;
     expect(editor.value).toBe("N0");
     editor.value = "CHANGED";
-    api.stopEditing(false);
-    expect(api.getNodeById("r0")?.data?.name).toBe("CHANGED");
+    api.editing.stop();
+    expect(api.rows.getById("r0")?.data?.name).toBe("CHANGED");
     api.destroy();
   });
 
@@ -81,7 +80,7 @@ describe("component registry", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", cellRenderer: "not-registered" }],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const row0 = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     expect(row0.textContent).toContain("n0");
@@ -95,13 +94,13 @@ describe("getRowHeight + wrapText", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: makeRows(3),
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       getRowHeight: (p) => (Number(p.data?.id.slice(1)) === 1 ? 72 : 36)
     });
     const rows = Array.from(host.querySelectorAll(".mach-row[data-index]")) as HTMLElement[];
     const row1 = rows.find((r) => r.dataset.index === "1") as HTMLElement;
     expect(row1.style.height).toBe("72px");
-    expect(api.getRowNode(2)?.rowIndex).toBe(2);
+    expect(api.rows.getAt(2)?.rowIndex).toBe(2);
 
     const container = host.querySelector(".mach-row-container") as HTMLElement;
     expect(container.style.height).toBe(`${36 + 72 + 36}px`);
@@ -116,7 +115,7 @@ describe("getRowHeight + wrapText", () => {
         { field: "score", headerName: "Score" }
       ],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const row0 = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     const cells = row0.querySelectorAll(".mach-cell");
@@ -130,7 +129,7 @@ describe("getRowHeight + wrapText", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     api.updateOptions({ getRowHeight: () => 50 });
     const rows = Array.from(host.querySelectorAll(".mach-row[data-index]")) as HTMLElement[];
@@ -146,11 +145,11 @@ describe("fixes round 2", () => {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: makeRows(3),
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.selectNodeById("r0", true, false);
-    api.selectNodeById("r2", true, false);
-    expect(api.getSelectedIds().sort()).toEqual(["r0", "r2"]);
+    api.selection.setById("r0", true, false);
+    api.selection.setById("r2", true, false);
+    expect(api.selection.getIds().sort()).toEqual(["r0", "r2"]);
     api.destroy();
   });
 
@@ -163,7 +162,7 @@ describe("fixes round 2", () => {
       ],
       rowSelection: "multiple",
       blockSize: 10,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       datasource: {
         getRows(params) {
           setTimeout(() => {
@@ -174,8 +173,8 @@ describe("fixes round 2", () => {
     });
     await new Promise((r) => setTimeout(r, 15));
 
-    api.selectAll(true);
-    expect(api.getSelectedRows().length).toBe(10);
+    api.selection.selectAll(true);
+    expect(api.selection.getRows().length).toBe(10);
     const headerCheckbox = host.querySelector(".mach-select-all") as HTMLInputElement;
     expect(headerCheckbox.checked).toBe(false);
     expect(headerCheckbox.indeterminate).toBe(true);
@@ -187,7 +186,7 @@ describe("fixes round 2", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     expect(host.querySelector(".mach-menu-btn")).toBeNull();
 
@@ -205,13 +204,13 @@ describe("fixes round 2", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "at", headerName: "时间", editable: true, cellEditor: "date" }],
       rowData: data,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.startEditingCell({ rowIndex: 0, colId: "at" });
+    api.editing.startCell({ rowIndex: 0, colId: "at" });
     const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
     expect(input.value).toBe("2024-05-06");
     input.value = "2024-06-07";
-    api.stopEditing(false);
+    api.editing.stop();
     expect(data[0].at).toBe("2024-06-07T08:30");
     api.destroy();
   });
@@ -225,14 +224,14 @@ describe("fixes round 2", () => {
         { id: "2", name: "b", score: 2, note: "-42" },
         { id: "3", name: "c", score: 3, note: "@weblink" }
       ],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    const csv = api.getDataAsCsv();
+    const csv = api.io.exportCsv();
     expect(csv).toContain("'=cmd");
     expect(csv).toContain("-42");
     expect(csv).toContain("'@weblink");
 
-    const raw = api.getDataAsCsv({ protectFormulas: false });
+    const raw = api.io.exportCsv({ protectFormulas: false });
     expect(raw).toContain("=cmd");
     api.destroy();
   });
@@ -256,7 +255,7 @@ describe("fixes round 2", () => {
       rowData: makeRows(2),
       treeData: true,
       masterDetail: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     expect(warn).toHaveBeenCalledTimes(2);
     warn.mockRestore();

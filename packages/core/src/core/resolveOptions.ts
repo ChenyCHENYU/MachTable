@@ -55,13 +55,13 @@ export function rowIdFromKey<TData>(rowKey: NonNullable<GridOptions<TData>["rowK
   return value == null ? "" : String(value);
 }
 
-function resolveRowIdentity<TData>(options: GridOptions<TData>): Pick<ResolvedGridOptions<TData>, "getRowId" | "rowKey"> {
+function resolveRowIdentity<TData>(options: GridOptions<TData>): Pick<ResolvedGridOptions<TData>, "resolveRowId" | "rowKey"> {
   const rowKey = options.rowKey;
-  const getRowId = options.getRowId ?? (rowKey
+  const resolveRowId = rowKey
     ? ({ data }: { data: TData }) => rowIdFromKey(rowKey, data)
-    : undefined);
+    : undefined;
   return {
-    ...(getRowId ? { getRowId } : {}),
+    ...(resolveRowId ? { resolveRowId } : {}),
     ...(rowKey ? { rowKey } : {})
   };
 }
@@ -172,7 +172,6 @@ function resolveWatermark(options: GridOptions) {
 function resolveInteraction(options: GridOptions) {
   return {
     columnMenu: options.columnMenu ?? false,
-    columnStateKey: options.columnStateKey ?? null,
     advancedFilterModel: normalizeAdvancedFilterModel(options.advancedFilterModel),
     ...resolveStatePersistence(options),
     locale: options.locale ?? {},
@@ -193,9 +192,17 @@ function resolveInteraction(options: GridOptions) {
 }
 
 function resolveStatePersistence(options: GridOptions) {
+  const persistence = options.persistence;
+  if (!persistence || typeof persistence.key !== "string" || !persistence.key.trim()) {
+    return { persistence: null };
+  }
   return {
-    stateKey: options.stateKey ?? null,
-    stateSaveDebounceMs: finiteAtLeast(options.stateSaveDebounceMs, 160, 0, true)
+    persistence: {
+      key: persistence.key.trim(),
+      debounceMs: finiteAtLeast(persistence.debounceMs, 160, 0, true),
+      ...(persistence.sections ? { sections: [...new Set(persistence.sections)] } : {}),
+      ...(persistence.store ? { store: persistence.store } : {})
+    }
   };
 }
 
@@ -230,10 +237,8 @@ function resolveAccessibility(options: GridOptions) {
 }
 
 const OPTIONAL_OPTION_KEYS = [
-  "stateStore",
   "detailRowRenderer",
   "isRowExpandable",
-  "columnStateStore",
   "aggFuncs",
   "components",
   "actionPolicy",

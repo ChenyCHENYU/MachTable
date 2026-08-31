@@ -73,7 +73,6 @@ export interface UseMachTableQueryReturn<TData> {
   selectedKeys: string[];
   selectedRows: TData[];
   selectionState: MachTableRemoteSelectionState;
-  gridProps: GridOptions<TData>;
   bindings: GridOptions<TData>;
   reload(options?: { resetPage?: boolean }): Promise<void>;
   retry(): Promise<void>;
@@ -142,7 +141,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     const api = apiRef.current;
     if (!api || api.isDestroyed()) return;
     suppressSelection.current = true;
-    try { api.setSelection(stateRef.current.rows.filter((row) => selected(rowId(row))), true); }
+    try { api.selection.setRows(stateRef.current.rows.filter((row) => selected(rowId(row))), true); }
     finally { suppressSelection.current = false; }
   }, [rowId, selected]);
 
@@ -250,7 +249,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     selectedById.current.clear();
     if (changed) notifySelection();
     suppressSelection.current = true;
-    try { apiRef.current?.deselectAll(); } finally { suppressSelection.current = false; }
+    try { apiRef.current?.selection.clear(); } finally { suppressSelection.current = false; }
   }, [notifySelection]);
 
   const onPaginationChanged = useCallback((event: PaginationChangedEvent<TData>): void => {
@@ -277,7 +276,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     stateRef.current.filterModel = next;
     const advanced = normalizeAdvancedFilterModel(event.advancedFilterModel);
     stateRef.current.advancedFilterModel = advanced;
-    stateRef.current.quickFilterText = event.api.getQuickFilter();
+    stateRef.current.quickFilterText = event.api.filtering.getQuickText();
     setFilterModel(next);
     setAdvancedFilterModel(advanced);
     setQuickFilterText(stateRef.current.quickFilterText);
@@ -318,9 +317,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     setPage(1); setSortModel([]); setFilterModel({}); setAdvancedFilterModel(null); clearSelection();
     suppressGrid.current = true;
     try {
-      apiRef.current?.setSortModel(null);
-      apiRef.current?.setFilterModel(null);
-      apiRef.current?.setAdvancedFilterModel(null);
+      apiRef.current?.sorting.setModel(null);
+      apiRef.current?.filtering.setModel(null);
+      apiRef.current?.filtering.setAdvancedModel(null);
     }
     finally { suppressGrid.current = false; }
     await load();
@@ -358,7 +357,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (!values.includes(pageSize)) values.push(pageSize);
     return values.sort((left, right) => left - right);
   }, [options.pageSizeOptions, pageSize]);
-  const gridProps = useMemo<GridOptions<TData>>(() => ({
+  const bindings = useMemo<GridOptions<TData>>(() => ({
     rowData: rows,
     loading,
     error,
@@ -396,9 +395,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     setQuickFilterText(value) {
       stateRef.current.quickFilterText = value;
       setQuickFilterText(value);
-      apiRef.current?.setQuickFilter(value);
+      apiRef.current?.filtering.setQuickText(value);
     },
-    selectedKeys, selectedRows, selectionState, gridProps, bindings: gridProps,
+    selectedKeys, selectedRows, selectionState, bindings,
     reload, retry: load, reset, abort, clearSelection, selectAllMatching, applySelectionState
   };
 }

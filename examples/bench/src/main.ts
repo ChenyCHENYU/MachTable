@@ -90,7 +90,7 @@ function rebuild(): void {
   api = createGrid<BenchRow>(host, {
     columnDefs: buildDefs(colCount),
     rowData: makeRows(rowCount),
-    getRowId: (p) => p.data.id,
+    rowKey: (row) => row.id,
     size: "compact",
     stripedRows: true,
     pagination: false,
@@ -120,7 +120,7 @@ document.getElementById("rebuild")!.addEventListener("click", rebuild);
 
 document.getElementById("scroll")!.addEventListener("click", () => {
   if (!api) return;
-  api.resetPerformanceMetrics();
+  api.diagnostics.resetPerformance();
   const viewport = host.querySelector(".mach-body-viewport--scroll") as HTMLElement;
   const startTop = viewport.scrollTop;
   const maxScroll = viewport.scrollHeight - viewport.clientHeight;
@@ -140,7 +140,7 @@ document.getElementById("scroll")!.addEventListener("click", () => {
       const elapsed = performance.now() - t0;
       const measuredFrames = Math.max(1, frames);
       const avgFrame = elapsed / measuredFrames;
-      const metrics = api?.getPerformanceSnapshot();
+      const metrics = api?.diagnostics.getPerformance();
       const internal = metrics
         ? `，内核 P95 <b>${metrics.p95RenderMs.toFixed(2)}ms</b>，长渲染 ${metrics.longRenderCount}/${metrics.sampleCount}`
         : "";

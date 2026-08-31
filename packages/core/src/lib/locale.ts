@@ -59,10 +59,10 @@ export const DEFAULT_LOCALE = {
   actionMore: "更多操作"
 } as const;
 
-export type RgLocaleKey = keyof typeof DEFAULT_LOCALE;
-export type RgLocale = Partial<Record<RgLocaleKey, string>>;
+export type MachTableLocaleKey = keyof typeof DEFAULT_LOCALE;
+export type MachTableLocale = Partial<Record<MachTableLocaleKey, string>>;
 
-export const LOCALE_EN: RgLocale = {
+export const LOCALE_EN: MachTableLocale = {
   matchContains: "Contains",
   matchNotContains: "Not Contains",
   matchEquals: "Equals",
@@ -123,7 +123,7 @@ export const LOCALE_EN: RgLocale = {
   actionMore: "More actions"
 };
 
-const MATCH_LOCALE_KEYS: Record<string, RgLocaleKey> = {
+const MATCH_LOCALE_KEYS: Record<string, MachTableLocaleKey> = {
   contains: "matchContains",
   notContains: "matchNotContains",
   equals: "matchEquals",
@@ -139,7 +139,7 @@ const MATCH_LOCALE_KEYS: Record<string, RgLocaleKey> = {
   inRange: "matchInRange"
 };
 
-export function matchLocaleKey(match: string): RgLocaleKey {
+export function matchLocaleKey(match: string): MachTableLocaleKey {
   return MATCH_LOCALE_KEYS[match] ?? ("matchEquals");
 }
 

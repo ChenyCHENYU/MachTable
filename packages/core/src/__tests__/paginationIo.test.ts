@@ -32,7 +32,7 @@ function createPagedGrid(rowCount: number, cfg: Record<string, any> = {}) {
   const api: GridApi<Row> = createGrid<Row>(host, {
     columnDefs,
     rowData: makeRows(rowCount),
-    getRowId: (p) => p.data.id,
+    rowKey: (row) => row.id,
     pagination: { pageSize: 20, ...cfg }
   });
   return { api, host };
@@ -41,10 +41,10 @@ function createPagedGrid(rowCount: number, cfg: Record<string, any> = {}) {
 describe("pagination", () => {
   it("is enabled by default and slices rows by pageSize", () => {
     const { api, host } = createPagedGrid(55);
-    expect(api.paginationEnabled()).toBe(true);
-    expect(api.getDisplayedRowCount()).toBe(20);
-    expect(api.getPageCount()).toBe(3);
-    expect(api.getTotalRowCount()).toBe(55);
+    expect(api.pagination.isEnabled()).toBe(true);
+    expect(api.rows.getCount()).toBe(20);
+    expect(api.pagination.getPageCount()).toBe(3);
+    expect(api.pagination.getTotalRowCount()).toBe(55);
 
     const bar = host.querySelector(".mach-pagination") as HTMLElement;
     expect(bar).toBeTruthy();
@@ -56,38 +56,38 @@ describe("pagination", () => {
 
   it("navigates pages via api and ui buttons with disabled bounds", () => {
     const { api, host } = createPagedGrid(45);
-    expect(api.getPage()).toBe(1);
-    expect(api.getRowNode(0)?.data?.id).toBe("r0");
+    expect(api.pagination.getPage()).toBe(1);
+    expect(api.rows.getAt(0)?.data?.id).toBe("r0");
 
-    api.setPage(2);
-    expect(api.getPage()).toBe(2);
-    expect(api.getDisplayedRowCount()).toBe(20);
-    expect(api.getRowNode(0)?.data?.id).toBe("r20");
+    api.pagination.setPage(2);
+    expect(api.pagination.getPage()).toBe(2);
+    expect(api.rows.getCount()).toBe(20);
+    expect(api.rows.getAt(0)?.data?.id).toBe("r20");
 
-    api.setPage(99);
-    expect(api.getPage()).toBe(3);
-    api.setPage(0);
-    expect(api.getPage()).toBe(1);
+    api.pagination.setPage(99);
+    expect(api.pagination.getPage()).toBe(3);
+    api.pagination.setPage(0);
+    expect(api.pagination.getPage()).toBe(1);
 
     const next = host.querySelector(".mach-pagination-next") as HTMLButtonElement;
     const prev = host.querySelector(".mach-pagination-prev") as HTMLButtonElement;
     expect(prev.disabled).toBe(true);
     next.click();
-    expect(api.getPage()).toBe(2);
+    expect(api.pagination.getPage()).toBe(2);
     expect(prev.disabled).toBe(false);
 
-    api.setPage(3);
+    api.pagination.setPage(3);
     const last = host.querySelector(".mach-pagination-last") as HTMLButtonElement;
     expect(last.disabled).toBe(true);
     const first = host.querySelector(".mach-pagination-first") as HTMLButtonElement;
     first.click();
-    expect(api.getPage()).toBe(1);
+    expect(api.pagination.getPage()).toBe(1);
     api.destroy();
   });
 
   it("index column keeps absolute numbering across pages", () => {
     const { api, host } = createPagedGrid(45);
-    api.setPage(2);
+    api.pagination.setPage(2);
     const firstRow = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     expect(firstRow.textContent?.trimStart().startsWith("21")).toBe(true);
     api.destroy();
@@ -95,12 +95,12 @@ describe("pagination", () => {
 
   it("setPageSize keeps first visible row in view and updates count", () => {
     const { api } = createPagedGrid(100);
-    api.setPage(3);
-    api.setPageSize(50);
-    expect(api.getPageSize()).toBe(50);
-    expect(api.getPage()).toBe(1);
-    expect(api.getPageCount()).toBe(2);
-    expect(api.getDisplayedRowCount()).toBe(50);
+    api.pagination.setPage(3);
+    api.pagination.setPageSize(50);
+    expect(api.pagination.getPageSize()).toBe(50);
+    expect(api.pagination.getPage()).toBe(1);
+    expect(api.pagination.getPageCount()).toBe(2);
+    expect(api.rows.getCount()).toBe(50);
     api.destroy();
   });
 
@@ -109,7 +109,7 @@ describe("pagination", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "id", headerName: "ID" }],
       rowData: [],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const bar = host.querySelector(".mach-pagination") as HTMLElement;
     expect(bar.style.display).toBe("none");
@@ -120,10 +120,10 @@ describe("pagination", () => {
       columnDefs: [{ field: "id", headerName: "ID" }],
       rowData: makeRows(8),
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    expect(api2.paginationEnabled()).toBe(false);
-    expect(api2.getDisplayedRowCount()).toBe(8);
+    expect(api2.pagination.isEnabled()).toBe(false);
+    expect(api2.rows.getCount()).toBe(8);
     const bar2 = host2.querySelector(".mach-pagination") as HTMLElement;
     expect(bar2.style.display).toBe("none");
     api2.destroy();
@@ -131,20 +131,20 @@ describe("pagination", () => {
 
   it("filters re-clamp page and keep pagination stable", () => {
     const { api } = createPagedGrid(45);
-    api.setPage(3);
-    api.setQuickFilter("n1");
-    expect(api.getTotalRowCount()).toBe(11);
-    expect(api.getPage()).toBe(1);
-    expect(api.getDisplayedRowCount()).toBe(11);
+    api.pagination.setPage(3);
+    api.filtering.setQuickText("n1");
+    expect(api.pagination.getTotalRowCount()).toBe(11);
+    expect(api.pagination.getPage()).toBe(1);
+    expect(api.rows.getCount()).toBe(11);
     api.destroy();
   });
 
   it("csv export covers all pages, headersOnly emits header row only", () => {
     const { api } = createPagedGrid(45);
-    const lines = api.getDataAsCsv().split("\r\n");
+    const lines = api.io.exportCsv().split("\r\n");
     expect(lines.length).toBe(46);
 
-    const template = api.getDataAsCsv({ headersOnly: true }).split("\r\n");
+    const template = api.io.exportCsv({ headersOnly: true }).split("\r\n");
     expect(template.length).toBe(1);
     expect(template[0]).toContain("ID");
     api.destroy();
@@ -153,21 +153,21 @@ describe("pagination", () => {
   it("runtime toggle via updateOptions", () => {
     const { api } = createPagedGrid(45);
     api.updateOptions({ pagination: false });
-    expect(api.paginationEnabled()).toBe(false);
-    expect(api.getDisplayedRowCount()).toBe(45);
+    expect(api.pagination.isEnabled()).toBe(false);
+    expect(api.rows.getCount()).toBe(45);
 
     api.updateOptions({ pagination: { pageSize: 10 } });
-    expect(api.paginationEnabled()).toBe(true);
-    expect(api.getDisplayedRowCount()).toBe(10);
-    expect(api.getPageCount()).toBe(5);
+    expect(api.pagination.isEnabled()).toBe(true);
+    expect(api.rows.getCount()).toBe(10);
+    expect(api.pagination.getPageCount()).toBe(5);
     api.destroy();
   });
 
   it("emits paginationChanged", () => {
     const listener = vi.fn();
     const { api } = createPagedGrid(45);
-    api.addEventListener("paginationChanged", listener);
-    api.setPage(2);
+    api.on("paginationChanged", listener);
+    api.pagination.setPage(2);
     expect(listener).toHaveBeenCalledWith(expect.objectContaining({ page: 2, pageCount: 3, total: 45 }));
     api.destroy();
   });
@@ -182,15 +182,15 @@ describe("pagination", () => {
       pagination: { mode: "server", page: 3, pageSize: 10, total: 42 },
       onPaginationChanged: listener
     });
-    expect(api.getDisplayedRowCount()).toBe(2);
-    expect(api.getPage()).toBe(3);
-    expect(api.getPageCount()).toBe(5);
-    expect(api.getTotalRowCount()).toBe(42);
-    api.setPage(4);
+    expect(api.rows.getCount()).toBe(2);
+    expect(api.pagination.getPage()).toBe(3);
+    expect(api.pagination.getPageCount()).toBe(5);
+    expect(api.pagination.getTotalRowCount()).toBe(42);
+    api.pagination.setPage(4);
     expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ page: 4, total: 42 }));
     api.updateOptions({ pagination: { mode: "server", page: 4, pageSize: 10, total: 33 } });
-    expect(api.getPage()).toBe(4);
-    expect(api.getPageCount()).toBe(4);
+    expect(api.pagination.getPage()).toBe(4);
+    expect(api.pagination.getPageCount()).toBe(4);
     api.destroy();
   });
 
@@ -199,16 +199,16 @@ describe("pagination", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "id", headerName: "ID" }],
       blockSize: 30,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       datasource: {
         getRows(params) {
           setTimeout(() => params.onSuccess(makeRows(30), 90), 0);
         }
       }
     });
-    expect(api.paginationEnabled()).toBe(false);
+    expect(api.pagination.isEnabled()).toBe(false);
     await new Promise((r) => setTimeout(r, 15));
-    expect(api.getDisplayedRowCount()).toBe(30);
+    expect(api.rows.getCount()).toBe(30);
     api.destroy();
   });
 });
@@ -285,7 +285,7 @@ describe("print", () => {
     };
     const openSpy = vi.spyOn(window, "open").mockReturnValue(fakeWin);
     const { api } = createPagedGrid(45);
-    const ok = api.print({ title: "设备清单" });
+    const ok = api.io.print({ title: "设备清单" });
     expect(ok).toBe(true);
     expect(written.length).toBe(1);
     expect(written[0]).toContain("设备清单");
@@ -298,7 +298,7 @@ describe("print", () => {
   it("returns false when popup blocked", () => {
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
     const { api } = createPagedGrid(10);
-    expect(api.print()).toBe(false);
+    expect(api.io.print()).toBe(false);
     openSpy.mockRestore();
     api.destroy();
   });
@@ -309,9 +309,9 @@ describe("importCsv", () => {
 
   it("replace mode maps headers to fields with numeric coercion", () => {
     const { api } = createPagedGrid(3);
-    expect(api.importCsv(csv)).toBe(true);
-    expect(api.getTotalRowCount()).toBe(2);
-    const first = api.getNodeById("r101");
+    expect(api.io.importCsv(csv)).toBe(true);
+    expect(api.pagination.getTotalRowCount()).toBe(2);
+    const first = api.rows.getById("r101");
     expect(first?.data).toBeTruthy();
     expect((first?.data as any).score).toBe(88);
     expect((first?.data as any).name).toBe("导入甲");
@@ -320,21 +320,21 @@ describe("importCsv", () => {
 
   it("append mode adds to existing rows", () => {
     const { api } = createPagedGrid(3);
-    api.importCsv(csv, { mode: "append" });
-    expect(api.getTotalRowCount()).toBe(5);
+    api.io.importCsv(csv, { mode: "append" });
+    expect(api.pagination.getTotalRowCount()).toBe(5);
     api.destroy();
   });
 
   it("paste mode routes through paste pipeline", () => {
     const { api } = createPagedGrid(10);
-    api.setPage(1);
-    api.importCsv(",,\nr103,粘贴行,50", { mode: "paste" });
+    api.pagination.setPage(1);
+    api.io.importCsv(",,\nr103,粘贴行,50", { mode: "paste" });
     api.destroy();
   });
 
   it("returns false for empty input", () => {
     const { api } = createPagedGrid(3);
-    expect(api.importCsv("")).toBe(false);
+    expect(api.io.importCsv("")).toBe(false);
     api.destroy();
   });
 });

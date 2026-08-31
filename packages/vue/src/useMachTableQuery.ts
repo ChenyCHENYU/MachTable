@@ -89,7 +89,6 @@ export interface UseMachTableQueryReturn<TData> {
   selectedKeys: Ref<string[]>;
   selectedRows: ShallowRef<TData[]>;
   selectionState: ComputedRef<MachTableRemoteSelectionState>;
-  gridProps: ComputedRef<GridOptions<TData>>;
   bindings: ComputedRef<GridOptions<TData>>;
   reload(options?: { resetPage?: boolean }): Promise<void>;
   retry(): Promise<void>;
@@ -187,7 +186,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     const selected = rows.value.filter((row) => isSelectedId(rowId(row)));
     suppressSelectionEvents = true;
     try {
-      api.setSelection(selected, true);
+      api.selection.setRows(selected, true);
     } finally {
       suppressSelectionEvents = false;
     }
@@ -351,7 +350,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     updateSelectedRefs();
   };
 
-  const gridProps = computed<GridOptions<TData>>(() => ({
+  const bindings = computed<GridOptions<TData>>(() => ({
     rowData: rows.value,
     loading: loading.value,
     rowKey: rowId,
@@ -392,9 +391,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     clearSelection();
     suppressGridEvents = true;
     try {
-      api?.setSortModel(null);
-      api?.setFilterModel(null);
-      api?.setAdvancedFilterModel(null);
+      api?.sorting.setModel(null);
+      api?.filtering.setModel(null);
+      api?.filtering.setAdvancedModel(null);
     } finally {
       suppressGridEvents = false;
     }
@@ -407,7 +406,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     selectedById.clear();
     updateSelectedRefs();
     suppressSelectionEvents = true;
-    try { api?.deselectAll(); } finally { suppressSelectionEvents = false; }
+    try { api?.selection.clear(); } finally { suppressSelectionEvents = false; }
   };
   const selectAllMatching = (): void => {
     allMatching.value = true;
@@ -493,8 +492,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     selectedKeys,
     selectedRows,
     selectionState,
-    gridProps,
-    bindings: gridProps,
+    bindings,
     reload,
     retry: load,
     reset,

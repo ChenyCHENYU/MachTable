@@ -100,7 +100,7 @@ const currencyEditor = vueCellEditor(CurrencyInput, {
 ```ts
 import { h } from "vue";
 import { ElTag } from "element-plus";
-import { vueCellRenderer } from "@agile-team/mach-table-vue";
+import { vueCellRenderer } from "@agile-team/mach-table-vue/adapters";
 
 const StatusTag = {
   props: ["value"],
@@ -152,7 +152,7 @@ EP `size="small"` 可对应表格 `size: "compact"`，默认对应 `normal`，�
 watch(visible, async (value) => {
   if (!value) return;
   await nextTick();
-  table.api.value?.refreshLayout();
+  table.api.value?.view.refreshLayout();
 });
 ```
 

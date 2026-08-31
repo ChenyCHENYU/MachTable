@@ -56,23 +56,29 @@ const apiSource = source("packages/core/src/types/api.ts");
 const optionSource = source("packages/core/src/types/options.ts");
 const eventSource = source("packages/core/src/types/events.ts");
 const current = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   policy: JSON.parse(fs.readFileSync(policyPath, "utf8")),
   coreExports: indexExports(source("packages/core/src/index.ts")),
+  coreAdapter: indexExports(source("packages/core/src/adapter.ts")),
   workerExports: indexExports(source("packages/core/src/worker.ts")),
   adapterExports: {
     vue: indexExports(source("packages/vue/src/index.ts")),
     vueAsync: indexExports(source("packages/vue/src/async.ts")),
     vueWorkflows: indexExports(source("packages/vue/src/workflows.ts")),
+    vueAdapters: indexExports(source("packages/vue/src/adapterEntry.ts")),
+    vueUi: indexExports(source("packages/vue/src/ui.ts")),
     react: indexExports(source("packages/react/src/index.ts")),
     reactWorkflows: indexExports(source("packages/react/src/workflows.ts")),
+    reactAdapters: indexExports(source("packages/react/src/adapterEntry.ts")),
+    reactUi: indexExports(source("packages/react/src/ui.ts")),
     xlsx: indexExports(source("packages/xlsx/src/index.ts"))
   },
   interfaces: {
     ...interfaceMembers(apiSource, [
       "GridApi", "GridRowsApi", "GridColumnsApi", "GridSelectionApi",
       "GridEditingApi", "GridStateApi", "GridDiagnosticsApi"
-      , "GridFilteringApi", "GridPaginationApi"
+      , "GridFilteringApi", "GridSortingApi", "GridPaginationApi",
+      "GridHierarchyApi", "GridViewApi", "GridIoApi"
     ]),
     ...interfaceMembers(optionSource, ["GridOptions", "GridFeature", "GridDataProcessor"]),
     ...interfaceMembers(eventSource, ["GridEventMap"])

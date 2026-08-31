@@ -4,31 +4,19 @@
 
 # @agile-team/mach-table-vue
 
-Official Vue 3 adapter for MachTable 0.23. It provides a generic `<MachTable>`, native typed slots, dedicated app/route configuration, cohesive controllers, advanced-filter aware remote query, conflict-aware editing composables, persistent named views, optional and persistent column resizing, bounded random-access remote blocks, governed domain APIs, optional Worker processing, an optional standard toolbar, optional Element Plus editors, async boundaries, in-place renderer refresh and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
-
-## Install
+MachTable 0.24 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 ```bash
 pnpm add @agile-team/mach-table-vue
 ```
 
-Import the stylesheet once from your application entry:
+应用入口只引入一次样式：
 
 ```ts
 import "@agile-team/mach-table-vue/styles.css";
 ```
 
-Optional large local-data Worker helpers use the same installed package but a separate chunk:
-
-```ts
-import { createWorkerDataProcessor } from "@agile-team/mach-table-vue/worker";
-```
-
-## Integration modes
-
-### Local, route-level import
-
-Best when only a few routes use a grid. A lazy-loaded route naturally keeps MachTable in that route's chunk.
+## 局部接入
 
 ```vue
 <script setup lang="ts">
@@ -36,149 +24,87 @@ import { ref } from "vue";
 import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
 
 interface Row { id: string; name: string }
-const grid = useMachTable<Row>();
+const table = useMachTable<Row>();
 const rows = ref<Row[]>([{ id: "1", name: "MachTable" }]);
-const columns: ColDef<Row>[] = [{ field: "name", headerName: "Name", flex: 1 }];
+const columns: ColDef<Row>[] = [{ field: "name", flex: 1, editable: true }];
 </script>
 
 <template>
   <div style="height: 520px">
     <MachTable
-      :ref="grid.ref"
+      :ref="table.ref"
       :row-data="rows"
       :column-defs="columns"
       row-key="id"
-      state-key="customer-list"
       enable-column-resize
-      striped-rows
+      :persistence="{ key: 'customers:list', sections: ['columns'] }"
     />
   </div>
 </template>
 ```
 
-### Global synchronous plugin
+## 全局接入
 
-Best when most screens render tables. Components are available in every template without page-level runtime imports.
+表格页面较多时，全局注册一次，页面模板直接使用 `<MachTable>`：
 
 ```ts
-// main.ts
 import { createApp } from "vue";
 import { MachTablePlugin } from "@agile-team/mach-table-vue";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
+import machTableConfig from "@/config/mach-table.config";
 
-createApp(App).use(MachTablePlugin).mount("#app");
+createApp(App).use(MachTablePlugin, machTableConfig).mount("#app");
 ```
 
-### Global async plugin
-
-Best for large admin or low-code applications. The plugin is registered at startup, while the component and Core stay in a separate chunk until the first `<MachTable>` is rendered.
+需要减少首屏代码时改用异步全局插件：
 
 ```ts
-// main.ts
-import { createApp } from "vue";
 import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
 
-createApp(App).use(AsyncMachTablePlugin).mount("#app");
-
-// Optional route-hover prefetch; dynamic imports are cached and idempotent.
-void preloadMachTable();
+app.use(AsyncMachTablePlugin, machTableConfig);
+void preloadMachTable(); // 可选：路由 hover 时预取
 ```
 
-The standard toolbar is a separate, tree-shakeable entry. Register it globally only when needed:
+推荐把约定集中到独立文件：
 
 ```ts
-import MachTableUiPlugin from "@agile-team/mach-table-vue/ui";
-app.use(MachTableUiPlugin);
-```
-
-After either global plugin is installed, pages can use `<MachTable>` directly. Keep conventions in a dedicated `mach-table.config.ts`, then install it with one clean line:
-
-```ts
-// mach-table.config.ts
+// src/config/mach-table.config.ts
 import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-vue";
+
 export default defineMachTableConfig({
   defaults: {
     size: "compact",
+    columnLayout: "fit",
     enableColumnResize: true,
-    pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] },
-    defaultColDef: { sortable: true, resizable: true, filter: true }
+    defaultColDef: { sortable: true, filter: true, resizable: true }
   },
   defaultPreset: "list",
-  presets: { list: defineMachTablePreset({ stripedRows: true }) }
+  presets: {
+    list: defineMachTablePreset({ stripedRows: true }),
+    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+  }
 });
-
-// main.ts
-app.use(MachTablePlugin, machTableConfig);
 ```
 
-Layouts can reactively refine defaults and presets with `provideMachTableConfig(...)`; direct table props always win. `provideMachTableDefaults(...)` remains as a smaller compatibility API. The async plugin also accepts `asyncComponentOptions` with `loadingComponent`, `errorComponent`, `delay`, `timeout` and `onError`.
+布局或路由可用响应式 `provideMachTableConfig()` 叠加配置，表格 props 始终拥有最高优先级。
 
-The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `vue >= 3.2` remains a peer dependency supplied by the host application. Existing local imports remain fully supported.
-
-Remote B-side lists can bind `useMachTableQuery()` directly. Use `mode: "auto"` for live filters or `mode: "manual"` for a submit-to-search form. For the smallest composable-only chunk, import query/editing/controller helpers from `@agile-team/mach-table-vue/workflows`. They own controlled server pagination, AbortSignal cancellation, stale-response protection, retry state and cross-page selection without exposing `gridApi` to ordinary pages.
-
-`useMachTableController()` composes table readiness, query, editing, selection, errors and standard commands. Pair it with `MachTableToolbar` from `/ui`, or bind `controller.commands` to your own design-system toolbar.
-
-Million-row batch actions use `selectionScope: "query"` and compact `allMatching + excludedKeys` rules, so clients never download every matching row ID.
-
-`useMachTableEditing()` exposes reactive dirty changes, detailed partial-save results, validation failures, version conflicts, failed-row reveal, rollback and an optional unsaved-page guard. `lastSaveResult`, `saveIssues`, `failedRowIds` and `resolveConflict()` keep page code small while preserving explicit business decisions. Semantic business types and cached dictionaries are configured once with `createBusinessColumnTypes()` and `createCachedDictionary()`.
+## 按需子入口
 
 ```ts
-const editing = useMachTableEditing(grid, { guardBeforeUnload: true });
-const result = await editing.saveDetailed(orderApi.saveChanges);
-if (result.conflicts.length) editing.reveal(result.conflicts[0].rowId);
-
-async function saveCurrentView() {
-  if (!grid.api.value) return;
-  const views = createGridViewManager(grid.api.value, {
-    scope: `${tenantId}:${userId}:orders`
-  });
-  await views.save("My pending orders");
-}
-```
-
-Remote query requests include both `filterModel` and the serializable nested `advancedFilterModel`. See the [advanced filter](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/advanced-filter.md), [named views](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/saved-views.md), and [batch save](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/batch-save.md) guides.
-
-Element Plus editors are optional and registered once without making EP a package dependency:
-
-```ts
+import { useMachTableQuery, useMachTableEditing } from "@agile-team/mach-table-vue/workflows";
+import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
+import { vueCellRenderer } from "@agile-team/mach-table-vue/adapters";
 import { createElementPlusEditors } from "@agile-team/mach-table-vue/editors";
-
-const ep = createElementPlusEditors({
-  input: ElInput,
-  inputNumber: ElInputNumber,
-  select: ElSelect,
-  datePicker: ElDatePicker
-});
+import { createWorkerDataProcessor } from "@agile-team/mach-table-vue/worker";
 ```
 
-Use `api.openColumnWorkbench()` for the built-in column settings UI. Lazy trees opt in with `isTreeRowExpandable` plus `loadTreeChildren`; ordinary tree data is unchanged.
+- `/workflows`：请求取消、防过期覆盖、服务端分页、跨页选择、脏数据和冲突保存。
+- `/ui`：可选标准工具栏；需要全局组件时另行 `app.use(MachTableUiPlugin)`。
+- `/adapters`：自定义 Vue renderer/editor/detail/overlay 桥接。
+- `/editors`：可选 Element Plus 编辑器，Element Plus 由宿主注入。
+- `/worker`：大型本地过滤/排序的独立 Worker 能力。
 
-## Cell and full-row editing
+该包自动依赖 `@agile-team/mach-table` 并重导出 Core 类型；宿主只需提供 `vue >= 3.2`。
 
-Core helpers are re-exported, so no second package import is needed:
+文档：[Vue 指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/vue.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [配置中心](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/configuration.md)
 
-```vue
-<script setup lang="ts">
-import { rowActionsColumn } from "@agile-team/mach-table-vue";
-
-const columns = [
-  { field: "name", editable: true },
-  { field: "age", editable: true, cellEditor: "number" },
-  rowActionsColumn({ onView, onDelete, overflow: "drawer" })
-];
-</script>
-
-<template>
-  <MachTable edit-type="fullRow" :column-defs="columns" :row-data="rows" />
-</template>
-```
-
-Cell mode is the default and provides a pencil plus inline confirm/cancel controls. Set `editable-indicator="always"`, `"hover"` or `"none"` to control the affordance.
-
-Documentation: [Vue guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/vue.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [Element Plus](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/element-plus.md) · [Naive UI](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/naive-ui.md)
-
-Source-available © ChenyCHENYU (Agile Team). Any use requires prior written authorization. See the [license](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) and [authorization process](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md).
+Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。

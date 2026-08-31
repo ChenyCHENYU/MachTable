@@ -1,5 +1,18 @@
 # @agile-team/mach-table-react
 
+## 0.24.0
+
+### Minor Changes
+
+- Align React with the canonical `MachTable`, `useMachTable`, `bindings` and domain API contracts; remove pre-adoption component, hook and Provider aliases.
+- Split workflows, UI, framework adapters and Worker helpers into explicit tree-shakeable subpaths while keeping Core types available from the single installed adapter package.
+- Support the unified per-table persistence configuration and strict application/preset configuration boundary.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.24.0
+
 ## 0.23.0
 
 ### Minor Changes

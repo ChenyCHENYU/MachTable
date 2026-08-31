@@ -284,7 +284,7 @@ export class HeaderRenderer {
       });
       resizeEl.addEventListener("dblclick", (e) => {
         e.stopPropagation();
-        this.core.getApi().autoSizeColumn(column.id);
+        this.core.getApi().columns.autoSize(column.id);
       });
       resizeEl.addEventListener("click", (e) => e.stopPropagation());
       cellEl.appendChild(resizeEl);

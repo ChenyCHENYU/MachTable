@@ -29,18 +29,18 @@ export const options = defineGridOptions<Order>({
   editType: "fullRow",
   rowData: [],
   rowKey: "id",
-  stateKey: "orders",
+  persistence: { key: "orders" },
   onCellValueChanged: ({ data, api }) => {
     data.amount.toFixed(2);
-    api.getDiagnostics();
+    api.diagnostics.get();
   }
 });
 
 export async function save(api: GridApi<Order>, handler: SaveChangesHandler<Order>): Promise<GridDiagnostics> {
-  api.startEditingRow(0);
-  await api.stopEditingRow(true);
-  const state: GridState = api.getState();
-  api.applyState(state);
-  await api.saveChanges(handler);
-  return api.getDiagnostics();
+  api.editing.startRow(0);
+  await api.editing.stop();
+  const state: GridState = api.state.get();
+  api.state.apply(state);
+  await api.editing.save(handler);
+  return api.diagnostics.get();
 }

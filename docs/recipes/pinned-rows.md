@@ -22,10 +22,10 @@ createGrid(host, {
 ## 运行时更新
 
 ```ts
-api.setPinnedTopRowData([diffRow]);      // 传 null/[] 清空并隐藏该区域
-api.getPinnedTopRowData();
-api.setPinnedBottomRowData([totalRow]);
-api.getPinnedBottomRowData();
+api.view.setPinnedRows("top", [diffRow]); // 传 null/[] 清空并隐藏该区域
+api.view.getPinnedRows("top");
+api.view.setPinnedRows("bottom", [totalRow]);
+api.view.getPinnedRows("bottom");
 ```
 
 ## 渲染能力
@@ -61,6 +61,6 @@ api.getPinnedBottomRowData();
 ```ts
 onCellValueChanged: () => {
   const sum = rows.reduce((a, r) => a + r.amount, 0);
-  api.setPinnedBottomRowData([{ name: "合计", amount: sum }]);
+  api.view.setPinnedRows("bottom", [{ name: "合计", amount: sum }]);
 }
 ```

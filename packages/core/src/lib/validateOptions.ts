@@ -113,15 +113,15 @@ function validateBlockDatasource(source: Record<string, unknown>): GridValidatio
   if (!hasStableRowId(source)) {
     issues.push({
       code: "MISSING_STABLE_ROW_ID",
-      option: "getRowId",
-      message: "Random-access blocks require rowKey/getRowId to preserve selection and identity after eviction"
+      option: "rowKey",
+      message: "Random-access blocks require rowKey to preserve selection and identity after eviction"
     });
   }
   return issues;
 }
 
 function hasStableRowId(source: Record<string, unknown>): boolean {
-  return typeof source.getRowId === "function" || source.rowKey != null;
+  return source.rowKey != null;
 }
 
 function validateMetadataValues(source: Record<string, unknown>): GridValidationIssue[] {
@@ -174,8 +174,8 @@ export function validateGridOptions(options: Partial<GridOptions<any>> | Record<
     if (config.mode === "server" && !hasStableRowId(source)) {
       issues.push({
         code: "MISSING_STABLE_ROW_ID",
-        option: "getRowId",
-        message: "服务端分页建议提供稳定 getRowId，否则跨页选择与增量更新无法可靠保持"
+        option: "rowKey",
+        message: "服务端分页建议提供稳定 rowKey，否则跨页选择与增量更新无法可靠保持"
       });
     }
     if (config.mode === "server" && config.total !== undefined && (

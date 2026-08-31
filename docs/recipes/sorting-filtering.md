@@ -10,11 +10,11 @@
   comparator: (a, b) => a - b }        // 自定义比较器（缺省用内置）
 
 // 编程式
-api.setSortModel([
+api.sorting.setModel([
   { colId: "region", direction: "asc" },
   { colId: "amount", direction: "desc" }
 ]);
-api.getSortModel();
+api.sorting.getModel();
 ```
 
 内置比较器语义：null/空串排末、数值与日期按大小、字符串 `localeCompare`（numeric + 忽略大小写）。多列排序稳定（同键保持原序）。
@@ -25,7 +25,7 @@ api.getSortModel();
 
 ```ts
 manualSorting: true,           // 本地不排序，表头指示器照常
-onSortChanged: (e) => fetchPage({ sort: e.sortModel })   // 自行请求并 setRowData
+onSortChanged: (e) => fetchPage({ sort: e.sortModel })   // 自行请求并 rows.setData
 ```
 
 无限滚动模式下排序变更自动携带 `sortModel` 从第 0 行重载，无需额外处理。
@@ -46,13 +46,13 @@ onSortChanged: (e) => fetchPage({ sort: e.sortModel })   // 自行请求并 setR
 ### FilterModel API（配合自定义筛选栏）
 
 ```ts
-api.setFilterModel({
+api.filtering.setModel({
   amount: { type: "number", conditions: [{ match: "inRange", value: 100, value2: 500 }] },
   status: { type: "set", values: ["运行中", "待机"] },
   name:   { type: "text", conditions: [{ match: "contains", value: "泵" }] }
 });
-api.getFilterModel();
-api.isColumnFilterPresent("amount");
+api.filtering.getModel();
+api.filtering.isPresent("amount");
 ```
 
 多条件：`conditions` 数组 + `operator: "and" | "or"`（默认 and）。模型可直接 JSON 序列化——适合"保存我的筛选"功能。
@@ -61,7 +61,7 @@ api.isColumnFilterPresent("amount");
 
 ```ts
 // 分词 AND、跨列 OR 包含，覆盖所有列的格式化文本
-api.setQuickFilter("华东 泵");
+api.filtering.setQuickText("华东 泵");
 createGrid(host, { quickFilterText: "xxx" });
 ```
 

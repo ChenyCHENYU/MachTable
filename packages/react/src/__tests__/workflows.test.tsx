@@ -7,7 +7,7 @@ import { MachTableToolbar } from "../MachTableToolbar";
 import { useMachTableController, type UseMachTableControllerReturn } from "../useMachTableController";
 import { useMachTableEditing, type UseMachTableEditingReturn } from "../useMachTableEditing";
 import { useMachTableQuery, type UseMachTableQueryReturn } from "../useMachTableQuery";
-import type { UseMachGridReturn } from "../useMachGrid";
+import type { UseMachTableReturn } from "../useMachTable";
 
 class ResizeObserverStub {
   observe(): void {}
@@ -41,24 +41,25 @@ describe("React B-side workflows", () => {
     const onSaveError = vi.fn();
     const api = {
       isDestroyed: () => false,
-      getDirtyRowIds: vi.fn(() => ["1"]),
-      getChanges: vi.fn(() => changes),
-      addEventListener: vi.fn(() => removeListener),
-      saveChanges: vi.fn(),
-      saveChangesDetailed: vi.fn(() => new Promise((resolve) => {
-        resolveSave = (saved) => resolve({ submitted: changes, saved, failures: [], conflicts: [] });
-      })),
-      rollbackChanges: vi.fn(() => true),
-      markChangesSaved: vi.fn(),
-      getNodeById: vi.fn(() => ({ rowIndex: 2 })),
-      scrollToIndex: vi.fn(),
-      startEditingCell: vi.fn(() => true)
+      on: vi.fn(() => removeListener),
+      editing: {
+        getDirtyRowIds: vi.fn(() => ["1"]),
+        getChanges: vi.fn(() => changes),
+        save: vi.fn(() => new Promise((resolve) => {
+          resolveSave = (saved) => resolve({ submitted: changes, saved, failures: [], conflicts: [] });
+        })),
+        rollback: vi.fn(() => true),
+        markSaved: vi.fn(),
+        startCell: vi.fn(() => true)
+      },
+      rows: { getById: vi.fn(() => ({ rowIndex: 2 })) },
+      view: { scrollToRow: vi.fn() }
     };
     const table = {
       apiRef: { current: api },
       api,
       ready: true
-    } as unknown as UseMachGridReturn;
+    } as unknown as UseMachTableReturn;
     let editing: UseMachTableEditingReturn | null = null;
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -89,16 +90,16 @@ describe("React B-side workflows", () => {
     });
     expect(onSaveSuccess).toHaveBeenCalledOnce();
     expect(editing!.reveal("1", "name", true)).toBe(true);
-    expect(api.scrollToIndex).toHaveBeenCalledWith(2, "middle");
+    expect(api.view.scrollToRow).toHaveBeenCalledWith(2, "middle");
     await act(async () => {
       expect(editing!.rollback(["1"])).toBe(true);
       editing!.markSaved(["1"]);
     });
-    expect(api.markChangesSaved).toHaveBeenCalledWith(["1"]);
+    expect(api.editing.markSaved).toHaveBeenCalledWith(["1"]);
 
-    api.getNodeById.mockReturnValueOnce(null as never);
+    api.rows.getById.mockReturnValueOnce(null as never);
     expect(editing!.reveal("missing", "name", true)).toBe(false);
-    api.saveChangesDetailed = vi.fn().mockRejectedValue(new Error("save failed"));
+    api.editing.save = vi.fn().mockRejectedValue(new Error("save failed"));
     await act(async () => {
       await expect(editing!.save(saveHandler)).rejects.toThrow("save failed");
     });
@@ -131,12 +132,12 @@ describe("React B-side workflows", () => {
     await act(async () => root.render(createElement(LocalHarness)));
     expect(local!.table.api).not.toBeNull();
     await act(async () => local!.setSearch("Ada"));
-    expect(local!.table.apiRef.current?.getGridOption("quickFilterText")).toBe("Ada");
-    await act(async () => local!.table.apiRef.current?.selectAll());
+    expect(local!.table.apiRef.current?.getOption("quickFilterText")).toBe("Ada");
+    await act(async () => local!.table.apiRef.current?.selection.selectAll());
     expect(local!.selectedCount).toBe(1);
     await act(async () => local!.commands.refresh());
     local!.commands.setDensity("compact");
-    expect(local!.table.apiRef.current?.getGridOption("size")).toBe("compact");
+    expect(local!.table.apiRef.current?.getOption("size")).toBe("compact");
     expect(await local!.commands.toggleFullscreen()).toBe(false);
     await act(async () => root.unmount());
 
@@ -147,7 +148,7 @@ describe("React B-side workflows", () => {
       sortModel: [], filterModel: {}, quickFilterText: null, setQuickFilterText,
       selectedKeys: ["2"], selectedRows: [{ id: "2" }],
       selectionState: { mode: "explicit", selectedKeys: ["2"] },
-      gridProps: {}, bindings: {}, reload, retry: reload, reset: reload, abort: vi.fn(),
+      bindings: {}, reload, retry: reload, reset: reload, abort: vi.fn(),
       clearSelection: vi.fn(), selectAllMatching: vi.fn(), applySelectionState: vi.fn()
     } as unknown as UseMachTableQueryReturn<{ id: string }>;
     const remoteHost = document.createElement("div");
@@ -214,16 +215,18 @@ describe("React B-side workflows", () => {
     expect(host.querySelector("#end")).toBeTruthy();
 
     const api = {
-      getGridOption: vi.fn(() => "normal"),
-      setQuickFilter: vi.fn(),
-      isInfinite: vi.fn(() => false),
-      refreshCells: vi.fn(),
-      openColumnWorkbench: vi.fn(),
-      setGridOption: vi.fn(),
-      canUndo: vi.fn(() => true),
-      canRedo: vi.fn(() => true),
-      undo: vi.fn(() => true),
-      redo: vi.fn(() => true)
+      getOption: vi.fn(() => "normal"),
+      updateOptions: vi.fn(),
+      filtering: { setQuickText: vi.fn() },
+      rows: { isRemote: vi.fn(() => false), reload: vi.fn() },
+      view: { refreshCells: vi.fn() },
+      columns: { openWorkbench: vi.fn() },
+      editing: {
+        canUndo: vi.fn(() => true),
+        canRedo: vi.fn(() => true),
+        undo: vi.fn(() => true),
+        redo: vi.fn(() => true)
+      }
     } as unknown as GridApi;
     await act(async () => root.render(createElement(MachTableToolbar, {
       api,
@@ -238,12 +241,12 @@ describe("React B-side workflows", () => {
     apiDensity.value = "large";
     apiDensity.dispatchEvent(new Event("change", { bubbles: true }));
     for (const button of host.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")) button.click();
-    expect(api.setQuickFilter).toHaveBeenCalledWith("local");
-    expect(api.refreshCells).toHaveBeenCalledOnce();
-    expect(api.openColumnWorkbench).toHaveBeenCalledOnce();
-    expect(api.setGridOption).toHaveBeenCalledWith("size", "large");
-    expect(api.undo).toHaveBeenCalledOnce();
-    expect(api.redo).toHaveBeenCalledOnce();
+    expect(api.filtering.setQuickText).toHaveBeenCalledWith("local");
+    expect(api.view.refreshCells).toHaveBeenCalledOnce();
+    expect(api.columns.openWorkbench).toHaveBeenCalledOnce();
+    expect(api.updateOptions).toHaveBeenCalledWith({ size: "large" });
+    expect(api.editing.undo).toHaveBeenCalledOnce();
+    expect(api.editing.redo).toHaveBeenCalledOnce();
 
     const onSearchChange = vi.fn();
     const onRefresh = vi.fn();
@@ -296,7 +299,7 @@ describe("React B-side workflows", () => {
 
     await act(async () => { await query!.reload(); });
     expect(query!.error).toEqual(expect.objectContaining({ message: "offline" }));
-    expect((query!.gridProps.overlayErrorTemplate as () => string)()).toContain("Remote request failed");
+    expect((query!.bindings.overlayErrorTemplate as () => string)()).toContain("Remote request failed");
     await act(async () => { await query!.retry(); });
     expect(query!.error).toBeInstanceOf(TypeError);
     await act(async () => { await query!.reload({ resetPage: true }); });
@@ -304,17 +307,17 @@ describe("React B-side workflows", () => {
 
     act(() => query!.selectAllMatching());
     expect(query!.selectionState).toEqual({ mode: "allMatching", excludedKeys: [] });
-    act(() => query!.gridProps.onSelectionChanged?.({ selectedRows: [{ id: "2" }] } as never));
+    act(() => query!.bindings.onSelectionChanged?.({ selectedRows: [{ id: "2" }] } as never));
     expect(query!.selectionState).toEqual({ mode: "allMatching", excludedKeys: ["1"] });
     act(() => query!.applySelectionState({ mode: "explicit", selectedKeys: ["1"] }));
     expect(query!.selectedKeys).toEqual(["1"]);
     act(() => query!.clearSelection());
     expect(query!.selectedKeys).toEqual([]);
 
-    act(() => query!.gridProps.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as never));
-    act(() => query!.gridProps.onFilterChanged?.({
+    act(() => query!.bindings.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as never));
+    act(() => query!.bindings.onFilterChanged?.({
       filterModel: { id: { type: "contains", filter: "1" } },
-      api: { getQuickFilter: () => null }
+      api: { filtering: { getQuickText: () => null } }
     } as never));
     await act(async () => { await query!.reset(); });
     expect(query!.sortModel).toEqual([]);

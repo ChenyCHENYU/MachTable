@@ -5,11 +5,16 @@ import {
   type CSSProperties,
   type MutableRefObject
 } from "react";
-import { createGrid, GRID_OPTION_KEYS, EVENT_TYPES, resolveMachTableGridOptions } from "@agile-team/mach-table";
+import { createGrid, EVENT_TYPES } from "@agile-team/mach-table";
+import { GRID_OPTION_KEYS, resolveMachTableGridOptions } from "@agile-team/mach-table/adapter";
 import type { GridApi, GridOptions, MachTablePresetSelection } from "@agile-team/mach-table";
 import { useMachTableConfig } from "./defaults";
 
 type AdapterOnlyGridOption = "className" | "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy";
+
+function handlerNameOf(eventType: string): string {
+  return `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
+}
 
 export type MachTableReactProps<TData = any> = Omit<GridOptions<TData>, AdapterOnlyGridOption> & {
   /** Named application preset(s). Explicit component props still win. */
@@ -86,15 +91,10 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
 
     const options = { ...effectiveRef.current } as Record<string, unknown>;
     for (const eventType of EVENT_TYPES) {
-      const handlerKey = `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
+      const handlerKey = handlerNameOf(eventType);
       options[handlerKey] = (event: unknown) => {
-        const defaultHandler = (effectiveRef.current as Record<string, unknown>)[handlerKey];
-        if (typeof defaultHandler === "function") (defaultHandler as (value: unknown) => void)(event);
-        const latest = propsRef.current as Record<string, unknown>;
-        const handler = latest[handlerKey];
-        if (typeof handler === "function" && handler !== defaultHandler) {
-          (handler as (value: unknown) => void)(event);
-        }
+        const handler = (propsRef.current as Record<string, unknown>)[handlerKey];
+        if (typeof handler === "function") (handler as (value: unknown) => void)(event);
       };
     }
 
@@ -126,7 +126,8 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
     const changed: Record<string, unknown> = {};
     optionValues.forEach((value, index) => {
       if (Object.is(value, previous[index])) return;
-      changed[GRID_OPTION_KEYS[index]] = value;
+      const key = GRID_OPTION_KEYS[index];
+      changed[key] = value;
     });
     if (Object.keys(changed).length > 0) {
       gridApiRef.current?.updateOptions(changed);
@@ -142,8 +143,3 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
     "aria-describedby": props["aria-describedby"]
   });
 }
-
-/** @deprecated Use MachTable. Kept as a source-compatible alias through 0.x. */
-export const RobotGrid = MachTable;
-/** @deprecated Use MachTableReactProps. */
-export type RobotGridReactProps<TData = any> = MachTableReactProps<TData>;

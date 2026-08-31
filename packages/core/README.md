@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-Enterprise-grade, framework-independent TypeScript data grid. Zero runtime dependencies, virtualized rows and columns, polished cell/full-row editing, async validation, action columns, change tracking, versioned state and resilient infinite loading.
+MachTable 0.24 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、状态持久化和可诊断扩展系统。
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -17,133 +17,41 @@ import "@agile-team/mach-table/styles/mach-table.css";
 const api = createGrid(document.querySelector("#grid")!, {
   columnDefs: [
     { field: "id", headerName: "ID", width: 120 },
-    { field: "name", headerName: "Name", flex: 1, editable: true }
+    { field: "name", headerName: "名称", flex: 1, editable: true }
   ],
   rowData: [{ id: "1", name: "MachTable" }],
   rowKey: "id",
   enableColumnResize: true,
-  stateKey: "customer-list"
+  persistence: { key: "tenant:user:customers", sections: ["columns"] }
 });
 
-// Required for native integrations when the host is removed.
+api.batch((grid) => {
+  grid.rows.transact({ update: [{ id: "1", name: "Updated" }] });
+  grid.columns.setVisible("internalNote", false);
+  grid.view.refreshCells({ rowIds: ["1"] });
+});
+
+const saved = await api.editing.save(orderApi.saveChanges);
+console.table(saved.conflicts);
+console.info(api.diagnostics.get());
+
+// 原生宿主卸载时必须销毁；Vue/React 适配器会自动处理。
 api.destroy();
 ```
 
-Complex business workflows use first-class APIs instead of adapter-specific glue:
+公共命令按 `rows`、`columns`、`selection`、`editing`、`filtering`、`sorting`、`pagination`、`hierarchy`、`view`、`state`、`io`、`diagnostics` 划分。完整签名见 [GridApi](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/api/grid-api.md)。
+
+大型本地数据 Worker 使用独立入口：
 
 ```ts
-const state = api.getState();
-await api.saveChanges((changes) => orderApi.save(changes));
-api.rollbackChanges();
-console.info(api.getDiagnostics());
-
-await api.applyTransactionAsync({ update: realtimeRows });
-api.applyState(state);
+import { createWorkerDataProcessor } from "@agile-team/mach-table/worker";
 ```
 
-0.23 adds governed domain APIs, incremental update invalidation and bounded remote-resource scheduling without removing the flat 0.x API:
+Vue/React 项目请只安装对应适配包，它会自动安装并重导出 Core：
 
-```ts
-api.batch((grid) => {
-  grid.rows.apply({ update: changedRows });
-  grid.columns.setVisible("internalNote", false);
-  grid.refreshCells({ rowIds: changedIds, columns: ["status"] });
-});
+- [@agile-team/mach-table-vue](https://www.npmjs.com/package/@agile-team/mach-table-vue)
+- [@agile-team/mach-table-react](https://www.npmjs.com/package/@agile-team/mach-table-react)
 
-console.info(api.diagnostics.get().updates);
-```
+文档：[快速开始](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/getting-started.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [API](https://github.com/ChenyCHENYU/MachTable/tree/main/docs/api)
 
-For very large remote datasets, opt into random-access blocks. Sequential infinite loading remains the compatibility default:
-
-```ts
-const options = {
-  datasource,
-  datasourceMode: "block" as const,
-  datasourceRowCount: 1_000_000,
-  blockSize: 200,
-  maxBlocksInCache: 12,
-  blockPrefetch: 1
-};
-
-await api.rows.ensureLoaded(40_000, 40_200, { signal });
-console.info(api.rows.getCacheSnapshot());
-```
-
-Worker runtime helpers are intentionally split from the default entry:
-
-```ts
-import { createWorkerDataProcessor, installGridDataWorker } from "@agile-team/mach-table/worker";
-```
-
-0.18 added governed runtime APIs, nested filters, named views, conflict-aware saves and performance evidence:
-
-```ts
-const views = createGridViewManager(api, { scope: "tenant:user:orders" });
-await views.save("My pending orders");
-
-const result = await api.saveChangesDetailed(orderApi.saveChanges);
-console.table(result.failures);
-console.table(result.conflicts);
-console.info(api.getDiagnostics().performance);
-```
-
-`GridState` v1 inputs migrate to v2 automatically. `GridFeature` manifests can declare `version`, `requires` and `conflicts`; invalid graphs are isolated before setup side effects run. JavaScript/JSON option patches are sanitized from the same metadata registry used by Core and framework adapters.
-
-0.13 added a built-in/headless column workbench and cancellable lazy trees:
-
-```ts
-api.openColumnWorkbench();
-const columns = api.getColumnWorkbenchItems();
-
-const treeOptions = {
-  treeData: true,
-  isTreeRowExpandable: ({ data }) => data.hasChildren,
-  loadTreeChildren: ({ data, signal }) => catalogApi.children(data.id, { signal })
-};
-```
-
-XLSX stays outside Core; install `@agile-team/mach-table-xlsx` only on Excel routes.
-
-Polished editing and row actions are built in rather than adapter-specific:
-
-```ts
-import { rowActionsColumn } from "@agile-team/mach-table";
-
-const options = {
-  editType: "fullRow" as const,
-  columnDefs: [
-    { field: "name", editable: true },
-    { field: "age", editable: true, cellEditor: "number" },
-    rowActionsColumn({ onView, onDelete, overflow: "drawer" })
-  ]
-};
-```
-
-Cell mode remains the default and renders a subtle pencil plus inline confirm/cancel controls. Use `editableIndicator: "always" | "hover" | "none"` to match the page density.
-
-0.14 removes common page glue with automatic GridState persistence, an explicit error overlay, compact row keys and framework-neutral toolbar commands:
-
-```ts
-import { createMachTableCommands } from "@agile-team/mach-table";
-
-const commands = createMachTableCommands({ getApi: () => api });
-commands.search("pending");
-await commands.refresh();
-
-api.setOverlay("error", () => "Request failed. Please retry.");
-```
-
-`rowKey: "id"` is shorthand for a stable field path; `getRowId` remains available for derived IDs and wins when both are present. `domLayout: "autoHeight"` is intended only for small client-side tables—normal virtual layout remains the large-data default.
-
-Column resizing is deliberately opt-in. Set `enableColumnResize: true`; add `stateKey` to remember the complete workspace, or `columnStateKey` to remember only widths/order/visibility/pinning/sort. Pointer cancellation rolls back, completed drags persist once, and untouched automatic/flex columns remain responsive.
-
-For framework applications use the official adapters:
-
-- Vue 3: [`@agile-team/mach-table-vue`](https://www.npmjs.com/package/@agile-team/mach-table-vue)
-- React 18+: [`@agile-team/mach-table-react`](https://www.npmjs.com/package/@agile-team/mach-table-react)
-
-Documentation: [Quick start](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/getting-started.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [API](https://github.com/ChenyCHENYU/MachTable/tree/main/docs/api)
-
-> Overlay strings render as text by default. Prefer HTMLElement factories for rich content; enable `allowUnsafeOverlayHtml` only for fully trusted static markup.
-
-Source-available © ChenyCHENYU (Agile Team). Any use requires prior written authorization. See the [license](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) and [authorization process](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md).
+Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。

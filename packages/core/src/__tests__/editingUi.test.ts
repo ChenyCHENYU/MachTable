@@ -30,7 +30,7 @@ describe("polished editing UI", () => {
         { field: "age" }
       ],
       rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
-      getRowId: (params) => params.data.id,
+      rowKey: (row) => row.id,
       editableIndicator: "always"
     });
 
@@ -42,14 +42,14 @@ describe("polished editing UI", () => {
     input.value = "Cancelled";
     host.querySelector<HTMLButtonElement>(".mach-edit-control--cancel")!.click();
     await flush();
-    expect(api.getNodeById("1")?.data?.name).toBe("Before");
+    expect(api.rows.getById("1")?.data?.name).toBe("Before");
 
     host.querySelector<HTMLButtonElement>('.mach-cell[data-col-id="name"] .mach-cell-edit-trigger')!.click();
     const nextInput = host.querySelector<HTMLInputElement>('.mach-cell[data-col-id="name"] .mach-editor-input')!;
     nextInput.value = "Confirmed";
     host.querySelector<HTMLButtonElement>(".mach-edit-control--confirm")!.click();
     await flush();
-    expect(api.getNodeById("1")?.data?.name).toBe("Confirmed");
+    expect(api.rows.getById("1")?.data?.name).toBe("Confirmed");
     api.destroy();
   });
 
@@ -70,13 +70,13 @@ describe("polished editing UI", () => {
         })
       ],
       rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
-      getRowId: (params) => params.data.id,
+      rowKey: (row) => row.id,
       onRowEditingStarted: started,
       onRowEditingStopped: stopped
     });
 
     host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
-    expect(api.isRowEditing(0)).toBe(true);
+    expect(api.editing.isRowActive(0)).toBe(true);
     expect(host.querySelectorAll(".mach-row-editor-shell")).toHaveLength(2);
     expect(host.querySelector(".mach-cell-editor-controls")).toBeNull();
     expect(host.querySelector('[aria-label="保存"]')).toBeTruthy();
@@ -86,7 +86,7 @@ describe("polished editing UI", () => {
     inputs[1].value = "30";
     host.querySelector<HTMLButtonElement>('[aria-label="取消"]')!.click();
     await flush();
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Before", age: 20 });
 
     host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
     const committed = host.querySelectorAll<HTMLInputElement>(".mach-row-editor-shell .mach-editor-input");
@@ -94,11 +94,11 @@ describe("polished editing UI", () => {
     committed[1].value = "31";
     host.querySelector<HTMLButtonElement>('[aria-label="保存"]')!.click();
     await flush();
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "After", age: 31 });
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "After", age: 31 });
     expect(started).toHaveBeenCalledTimes(2);
     expect(stopped).toHaveBeenLastCalledWith(expect.objectContaining({ cancelled: false, changes: expect.any(Array) }));
-    expect(api.undo()).toBe(true);
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
+    expect(api.editing.undo()).toBe(true);
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Before", age: 20 });
     api.destroy();
   });
 
@@ -117,7 +117,7 @@ describe("polished editing UI", () => {
         rowActionsColumn<Person>()
       ],
       rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
-      getRowId: (params) => params.data.id
+      rowKey: (row) => row.id
     });
 
     host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
@@ -126,16 +126,16 @@ describe("polished editing UI", () => {
     inputs[1].value = "12";
     host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
-    expect(api.isRowEditing(0)).toBe(true);
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
+    expect(api.editing.isRowActive(0)).toBe(true);
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Before", age: 20 });
     expect(host.querySelector(".mach-editor-invalid")).toBeTruthy();
 
     inputs[1].value = "22";
     inputs[1].dispatchEvent(new Event("input", { bubbles: true }));
     host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
-    expect(api.isRowEditing()).toBe(false);
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Should not leak", age: 22 });
+    expect(api.editing.isRowActive()).toBe(false);
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Should not leak", age: 22 });
     api.destroy();
   });
 
@@ -155,7 +155,7 @@ describe("polished editing UI", () => {
         rowActionsColumn<Person>()
       ],
       rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
-      getRowId: (params) => params.data.id
+      rowKey: (row) => row.id
     });
 
     host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
@@ -165,14 +165,14 @@ describe("polished editing UI", () => {
     host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
     expect(validator).toHaveBeenCalledOnce();
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Before", age: 20 });
     expect(host.querySelector('.mach-cell[data-col-id="age"] .mach-editor-invalid')).toBeTruthy();
 
     inputs[1].value = "21";
     inputs[1].dispatchEvent(new Event("input", { bubbles: true }));
     host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Supervisor", age: 21 });
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Supervisor", age: 21 });
     api.destroy();
   });
 
@@ -196,7 +196,7 @@ describe("polished editing UI", () => {
         rowActionsColumn<Person>()
       ],
       rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
-      getRowId: (params) => params.data.id,
+      rowKey: (row) => row.id,
       onCellValueChanged: changed
     });
 
@@ -206,15 +206,15 @@ describe("polished editing UI", () => {
     inputs[1].value = "13";
     host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Before", age: 20 });
-    expect(api.isRowEditing(0)).toBe(true);
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Before", age: 20 });
+    expect(api.editing.isRowActive(0)).toBe(true);
     expect(changed).not.toHaveBeenCalled();
 
     inputs[1].value = "23";
     inputs[1].dispatchEvent(new Event("input", { bubbles: true }));
     host.querySelector<HTMLButtonElement>('[aria-label="确认"]')!.click();
     await flush();
-    expect(api.getNodeById("1")?.data).toMatchObject({ name: "Must roll back", age: 23 });
+    expect(api.rows.getById("1")?.data).toMatchObject({ name: "Must roll back", age: 23 });
     expect(changed).toHaveBeenCalledTimes(2);
     api.destroy();
   });

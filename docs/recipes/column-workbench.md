@@ -5,42 +5,42 @@
 ## 打开内置工作台
 
 ```ts
-api.openColumnWorkbench(buttonEl);
-api.closeColumnWorkbench();
+api.columns.openWorkbench(buttonEl);
+api.columns.closeWorkbench();
 ```
 
-不传锚点时，工作台自动定位在表格右上角。旧的 `openColumnPanel()` 在 0.x 期间仍可用，但新代码应使用 `openColumnWorkbench()`。
+不传锚点时，工作台自动定位在表格右上角。
 
 ## 自定义业务工作台
 
 如果产品需要把列配置放进自己的 `ElDrawer`、`Dialog` 或设置中心，可读取统一的 headless 数据：
 
 ```ts
-const columns = api.getColumnWorkbenchItems();
+const columns = api.columns.getWorkbenchItems();
 // [{ colId, label, visible, pinned, width, movable, hideable }]
 
-api.setColumnVisibility("amount", false);
-api.setColumnPinned("orderNo", "left");
-api.moveColumn("status", 2);
-api.autoSizeAllColumns();
-api.resetColumnState();
+api.columns.setVisible("amount", false);
+api.columns.setPinned("orderNo", "left");
+api.columns.move("status", 2);
+api.columns.autoSizeAll();
+api.columns.resetState();
 ```
 
 `hideable: false` 表示选择列等结构性列不应被用户隐藏；`movable: false` 表示业务锁定列。自定义 UI 应遵守这两个标记。
 
 ## 持久化
 
-全局配置中设置 `columnStateKey` 后，工作台的显隐、顺序、固定和宽度会自动保存：
+在具体表格设置列区段持久化后，工作台的显隐、顺序、固定和宽度会自动保存：
 
 ```ts
 export default defineMachTableConfig({
   defaults: {
-    columnStateKey: "orders:v3"
+    persistence: { key: "tenant:user:orders:v3", sections: ["columns"] }
   }
 });
 ```
 
-多租户应用应使用 `createColumnStateKey({ tenantId, userId, route, schemaVersion })` 生成隔离键。列 ID 或结构发生破坏性变化时提升 `schemaVersion`，不要继续回放不兼容状态。
+多租户应用应按 `${appId}:${tenantId}:${userId}:${route}:v${schemaVersion}` 生成隔离的 `persistence.key`。列 ID 或结构发生破坏性变化时提升 `schemaVersion`，不要继续回放不兼容状态。
 
 ## 设计边界
 

@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.24.0
+
+### Patch Changes
+
+- Update the optional XLSX bridge to consume the canonical Core row, selection and IO domains without adding workbook runtime code to normal table pages.
+- Updated dependencies:
+  - @agile-team/mach-table@0.24.0
+
 ## 0.23.0
 
 ### Patch Changes

@@ -90,7 +90,7 @@ export class ColumnMenuService {
         btn.type = "button";
         btn.textContent = this.core.getLocaleText(labelKey);
         btn.addEventListener("click", () => {
-          api.setSortModel(dir ? [{ colId: column.id, direction: dir }] : []);
+          api.sorting.setModel(dir ? [{ colId: column.id, direction: dir }] : []);
           this.close();
         });
         return btn;
@@ -105,7 +105,7 @@ export class ColumnMenuService {
       btn.type = "button";
       btn.textContent = this.core.getLocaleText(labelKey);
       btn.addEventListener("click", () => {
-        if (column) api.setColumnPinned(column.id, pinned);
+        if (column) api.columns.setPinned(column.id, pinned);
         this.close();
       });
       return btn;
@@ -120,15 +120,15 @@ export class ColumnMenuService {
     fitBtn.type = "button";
     fitBtn.textContent = this.core.getLocaleText("autoSize");
     fitBtn.addEventListener("click", () => {
-      if (column) api.autoSizeColumn(column.id);
-      else api.autoSizeAllColumns();
+      if (column) api.columns.autoSize(column.id);
+      else api.columns.autoSizeAll();
       this.close();
     });
     const hideBtn = el("button", "mach-column-panel-btn") as HTMLButtonElement;
     hideBtn.type = "button";
     hideBtn.textContent = this.core.getLocaleText("hideColumn");
     hideBtn.addEventListener("click", () => {
-      if (column) api.setColumnVisibility(column.id, false);
+      if (column) api.columns.setVisible(column.id, false);
       this.close();
     });
     if (column) {
@@ -166,14 +166,14 @@ export class ColumnMenuService {
     resetBtn.type = "button";
     resetBtn.textContent = this.core.getLocaleText("resetAll");
     resetBtn.addEventListener("click", () => {
-      api.resetColumnState();
+      api.columns.resetState();
       this.close();
     });
     const allFitBtn = el("button", "mach-filter-btn-apply") as HTMLButtonElement;
     allFitBtn.type = "button";
     allFitBtn.textContent = this.core.getLocaleText("autoSizeAll");
     allFitBtn.addEventListener("click", () => {
-      api.autoSizeAllColumns();
+      api.columns.autoSizeAll();
       this.close();
     });
     footer.append(resetBtn, allFitBtn);
@@ -220,7 +220,7 @@ export class ColumnMenuService {
       checkbox.checked = !col.hide;
       checkbox.disabled = col.hasCheckbox;
       checkbox.addEventListener("change", () => {
-        api.setColumnVisibility(col.id, checkbox.checked);
+        api.columns.setVisible(col.id, checkbox.checked);
         this.rebuildListStates();
       });
       const text = el("span", "mach-column-workbench-name");
@@ -245,7 +245,7 @@ export class ColumnMenuService {
         }
         pin.value = col.pinned ?? "";
         pin.addEventListener("change", () => {
-          api.setColumnPinned(col.id, pin.value === "left" || pin.value === "right" ? pin.value : null);
+          api.columns.setPinned(col.id, pin.value === "left" || pin.value === "right" ? pin.value : null);
           this.rebuildListStates();
         });
         row.appendChild(pin);
@@ -262,7 +262,7 @@ export class ColumnMenuService {
           button.textContent = caption;
           button.disabled = disabled || col.hide || !col.movable;
           button.addEventListener("click", () => {
-            api.moveColumn(col.id, next);
+            api.columns.move(col.id, next);
             this.rebuildListStates();
           });
           return button;

@@ -2,7 +2,6 @@ import { act, createElement, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GridApi } from "@agile-team/mach-table";
-import { RobotGrid } from "../MachTable";
 import { reactCellRenderer } from "../adapters";
 import DefaultMachTable, {
   createGrid,
@@ -10,12 +9,11 @@ import DefaultMachTable, {
   defineMachTableConfig,
   MachTable,
   MachTableProvider,
-  MachTableToolbar,
-  useMachTableQuery,
-  type ColDef,
-  type UseMachTableQueryReturn
+  type ColDef
 } from "../index";
-import { useMachGrid } from "../useMachGrid";
+import { MachTableToolbar } from "../ui";
+import { useMachTableQuery, type UseMachTableQueryReturn } from "../useMachTableQuery";
+import { useMachTable } from "../useMachTable";
 
 class ResizeObserverStub {
   observe(): void {}
@@ -41,8 +39,7 @@ describe("React adapter", () => {
     expect(column.field).toBe("id");
     expect(createGrid).toBeTypeOf("function");
     expect(DEFAULT_LOCALE.loading).toBeTruthy();
-    expect(DefaultMachTable).toBe(RobotGrid);
-    expect(MachTable).toBe(RobotGrid);
+    expect(DefaultMachTable).toBe(MachTable);
   });
 
   it("merges provider defaults while keeping table props authoritative", async () => {
@@ -55,7 +52,7 @@ describe("React adapter", () => {
       defaultColDef: { sortable: false, resizable: false }
     };
 
-    await act(async () => root.render(createElement(MachTableProvider, { defaults },
+    await act(async () => root.render(createElement(MachTableProvider, { config: { defaults } },
       createElement(MachTable, {
         theme: "light",
         columnDefs: [{ field: "id" }],
@@ -206,14 +203,16 @@ describe("React adapter", () => {
     await act(async () => root.unmount());
   });
 
-  it("exposes a reactive API through useMachGrid", async () => {
+  it("exposes a reactive API through useMachTable", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
     let observedApi: GridApi | null = null;
+    let observedGrid: ReturnType<typeof useMachTable> | null = null;
 
     function Harness() {
-      const grid = useMachGrid();
+      const grid = useMachTable();
+      observedGrid = grid;
       observedApi = grid.api;
       return createElement(MachTable, {
         apiRef: grid.apiRef,
@@ -225,7 +224,12 @@ describe("React adapter", () => {
 
     await act(async () => root.render(createElement(Harness)));
     expect(observedApi).not.toBeNull();
-    expect((observedApi as GridApi | null)?.getDisplayedRowCount()).toBe(1);
+    expect((observedApi as GridApi | null)?.rows.getCount()).toBe(1);
+    await act(async () => {
+      observedGrid!.apiRef.current = observedApi;
+      await Promise.resolve();
+    });
+    expect(observedGrid!.ready).toBe(true);
     await act(async () => root.unmount());
   });
 
@@ -240,15 +244,15 @@ describe("React adapter", () => {
     let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
     function Harness() {
       remote = useMachTableQuery({ query: { keyword: "x" }, queryKey: "x", rowKey: "id", request, mode: "manual" });
-      return createElement(MachTable<{ id: string }>, { ...remote.gridProps, columnDefs: [{ field: "id" }] });
+      return createElement(MachTable<{ id: string }>, { ...remote.bindings, columnDefs: [{ field: "id" }] });
     }
     await act(async () => root.render(createElement(Harness)));
     expect(request).not.toHaveBeenCalled();
     await act(async () => {
-      remote!.gridProps.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
-      remote!.gridProps.onFilterChanged?.({
+      remote!.bindings.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
+      remote!.bindings.onFilterChanged?.({
         filterModel: {},
-        api: { getQuickFilter: () => null },
+        api: { filtering: { getQuickText: () => null } },
         advancedFilterModel: {
           version: 1,
           root: {
@@ -265,7 +269,7 @@ describe("React adapter", () => {
       advancedFilterModel: expect.objectContaining({ version: 1 })
     }));
     expect(remote!.rows).toEqual([{ id: "1" }]);
-    expect(remote!.gridProps.error).toBeNull();
+    expect(remote!.bindings.error).toBeNull();
     await act(async () => root.unmount());
   });
 

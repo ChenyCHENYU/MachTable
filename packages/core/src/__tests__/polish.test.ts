@@ -41,7 +41,7 @@ describe("rich tooltip", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: rows,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       tooltipComponent: (p) => `提示: ${p.formatted} (行${p.rowIndex + 1})`
     });
 
@@ -64,7 +64,7 @@ describe("rich tooltip", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: rows,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       tooltipShowDelay: 100,
       tooltipComponent: () => "T"
     });
@@ -83,17 +83,17 @@ describe("flash on change", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", editable: true }],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    api.editing.startCell({ rowIndex: 0, colId: "name" });
     const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
     input.value = "changed";
-    api.stopEditing(false);
+    api.editing.stop();
 
     expect(cellAt(host, 0, "name").classList.contains("mach-cell--flash")).toBe(true);
 
-    api.undo();
+    api.editing.undo();
     expect(cellAt(host, 0, "name").classList.contains("mach-cell--flash")).toBe(true);
     api.destroy();
   });
@@ -103,13 +103,13 @@ describe("flash on change", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", editable: true }],
       rowData: rows,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       flashCells: false
     });
-    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    api.editing.startCell({ rowIndex: 0, colId: "name" });
     const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
     input.value = "x";
-    api.stopEditing(false);
+    api.editing.stop();
     expect(cellAt(host, 0, "name").classList.contains("mach-cell--flash")).toBe(false);
     api.destroy();
   });
@@ -122,7 +122,7 @@ describe("custom context menu", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: rows,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       contextMenu: true,
       getContextMenuItems: (p) => [
         { label: `编辑 ${p.value}`, action },
@@ -153,7 +153,7 @@ describe("custom context menu", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: rows,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       contextMenu: true,
       getContextMenuItems: () => null
     });
@@ -175,7 +175,7 @@ describe("colSpan", () => {
         { field: "remark", headerName: "Remark", width: 120 }
       ],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const row0name = cellAt(host, 0, "name");
@@ -207,7 +207,7 @@ describe("autoHeight", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "名称", width: 150, wrapText: true, autoHeight: true }],
       rowData: data,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const rowsEls = Array.from(host.querySelectorAll(".mach-row[data-index]")) as HTMLElement[];
@@ -240,7 +240,7 @@ describe("preset columns", () => {
       columnDefs,
       rowData: rows,
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     expect(host.querySelectorAll(".mach-row-checkbox").length).toBeGreaterThan(0);

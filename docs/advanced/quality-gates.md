@@ -45,7 +45,7 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 
 ## 类型与异步安全
 
-公开 API 结构由 `api/public-api.snapshot.json` 锁定，生命周期规则由 `api/public-api-policy.json` 声明。任何删除、改名、新增或参数/返回值签名变化都会让 `check:api` 失败；贡献者必须先确认兼容策略、同步 Changelog/升级文档，再显式更新快照。快照覆盖 Core/Worker、Vue/React 和 XLSX 公开入口，并与 TypeScript consumer fixture 互补：前者检查结构漂移，后者检查真实 ESM/CJS/Vue SFC 消费。
+公开 API 结构由 `api/public-api.snapshot.json` 锁定，生命周期规则由 `api/public-api-policy.json` 声明。任何删除、改名、新增或参数/返回值签名变化都会让 `check:api` 失败；贡献者必须先确认兼容策略、同步 Changelog/升级文档，再显式更新快照。快照覆盖 Core 根入口、Core adapter/worker、Vue/React 根入口及其 workflows/ui/adapters 子入口和 XLSX，并与 TypeScript consumer fixture 互补：前者检查结构漂移，后者检查真实 ESM/CJS/Vue SFC 消费。
 
 生产源码启用 TypeScript ESLint 的类型感知规则，重点阻止：
 

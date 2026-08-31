@@ -73,6 +73,6 @@ defs[2].cellRenderer = "statusBadge";   // 或在 fields 元数据中约定 rend
 
 ```ts
 watch(schema, (next) => {
-  api.setColumnDefs(buildColDefsFromSchema(next));   // 列状态（宽/序/显隐）按 colId 保留
+  api.columns.setDefinitions(buildColDefsFromSchema(next));   // 列状态（宽/序/显隐）按 colId 保留
 });
 ```

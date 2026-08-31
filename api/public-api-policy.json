@@ -7,18 +7,20 @@
     "selection",
     "editing",
     "filtering",
+    "sorting",
     "pagination",
+    "hierarchy",
+    "view",
     "state",
+    "io",
     "diagnostics"
   ],
   "flatApi": {
-    "status": "compatibility",
-    "removalBefore": "1.0.0",
-    "rule": "Do not add a flat alias when an existing domain operation or option expresses the same capability."
+    "status": "removed",
+    "rootMemberLimit": 19,
+    "rule": "Root methods are limited to lifecycle, configuration, events and batching; commands belong to one domain."
   },
-  "deprecated": {
-    "GridApi.openColumnPanel": "GridApi.openColumnWorkbench"
-  },
+  "deprecated": {},
   "stability": {
     "stable": "Documented API covered by signature and semantic contract gates.",
     "experimental": "Must live behind an explicit subpath or GridFeature until promoted.",

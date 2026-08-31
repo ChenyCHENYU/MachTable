@@ -1,14 +1,16 @@
+export { defineMachTableConfig } from "@agile-team/mach-table";
 export {
-  defineMachTableConfig,
   mergeMachTableConfig,
   normalizeMachTableConfig,
   resolveMachTableGridOptions
-} from "@agile-team/mach-table";
+} from "@agile-team/mach-table/adapter";
 export type {
   MachTableConfigWarning,
-  MachTableOptionExplanation,
   MachTablePresetSelection,
   MachTableRuntimeConfig,
+} from "@agile-team/mach-table";
+export type {
+  MachTableOptionExplanation,
   ResolvedMachTableConfig,
   ResolvedMachTableGridOptions
-} from "@agile-team/mach-table";
+} from "@agile-team/mach-table/adapter";

@@ -50,7 +50,7 @@ const cssVars = computed(() => ({
 ```ts
 import { h } from "vue";
 import { NTag, NBadge, NButton, NEllipsis } from "naive-ui";
-import { vueCellRenderer } from "@agile-team/mach-table-vue";
+import { vueCellRenderer } from "@agile-team/mach-table-vue/adapters";
 
 const columns = [
   {
@@ -121,7 +121,8 @@ registerCellEditor("n-date", naiveEditor(NDatePicker, { type: "datetime" }));
 
 ```ts
 // 组件库内部：TableColumnDesc → MachTable ColDef 适配器
-import { MachTable, vueCellRenderer, type ColDef } from "@agile-team/mach-table-vue";
+import { MachTable, type ColDef } from "@agile-team/mach-table-vue";
+import { vueCellRenderer } from "@agile-team/mach-table-vue/adapters";
 
 function descToColDef(desc: TableColumnDesc): ColDef<any> {
   return {
@@ -145,7 +146,7 @@ function descToColDef(desc: TableColumnDesc): ColDef<any> {
 }
 ```
 
-映射后 `getSelection / setSelection / getVisibleSelection / deselectAll / setSortModel` 等语义在两侧一一对应，业务代码几乎无感切换。集成要点：
+映射后把业务命令统一到 `api.selection` 与 `api.sorting` 等领域，页面无需记忆不同表格的平面方法名。集成要点：
 
 | 关注点 | 结论 |
 | --- | --- |

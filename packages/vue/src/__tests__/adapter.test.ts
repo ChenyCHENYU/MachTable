@@ -1,6 +1,5 @@
 import { createApp, defineComponent, h, nextTick, onUnmounted, ref, shallowRef, type GlobalComponents } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RobotGrid } from "../MachTable";
 import { vueCellRenderer } from "../adapters";
 import { createElementPlusEditors, vueCellEditor } from "../editors";
 import DefaultPlugin, {
@@ -100,14 +99,12 @@ describe("Vue adapter", () => {
     const app = createApp({ render: () => null });
     app.use(MachTablePlugin);
     app.use(MachTableUiPlugin);
-    const globallyTyped: GlobalComponents["MachTable"] = RobotGrid;
+    const globallyTyped: GlobalComponents["MachTable"] = MachTable;
 
     expect(DefaultPlugin).toBe(MachTablePlugin);
-    expect(globallyTyped).toBe(RobotGrid);
-    expect(app.component("MachTable")).toBe(RobotGrid);
-    expect(app.component("RobotGrid")).toBe(RobotGrid);
+    expect(globallyTyped).toBe(MachTable);
+    expect(app.component("MachTable")).toBe(MachTable);
     expect(app.component("MachTableToolbar")).toBe(MachTableToolbar);
-    expect(MachTable).toBe(RobotGrid);
   });
 
   it("applies plugin defaults and lets component props override them", async () => {
@@ -127,6 +124,25 @@ describe("Vue adapter", () => {
     await nextTick();
     expect(host.querySelector(".mach-root")?.classList.contains("mach-theme-dark")).toBe(false);
     expect((host.querySelector(".mach-pagination") as HTMLElement).style.display).toBe("none");
+    app.unmount();
+  });
+
+  it("emits each explicit grid event once without replacing the adapter bridge", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const onCellClicked = vi.fn();
+    const app = createApp({
+      render: () => h(MachTable, {
+        columnDefs: [{ field: "name" }],
+        rowData: [{ name: "Ada" }],
+        pagination: false,
+        onCellClicked
+      })
+    });
+    app.mount(host);
+    await nextTick();
+    host.querySelector<HTMLElement>('.mach-cell[data-col-id="name"]')!.click();
+    expect(onCellClicked).toHaveBeenCalledOnce();
     app.unmount();
   });
 
@@ -232,16 +248,12 @@ describe("Vue adapter", () => {
     app.unmount();
   });
 
-  it("supports a configurable async global registration and explicit preloading", async () => {
+  it("supports async global registration and explicit preloading", async () => {
     const app = createApp({ render: () => null });
-    app.use(AsyncMachTablePlugin, {
-      componentName: "BusinessTable",
-      registerRobotGridAlias: false
-    });
+    app.use(AsyncMachTablePlugin);
 
-    expect(app.component("BusinessTable")).toBe(AsyncMachTable);
-    expect(app.component("RobotGrid")).toBeUndefined();
-    await expect(preloadMachTable()).resolves.toBe(RobotGrid);
+    expect(app.component("MachTable")).toBe(AsyncMachTable);
+    await expect(preloadMachTable()).resolves.toBe(MachTable);
   });
 
   it("does not silently overwrite an existing global component", () => {
@@ -470,7 +482,7 @@ describe("Vue adapter", () => {
     await nextTick();
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     expect(grid!.ready.value).toBe(true);
-    expect(grid!.api.value?.getDisplayedRowCount()).toBe(1);
+    expect(grid!.api.value?.rows.getCount()).toBe(1);
     app.unmount();
     await nextTick();
     expect(grid!.ready.value).toBe(false);
@@ -489,7 +501,7 @@ describe("Vue adapter", () => {
           ref: grid!.ref,
           columnDefs: [{ field: "name", editable: true }],
           rowData: [{ id: "1", name: "one" }, { id: "2", name: "two" }],
-          getRowId: ({ data }: any) => data.id,
+          rowKey: (row: any) => row.id,
           pagination: false
         });
       }
@@ -498,9 +510,9 @@ describe("Vue adapter", () => {
     await nextTick();
     await nextTick();
     for (let rowIndex = 0; rowIndex < 2; rowIndex++) {
-      grid!.api.value!.startEditingCell({ rowIndex, colId: "name" });
+      grid!.api.value!.editing.startCell({ rowIndex, colId: "name" });
       (host.querySelector(".mach-editor-input") as HTMLInputElement).value = `changed-${rowIndex}`;
-      await grid!.api.value!.stopEditingAsync();
+      await grid!.api.value!.editing.stop();
     }
     expect(editing!.dirty.value).toBe(true);
     expect(editing!.dirtyRowIds.value).toEqual(["1", "2"]);
@@ -516,20 +528,21 @@ describe("Vue adapter", () => {
   it("guards editing failures, concurrent saves and before-unload cleanup", async () => {
     let resolveSave!: (value: any) => void;
     const saveChanges = vi.fn();
-    const saveChangesDetailed = vi.fn(() => new Promise<any>((resolve) => { resolveSave = resolve; }));
+    const saveRequest = vi.fn(() => new Promise<any>((resolve) => { resolveSave = resolve; }));
     const removeDirtyListener = vi.fn();
     const api = {
       isDestroyed: () => false,
-      getDirtyRowIds: () => ["1"],
-      getChanges: () => [{ rowId: "1", colId: "name", oldValue: "before", newValue: "after" }],
-      addEventListener: vi.fn(() => removeDirtyListener),
-      saveChanges,
-      saveChangesDetailed,
-      rollbackChanges: vi.fn(() => true),
-      markChangesSaved: vi.fn(),
-      getNodeById: vi.fn(() => null),
-      scrollToIndex: vi.fn(),
-      startEditingCell: vi.fn()
+      on: vi.fn(() => removeDirtyListener),
+      editing: {
+        getDirtyRowIds: () => ["1"],
+        getChanges: () => [{ rowId: "1", colId: "name", oldValue: "before", newValue: "after" }],
+        save: saveRequest,
+        rollback: vi.fn(() => true),
+        markSaved: vi.fn(),
+        startCell: vi.fn()
+      },
+      rows: { getById: vi.fn(() => null) },
+      view: { scrollToRow: vi.fn() }
     };
     const table = { api: shallowRef<any>(api) } as UseMachTableReturn<any>;
     const onSaveError = vi.fn();
@@ -557,9 +570,9 @@ describe("Vue adapter", () => {
     expect(editing!.reveal("missing", "name", true)).toBe(false);
     expect(editing!.rollback(["1"])).toBe(true);
     editing!.markSaved(["1"]);
-    expect(api.markChangesSaved).toHaveBeenCalledWith(["1"]);
+    expect(api.editing.markSaved).toHaveBeenCalledWith(["1"]);
 
-    api.saveChangesDetailed = vi.fn().mockRejectedValue(new Error("save failed"));
+    api.editing.save = vi.fn().mockRejectedValue(new Error("save failed"));
     await expect(editing!.save(saveChanges as any)).rejects.toThrow("save failed");
     expect(onSaveError).toHaveBeenCalledOnce();
     expect(editing!.saveError.value).toBeInstanceOf(Error);
@@ -623,15 +636,15 @@ describe("Vue adapter", () => {
     requests[0].resolve({ rows: [{ id: "1", name: "one" }], total: 21 });
     await Promise.resolve();
     await nextTick();
-    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
+    remote!.bindings.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
     expect(remote!.selectedKeys.value).toEqual(["1"]);
 
-    remote!.gridProps.value.onPaginationChanged?.({ page: 2, pageSize: 20 } as any);
+    remote!.bindings.value.onPaginationChanged?.({ page: 2, pageSize: 20 } as any);
     expect(requests[1].page).toBe(2);
     requests[1].resolve({ rows: [{ id: "2", name: "two" }], total: 21 });
     await Promise.resolve();
     await nextTick();
-    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
+    remote!.bindings.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
     expect(remote!.selectedKeys.value).toEqual(["1", "2"]);
     expect(remote!.selectedRows.value.map((row) => row.name)).toEqual(["one", "two"]);
     app.unmount();
@@ -660,7 +673,7 @@ describe("Vue adapter", () => {
     expect(remote!.selectionState.value).toEqual({ mode: "allMatching", excludedKeys: [] });
     expect(remote!.selectedKeys.value).toEqual([]);
 
-    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: [{ id: "2" }] } as any);
+    remote!.bindings.value.onSelectionChanged?.({ selectedRows: [{ id: "2" }] } as any);
     expect(remote!.selectionState.value).toEqual({ mode: "allMatching", excludedKeys: ["1"] });
     expect(remote!.selectedRows.value).toEqual([{ id: "2" }]);
 
@@ -708,7 +721,7 @@ describe("Vue adapter", () => {
 
     await remote!.reload();
     expect(remote!.error.value).toEqual(expect.objectContaining({ message: "offline" }));
-    const errorOverlay = remote!.gridProps.value.overlayErrorTemplate as () => string;
+    const errorOverlay = remote!.bindings.value.overlayErrorTemplate as () => string;
     expect(errorOverlay()).toContain("Remote request failed");
     await remote!.retry();
     expect(remote!.error.value).toBeInstanceOf(TypeError);
@@ -751,17 +764,17 @@ describe("Vue adapter", () => {
     }));
     app.mount(host);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
-    remote!.gridProps.value.onPaginationChanged?.({ page: 1, pageSize: 20 } as any);
+    remote!.bindings.value.onPaginationChanged?.({ page: 1, pageSize: 20 } as any);
     expect(request).toHaveBeenCalledTimes(1);
 
-    remote!.gridProps.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
+    remote!.bindings.value.onSelectionChanged?.({ selectedRows: remote!.rows.value } as any);
     expect(remote!.selectedKeys.value).toEqual(["1"]);
     remote!.selectedKeys.value = [];
     expect(remote!.selectedRows.value).toEqual([]);
 
-    remote!.gridProps.value.onSortChanged?.({ sortModel: [{ colId: "name", sort: "asc" }] } as any);
+    remote!.bindings.value.onSortChanged?.({ sortModel: [{ colId: "name", sort: "asc" }] } as any);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
-    remote!.gridProps.value.onFilterChanged?.({ filterModel: { name: { type: "contains", filter: "x" } } } as any);
+    remote!.bindings.value.onFilterChanged?.({ filterModel: { name: { type: "contains", filter: "x" } } } as any);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(3));
     quickFilterText.value = "fast";
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(4));
@@ -792,8 +805,8 @@ describe("Vue adapter", () => {
     expect(request).not.toHaveBeenCalled();
     query.value = { keyword: "after" };
     await nextTick();
-    remote!.gridProps.value.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
-    remote!.gridProps.value.onFilterChanged?.({
+    remote!.bindings.value.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
+    remote!.bindings.value.onFilterChanged?.({
       filterModel: {},
       advancedFilterModel: {
         version: 1,
@@ -865,16 +878,18 @@ describe("Vue adapter", () => {
     app.unmount();
 
     const api = {
-      getGridOption: vi.fn(() => "normal"),
-      setQuickFilter: vi.fn(),
-      isInfinite: vi.fn(() => false),
-      refreshCells: vi.fn(),
-      openColumnWorkbench: vi.fn(),
-      setGridOption: vi.fn(),
-      canUndo: vi.fn(() => true),
-      canRedo: vi.fn(() => true),
-      undo: vi.fn(() => true),
-      redo: vi.fn(() => true)
+      getOption: vi.fn(() => "normal"),
+      updateOptions: vi.fn(),
+      filtering: { setQuickText: vi.fn() },
+      rows: { isRemote: vi.fn(() => false), reload: vi.fn() },
+      view: { refreshCells: vi.fn() },
+      columns: { openWorkbench: vi.fn() },
+      editing: {
+        canUndo: vi.fn(() => true),
+        canRedo: vi.fn(() => true),
+        undo: vi.fn(() => true),
+        redo: vi.fn(() => true)
+      }
     } as unknown as GridApi;
     const fallbackHost = document.createElement("div");
     document.body.appendChild(fallbackHost);
@@ -894,12 +909,12 @@ describe("Vue adapter", () => {
     fallbackDensity.value = "large";
     fallbackDensity.dispatchEvent(new Event("change", { bubbles: true }));
     for (const button of fallbackHost.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")) button.click();
-    expect(api.setQuickFilter).toHaveBeenCalledWith("local");
-    expect(api.refreshCells).toHaveBeenCalledOnce();
-    expect(api.openColumnWorkbench).toHaveBeenCalledOnce();
-    expect(api.setGridOption).toHaveBeenCalledWith("size", "large");
-    expect(api.undo).toHaveBeenCalledOnce();
-    expect(api.redo).toHaveBeenCalledOnce();
+    expect(api.filtering.setQuickText).toHaveBeenCalledWith("local");
+    expect(api.view.refreshCells).toHaveBeenCalledOnce();
+    expect(api.columns.openWorkbench).toHaveBeenCalledOnce();
+    expect(api.updateOptions).toHaveBeenCalledWith({ size: "large" });
+    expect(api.editing.undo).toHaveBeenCalledOnce();
+    expect(api.editing.redo).toHaveBeenCalledOnce();
     fallbackApp.unmount();
   });
 
@@ -925,13 +940,13 @@ describe("Vue adapter", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     local!.search.value = "Ada";
     await nextTick();
-    expect(local!.table.api.value?.getGridOption("quickFilterText")).toBe("Ada");
-    local!.table.api.value?.selectAll();
+    expect(local!.table.api.value?.getOption("quickFilterText")).toBe("Ada");
+    local!.table.api.value?.selection.selectAll();
     await nextTick();
     expect(local!.selectedCount.value).toBe(1);
     await local!.reload();
     local!.commands.setDensity("compact");
-    expect(local!.table.api.value?.getGridOption("size")).toBe("compact");
+    expect(local!.table.api.value?.getOption("size")).toBe("compact");
     expect(local!.busy.value).toBe(false);
     expect(local!.error.value).toBeNull();
     app.unmount();

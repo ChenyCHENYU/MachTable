@@ -41,7 +41,7 @@ describe("preset renderers", () => {
         { field: "status", headerName: "Status", cellRenderer: "statusTag" }
       ],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     expect(cellAt(host, 0, "status").querySelector(".mach-tag--success")).toBeTruthy();
     expect(cellAt(host, 1, "status").querySelector(".mach-tag--danger")).toBeTruthy();
@@ -60,7 +60,7 @@ describe("preset renderers", () => {
           }) }
       ],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const tag = cellAt(host, 2, "status").querySelector(".mach-tag") as HTMLElement;
     expect(tag.className).toContain("mach-tag--info");
@@ -73,7 +73,7 @@ describe("preset renderers", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "progress", headerName: "进度", cellRenderer: "progressBar" }],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const cell0 = cellAt(host, 0, "progress");
     const bar = cell0.querySelector(".mach-progress__bar") as HTMLElement;
@@ -90,7 +90,7 @@ describe("preset renderers", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", cellRenderer: "link" }],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const link = cellAt(host, 0, "name").querySelector(".mach-link") as HTMLElement;
     expect(link.textContent).toBe("a");
@@ -123,7 +123,7 @@ describe("preset renderers", () => {
         }
       ],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const opCell = cellAt(host, 0, "op");
@@ -167,7 +167,7 @@ describe("preset renderers", () => {
         }
       ],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const buttons = cellAt(host, 0, "op").querySelectorAll(".mach-action-btn");
@@ -220,7 +220,7 @@ describe("getRowHeight cache", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", editable: true }],
       rowData: rows,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       getRowHeight: (p) => {
         calls.push(p.data!.id);
         return 36;
@@ -228,15 +228,15 @@ describe("getRowHeight cache", () => {
     });
     expect(calls.length).toBe(rows.length);
 
-    api.refreshLayout();
-    api.refreshLayout();
+    api.view.refreshLayout();
+    api.view.refreshLayout();
     expect(calls.length).toBe(rows.length);
 
-    api.startEditingCell({ rowIndex: 0, colId: "name" });
+    api.editing.startCell({ rowIndex: 0, colId: "name" });
     const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
     input.value = "changed-and-longer-remark";
-    api.stopEditing(false);
-    api.refreshLayout();
+    api.editing.stop();
+    api.view.refreshLayout();
     expect(calls.filter((id) => id === "1").length).toBe(2);
     expect(calls.filter((id) => id === "2").length).toBe(1);
     api.destroy();
@@ -248,7 +248,7 @@ describe("getRowHeight cache", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: rows,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       getRowHeight: () => {
         calls++;
         return 36;

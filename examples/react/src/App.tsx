@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import {
   MachTable,
-  MachTableToolbar,
-  reactCellRenderer,
   type CellClickEvent,
   type ColDef
 } from "@agile-team/mach-table-react";
+import { reactCellRenderer } from "@agile-team/mach-table-react/adapters";
+import { MachTableToolbar } from "@agile-team/mach-table-react/ui";
 import { useMachTableController } from "@agile-team/mach-table-react/workflows";
 
 interface Employee {
@@ -57,7 +57,7 @@ export default function App() {
         onSearchChange={controller.setSearch}
         loading={controller.busy}
         selectedCount={controller.selectedCount}
-        onClearSelection={() => controller.table.apiRef.current?.deselectAll()}
+        onClearSelection={() => controller.table.apiRef.current?.selection.clear()}
         start={<button onClick={() => setRows(makeRows(rows.length + 1_000))}>追加 1,000 行</button>}
       />
       <div style={{ height: "70vh", minHeight: 400 }}>
@@ -69,7 +69,7 @@ export default function App() {
           columnDefs={columns}
           rowData={rows}
           rowKey="id"
-          stateKey="react-employees"
+          persistence={{ key: "react-employees" }}
           onCellClicked={(event: CellClickEvent<Employee>) => setClicked(`${event.colDef.field}:${event.value}`)}
         />
       </div>

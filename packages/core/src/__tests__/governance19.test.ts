@@ -70,16 +70,16 @@ describe("0.19 update and API governance", () => {
       rowKey: "id",
       pagination: false
     });
-    const before = api.getDiagnostics().updates.flushCount;
+    const before = api.diagnostics.get().updates.flushCount;
     api.batch((grid) => {
-      grid.setColumnVisibility("amount", false);
-      grid.setColumnVisibility("amount", true);
-      grid.refreshCells({ rowIds: ["1"], columns: ["name"] });
+      grid.columns.setVisible("amount", false);
+      grid.columns.setVisible("amount", true);
+      grid.view.refreshCells({ rowIds: ["1"], columns: ["name"] });
     });
-    expect(api.getDiagnostics().updates.flushCount - before).toBe(1);
-    expect(api.rows.getDisplayedCount()).toBe(api.getDisplayedRowCount());
-    expect(api.columns.getState()).toEqual(api.getColumnState());
-    expect(api.diagnostics.get()).toEqual(api.getDiagnostics());
+    expect(api.diagnostics.get().updates.flushCount - before).toBe(1);
+    expect(api.rows.getCount()).toBe(api.rows.getCount());
+    expect(api.columns.getState()).toEqual(api.columns.getState());
+    expect(api.diagnostics.get()).toEqual(api.diagnostics.get());
     api.destroy();
   });
 
@@ -170,10 +170,10 @@ describe("0.19 random-access datasource", () => {
       blockPrefetch: 0
     });
     await tick();
-    expect(api.getDisplayedRowCount()).toBe(100);
-    expect(api.getRowNode(55)).toEqual(expect.objectContaining({ loading: true, rowIndex: 55 }));
+    expect(api.rows.getCount()).toBe(100);
+    expect(api.rows.getAt(55)).toEqual(expect.objectContaining({ loading: true, rowIndex: 55 }));
     await api.rows.ensureLoaded(50, 60);
-    expect(api.getRowNode(55)?.data?.name).toBe("Row 55");
+    expect(api.rows.getAt(55)?.data?.name).toBe("Row 55");
     expect(calls).toEqual([0, 50]);
     expect(api.rows.getCacheSnapshot()).toEqual(expect.objectContaining({ cachedBlockCount: 2, cachedRowCount: 20 }));
     api.rows.purgeCache();
@@ -246,10 +246,10 @@ describe("0.19 Worker-ready local processing", () => {
         process: vi.fn(async () => ({ rowIds: ["2", "1"] }))
       }
     });
-    api.setSortModel([{ colId: "amount", direction: "desc" }]);
+    api.sorting.setModel([{ colId: "amount", direction: "desc" }]);
     await tick();
-    expect(api.getRowNode(0)?.id).toBe("2");
-    expect(api.getPerformanceSnapshot().modelSampleCount).toBeGreaterThan(0);
+    expect(api.rows.getAt(0)?.id).toBe("2");
+    expect(api.diagnostics.getPerformance().modelSampleCount).toBeGreaterThan(0);
     api.destroy();
   });
 });

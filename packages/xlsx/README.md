@@ -1,6 +1,6 @@
 # @agile-team/mach-table-xlsx
 
-Optional XLSX import/export for MachTable. The workbook engine is injected and can be dynamically imported, so normal table pages do not download Excel code.
+MachTable 的可选 XLSX 导入导出扩展。工作簿引擎由宿主动态注入，因此普通表格页面不会下载 Excel 代码。
 
 ```bash
 pnpm add @agile-team/mach-table-xlsx xlsx
@@ -9,18 +9,22 @@ pnpm add @agile-team/mach-table-xlsx xlsx
 ```ts
 import { createXlsxExtension } from "@agile-team/mach-table-xlsx";
 
-const xlsx = createXlsxExtension(() => import("xlsx"));
-await xlsx.export(api, { fileName: "orders.xlsx", sheetName: "Orders" });
+const excel = createXlsxExtension(() => import("xlsx"));
 
-await xlsx.import(api, await file.arrayBuffer(), {
+await excel.export(api, {
+  fileName: "orders.xlsx",
+  sheetName: "Orders"
+});
+
+await excel.import(api, await file.arrayBuffer(), {
   sheet: 0,
   mode: "replace",
   coerceNumbers: true
 });
 ```
 
-The extension reuses Core CSV selection, header, formula-protection and safe import rules. `xlsx` is an example engine, not a bundled dependency; an approved compatible engine can be injected instead.
+扩展复用 Core 的选择范围、表头、公式注入防护和安全导入规则。`xlsx` 只是示例引擎，不是本包的捆绑依赖；可注入经过项目批准的兼容引擎。
 
-Documentation: [XLSX guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/xlsx.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md)
+文档：[XLSX 指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/xlsx.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md)
 
-Source-available © ChenyCHENYU (Agile Team). Any use requires prior written authorization. See the [license](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) and [authorization process](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md).
+Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。

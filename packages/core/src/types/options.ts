@@ -11,7 +11,7 @@ import type { AdvancedFilterModel } from "./advancedFilter";
 import type { GridEventMap } from "./events";
 import type { CellRendererParams, GetRowIdParams } from "./params";
 import type { RowNode } from "./row";
-import type { GridStateInput } from "./state";
+import type { GridStateInput, GridStateSection } from "./state";
 import type { FieldPath } from "./path";
 
 export interface ColumnStateStore {
@@ -23,6 +23,15 @@ export interface GridStateStore {
   load(key: string): GridStateInput | null | Promise<GridStateInput | null>;
   save(key: string, state: GridStateInput): void | Promise<void>;
   clear?(key: string): void | Promise<void>;
+}
+
+export interface GridPersistenceOptions {
+  /** Stable storage key; namespace it by application, user and table. */
+  key: string;
+  /** Restored state sections. Defaults to every section. */
+  sections?: readonly GridStateSection[];
+  store?: GridStateStore;
+  debounceMs?: number;
 }
 
 /** Per-grid component overrides. These take precedence over the global registry. */
@@ -221,8 +230,7 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   defaultColDef?: Partial<ColDef<TData>>;
   /** Reusable semantic column definitions referenced through `colDef.type`. */
   columnTypes?: Readonly<Record<string, Partial<ColDef<TData>>>>;
-  getRowId?: (params: GetRowIdParams<TData>) => string;
-  /** Stable business key shorthand. `getRowId` takes precedence when both are set. */
+  /** Stable business key. Use a field path or a function for derived identifiers. */
   rowKey?: FieldPath<TData> | ((row: TData) => string | number);
   rowHeight?: number;
   headerHeight?: number;
@@ -248,8 +256,6 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   isRowExpandable?: (params: DetailRowRendererParams<TData>) => boolean;
   detailToggleColumn?: boolean;
   columnMenu?: boolean;
-  columnStateKey?: string | null;
-  columnStateStore?: ColumnStateStore;
   aggFuncs?: Record<string, (values: any[]) => any>;
   components?: GridComponents;
   /** Shared policy consumed by action column helpers. */
@@ -257,11 +263,9 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   features?: readonly GridFeature<TData>[];
   /** State restored atomically after columns and initial rows are available. */
   initialState?: GridStateInput;
-  /** Persist the complete user-visible GridState with a versioned store. */
-  stateKey?: string | null;
-  stateStore?: GridStateStore;
-  stateSaveDebounceMs?: number;
-  locale?: import("../lib/locale").RgLocale;
+  /** Opt-in versioned state persistence. Use sections: ["columns"] for width/order memory only. */
+  persistence?: GridPersistenceOptions | false;
+  locale?: import("../lib/locale").MachTableLocale;
   /** Cell editing is isolated; fullRow stages every editable cell and commits them together. */
   editType?: GridEditType;
   /** Visibility of the subtle pencil affordance on editable cells. */
@@ -352,7 +356,8 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   rowData: TData[];
   defaultColDef: Partial<ColDef<TData>>;
   columnTypes: Readonly<Record<string, Partial<ColDef<TData>>>>;
-  getRowId?: (params: GetRowIdParams<TData>) => string;
+  /** Internal normalized identity resolver derived from rowKey. */
+  resolveRowId?: (params: GetRowIdParams<TData>) => string;
   rowKey?: FieldPath<TData> | ((row: TData) => string | number);
   rowHeight: number;
   headerHeight: number;
@@ -374,17 +379,14 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   isRowExpandable?: (params: DetailRowRendererParams<TData>) => boolean;
   detailToggleColumn: boolean;
   columnMenu: boolean;
-  columnStateKey: string | null;
-  columnStateStore?: ColumnStateStore;
   aggFuncs?: Record<string, (values: any[]) => any>;
   components?: GridComponents;
   actionPolicy?: ActionPolicy<TData>;
   features: readonly GridFeature<TData>[];
   initialState?: GridStateInput;
-  stateKey: string | null;
-  stateStore?: GridStateStore;
-  stateSaveDebounceMs: number;
-  locale: import("../lib/locale").RgLocale;
+  persistence: Required<Pick<GridPersistenceOptions, "key" | "debounceMs">> &
+    Pick<GridPersistenceOptions, "sections" | "store"> | null;
+  locale: import("../lib/locale").MachTableLocale;
   editType: GridEditType;
   editableIndicator: EditableIndicator;
   rowEditValidator?: (

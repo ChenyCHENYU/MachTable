@@ -1,5 +1,18 @@
 # @agile-team/mach-table-vue
 
+## 0.24.0
+
+### Minor Changes
+
+- Align Vue with the canonical `MachTable`, `useMachTable`, `bindings` and domain API contracts; remove pre-adoption compatibility aliases and duplicate defaults injection.
+- Keep the root entry focused on the component, lifecycle/config primitives and Core exports; move workflows, UI, framework adapters, editors and Worker helpers to explicit tree-shakeable subpaths.
+- Support the unified per-table persistence configuration and strict application/preset configuration boundary.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.24.0
+
 ## 0.23.0
 
 ### Minor Changes

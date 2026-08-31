@@ -1,6 +1,6 @@
 # 事件 Events
 
-事件双通道：`options.onXxx` 回调 与 `api.addEventListener(type, fn)`（返回取消函数）。所有事件对象都含 `type` 与 `api` 字段。
+事件双通道：`options.onXxx` 回调 与 `api.on(type, fn)`（返回取消函数）。所有事件对象都含 `type` 与 `api` 字段。
 
 ## 生命周期
 
@@ -125,8 +125,8 @@ createGrid(host, {
   onCellValueChanged: (e) => audit(e.colDef.field, e.oldValue, e.newValue)
 });
 
-// 方式二：addEventListener（返回取消函数）
-const off = api.addEventListener("rangeSelectionChanged", (e) => {
+// 方式二：api.on（返回取消函数）
+const off = api.on("rangeSelectionChanged", (e) => {
   console.log("框选", e.range);
 });
 off(); // 取消订阅

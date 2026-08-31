@@ -1,10 +1,10 @@
 import {
   MachTable,
   MachTableProvider,
-  MachTableToolbar,
   defineMachTableConfig,
   type MachTableReactProps
 } from "@agile-team/mach-table-react";
+import { MachTableToolbar } from "@agile-team/mach-table-react/ui";
 import { useMachTableController, useMachTableEditing, useMachTableQuery } from "@agile-team/mach-table-react/workflows";
 
 interface Row { id: string; name: string }
@@ -25,7 +25,7 @@ export const toolbar = MachTableToolbar;
 
 export function Table() {
   return (
-    <MachTableProvider<Row> config={config}>
+    <MachTableProvider config={config}>
       <MachTable<Row> {...props} />
     </MachTableProvider>
   );

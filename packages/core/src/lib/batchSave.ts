@@ -6,6 +6,7 @@ import type {
   SaveChangesResult
 } from "../types/api";
 import type { GridApi } from "../types/api";
+import { getByPath } from "./path";
 
 function cloneSnapshotData<T>(data: T): T {
   try { if (typeof structuredClone === "function") return structuredClone(data); }
@@ -77,16 +78,12 @@ function conflictUpdateData<TData>(
   conflict: SaveChangeConflict<TData>
 ): { data: TData; mergeIntoCurrent: boolean } | null {
   if (conflict.serverData === undefined) return null;
-  const node = api.getNodeById(conflict.rowId);
+  const node = api.rows.getById(conflict.rowId);
   if (!node || node.data == null) return null;
-  const getRowId = api.getGridOption("getRowId");
-  if (getRowId) {
-    try {
-      const id = getRowId({ data: conflict.serverData, index: node.rowIndex, api });
-      return id === conflict.rowId ? { data: conflict.serverData, mergeIntoCurrent: false } : null;
-    } catch {
-      return null;
-    }
+  const rowKey = api.getOption("rowKey");
+  if (rowKey) {
+    const id = typeof rowKey === "function" ? rowKey(conflict.serverData) : getByPath(conflict.serverData, rowKey);
+    return String(id) === conflict.rowId ? { data: conflict.serverData, mergeIntoCurrent: false } : null;
   }
   const current = node.data;
   const mergeable = current != null && conflict.serverData != null &&
@@ -103,9 +100,9 @@ export function resolveSaveConflict<TData>(
   if (strategy === "keepLocal") return true;
   const update = conflictUpdateData(api, conflict);
   if (!update) return false;
-  api.rollbackChanges([conflict.rowId]);
+  api.editing.rollback([conflict.rowId]);
   if (update.mergeIntoCurrent) Object.assign(update.data as object, conflict.serverData as object);
-  api.applyTransaction({ update: [update.data] });
-  api.markChangesSaved([conflict.rowId]);
+  api.rows.transact({ update: [update.data] });
+  api.editing.markSaved([conflict.rowId]);
   return true;
 }

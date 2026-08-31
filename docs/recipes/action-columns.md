@@ -24,7 +24,7 @@ columnDefs: [
 ]
 ```
 
-五行搭出一张标准后台列表。工厂返回普通 `ColDef`，可继续被 `columnStateKey`/列菜单管理。
+五行搭出一张标准后台列表。工厂返回普通 `ColDef`，可继续被列菜单与 `persistence.sections: ["columns"]` 管理。
 
 ## 整行编辑操作列（推荐）
 

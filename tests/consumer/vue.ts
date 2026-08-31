@@ -1,7 +1,7 @@
 import {
   MachTable,
   MachTablePlugin,
-  provideMachTableDefaults,
+  defineMachTableConfig,
   type MachTableVueProps
 } from "@agile-team/mach-table-vue";
 import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
@@ -23,6 +23,6 @@ export const props: MachTableVueProps<Row> = {
   rowKey: "id"
 };
 
-export function provideDefaults(): void {
-  provideMachTableDefaults<Row>({ pagination: false, defaultColDef: { sortable: true } });
-}
+export const applicationConfig = defineMachTableConfig({
+  defaults: { pagination: false, defaultColDef: { sortable: true } }
+});

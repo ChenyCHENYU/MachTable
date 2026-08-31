@@ -41,7 +41,7 @@ const views = createGridViewManager(api, {
 
 ## 与完整 GridState 的区别
 
-| 能力 | 命名视图 | `stateKey` / GridState |
+| 能力 | 命名视图 | `persistence` / GridState |
 | --- | --- | --- |
 | 列、排序、过滤、页大小 | 保存 | 保存 |
 | 当前页 | 重置为 1 | 保存 |

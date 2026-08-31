@@ -4,112 +4,102 @@
 
 # @agile-team/mach-table-react
 
-Official React 18+ adapter for MachTable 0.23. It provides a generic `<MachTable>`, full app/route configuration, advanced-filter aware remote query, conflict-aware editing workflows, persistent named views, a cohesive controller, optional and persistent column resizing, bounded random-access remote blocks, governed domain APIs, optional Worker processing, a standard toolbar, in-place React cell refresh, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
-
-## Install
+MachTable 0.24 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 ```bash
 pnpm add @agile-team/mach-table-react
 ```
 
-Optional large local-data Worker helpers use the same installed package but a separate chunk:
-
-```ts
-import { createWorkerDataProcessor } from "@agile-team/mach-table-react/worker";
-```
-
-Import the stylesheet once from your application entry:
+应用入口只引入一次样式：
 
 ```ts
 import "@agile-team/mach-table-react/styles.css";
 ```
 
-## Direct import
+## 基础接入
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, useMachGrid, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
 
 interface Row { id: string; name: string }
 
-export function App({ rows }: { rows: Row[] }) {
-  const grid = useMachGrid<Row>();
+export function Customers({ rows }: { rows: Row[] }) {
+  const table = useMachTable<Row>();
   const columns = useMemo<ColDef<Row>[]>(
-    () => [{ field: "name", headerName: "Name", flex: 1 }],
+    () => [{ field: "name", flex: 1, editable: true }],
     []
   );
 
   return (
     <div style={{ height: 520 }}>
       <MachTable<Row>
-        apiRef={grid.apiRef}
+        apiRef={table.apiRef}
         rowData={rows}
         columnDefs={columns}
         rowKey="id"
-        stateKey="customer-list"
         enableColumnResize
+        persistence={{ key: "customers:list", sections: ["columns"] }}
       />
     </div>
   );
 }
 ```
 
-## Route-level lazy loading
+对象型列和配置建议用 `useMemo` 保持引用稳定。`useMachTable()` 同时提供 `apiRef`、响应式 `api` 与 `ready`。
 
-React intentionally has no global component registry. MachTable provides a default component export so the standard `React.lazy` API works without a mapping wrapper:
+## 应用配置
 
-```tsx
-import { lazy, Suspense } from "react";
-
-const MachTable = lazy(() => import("@agile-team/mach-table-react"));
-
-export function OrdersPage() {
-  return (
-    <Suspense fallback={<div>Loading table...</div>}>
-      <MachTable columnDefs={columns} rowData={rows} />
-    </Suspense>
-  );
-}
-```
-
-When the page itself is route-lazy, a normal named import inside that page already produces the same route-level split. Use `React.lazy` when the grid should be split independently from the page.
-
-## Application and route defaults
-
-Keep table conventions in one file. Providers can be nested; the nearest configuration is merged, named presets are reusable, and explicit table props win:
-
-```tsx
-// mach-table.config.ts
+```ts
+// src/config/mach-table.config.ts
 import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-react";
+
 export default defineMachTableConfig({
   defaults: {
     size: "compact",
+    columnLayout: "fit",
     enableColumnResize: true,
-    defaultColDef: { sortable: true, resizable: true, filter: true }
+    defaultColDef: { sortable: true, filter: true, resizable: true }
   },
   defaultPreset: "list",
   presets: {
-    list: defineMachTablePreset({ pagination: false }),
+    list: defineMachTablePreset({ stripedRows: true }),
     crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
   }
 });
+```
 
-// main.tsx
+```tsx
 <MachTableProvider config={machTableConfig}>
   <App />
 </MachTableProvider>
 ```
 
-The adapter installs the matching `@agile-team/mach-table` core automatically and re-exports its complete API and types. Only `react >= 18` and `react-dom >= 18` remain peer dependencies supplied by the host application.
+Provider 可按路由/布局嵌套，最近一层覆盖外层，表格 props 优先级最高。
 
-## Remote lists and standard workflows
+## 按需加载
 
-Import heavier page workflows from the tree-shakeable subpath:
+React 不模拟全局组件注册。路由本身懒加载时普通 import 已自然拆包；需要独立边界时：
 
 ```tsx
-import { useMachTableQuery, useMachTableController } from "@agile-team/mach-table-react/workflows";
-import { MachTable, MachTableToolbar } from "@agile-team/mach-table-react";
+const MachTable = lazy(() => import("@agile-team/mach-table-react"));
+```
 
+可选能力使用子入口：
+
+```tsx
+import { useMachTableQuery, useMachTableEditing } from "@agile-team/mach-table-react/workflows";
+import { MachTableToolbar } from "@agile-team/mach-table-react/ui";
+import { reactCellRenderer } from "@agile-team/mach-table-react/adapters";
+import { createWorkerDataProcessor } from "@agile-team/mach-table-react/worker";
+```
+
+- `/workflows`：请求取消、防过期覆盖、服务端分页、跨页选择、脏数据和冲突保存。
+- `/ui`：可选标准工具栏。
+- `/adapters`：自定义 React cell/detail renderer 桥接。
+- `/worker`：大型本地过滤/排序的独立 Worker 能力。
+
+```tsx
 const query = useMachTableQuery({
   query: filters,
   queryKey: filters,
@@ -117,53 +107,12 @@ const query = useMachTableQuery({
   request: orderApi.page,
   mode: "manual"
 });
-const controller = useMachTableController({ query });
 
-<MachTableToolbar
-  api={controller.table.api}
-  commands={controller.commands}
-  search={controller.search}
-  onSearchChange={controller.setSearch}
-  loading={controller.busy}
-/>;
-<MachTable apiRef={controller.table.apiRef} {...controller.bindings} />;
+<MachTable<Row> apiRef={table.apiRef} columnDefs={columns} {...query.bindings} />;
 ```
 
-The query hook cancels superseded requests, ignores stale responses, forwards nested advanced filters, exposes an error overlay and supports cross-page or select-all-matching selection. `useMachTableEditing()` adds dirty state, detailed partial-save/conflict results, guarded saves, conflict resolution, rollback and reveal helpers.
+该包自动依赖 `@agile-team/mach-table` 并重导出 Core 类型；宿主只需提供 `react` 和 `react-dom >= 18`。
 
-```tsx
-const editing = useMachTableEditing(grid, { guardBeforeUnload: true });
-const result = await editing.saveDetailed(orderApi.saveChanges);
-if (result.conflicts.length) editing.reveal(result.conflicts[0].rowId);
+文档：[React 指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/react.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [SSR](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/ssr.md)
 
-async function saveCurrentView() {
-  const api = grid.apiRef.current;
-  if (!api) return;
-  const views = createGridViewManager(api, {
-    scope: `${tenantId}:${userId}:orders`
-  });
-  await views.save("My pending orders");
-}
-```
-
-See the [advanced filter](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/advanced-filter.md), [named views](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/saved-views.md), and [batch save](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/batch-save.md) guides.
-
-## Cell and full-row editing
-
-```tsx
-import { MachTable, rowActionsColumn } from "@agile-team/mach-table-react";
-
-const columns = [
-  { field: "name", editable: true },
-  { field: "age", editable: true, cellEditor: "number" },
-  rowActionsColumn({ onView, onDelete, overflow: "drawer" })
-];
-
-<MachTable editType="fullRow" columnDefs={columns} rowData={rows} />;
-```
-
-Cell mode is the default and provides a pencil plus inline confirm/cancel controls. Use `editableIndicator="always" | "hover" | "none"` to match the page density.
-
-Documentation: [React guide](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/react.md) · [Enterprise integration](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [Next.js / SSR](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/ssr.md)
-
-Source-available © ChenyCHENYU (Agile Team). Any use requires prior written authorization. See the [license](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) and [authorization process](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md).
+Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。

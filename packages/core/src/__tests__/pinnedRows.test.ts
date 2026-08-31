@@ -36,7 +36,7 @@ describe("pinned top/bottom rows", () => {
       rowData: rows,
       pinnedTopRowData: [{ id: "t", name: "汇总行", amount: 60 }],
       pinnedBottomRowData: [{ id: "b", name: "均值行", amount: 20 }],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const top = host.querySelector(".mach-pinned-rows--top") as HTMLElement;
@@ -58,21 +58,21 @@ describe("pinned top/bottom rows", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: defs,
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const top = host.querySelector(".mach-pinned-rows--top") as HTMLElement;
     expect(top.style.display).toBe("none");
 
-    api.setPinnedTopRowData([{ id: "t", name: "新增", amount: 1 }]);
+    api.view.setPinnedRows("top", [{ id: "t", name: "新增", amount: 1 }]);
     expect(top.style.display).toBe("");
-    expect(api.getPinnedTopRowData().length).toBe(1);
+    expect(api.view.getPinnedRows("top").length).toBe(1);
 
-    api.setPinnedTopRowData(null);
+    api.view.setPinnedRows("top", null);
     expect(top.style.display).toBe("none");
-    expect(api.getPinnedTopRowData().length).toBe(0);
+    expect(api.view.getPinnedRows("top").length).toBe(0);
 
-    api.setPinnedBottomRowData([{ id: "b", name: "底", amount: 2 }]);
-    expect(api.getPinnedBottomRowData()[0].name).toBe("底");
+    api.view.setPinnedRows("bottom", [{ id: "b", name: "底", amount: 2 }]);
+    expect(api.view.getPinnedRows("bottom")[0].name).toBe("底");
     api.destroy();
   });
 
@@ -85,7 +85,7 @@ describe("pinned top/bottom rows", () => {
       ],
       rowData: rows,
       pinnedTopRowData: [{ id: "t", name: "顶", amount: 1 }],
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const topSeg = host.querySelector(".mach-pinned-rows--top .mach-pinned-seg--center") as HTMLElement;
     const viewport = host.querySelector(".mach-body-viewport--scroll") as HTMLElement;
@@ -103,12 +103,12 @@ describe("pinned top/bottom rows", () => {
       rowData: rows,
       pinnedTopRowData: [{ id: "t", name: "汇总", amount: 60 }],
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    const lines = api.getDataAsCsv().split("\r\n");
+    const lines = api.io.exportCsv().split("\r\n");
     expect(lines.length).toBe(4);
     expect(lines.join("")).not.toContain("汇总");
-    expect(api.getDisplayedRowCount()).toBe(3);
+    expect(api.rows.getCount()).toBe(3);
     api.destroy();
   });
 });

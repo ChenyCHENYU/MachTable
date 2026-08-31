@@ -26,10 +26,10 @@ function createHost(): HTMLElement {
 }
 
 function editCell(api: GridApi<Row>, host: HTMLElement, row: number, colId: string, value: string): void {
-  api.startEditingCell({ rowIndex: row, colId });
+  api.editing.startCell({ rowIndex: row, colId });
   const input = host.querySelector(".mach-editor-input") as HTMLInputElement;
   input.value = value;
-  api.stopEditing(false);
+  api.editing.stop();
 }
 
 describe("fixes round 3", () => {
@@ -38,14 +38,14 @@ describe("fixes round 3", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name" }],
       rowData: makeRows(3),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.setPinnedTopRowData([{ id: "t", name: "顶部", score: 1 }]);
-    api.setPinnedBottomRowData([{ id: "b", name: "底部", score: 2 }]);
+    api.view.setPinnedRows("top", [{ id: "t", name: "顶部", score: 1 }]);
+    api.view.setPinnedRows("bottom", [{ id: "b", name: "底部", score: 2 }]);
 
-    expect(api.getPinnedTopRowData().length).toBe(1);
-    expect(api.getPinnedBottomRowData().length).toBe(1);
+    expect(api.view.getPinnedRows("top").length).toBe(1);
+    expect(api.view.getPinnedRows("bottom").length).toBe(1);
 
     const top = host.querySelector(".mach-pinned-rows--top") as HTMLElement;
     const bottom = host.querySelector(".mach-pinned-rows--bottom") as HTMLElement;
@@ -54,13 +54,13 @@ describe("fixes round 3", () => {
     expect(top.textContent).toContain("顶部");
     expect(bottom.textContent).toContain("底部");
 
-    api.setPinnedTopRowData([{ id: "t2", name: "顶部2", score: 3 }]);
-    expect(api.getPinnedBottomRowData().length).toBe(1);
+    api.view.setPinnedRows("top", [{ id: "t2", name: "顶部2", score: 3 }]);
+    expect(api.view.getPinnedRows("bottom").length).toBe(1);
     expect(bottom.textContent).toContain("底部");
     expect(top.textContent).toContain("顶部2");
 
-    api.setPinnedTopRowData(null);
-    expect(api.getPinnedBottomRowData().length).toBe(1);
+    api.view.setPinnedRows("top", null);
+    expect(api.view.getPinnedRows("bottom").length).toBe(1);
     expect(top.style.display).toBe("none");
     api.destroy();
   });
@@ -70,21 +70,21 @@ describe("fixes round 3", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", editable: true }],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const root = host.querySelector(".mach-root") as HTMLElement;
 
     editCell(api, host, 0, "name", "edited");
-    expect(api.getNodeById("r0")?.data?.name).toBe("edited");
+    expect(api.rows.getById("r0")?.data?.name).toBe("edited");
 
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
-    expect(api.getNodeById("r0")?.data?.name).toBe("n0");
+    expect(api.rows.getById("r0")?.data?.name).toBe("n0");
 
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "y", ctrlKey: true, bubbles: true, cancelable: true }));
-    expect(api.getNodeById("r0")?.data?.name).toBe("edited");
+    expect(api.rows.getById("r0")?.data?.name).toBe("edited");
 
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
-    expect(api.getNodeById("r0")?.data?.name).toBe("edited");
+    expect(api.rows.getById("r0")?.data?.name).toBe("edited");
     api.destroy();
   });
 
@@ -93,7 +93,7 @@ describe("fixes round 3", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", editable: true }],
       blockSize: 10,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       datasource: {
         getRows(params) {
           setTimeout(() => params.onSuccess(makeRows(10, params.startRow), 10), 0);
@@ -103,11 +103,11 @@ describe("fixes round 3", () => {
     await new Promise((r) => setTimeout(r, 15));
 
     editCell(api, host, 0, "name", "x");
-    expect(api.canUndo()).toBe(true);
+    expect(api.editing.canUndo()).toBe(true);
 
-    api.reload();
+    void api.rows.reload();
     await new Promise((r) => setTimeout(r, 15));
-    expect(api.canUndo()).toBe(false);
+    expect(api.editing.canUndo()).toBe(false);
     api.destroy();
   });
 
@@ -129,18 +129,18 @@ describe("fixes round 3", () => {
         }
       ],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     editCell(api, host, 0, "score", "9");
     expect(seenOld[seenOld.length - 1]).toBe(1);
 
-    api.undo();
+    api.editing.undo();
     expect(seenOld[seenOld.length - 1]).toBe(9);
 
-    api.redo();
+    api.editing.redo();
     expect(seenOld[seenOld.length - 1]).toBe(1);
-    expect(api.getNodeById("r0")?.data?.score).toBe(9);
+    expect(api.rows.getById("r0")?.data?.score).toBe(9);
     api.destroy();
   });
 
@@ -149,17 +149,17 @@ describe("fixes round 3", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", editable: true }],
       rowData: makeRows(2),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     editCell(api, host, 0, "name", "a");
     editCell(api, host, 0, "name", "b");
     editCell(api, host, 0, "name", "c");
-    expect(api.canUndo()).toBe(true);
+    expect(api.editing.canUndo()).toBe(true);
 
     api.updateOptions({ undoStackSize: 1 });
-    api.undo();
-    expect(api.canUndo()).toBe(false);
+    api.editing.undo();
+    expect(api.editing.canUndo()).toBe(false);
     api.destroy();
   });
 });

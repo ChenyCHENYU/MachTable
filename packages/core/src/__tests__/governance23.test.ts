@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGrid } from "../index";
+import { normalizeMachTableConfig } from "../lib/configuration";
 import { PerformanceMonitor } from "../services/performanceMonitor";
 import { RemoteBlockCache } from "../services/remoteBlockCache";
 
@@ -21,7 +22,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("0.23 API contract", () => {
+describe("0.24 API contract", () => {
   it("keeps domain facades stable, lazy and responsibility-focused", () => {
     const api = createGrid<Row>(host(), {
       columnDefs: [{ field: "name", filter: "text" }, { field: "amount" }],
@@ -31,10 +32,30 @@ describe("0.23 API contract", () => {
     });
     expect(api.filtering).toBe(api.filtering);
     expect(api.pagination).toBe(api.pagination);
+    expect(Object.keys(api).sort()).toEqual([
+      "batch", "columns", "destroy", "diagnostics", "editing", "filtering", "getOption",
+      "hierarchy", "io", "isDestroyed", "on", "pagination", "rows", "selection", "sorting",
+      "state", "updateOptions", "view", "whenReady"
+    ].sort());
+    expect(Object.isFrozen(api)).toBe(true);
+    expect(Object.isFrozen(api.rows)).toBe(true);
     api.filtering.setQuickText("Alpha");
     expect(api.filtering.isPresent()).toBe(true);
     expect(api.pagination.getPageSize()).toBe(20);
     api.destroy();
+  });
+
+  it("rejects instance state in the application config center", () => {
+    expect(() => normalizeMachTableConfig({
+      defaults: { rowData: [{ id: "1" }] }
+    } as any)).toThrow(/instance-only/);
+    const warning = vi.fn();
+    expect(normalizeMachTableConfig({
+      strict: false,
+      defaults: { stateKey: "legacy" } as any,
+      onConfigWarning: warning
+    }).defaults).not.toHaveProperty("stateKey");
+    expect(warning).toHaveBeenCalledWith(expect.objectContaining({ code: "INVALID_DEFAULT_OPTION" }));
   });
 
   it("commits one option patch through one scheduled visual update", () => {
@@ -44,12 +65,12 @@ describe("0.23 API contract", () => {
       rowKey: "id",
       pagination: false
     });
-    const before = api.getDiagnostics().updates.flushCount;
+    const before = api.diagnostics.get().updates.flushCount;
     api.updateOptions({ size: "compact", theme: "dark", rowHeight: 32, stripedRows: true });
-    expect(api.getDiagnostics().updates.flushCount - before).toBe(1);
-    expect(api.getGridOption("rowHeight")).toBe(32);
+    expect(api.diagnostics.get().updates.flushCount - before).toBe(1);
+    expect(api.getOption("rowHeight")).toBe(32);
     api.updateOptions({ rowHeight: "invalid" } as any);
-    expect(api.getGridOption("rowHeight")).toBe(32);
+    expect(api.getOption("rowHeight")).toBe(32);
     api.destroy();
   });
 
@@ -60,15 +81,15 @@ describe("0.23 API contract", () => {
       rowKey: "id",
       pagination: false
     });
-    const before = api.getPerformanceSnapshot().modelSampleCount;
-    api.applyTransaction({ update: [{ id: "1", name: "Updated", amount: 2 }] });
-    expect(api.getPerformanceSnapshot().modelSampleCount).toBe(before);
+    const before = api.diagnostics.getPerformance().modelSampleCount;
+    api.rows.transact({ update: [{ id: "1", name: "Updated", amount: 2 }] });
+    expect(api.diagnostics.getPerformance().modelSampleCount).toBe(before);
     expect(document.querySelector('.mach-cell[data-col-id="name"]')?.textContent).toBe("Updated");
     api.destroy();
   });
 });
 
-describe("0.23 bounded resources", () => {
+describe("0.24 bounded resources", () => {
   it("limits concurrent block requests and starts the highest-priority queued block first", async () => {
     const cache = new RemoteBlockCache<number>(8, undefined, 2);
     const started: number[] = [];

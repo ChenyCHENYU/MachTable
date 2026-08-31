@@ -139,39 +139,72 @@ export interface GridDiagnostics {
 
 export interface GridRowsApi<TData = any> {
   setData(rows: TData[] | null | undefined): void;
-  apply(transaction: RowTransaction<TData>): void;
-  applyAsync(transaction: RowTransaction<TData>, options?: GridAsyncOptions): Promise<void>;
-  getDisplayedCount(): number;
+  transact(transaction: RowTransaction<TData>): void;
+  transactAsync(transaction: RowTransaction<TData>, options?: GridAsyncOptions): Promise<void>;
+  flushTransactions(): void;
+  getCount(): number;
+  getAt(index: number): RowNode<TData> | undefined;
   getById(id: string): RowNode<TData> | undefined;
-  scrollTo(index: number, position?: "top" | "bottom" | "middle" | "nearest"): void;
+  forEach(callback: (node: RowNode<TData>, index: number) => void): void;
+  forEachDisplayed(callback: (node: RowNode<TData>, index: number) => void): void;
+  reorder(fromIndex: number, toIndex: number): boolean;
+  isRemote(): boolean;
+  reload(options?: GridAsyncOptions): Promise<void>;
   ensureLoaded(startRow: number, endRow: number, options?: GridAsyncOptions): Promise<void>;
   purgeCache(): void;
   getCacheSnapshot(): RemoteBlockCacheSnapshot;
 }
 
-export interface GridColumnsApi {
+export interface GridColumnsApi<TData = any> {
+  getDefinitions(): (ColDef<TData> | ColDefGroup<TData>)[] | null;
+  setDefinitions(definitions: (ColDef<TData> | ColDefGroup<TData>)[] | null | undefined): void;
   getState(): ColumnState[];
   setState(state: ColumnState[]): void;
   resetState(): void;
   setVisible(colId: string, visible: boolean): void;
+  setPinned(colId: string, pinned: "left" | "right" | null): void;
+  move(colId: string, toIndex: number): void;
   setWidth(colId: string, width: number): boolean;
+  fit(width?: number): void;
+  autoSize(colId: string, skipHeader?: boolean): void;
+  autoSizeAll(skipHeader?: boolean): void;
+  getWorkbenchItems(): ColumnWorkbenchItem[];
+  openWorkbench(anchor?: HTMLElement): void;
+  closeWorkbench(): void;
 }
 
 export interface GridSelectionApi<TData = any> {
   getRows(): TData[];
+  getVisibleRows(): TData[];
+  getNodes(): RowNode<TData>[];
   getIds(): string[];
+  setRows(rows: TData[], clearOthers?: boolean): void;
+  setById(nodeId: string, selected?: boolean, clearOthers?: boolean): void;
   selectAll(filteredOnly?: boolean): void;
   clear(): void;
+  getMode(): RowSelectionMode;
+  setMode(mode: RowSelectionMode): void;
+  getRange(): import("./events").GridCellRange | null;
+  clearRange(): void;
 }
 
 export interface GridEditingApi<TData = any> {
+  startCell(params: { rowIndex: number; colId: string; keyPress?: string }): boolean;
+  startRow(rowIndex: number): boolean;
+  isRowActive(rowIndex?: number): boolean;
+  stop(options?: { cancel?: boolean }): Promise<boolean>;
   getChanges(): GridChange<TData>[];
+  getDirtyRowIds(): string[];
+  markSaved(rowIds?: readonly string[]): void;
   rollback(rowIds?: readonly string[]): boolean;
   save(
     handler: SaveChangesHandler<TData>,
     rowIds?: readonly string[]
   ): Promise<GridBatchSaveResult<TData>>;
-  stop(cancel?: boolean): Promise<boolean>;
+  undo(): boolean;
+  redo(): boolean;
+  canUndo(): boolean;
+  canRedo(): boolean;
 }
 
 export interface GridStateApi {
@@ -196,7 +229,6 @@ export interface GridFilteringApi {
   isPresent(colId?: string): boolean;
 }
 
-/** Pagination is a bounded facade over the existing flat compatibility methods. */
 export interface GridPaginationApi {
   isEnabled(): boolean;
   setEnabled(enabled: boolean): void;
@@ -206,6 +238,40 @@ export interface GridPaginationApi {
   setPageSize(size: number): void;
   getPageCount(): number;
   getTotalRowCount(): number;
+}
+
+export interface GridSortingApi {
+  getModel(): SortModel;
+  setModel(model: SortModel | null): void;
+}
+
+export interface GridHierarchyApi<TData = any> {
+  isRowExpanded(rowId: string): boolean;
+  setRowExpanded(rowId: string, expanded: boolean): boolean;
+  isTreeRowLoading(rowId: string): boolean;
+  loadTreeChildren(rowId: string, options?: { force?: boolean }): Promise<readonly TData[]>;
+  isGroupExpanded(groupId: string): boolean;
+  setGroupExpanded(groupId: string, expanded: boolean): boolean;
+  setAllGroupsExpanded(expanded: boolean): void;
+  setAllDetailsExpanded(expanded: boolean): void;
+}
+
+export interface GridViewApi<TData = any> {
+  getRoot(): HTMLElement | null;
+  scrollToRow(index: number, position?: "top" | "bottom" | "middle" | "nearest"): void;
+  refreshCells(params?: RefreshCellsParams): void;
+  refreshLayout(): void;
+  flush(): void;
+  setOverlay(type: "loading" | "noRows" | "error" | null): void;
+  getPinnedRows(position: "top" | "bottom"): TData[];
+  setPinnedRows(position: "top" | "bottom", rows: TData[] | null): void;
+}
+
+export interface GridIoApi {
+  exportCsv(params?: CsvExportParams): string;
+  importCsv(text: string, options?: ImportCsvOptions): boolean;
+  print(options?: PrintOptions): boolean;
+  copyRange(): Promise<boolean>;
 }
 
 export interface SaveChangeIssue {
@@ -244,185 +310,26 @@ export interface ScrollToIndexPosition {
 }
 
 export interface GridApi<TData = any> {
-  /** Optional namespaced facade. Existing flat methods remain supported. */
   readonly rows: GridRowsApi<TData>;
-  readonly columns: GridColumnsApi;
+  readonly columns: GridColumnsApi<TData>;
   readonly selection: GridSelectionApi<TData>;
   readonly editing: GridEditingApi<TData>;
-  readonly state: GridStateApi;
-  readonly diagnostics: GridDiagnosticsApi;
   readonly filtering: GridFilteringApi;
+  readonly sorting: GridSortingApi;
   readonly pagination: GridPaginationApi;
+  readonly hierarchy: GridHierarchyApi<TData>;
+  readonly view: GridViewApi<TData>;
+  readonly state: GridStateApi;
+  readonly io: GridIoApi;
+  readonly diagnostics: GridDiagnosticsApi;
   /** Coalesces model/layout/render work from nested synchronous API calls. */
   batch<TResult>(callback: (api: GridApi<TData>) => TResult): TResult;
-  /** Flushes deferred work; normally only needed by tests and imperative measurements. */
-  flushUpdates(): void;
   /** Resolves after the first layout frame and gridReady emission. */
   whenReady(): Promise<GridApi<TData>>;
-  /** Stable grid root for portals, measurements and fullscreen targets; null after destroy. */
-  getRootElement(): HTMLElement | null;
   /** Reads the currently resolved value after application, preset and table overrides. */
-  getGridOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K];
-  /** Typed shorthand for updating one runtime option. */
-  setGridOption<K extends keyof GridOptions<TData>>(key: K, value: GridOptions<TData>[K]): void;
-  setRowData(rows: TData[] | null | undefined): void;
-  applyTransaction(transaction: RowTransaction<TData>): void;
-  /** Coalesces rapid transactions and refreshes the row pipeline once per batch. */
-  applyTransactionAsync(transaction: RowTransaction<TData>, options?: GridAsyncOptions): Promise<void>;
-  /** Immediately applies transactions currently waiting in the async queue. */
-  flushAsyncTransactions(): void;
-
-  getColumnDefs(): (ColDef<TData> | ColDefGroup<TData>)[] | null;
-  setColumnDefs(colDefs: (ColDef<TData> | ColDefGroup<TData>)[] | null | undefined): void;
-
-  getColumnState(): ColumnState[];
-  setColumnState(state: ColumnState[]): void;
-  resetColumnState(): void;
-  setColumnVisibility(colId: string, visible: boolean): void;
-  moveColumn(colId: string, toIndex: number): void;
-  setColumnPinned(colId: string, pinned: "left" | "right" | null): void;
-  /** Sets one width without replacing the rest of the column state. */
-  setColumnWidth(colId: string, width: number): boolean;
-
-  sizeColumnsToFit(width?: number): void;
-  autoSizeColumn(colId: string, skipHeader?: boolean): void;
-  autoSizeAllColumns(skipHeader?: boolean): void;
-
-  getSortModel(): SortModel;
-  setSortModel(sortModel: SortModel | null): void;
-
-  getFilterModel(): FilterModel;
-  setFilterModel(filterModel: FilterModel | null): void;
-  getAdvancedFilterModel(): AdvancedFilterModel | null;
-  setAdvancedFilterModel(model: AdvancedFilterModel | null): void;
-  isColumnFilterPresent(colId: string): boolean;
-
-  setQuickFilter(text: string | null | undefined): void;
-  getQuickFilter(): string | null;
-
-  getRowSelection(): RowSelectionMode;
-  setRowSelection(mode: RowSelectionMode): void;
-
-  getSelectedNodes(): RowNode<TData>[];
-  getSelectedRows(): TData[];
-  selectNodeById(nodeId: string, selected?: boolean, clearOthers?: boolean): void;
-  selectAll(filteredOnly?: boolean): void;
-  deselectAll(): void;
-
-  getDisplayedRowCount(): number;
-  getRowNode(rowIndex: number): RowNode<TData> | undefined;
-  getNodeById(id: string): RowNode<TData> | undefined;
-  forEachNode(callback: (node: RowNode<TData>, index: number) => void): void;
-  forEachNodeAfterFilterAndSort(callback: (node: RowNode<TData>, index: number) => void): void;
-
-  scrollToIndex(rowIndex: number, position?: "top" | "bottom" | "middle" | "nearest"): void;
-
-  expandRow(rowId: string): boolean;
-  collapseRow(rowId: string): boolean;
-  toggleDetailRow(rowId: string): boolean;
-  isRowExpanded(rowId: string): boolean;
-  expandAllDetails(): void;
-  collapseAllDetails(): void;
-
-  /** Loads and caches lazy tree children. Concurrent calls for one row are deduplicated. */
-  loadTreeChildren(rowId: string, options?: { force?: boolean }): Promise<readonly TData[]>;
-  retryTreeChildren(rowId: string): Promise<readonly TData[]>;
-  isTreeRowLoading(rowId: string): boolean;
-
-  toggleRowGroup(groupId: string): boolean;
-  isGroupExpanded(groupId: string): boolean;
-  expandAllGroups(): void;
-  collapseAllGroups(): void;
-
-  reorderRows(fromIndex: number, toIndex: number): boolean;
-
-  setSelection(rows: TData[], clearOthers?: boolean): void;
-  getVisibleSelection(): TData[];
-  getSelectedIds(): string[];
-
-  undo(): boolean;
-  redo(): boolean;
-  canUndo(): boolean;
-  canRedo(): boolean;
-  getDirtyRowIds(): string[];
-  getChanges(): GridChange<TData>[];
-  markChangesSaved(rowIds?: readonly string[]): void;
-  /** Saves a stable snapshot; supports partial success and preserves edits made in flight. */
-  saveChanges(handler: SaveChangesHandler<TData>, rowIds?: readonly string[]): Promise<GridChange<TData>[]>;
-  saveChangesDetailed(
-    handler: SaveChangesHandler<TData>,
-    rowIds?: readonly string[]
-  ): Promise<GridBatchSaveResult<TData>>;
-  rollbackChanges(rowIds?: readonly string[]): boolean;
-
-  setPinnedTopRowData(rows: TData[] | null): void;
-  getPinnedTopRowData(): TData[];
-  setPinnedBottomRowData(rows: TData[] | null): void;
-  getPinnedBottomRowData(): TData[];
-
-  getRangeSelection(): import("./events").GridCellRange | null;
-  clearRangeSelection(): void;
-  copyRangeToClipboard(): Promise<boolean>;
-
-  /** Opens the built-in searchable column workbench. */
-  openColumnWorkbench(anchor?: HTMLElement): void;
-  closeColumnWorkbench(): void;
-  getColumnWorkbenchItems(): ColumnWorkbenchItem[];
-  /** @deprecated Use openColumnWorkbench. Kept during the 0.x compatibility window. */
-  openColumnPanel(anchor?: HTMLElement): void;
-
-  refreshLayout(): void;
-
-  isInfinite(): boolean;
-  reload(options?: GridAsyncOptions): Promise<void>;
-  /** Ensures an inclusive/exclusive remote row range is cached in random-access block mode. */
-  ensureRowsLoaded(startRow: number, endRow: number, options?: GridAsyncOptions): Promise<void>;
-  /** Aborts block requests and removes all random-access datasource blocks. */
-  purgeDatasourceCache(): void;
-  getDatasourceCacheSnapshot(): RemoteBlockCacheSnapshot;
-
-  paginationEnabled(): boolean;
-  setPaginationEnabled(enabled: boolean): void;
-  getPage(): number;
-  setPage(page: number): void;
-  getPageSize(): number;
-  setPageSize(size: number): void;
-  getPageCount(): number;
-  getTotalRowCount(): number;
-
-  importCsv(text: string, options?: ImportCsvOptions): boolean;
-  print(options?: PrintOptions): boolean;
-
-  startEditingCell(params: { rowIndex: number; colId: string; keyPress?: string }): boolean;
-  /** Starts staged editing for every editable cell in one displayed row. */
-  startEditingRow(rowIndex: number): boolean;
-  /** Returns whether any row, or the requested displayed row, is in full-row edit mode. */
-  isRowEditing(rowIndex?: number): boolean;
-  stopEditing(cancel?: boolean): void;
-  /** Stops editing and resolves after synchronous or asynchronous validation. */
-  stopEditingAsync(cancel?: boolean): Promise<boolean>;
-  /** Explicit full-row counterpart; aliases stopEditingAsync when a row is active. */
-  stopEditingRow(cancel?: boolean): Promise<boolean>;
-
-  refreshCells(params?: RefreshCellsParams): void;
+  getOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K];
   updateOptions(options: Partial<GridOptions<TData>>): void;
-
-  getDataAsCsv(params?: CsvExportParams): string;
-
-  getState(): GridState;
-  applyState(state: GridStateInput, options?: ApplyGridStateOptions): void;
-  /** Lightweight runtime snapshot suitable for support logs and health panels. */
-  getDiagnostics(): GridDiagnostics;
-  /** Rolling viewport-render metrics for diagnostics and reproducible benchmarks. */
-  getPerformanceSnapshot(): GridPerformanceSnapshot;
-  resetPerformanceMetrics(): void;
-
-  setOverlay(type: "loading" | "noRows" | "error" | null): void;
-  hideOverlays(): void;
-
-  addEventListener<K extends GridEventType>(eventType: K, listener: (event: GridEventMap<TData>[K]) => void): () => void;
-  removeEventListener<K extends GridEventType>(eventType: K, listener: (event: GridEventMap<TData>[K]) => void): void;
-
+  on<K extends GridEventType>(eventType: K, listener: (event: GridEventMap<TData>[K]) => void): () => void;
   destroy(): void;
   isDestroyed(): boolean;
 }

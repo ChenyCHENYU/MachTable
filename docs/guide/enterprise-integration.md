@@ -1,528 +1,461 @@
 # 企业级项目接入手册
 
-本手册面向需要把 MachTable 纳入正式业务系统的前端团队，覆盖技术选型、安装、工程封装、数据接入、错误治理、安全、性能、测试和上线检查。只想快速体验可先阅读[快速开始](/guide/getting-started)。
+本文面向真实 B 端项目落地，覆盖依赖、目录、全局约定、页面封装、远程查询、编辑保存、状态、监控、测试和上线。示例以 `0.24.x` 为基线。
 
 ## 1. 接入前决策
 
-### 选择正确的包
+先按页面形态选择数据模型：
 
-| 项目类型 | 安装 |
+| 场景 | 推荐方案 |
 | --- | --- |
-| Vue 3 | `@agile-team/mach-table-vue` |
-| React 18+ | `@agile-team/mach-table-react` |
-| 原生 TS/JS、Web Component、其他框架 | `@agile-team/mach-table` |
+| 普通后台列表、查询表单、服务端分页 | 适配包 `/workflows` 的 `useMachTableQuery()` |
+| 小到中型本地数据、复杂前端交互 | `rowData` + 本地排序过滤 |
+| 连续向下加载的日志/动态 | 默认 `datasourceMode: "sequential"` |
+| 百万级、滚动条任意跳转 | `datasourceMode: "block"` + 已知总量 |
+| 组织、目录、物料分类 | `treeData` + `loadTreeChildren` |
+| 小型详情表、无需虚拟滚动 | `domLayout: "autoHeight"` |
 
-Vue 和 React 适配器互相独立，并自动安装、重导出匹配版本的 Core；宿主框架仍是 peer dependency。Vue 项目不会因为官方支持 React 而增加 React 代码。
+不要把服务端分页、无限追加、随机块和懒加载树混在同一个实例中。优先选择满足需求的最小模型。
 
-### 数据模式
+## 2. 安装与版本锁定
 
-| 数据规模与场景 | 推荐方式 |
-| --- | --- |
-| 数百到数万条，数据已在浏览器 | `rowData`，使用客户端排序和过滤 |
-| 常规后台接口分页 | `rowData` + 内置 `pagination`，接口返回一页时由业务层控制请求 |
-| 数据量大、连续滚动、服务端排序过滤 | `datasource` 无限模式 |
-| 树形、分组、聚合需要服务端下推 | 先确认业务模型；当前版本不提供完整 SSRM |
-
-不要把百万行一次性下载到浏览器。虚拟化降低 DOM 成本，不会降低网络、解析和内存中的原始数据成本。
-
-## 2. 安装与锁定版本
-
-Vue：
+业务只安装一个框架适配包：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.23.0
+pnpm add @agile-team/mach-table-vue@^0.24.0
+# 或
+pnpm add @agile-team/mach-table-react@^0.24.0
 ```
 
-React：
+适配包自动安装匹配的 Core。Vue 项目只需提供 `vue >= 3.2`；React 项目提供 `react/react-dom >= 18`。
 
-```bash
-pnpm add @agile-team/mach-table-react@^0.23.0
+生产项目建议：
+
+- 提交 lockfile。
+- 升级 minor 前阅读 [升级指南](/guide/upgrading)和各包 Changelog。
+- 在预发布环境跑关键表格的业务回归与浏览器矩阵。
+- 主题 CSS 只在应用入口导入一次。
+
+## 3. 推荐目录
+
+```text
+src/
+├─ config/
+│  └─ mach-table.config.ts       # 全局约定、预设、语义列
+├─ components/table/
+│  ├─ AppTable.vue|tsx           # 可选：组织级薄封装
+│  ├─ table-errors.ts            # 错误与遥测映射
+│  └─ table-permissions.ts       # 操作策略
+├─ api/
+│  └─ orders.ts                  # 服务端接口
+├─ views/orders/
+│  ├─ columns.ts                 # 业务列
+│  ├─ OrdersPage.vue|tsx
+│  └─ orders.types.ts
+└─ main.ts|tsx
 ```
 
-npm / Yarn：
+组织级封装应保持“薄”：统一容器、空状态、错误遥测和少量强约定即可。不要二次复制全部 `GridOptions`，也不要隐藏 `GridApi` 的领域结构。
 
-```bash
-npm install @agile-team/mach-table-vue@^0.23.0
-yarn add @agile-team/mach-table-vue@^0.23.0
-```
-
-Core、Vue、React 与可选 XLSX 包采用同版本联动。适配器会锁定匹配版本的 Core，普通业务项目仍只需升级自己的适配器并提交 lockfile；未使用 Excel 时不要安装 XLSX 包。`0.x` 阶段升级 minor 前先看[升级指南](/guide/upgrading)。
-
-### 私有镜像
-
-企业 npm 镜像需要同步 `@agile-team` scope。示例 `.npmrc`：
-
-```ini
-@agile-team:registry=https://registry.npmjs.org/
-```
-
-认证令牌只能放在 CI Secret 或用户级 npm 配置，禁止提交到仓库。若公司镜像代理 npmjs，请把 registry 替换为内部地址。
-
-## 3. 全局样式
-
-每个应用只引入一次主题 CSS。推荐放在应用入口或全局样式入口，并使用所属框架的单包入口：
-
-```ts
-// Vue
-import "@agile-team/mach-table-vue/styles.css";
-
-// React
-import "@agile-team/mach-table-react/styles.css";
-```
-
-表格容器必须拥有可计算高度：
-
-```css
-.orders-grid {
-  height: calc(100vh - 196px);
-  min-height: 360px;
-}
-```
-
-只有 `height: 100%` 而父级没有高度时，表格不会显示。这是接入时最常见的问题。
-
-## 4. Vue 3 标准封装
-
-建议在业务组件库中封装统一入口，集中默认配置、错误上报和主题策略。
-
-### 注入策略
-
-| 项目特征 | 推荐模式 | 原因 |
-| --- | --- | --- |
-| 少量路由使用表格 | 页面或业务封装内局部导入 | 随路由自然分包，边界最清楚 |
-| 大部分页面使用表格 | `app.use(MachTablePlugin)` | 启动后任意模板直接使用 |
-| 大型中后台、低代码平台 | `app.use(AsyncMachTablePlugin)` | 全局可用，同时首次渲染才加载 Core |
-
-大型平台建议把配置单独维护，入口只负责安装。完整字段和覆盖规则见[配置中心](/guide/configuration)。
+## 4. 应用配置中心
 
 ```ts
 // src/config/mach-table.config.ts
-import { defineMachTableConfig } from "@agile-team/mach-table-vue";
+import {
+  createBusinessColumnTypes,
+  defineMachTableConfig,
+  defineMachTablePreset
+} from "@agile-team/mach-table-vue"; // React 项目改为 -react
 
 export default defineMachTableConfig({
   defaults: {
     size: "compact",
-    pagination: false,
+    theme: "auto",
+    columnLayout: "fit",
     enableColumnResize: true,
-    defaultColDef: { minWidth: 100, sortable: true, resizable: true, filter: true },
-    onGridError: ({ code, error, source, context }) => {
-      telemetry.captureException(error, { tags: { code, source }, extra: context });
+    defaultColDef: {
+      minWidth: 100,
+      sortable: true,
+      resizable: true,
+      movable: true,
+      filter: true
+    },
+    pagination: {
+      pageSize: 20,
+      pageSizeOptions: [20, 50, 100],
+      showTotal: true,
+      showPageSizeSelector: true
+    },
+    onGridError: ({ code, error, source }) => {
+      telemetry.captureException(error, { tags: { code, source } });
     }
-  }
+  },
+  defaultPreset: "list",
+  presets: {
+    list: defineMachTablePreset({ stripedRows: true, columnMenu: true }),
+    crud: defineMachTablePreset({
+      rowSelection: "multiple",
+      editType: "fullRow",
+      enableRangeSelection: true,
+      statusBar: true
+    }),
+    picker: defineMachTablePreset({ rowSelection: "multiple" })
+  },
+  columnTypes: createBusinessColumnTypes({
+    locale: "zh-CN",
+    currency: "CNY",
+    timeZone: "Asia/Shanghai"
+  }),
+  onConfigWarning: (warning) => telemetry.captureMessage(warning.message)
 });
 ```
+
+实例数据、列、请求状态、初始状态和持久化身份不能放进 defaults/preset。严格配置会尽早报错，避免跨租户串状态。
+
+Vue 安装：
 
 ```ts
-// main.ts
-import { createApp } from "vue";
-import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
-import machTableConfig from "@/config/mach-table.config";
-
-const app = createApp(App);
-app.use(AsyncMachTablePlugin, machTableConfig);
-app.mount("#app");
-
-// 可在权限菜单 hover 或 requestIdleCallback 中预取。
-void preloadMachTable();
+app.use(MachTablePlugin, machTableConfig);
 ```
 
-配置中心解决大多数统一配置，路由布局可用响应式 `provideMachTableConfig` 继续叠加。只有需要固定审计字段、权限列或业务协议转换时才封装 `AppDataGrid`，避免为了重复默认值制造无意义包装层。
-
-```vue
-<!-- components/AppDataGrid.vue -->
-<script setup lang="ts" generic="TData extends object">
-import { computed } from "vue";
-import { MachTable, type ColDef, type GridOptions } from "@agile-team/mach-table-vue";
-
-const props = defineProps<{
-  rows: TData[];
-  columns: ColDef<TData>[];
-  loading?: boolean;
-  getRowId: NonNullable<GridOptions<TData>["getRowId"]>;
-}>();
-
-const defaults = computed(() => ({
-  defaultColDef: { minWidth: 100, sortable: true, resizable: true },
-  rowSelection: "multiple" as const,
-  size: "compact" as const,
-  enableColumnResize: true,
-  stripedRows: true,
-  columnMenu: true,
-  onGridError: (event: { error: unknown; source: string; context?: Record<string, unknown> }) => {
-    // 替换为企业监控平台：Sentry、OpenTelemetry 或内部日志 SDK。
-    console.error("[grid]", event.source, event.error, event.context);
-  }
-}));
-</script>
-
-<template>
-  <MachTable
-    v-bind="defaults"
-    :column-defs="columns"
-    :row-data="rows"
-    :loading="loading"
-    :get-row-id="getRowId"
-  />
-</template>
-```
-
-业务页面：
-
-```vue
-<script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
-import type { ColDef } from "@agile-team/mach-table-vue";
-import AppDataGrid from "@/components/AppDataGrid.vue";
-
-interface Order { id: string; customer: string; amount: number; status: string }
-
-const rows = ref<Order[]>([]);
-const loading = ref(false);
-const columns = shallowRef<ColDef<Order>[]>([
-  { field: "id", headerName: "订单号", width: 140, pinned: "left" },
-  { field: "customer", headerName: "客户", flex: 1, filter: "text" },
-  { field: "amount", headerName: "金额", width: 140, filter: "number" },
-  { field: "status", headerName: "状态", width: 120, filter: "set" }
-]);
-
-onMounted(async () => {
-  loading.value = true;
-  try {
-    rows.value = await orderService.list();
-  } finally {
-    loading.value = false;
-  }
-});
-</script>
-
-<template>
-  <AppDataGrid
-    class="orders-grid"
-    :rows="rows"
-    :columns="columns"
-    :loading="loading"
-    :get-row-id="({ data }) => data.id"
-  />
-</template>
-```
-
-适配器会在组件卸载时自动 `destroy()`。需要导出、选中或命令式操作时使用 [`useMachTable`](/guide/vue#usemachtable-组合式-api-推荐)。
-
-## 5. React 标准封装
-
-React 项目不使用全局组件注册。路由本身已懒加载时，在路由组件内正常 import；需要把表格从页面 chunk 继续拆分时使用标准懒加载：
+React 安装：
 
 ```tsx
-import { lazy, Suspense } from "react";
-
-const LazyMachTable = lazy(() => import("@agile-team/mach-table-react"));
-
-export function DeferredGrid() {
-  return (
-    <Suspense fallback={<div>正在加载表格...</div>}>
-      <LazyMachTable columnDefs={columns} rowData={rows} />
-    </Suspense>
-  );
-}
+<MachTableProvider config={machTableConfig}><App /></MachTableProvider>
 ```
 
-```tsx
-import { useMemo } from "react";
-import { MachTable, MachTableProvider, type ColDef, type GridOptions } from "@agile-team/mach-table-react";
+## 5. 稳定行身份
 
-type AppDataGridProps<TData> = {
-  rows: TData[];
-  columns: ColDef<TData>[];
-  loading?: boolean;
-  getRowId: NonNullable<GridOptions<TData>["getRowId"]>;
-};
-
-export function AppDataGrid<TData extends object>(props: AppDataGridProps<TData>) {
-  const defaultColDef = useMemo<Partial<ColDef<TData>>>(() => ({
-    minWidth: 100,
-    sortable: true,
-    resizable: true
-  }), []);
-
-  return (
-    <MachTable<TData>
-      rowData={props.rows}
-      columnDefs={props.columns}
-      loading={props.loading}
-      getRowId={props.getRowId}
-      defaultColDef={defaultColDef}
-      rowSelection="multiple"
-      size="compact"
-      enableColumnResize
-      stripedRows
-      columnMenu
-      onGridError={(event) => console.error("[grid]", event.source, event.error, event.context)}
-    />
-  );
-}
-```
-
-列定义和对象型配置应使用 `useMemo` 保持引用稳定。组件支持 StrictMode，卸载会自动清理。命令式操作使用 [`useMachGrid`](/guide/react#usemachgrid-hook-推荐)。
-
-在应用或路由根部集中默认值；单表 props 会覆盖 Provider：
-
-```tsx
-<MachTableProvider defaults={{
-  size: "compact",
-  pagination: false,
-  enableColumnResize: true,
-  defaultColDef: { sortable: true, resizable: true, filter: true },
-  onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
-}}>
-  <OrdersRoutes />
-</MachTableProvider>
-```
-
-## 6. 稳定行 ID
-
-正式项目必须提供业务稳定且唯一的 `rowKey` 或 `getRowId`。简单字段首选：
+生产实例必须提供稳定、唯一的 `rowKey`：
 
 ```ts
 rowKey: "id"
+rowKey: "identity.businessId"
+rowKey: (row) => `${row.tenantId}:${row.orderId}`
 ```
 
-派生主键再使用：
+不要使用展示索引、随机数或会被编辑的普通字段。稳定 ID 影响：
+
+- 增量事务与选择保持。
+- 编辑脏数据、撤销/重做和冲突定位。
+- 树、分组、详情展开。
+- 无限/随机块加载后的跨块状态。
+- GridState 的选择与展开恢复。
+
+## 6. 业务列独立维护
 
 ```ts
-getRowId: ({ data }) => data.id
+// views/orders/columns.ts
+import {
+  defineColumns,
+  rowActionsColumn,
+  type ColDef
+} from "@agile-team/mach-table-vue";
+
+export const orderColumns = defineColumns<Order>([
+  { field: "orderNo", headerName: "订单号", width: 150, pinned: "left" },
+  { field: "customerName", headerName: "客户", minWidth: 180, flex: 1, filter: "text" },
+  { field: "amount", headerName: "金额", type: "currency", editable: canEditAmount },
+  { field: "status", headerName: "状态", type: "status" },
+  rowActionsColumn({
+    onView: ({ data }) => router.push(`/orders/${data.id}`),
+    onEdit: permissions.can("order.edit") ? openEdit : undefined,
+    onDelete: permissions.can("order.delete") ? remove : undefined,
+    overflow: "drawer",
+    actions: domainActions
+  })
+]);
 ```
 
-不要使用当前数组下标、随机数或会变化的展示字段。稳定 ID 用于：
+高频查看/编辑/删除使用内置图标；更多动作进入菜单或抽屉。没有通用动作的页面可以只传 `actions`，不会出现空占位按钮。
 
-- 全量刷新后保持选择；
-- 增删改事务定位；
-- 树节点、明细行和无限模式缓存；
-- 错误上下文与自动化测试定位。
+前端可见性不是安全边界，后端必须再次校验权限。
 
-开发和测试环境不要设置 `suppressWarnings`，这样重复 ID、重复列 ID 和不合法组合会尽早暴露。
+## 7. Vue 页面模板
 
-## 7. 更新数据
+```vue
+<script setup lang="ts">
+import { MachTable } from "@agile-team/mach-table-vue";
+import { useMachTableController } from "@agile-team/mach-table-vue/workflows";
+import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
+import { orderColumns } from "./columns";
 
-| 操作 | 方式 |
-| --- | --- |
-| 接口返回全量新列表 | 更新 `rowData` / `api.setRowData(rows)` |
-| 单行或少量增删改 | `api.applyTransaction({ add, update, remove })` |
-| WebSocket / 高频流更新 | `await api.applyTransactionAsync(...)`；同一时间窗只刷新一次管线 |
-| 只重画展示内容 | `api.refreshCells()` |
-| 弹窗、Tab、折叠面板变为可见 | `api.refreshLayout()` |
-| 无限模式刷新 | `await api.reload()` |
+const controller = useMachTableController<Order, OrderFilters>({
+  query: {
+    query: () => filters.value,
+    rowKey: "id",
+    request: orderApi.page,
+    mode: "manual",
+    keepPreviousData: true,
+    selectionScope: "query"
+  },
+  editing: { guardBeforeUnload: true }
+});
+</script>
 
-不要原地修改数组后期待框架自动识别。Vue 给 `rows.value` 新数组；React 更新 state 引用。高频实时更新使用 `applyTransactionAsync`，默认在 16ms 时间窗内按调用顺序合并；需要立即落地时调用 `flushAsyncTransactions()`。
+<template>
+  <section class="orders-page">
+    <MachTableToolbar
+      v-model="controller.search.value"
+      :api="controller.table.api.value"
+      :commands="controller.commands"
+      :loading="controller.busy.value"
+      :selected-count="controller.selectedCount.value"
+    />
+    <div class="orders-page__grid">
+      <MachTable
+        :ref="controller.table.ref"
+        preset="crud"
+        :column-defs="orderColumns"
+        v-bind="controller.bindings.value"
+        :persistence="{ key: stateKey }"
+      />
+    </div>
+  </section>
+</template>
 
-## 8. 服务端数据
+<style scoped>
+.orders-page { min-height: 0; height: 100%; display: flex; flex-direction: column; }
+.orders-page__grid { min-height: 0; flex: 1; }
+</style>
+```
 
-无限数据源接收排序、过滤、快速搜索、取消信号和成功/失败回调：
+## 8. React 页面模板
+
+```tsx
+import { useMemo } from "react";
+import { MachTable } from "@agile-team/mach-table-react";
+import { useMachTableController, useMachTableQuery } from "@agile-team/mach-table-react/workflows";
+import { MachTableToolbar } from "@agile-team/mach-table-react/ui";
+
+export function OrdersPage() {
+  const columns = useMemo(() => createOrderColumns(actions), [actions]);
+  const query = useMachTableQuery<Order, OrderFilters>({
+    query: filters,
+    queryKey: filters,
+    rowKey: "id",
+    request: orderApi.page,
+    mode: "manual",
+    keepPreviousData: true,
+    selectionScope: "query"
+  });
+  const controller = useMachTableController<Order>({ query });
+
+  return <section className="orders-page">
+    <MachTableToolbar
+      api={controller.table.api}
+      commands={controller.commands}
+      search={controller.search}
+      onSearchChange={controller.setSearch}
+      loading={controller.busy}
+      selectedCount={controller.selectedCount}
+    />
+    <div className="orders-page__grid">
+      <MachTable<Order>
+        apiRef={controller.table.apiRef}
+        preset="crud"
+        columnDefs={columns}
+        persistence={{ key: stateKey }}
+        {...controller.bindings}
+      />
+    </div>
+  </section>;
+}
+```
+
+## 9. 远程查询协议
+
+`useMachTableQuery` 的请求收到完整且可取消的参数：
 
 ```ts
-// React 项目将包名替换为 @agile-team/mach-table-react。
-import type { GridDatasource } from "@agile-team/mach-table-vue";
+async function page(params: MachTablePageRequest<OrderFilters>) {
+  const response = await http.post("/orders/page", {
+    page: params.page,
+    pageSize: params.pageSize,
+    query: params.query,
+    sort: params.sortModel,
+    filter: params.filterModel,
+    advancedFilter: params.advancedFilterModel,
+    keyword: params.quickFilterText
+  }, { signal: params.signal });
 
-const datasource: GridDatasource<Order> = {
-  async getRows(params) {
-    try {
-      const result = await orderService.query({
-        offset: params.startRow,
-        limit: params.endRow - params.startRow,
-        sort: params.sortModel,
-        filter: params.filterModel,
-        keyword: params.quickFilterText,
-        signal: params.signal
-      });
-      params.onSuccess(result.rows, result.total);
-    } catch (error) {
-      if ((error as { name?: string }).name !== "AbortError") params.fail(error);
-    }
+  return { rows: response.items, total: response.total };
+}
+```
+
+约定：
+
+- 把 `signal` 传给 HTTP 客户端。
+- 返回 `rows` 数组与非负有限 `total`。
+- 服务端把列 ID 映射到白名单字段，不能直接拼接 SQL。
+- 排序、过滤和高级 AST 必须在服务端做深度、数量、操作符和字段白名单校验。
+- `mode: "manual"` 用于“点击查询”；`auto` 用于实时筛选。
+- `keepPreviousData` 减少分页闪烁，错误时保留可重试界面。
+
+## 10. 编辑与保存闭环
+
+单元格模式适合局部快速修改；`fullRow` 适合跨字段规则和显式确认。
+
+```ts
+const result = await table.api.value!.editing.save(async (changes) => {
+  const response = await orderApi.saveBatch(changes);
+  return {
+    savedRowIds: response.savedIds,
+    failures: response.validationErrors,
+    conflicts: response.versionConflicts
+  };
+});
+
+if (result.conflicts.length) {
+  // 由业务决定接受服务端值还是保留本地值后重试。
+  editing.resolveConflict(result.conflicts[0].rowId, "keepLocal");
+}
+```
+
+请求开始时 Core 固定本次变更快照。请求期间产生的新编辑不会被旧响应误标记为已保存。`useMachTableEditing()` 额外提供：
+
+- `dirty`、`changes`、`dirtyRowIds`。
+- `saving`、`saveError`、`lastSaveResult`。
+- `failedRowIds`、`reveal()`、`resolveConflict()`。
+- `rollback()`、`markSaved()` 和离页提醒。
+
+## 11. 状态与列宽记忆
+
+列宽交互默认关闭，应用配置可统一开启。持久化只有一个配置入口：
+
+```ts
+const stateKey = `${appId}:${tenantId}:${userId}:orders:v2`;
+
+persistence: {
+  key: stateKey,
+  // 只要列偏好时使用；省略则保存完整工作区。
+  sections: ["columns"],
+  debounceMs: 160,
+  store: enterpriseStateStore
+}
+```
+
+自定义 store：
+
+```ts
+const enterpriseStateStore: GridStateStore = {
+  async load(key) {
+    return preferencesApi.get<GridState>(key);
+  },
+  async save(key, state) {
+    await preferencesApi.put(key, state);
+  },
+  async clear(key) {
+    await preferencesApi.remove(key);
   }
 };
 ```
 
-`AbortSignal` 必须传给 HTTP 客户端。排序或过滤变化时旧请求会被取消，忽略信号会浪费网络并增加竞态风险。完整协议见[无限滚动](/recipes/infinite-scroll)。
+建议：
+
+- key 包含应用、租户、用户、页面和业务 schema 版本。
+- 删除/重命名关键列或改变行 ID 规则时升级 key 后缀。
+- 用户会话状态与命名视图分开；命名视图通常不保存选择和展开。
+- 不配置 `persistence` 时不会产生任何存储写入。
+
+## 12. API 使用边界
+
+页面代码只通过领域 API 操作：
 
 ```ts
-const remoteDefaults = {
-  datasource,
-  blockSize: 100,
-  datasourceRetryCount: 2,
-  datasourceRetryDelay: 300
-};
+api.rows.transact({ update: changedRows });
+api.selection.clear();
+api.columns.openWorkbench();
+api.filtering.setQuickText(keyword);
+await api.rows.reload({ signal });
+api.view.scrollToRow(0, "top");
 ```
 
-请求失败后按基础延迟指数退避（最长 30 秒）；仅重试耗尽后发出 `DATA_SOURCE_ERROR`。`reload()`、排序/过滤变化和组件卸载都会取消当前请求及待执行重试。
-
-标准服务端分页、查询表单和跨页选择优先使用 [`useMachTableQuery`](/recipes/remote-query)。组织/目录类数据使用 [`isTreeRowExpandable + loadTreeChildren`](/recipes/tree-lazy-loading)：必须提供稳定 `getRowId`，并把 `signal` 传给请求客户端。普通分页、无限追加和懒加载树是三种不同模型，不应混用或宣称为完整 SSRM。
-
-## 9. 列状态持久化
-
-单机应用只需设置带版本的 key：
+同一业务动作修改多个领域时使用 `batch()`：
 
 ```ts
-columnStateKey: "orders-v1"
-```
-
-多设备或多租户系统使用后端存储：
-
-```ts
-columnStateStore: {
-  load: (key) => preferencesApi.loadGridState({ key, userId, tenantId }),
-  save: (key, state) => preferencesApi.saveGridState({ key, state, userId, tenantId })
-}
-```
-
-列结构发生不兼容变化时升级 key，例如 `orders-v1` → `orders-v2`，不要让旧状态污染新列结构。
-
-内置列工作台通过 `api.openColumnWorkbench()` 打开；业务需要自己的 `ElDrawer` 时读取 `api.getColumnWorkbenchItems()` 并调用标准列 API，详见[列工作台](/recipes/column-workbench)。不要在页面再维护一份会与 GridState 漂移的字段数组。
-
-## 10. 全量视图状态
-
-`columnStateKey` 只负责列偏好。需要保存工作台、页签或路由快照时使用版本化 `GridState`，它同时包含列、排序、过滤、快速搜索、分页、选择和展开状态：
-
-```ts
-const snapshot = api.getState();
-sessionStorage.setItem("orders-grid", JSON.stringify(snapshot));
-
-const restored = JSON.parse(sessionStorage.getItem("orders-grid") ?? "null");
-if (restored) api.applyState(restored, { emitEvents: false });
-```
-
-首屏也可直接传 `initialState`，避免先渲染默认视图再跳变。状态对象带 `version`；业务持久化层仍应给自己的 schema 加版本并在列模型破坏性变化时迁移或丢弃旧快照。
-
-## 11. 编辑、批量保存与并发安全
-
-列级 `validate` 可返回字符串或 Promise。异步校验期间编辑器进入 `aria-busy`，失败保持编辑态；取消或卸载后迟到的响应不会写入数据。
-
-```ts
-{
-  field: "orderNo",
-  editable: true,
-  validate: async (value) => await orderApi.exists(value)
-    ? "订单号已存在"
-    : true
-}
-```
-
-录入型页面优先明确选择编辑模型：单字段快速修改使用默认 `editType: "cell"`，当前格自带对勾/取消；表单式业务使用 `editType: "fullRow"` 与 `rowActionsColumn`，整行草稿在所有字段校验通过前不会写入原数据：
-
-```ts
-import { rowActionsColumn } from "@agile-team/mach-table-vue"; // React 包同名导出
-
-const options = {
-  editType: "fullRow" as const,
-  columnDefs: [
-    { field: "customer", editable: true },
-    { field: "amount", editable: true, cellEditor: "number", validate: validateAmount },
-    rowActionsColumn({
-      onView: ({ data }) => router.push(`/orders/${data.id}`),
-      onDelete: ({ data }) => deleteOrder(data),
-      overflow: "drawer",
-      extraActions: businessActions
-    })
-  ]
-};
-```
-
-整行提交形成一个撤销批次，Escape/取消立即丢弃草稿。操作列还支持 `overflow: "menu" | "drawer" | "inline"`；没有查看/编辑/删除的业务表直接使用 `actionsColumn({ actions })`，不会注入默认动作。
-
-涉及日期区间、额度联动、字段组合唯一性等规则时使用 `rowEditValidator({ values, changes, data })`。它支持 Promise，并可返回 `{ [colId]: message }` 把错误定位到一个或多个具体编辑器。
-
-所有成功写值自动进入脏数据集合。保存接口成功后由 `saveChanges` 精确确认该次快照；若请求期间用户继续编辑，新修改会保留，并把已保存值作为新的比较基线：
-
-```ts
-await api.saveChanges(async (changes) => {
-  await orderApi.saveBatch(changes);
+api.batch((grid) => {
+  grid.filtering.setModel(null);
+  grid.sorting.setModel(null);
+  grid.pagination.setPage(1);
 });
-
-api.getDirtyRowIds();
-api.getChanges();
-api.rollbackChanges();
 ```
 
-详见[编辑、校验与保存](/recipes/editing)。
+不要导入内部 service/class，不要保存 RowNode 作为长期业务状态，也不要从 DOM 反推表格数据。
 
-## 12. 安全要求
+## 13. 错误、监控和诊断
 
-- Overlay 字符串默认按文本渲染，推荐传入 `HTMLElement` 工厂。
-- 除非内容完全由代码静态控制，否则禁止启用 `allowUnsafeOverlayHtml`。
-- 单元格富内容优先返回 DOM/框架组件，不要拼接用户输入为 HTML。
-- CSV 默认启用公式注入保护；只有可信内部数据才能关闭 `protectFormulas`。
-- XLSX 只通过可选扩展动态加载；限制文件大小/Sheet 数/行数并在服务端重新校验，详见[可选 XLSX](/recipes/xlsx)。
-- npm token、后端地址和租户信息不得写入列定义或前端仓库。
-- 自定义 renderer/editor 必须返回 `destroy`，用于卸载框架 root 和取消监听器。
+至少采集：
 
-严格 CSP 项目应评估应用现有 style 策略。MachTable 使用外部 CSS，并根据布局写入必要的行内尺寸样式；若 CSP 禁止所有 `style-src-attr`，需要在企业安全基线中配置相应策略。
-
-## 13. 错误与监控
-
-统一接入 `onGridError`：
+- `gridError` 的 `code`、`source` 和异常。
+- 远程请求耗时、取消率、失败率与返回行数。
+- 编辑保存的失败/冲突数量。
+- 可抽样的 `api.diagnostics.getPerformance()`。
 
 ```ts
-onGridError: ({ code, error, source, context }) => {
-  telemetry.captureException(error, {
-    tags: { component: "MachTable", code, source },
-    extra: context
-  });
-}
+const snapshot = api.diagnostics.get();
+telemetry.gauge("grid.render.p95", snapshot.performance.p95RenderMs, {
+  gridId: snapshot.gridId,
+  rows: snapshot.rowCount,
+  columns: snapshot.columnCount
+});
 ```
 
-MachTable 会隔离用户事件、renderer、formatter、Feature、数据源和销毁阶段异常。不要因为已有隔离就忽略监控；错误事件是生产环境发现业务插件缺陷的主要入口。
+诊断快照用于排错和测试，不作为业务真相源。
 
-用户提交工单时可附加 `api.getDiagnostics()`：它只包含版本、行列/DOM 数量、加载与脏数据状态、最近 50 条结构化错误，不采集业务行内容。
+## 14. 安全基线
 
-## 14. 性能基线
+- Overlay 字符串默认按文本渲染；只有可信静态 HTML 才开启 `allowUnsafeOverlayHtml`。
+- CSV 导出保持默认公式注入保护。
+- 服务端对排序/过滤字段和操作符做白名单。
+- 操作列权限同时在后端校验。
+- 远程错误不要直接显示内部堆栈、SQL 或敏感响应。
+- 不把访问令牌写入表格状态、列定义或持久化 key。
 
-- 列定义在 Vue 使用 `shallowRef`，React 使用 `useMemo`。
-- 纯展示优先 `valueFormatter`，不要为每个文本格创建 Vue/React root。
-- `rowBuffer` 保持默认值；只有真实测量后再调整。
-- 自动列宽最多取样部分数据，但仍不应在高频流更新中反复调用。
-- 10 万级数据优先无限模式，避免一次性下载和 JSON 解析。
-- 使用浏览器 Performance 面板和仓库 `examples/bench` 评估真实列模型与 renderer。
+## 15. 测试策略
 
-详见[性能指南](/advanced/performance)。
+### 单元/组件测试
 
-## 15. 测试建议
+- 配置预设是否按预期覆盖。
+- 列定义中权限、formatter、validator 和 action。
+- 请求取消与过期响应不覆盖新数据。
+- 部分保存、冲突、回滚和离页提醒。
+- `persistence.sections` 只恢复允许的区段。
 
-组件测试至少覆盖：
+### E2E
 
-- 有数据、空数据、加载和接口失败；
-- 唯一行 ID 与事务更新；
-- 选择、编辑校验、排序过滤；
-- 路由切换或条件渲染后的卸载；
-- 弹窗/Tab 打开后的 `refreshLayout()`。
+- 键盘导航、选择、编辑提交/取消。
+- 列宽拖动、双击自动宽度、刷新后恢复。
+- 查询、分页、错误重试和跨页选择。
+- 大数据连续滚动与多次进入/离开路由无泄漏。
+- Chromium、Firefox、WebKit 关键流程。
 
-端到端测试使用语义定位：
+### 消费端构建
 
-```ts
-const grid = page.getByRole("grid");
-await expect(grid).toBeVisible();
-await grid.focus();
-await expect(grid).toBeFocused();
-```
-
-不要依赖虚拟列表中当前不存在的远端行 DOM。需要定位业务行时先调用 API 滚动到目标位置。
+在业务 CI 中至少验证 TypeScript、Vue SFC/React JSX、生产 bundler 构建和包体积变化。
 
 ## 16. 上线检查清单
 
-- [ ] lockfile 中适配器只解析到一个匹配版本的 Core
-- [ ] 全局 CSS 只引入一次
-- [ ] 已按页面覆盖面选择局部、全局同步或全局异步策略
-- [ ] 异步模式的 chunk 路径、CSP 与错误监控已在生产环境验证
-- [ ] 容器在桌面、弹窗、Tab、全屏模式都有确定高度
-- [ ] 所有生产表格提供稳定 `rowKey` 或 `getRowId`
-- [ ] 服务端数据源透传 `AbortSignal`
-- [ ] 复杂编辑页已覆盖异步校验、保存失败与回滚
-- [ ] 需要恢复工作区的页面已设计 `GridState` 版本迁移
-- [ ] `onGridError` 已接入监控
-- [ ] 自定义 renderer/editor/detail 均提供清理逻辑
-- [ ] 未对不可信内容开启 `allowUnsafeOverlayHtml`
-- [ ] 大数据量使用无限模式并完成真实数据压测
-- [ ] Chrome/Edge、Firefox、Safari 目标版本完成验收
-- [ ] 列状态 key 包含结构版本
-- [ ] 升级记录、回滚版本和负责人已进入发布单
+- [ ] 只安装一个框架适配包并锁定 lockfile
+- [ ] 应用入口只引入一次样式
+- [ ] 每个生产表格提供稳定 `rowKey`
+- [ ] 默认虚拟布局容器具有明确高度和 `min-height: 0`
+- [ ] 实例数据/状态未进入全局 defaults 或 preset
+- [ ] 持久化 key 包含租户、用户、场景和 schema 版本
+- [ ] 远程请求透传 AbortSignal，并校验返回结构
+- [ ] 服务端白名单校验排序、过滤和高级 AST
+- [ ] 编辑失败、冲突、回滚与离页流程已验收
+- [ ] 权限在后端再次校验
+- [ ] `gridError` 和核心请求指标进入监控
+- [ ] 关键流程通过浏览器矩阵和路由反复挂载测试
+- [ ] 已确认 MachTable 使用授权范围
 
-遇到问题先查[排错手册](/guide/troubleshooting)，升级版本查[升级指南](/guide/upgrading)。
+## 17. 推荐渐进落地
+
+1. 先选择一个典型 CRUD 列表接入配置中心、查询与持久化。
+2. 验证设计系统、权限、监控和错误处理。
+3. 沉淀薄封装、列工厂和请求适配器。
+4. 扩展到编辑、树、详情和大数据页面。
+5. 用真实性能与业务证据决定是否启用 Worker 或随机块模型。
+
+相关文档：[配置中心](/guide/configuration) · [GridApi](/api/grid-api) · [远程查询](/recipes/remote-query) · [编辑](/recipes/editing) · [质量门禁](/advanced/quality-gates)

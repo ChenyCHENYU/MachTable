@@ -22,7 +22,7 @@ AG 的 [`moduleRegistry.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f
 - 模块自己的运行时校验与注册钩子；
 - Grid 销毁后的作用域模块清理。
 
-MachTable 0.23 的 `GridFeature` 已支持 `version/requires/conflicts` 和依赖 semver 范围，初始化前执行依赖排序、缺失/版本不兼容/冲突/循环隔离，并在 `getDiagnostics().activeFeatures` 暴露 per-grid 清单。它仍不照搬 AG 的 Bean/Module 规模：扩展只获得稳定 Context，生命周期资源由宿主统一托管。
+MachTable 的 `GridFeature` 已支持 `version/requires/conflicts` 和依赖 semver 范围，初始化前执行依赖排序、缺失/版本不兼容/冲突/循环隔离，并在 `api.diagnostics.get().activeFeatures` 暴露 per-grid 清单。它仍不照搬 AG 的 Bean/Module 规模：扩展只获得稳定 Context，生命周期资源由宿主统一托管。
 
 ### 2. 生命周期治理是 AG 稳定性的关键
 
@@ -34,7 +34,7 @@ MachTable 已有显式 service 销毁、renderer `{ el, destroy }`、Vue slot �
 
 AG 的 [`validationService.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f7bd35598b67ce38c1036ed0082df9/packages/ag-grid-community/src/validation/validationService.ts) 和 [`gridOptionsValidations.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f7bd35598b67ce38c1036ed0082df9/packages/ag-grid-community/src/validation/rules/gridOptionsValidations.ts) 覆盖拼写建议、依赖模块、互斥选项、数值约束、废弃迁移和组件合法性。错误不仅写控制台，还带稳定编号和缺失模块建议。
 
-MachTable 已有 `GRID_OPTION_META`、列定义校验、稳定错误码、`getDiagnostics()` 和配置来源 `explainOption()`；0.18 让 registry 同时驱动初始校验和 `updateOptions()` 运行时净化，未知/类型错误的 JavaScript 或低代码 JSON 只报告、不部分污染实例。服务端分页和数据模型冲突仍由组合规则校验。后续继续覆盖：
+MachTable 已有 `GRID_OPTION_META`、列定义校验、稳定错误码、`api.diagnostics.get()` 和配置来源 `explainOption()`；同一 registry 驱动初始校验和 `updateOptions()` 运行时净化，未知/类型错误的 JavaScript 或低代码 JSON 只报告、不部分污染实例。服务端分页和数据模型冲突仍由组合规则校验。后续继续覆盖：
 
 - 互斥的数据模型组合；
 - 功能依赖和缺失组件；
@@ -53,7 +53,7 @@ AG Community 的 [`InfiniteCache`](https://github.com/ag-grid/ag-grid/blob/b51ca
 - 未知总数的虚拟尾部与最终 rowCount 收敛；
 - 可观察的块状态。
 
-MachTable 0.23 保留可靠的顺序追加默认模型，并通过显式 `datasourceMode: "block"` 提供任意块请求、并发上限、优先队列、请求去重、AbortSignal、带抖动退避、滚动方向预取、LRU 淘汰、占位骨架与缓存诊断。`useMachTableQuery` 继续覆盖普通 B 端分页。它已解决 Infinite Model 的高频随机跳转与请求风暴问题，但仍不宣称等同 AG SSRM：服务端分组/聚合/事务更新和分层 Store 协议尚未实现。
+MachTable 0.24 保留可靠的顺序追加默认模型，并通过显式 `datasourceMode: "block"` 提供任意块请求、并发上限、优先队列、请求去重、AbortSignal、带抖动退避、滚动方向预取、LRU 淘汰、占位骨架与缓存诊断。`useMachTableQuery` 继续覆盖普通 B 端分页。它已解决 Infinite Model 的高频随机跳转与请求风暴问题，但仍不宣称等同 AG SSRM：服务端分组/聚合/事务更新和分层 Store 协议尚未实现。
 
 ### 5. SSRM 的难点是层级 Store，不是一个 getRows
 
@@ -77,7 +77,7 @@ MachTable 的 Core renderer/editor 契约更小，Vue 已有原生 cell/header/e
 
 AG 官方 [Grid State](https://www.ag-grid.com/javascript-data-grid/grid-state/) 包含版本，并在载入旧状态时迁移；还覆盖列、筛选、选择、展开、分页、固定行、滚动和工具面板。
 
-MachTable 0.18 将 `GridState` 升级为 v2，自动迁移 v1，并对列、排序、普通/高级过滤、搜索与 ID 集合做有界净化；销毁前会刷新自动状态保存。命名视图刻意排除选择、当前页和展开状态，避免偏好与业务会话混淆。仍缺统一 state-updated 事件、焦点/滚动状态和跨未来大版本迁移工具。
+MachTable 的 `GridState` 当前为 v2，并对列、排序、普通/高级过滤、搜索与 ID 集合做有界净化；销毁前会刷新自动状态保存。命名视图刻意排除选择、当前页和展开状态，避免偏好与业务会话混淆。0.24 在尚无正式接入时删除 v1 迁移负担；未来跨版本变化必须配套显式迁移工具和契约测试。
 
 ## wl 项目真实使用画像
 
@@ -145,7 +145,7 @@ MachTable 0.18 将 `GridState` 升级为 v2，自动迁移 v1，并对列、排�
 - 0.16—0.17 能力并入 0.18 统一发布：高级过滤 AST、命名视图、详细批量保存与冲突协议；
 - 0.18：Option/Feature 治理、GridState v2 迁移、renderer 原地刷新和可复现性能诊断。
 - 0.19：随机块远程模型、Worker 处理边界、增量行高/二分列索引、更新调度器、领域 API 与 API 快照门禁。
-- 0.20—0.23：API 生命周期策略、惰性领域 facade、update-only 管线失效、远程并发/优先级、共享 Observer、发布产物与 500 列/生命周期门禁。
+- 0.20—0.24：冻结领域 facade、update-only 管线失效、远程并发/优先级、共享 Observer、统一持久化、发布产物与 500 列/生命周期门禁。
 
 ### 1.0：暂不上
 

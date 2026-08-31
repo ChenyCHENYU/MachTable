@@ -1,7 +1,12 @@
 import type { GridState } from "../types/state";
 import type { GridStateStore } from "../types/options";
-import type { ColumnStateStorage } from "./columnStateStore";
-import { migrateGridState } from "./gridState";
+import { normalizeGridState } from "./gridState";
+
+export interface GridStateStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
 
 export interface StoredGridState {
   schemaVersion: 2;
@@ -11,7 +16,7 @@ export interface StoredGridState {
 
 export interface LocalGridStateStoreOptions {
   namespace?: string;
-  storage?: ColumnStateStorage;
+  storage?: GridStateStorage;
   /** Reject unexpectedly large or corrupted payloads. Defaults to 512 KiB. */
   maxBytes?: number;
   onError?(error: unknown, operation: "load" | "save" | "clear", key: string): void;
@@ -22,7 +27,7 @@ export interface ManagedGridStateStore extends GridStateStore {
   storageKey(key: string): string;
 }
 
-function currentStorage(): ColumnStateStorage | null {
+function currentStorage(): GridStateStorage | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
   } catch {
@@ -50,8 +55,8 @@ export function createLocalGridStateStore(options: LocalGridStateStoreOptions = 
         const raw = (options.storage ?? currentStorage())?.getItem(storageKey(key));
         if (!raw || storageBytes(raw) > maxBytes) return null;
         const parsed = JSON.parse(raw) as { schemaVersion?: unknown; state?: unknown };
-        if (parsed?.schemaVersion !== 1 && parsed?.schemaVersion !== 2) return null;
-        return migrateGridState(parsed.state);
+        if (parsed?.schemaVersion !== 2) return null;
+        return normalizeGridState(parsed.state);
       } catch (error) {
         report(error, "load", key);
         return null;
@@ -59,7 +64,7 @@ export function createLocalGridStateStore(options: LocalGridStateStoreOptions = 
     },
     save(key, state) {
       try {
-        const normalized = migrateGridState(state);
+        const normalized = normalizeGridState(state);
         if (!normalized) throw new TypeError(`[MachTable] Invalid grid state for "${key}".`);
         const payload = JSON.stringify({ schemaVersion: 2, savedAt: Date.now(), state: normalized } satisfies StoredGridState);
         if (storageBytes(payload) > maxBytes) throw new RangeError(`[MachTable] Grid state for "${key}" exceeds ${maxBytes} bytes.`);

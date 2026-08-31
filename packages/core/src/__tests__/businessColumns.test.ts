@@ -60,7 +60,7 @@ describe("cached dictionaries", () => {
     const api: GridApi<{ id: string; code: string }> = createGrid(host, {
       columnDefs: [{ field: "code", cellRenderer: renderer }],
       rowData: [{ id: "1", code: "A" }],
-      getRowId: ({ data }) => data.id
+      rowKey: (row) => row.id
     });
     const value = host.querySelector(".mach-dictionary-value") as HTMLElement;
     expect(value.textContent).toBe("loading");

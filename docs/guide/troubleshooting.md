@@ -6,11 +6,11 @@
 | --- | --- | --- |
 | 页面空白，没有报错 | 容器或父级高度为 0 | 给容器明确 `height/min-height`，检查 flex 链路 |
 | 有结构但没有样式 | 未引入适配器 CSS | Vue 全局引入 `@agile-team/mach-table-vue/styles.css`；React 引入 `@agile-team/mach-table-react/styles.css` |
-| 弹窗首次打开列宽为 0 | 隐藏状态下完成初次测量 | 弹窗可见后的 nextTick/effect 调 `api.refreshLayout()` |
+| 弹窗首次打开列宽为 0 | 隐藏状态下完成初次测量 | 弹窗可见后的 nextTick/effect 调 `api.view.refreshLayout()` |
 | `pnpm add` 返回 404 | registry 不正确或企业镜像未同步 scope | 检查 `pnpm config get registry` 与 `.npmrc` scope 配置 |
 | Vue prop 不生效 | 模板未使用 kebab-case 或名称错误 | `stripedRows` 对应 `striped-rows`，查 GridOptions |
-| 更新数据后选择丢失 | 没有稳定 `getRowId` | 使用数据库主键/业务唯一键 |
-| 行重复或事务异常 | `getRowId` 返回重复值 | 保持全数据集唯一，开发环境不要抑制警告 |
+| 更新数据后选择丢失 | 没有稳定 `rowKey` | 使用数据库主键/业务唯一键 |
+| 行重复或事务异常 | `rowKey` 返回重复值 | 保持全数据集唯一，开发环境不要抑制警告 |
 | React 频繁重建或更新 | 每次 render 创建新列/对象配置 | 用 `useMemo` 稳定引用 |
 | Vue 提示无法解析 `<MachTable>` | 全局插件未安装、安装到了另一个 app 实例，或自定义了组件名 | 确认入口调用 `app.use(MachTablePlugin)` / `app.use(AsyncMachTablePlugin)` 且发生在 `mount` 前 |
 | Vue 全局组件运行正常但 IDE 报红 | 类型服务尚未加载包的模块增强 | 确认入口有插件 import，重启 Volar / `vue-tsc`；自定义名称需在项目 `GlobalComponents` 中声明 |
@@ -48,14 +48,14 @@ Vue：
 
 ```ts
 const grid = useMachTable<Row>();
-grid.api.value?.refreshLayout();
+grid.api.value?.view.refreshLayout();
 ```
 
 React：
 
 ```ts
-const grid = useMachGrid<Row>();
-grid.api?.refreshLayout();
+const grid = useMachTable<Row>();
+grid.api?.view.refreshLayout();
 ```
 
 挂载前 API 为 `null` 是正常状态。不要在组件 render/setup 同步阶段强制解引用。
@@ -87,7 +87,7 @@ MachTable 样式限定在 `.mach-root` 下。若宿主仍覆盖表格：
 const options = {
   columnDefs: [{ field: "name", headerName: "Name" }],
   rowData: [{ id: "1", name: "Test" }],
-  getRowId: ({ data }: { data: { id: string } }) => data.id
+  rowKey: (row: { id: string }) => row.id
 };
 ```
 

@@ -34,7 +34,7 @@ export function createMachTableCommands<TData = any>(options: MachTableCommandOp
   const getApi = (): GridApi<TData> | null => options.getApi();
   return {
     search(text) {
-      available(getApi)?.setQuickFilter(text);
+      available(getApi)?.filtering.setQuickText(text);
     },
     async refresh() {
       if (options.reload) {
@@ -43,33 +43,33 @@ export function createMachTableCommands<TData = any>(options: MachTableCommandOp
       }
       const api = available(getApi);
       if (!api) return;
-      if (api.isInfinite()) await api.reload();
-      else api.refreshCells();
+      if (api.rows.isRemote()) await api.rows.reload();
+      else api.view.refreshCells();
     },
     openColumns(anchor) {
-      available(getApi)?.openColumnWorkbench(anchor);
+      available(getApi)?.columns.openWorkbench(anchor);
     },
     setDensity(size) {
-      available(getApi)?.setGridOption("size", size);
+      available(getApi)?.updateOptions({ size });
     },
     resetColumns() {
-      available(getApi)?.resetColumnState();
+      available(getApi)?.columns.resetState();
     },
     undo() {
-      return available(getApi)?.undo() ?? false;
+      return available(getApi)?.editing.undo() ?? false;
     },
     redo() {
-      return available(getApi)?.redo() ?? false;
+      return available(getApi)?.editing.redo() ?? false;
     },
     canUndo() {
-      return available(getApi)?.canUndo() ?? false;
+      return available(getApi)?.editing.canUndo() ?? false;
     },
     canRedo() {
-      return available(getApi)?.canRedo() ?? false;
+      return available(getApi)?.editing.canRedo() ?? false;
     },
     exportCsv(filename = "mach-table.csv") {
       const api = available(getApi);
-      return api ? downloadFile(filename, api.getDataAsCsv({ prependBOM: true }), "text/csv;charset=utf-8") : false;
+      return api ? downloadFile(filename, api.io.exportCsv({ prependBOM: true }), "text/csv;charset=utf-8") : false;
     },
     async toggleFullscreen() {
       if (typeof document === "undefined") return false;
@@ -78,7 +78,7 @@ export function createMachTableCommands<TData = any>(options: MachTableCommandOp
         return false;
       }
       const api = available(getApi);
-      const root = api?.getRootElement();
+      const root = api?.view.getRoot();
       const target = options.getFullscreenElement?.() ?? root?.parentElement ?? root;
       if (!target?.requestFullscreen) return false;
       await target.requestFullscreen();

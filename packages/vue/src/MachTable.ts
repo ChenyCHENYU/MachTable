@@ -1,10 +1,9 @@
 import { defineComponent, getCurrentInstance, h, onBeforeUnmount, onMounted, ref, watch, type DefineComponent } from "vue";
 import {
   createGrid,
-  EVENT_TYPES,
-  GRID_OPTION_KEYS,
-  GRID_OPTION_META
+  EVENT_TYPES
 } from "@agile-team/mach-table";
+import { GRID_OPTION_KEYS, GRID_OPTION_META } from "@agile-team/mach-table/adapter";
 import type { GridApi, GridOptions } from "@agile-team/mach-table";
 import { useMachTableConfig } from "./defaults";
 import {
@@ -161,7 +160,8 @@ const MachTableImpl = defineComponent({
         const changed: Record<string, unknown> = {};
         values.forEach((value, index) => {
           if (Object.is(value, previous[index])) return;
-          changed[GRID_OPTION_KEYS[index]] = value;
+          const key = GRID_OPTION_KEYS[index];
+          changed[key] = value;
         });
         if (Object.keys(changed).length > 0) api.updateOptions(changed as Partial<GridOptions<any>>);
       }
@@ -183,7 +183,3 @@ const MachTableImpl = defineComponent({
 });
 
 export const MachTable = MachTableImpl as unknown as MachTableVueComponent;
-/** @deprecated Use MachTable. Kept as a source-compatible alias through 0.x. */
-export const RobotGrid = MachTable;
-/** @deprecated Use MachTableVueProps. */
-export type RobotGridVueProps<TData = any> = MachTableVueProps<TData>;

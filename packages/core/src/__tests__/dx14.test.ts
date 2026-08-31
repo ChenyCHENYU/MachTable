@@ -5,13 +5,11 @@ import {
   createGrid,
   createLocalGridStateStore,
   defineMachTableConfig,
-  mergeMachTableConfig,
-  normalizeMachTableConfig,
-  resolveMachTableGridOptions,
   validateGridOptions,
   type ColDef,
   type GridApi
 } from "../index";
+import { mergeMachTableConfig, normalizeMachTableConfig, resolveMachTableGridOptions } from "../lib/configuration";
 
 interface Row {
   id: string;
@@ -41,21 +39,20 @@ afterEach(() => {
 });
 
 describe("0.14 progressive DX", () => {
-  it("accepts a typed nested rowKey and keeps getRowId precedence", () => {
+  it("accepts typed path and function row keys", () => {
     const api = createGrid(host(), { columnDefs: columns, rowData: rows, rowKey: "profile.code" });
-    expect(api.getNodeById("101")?.data?.id).toBe("a");
-    expect(api.getRootElement()?.classList).toContain("mach-root");
+    expect(api.rows.getById("101")?.data?.id).toBe("a");
+    expect(api.view.getRoot()?.classList).toContain("mach-root");
     api.destroy();
-    expect(api.getRootElement()).toBeNull();
+    expect(api.view.getRoot()).toBeNull();
 
     const explicit = createGrid(host(), {
       columnDefs: columns,
       rowData: rows,
-      rowKey: "profile.code",
-      getRowId: ({ data }) => `row:${data.id}`
+      rowKey: (row) => `row:${row.id}`
     });
-    expect(explicit.getNodeById("row:a")?.data?.profile.code).toBe(101);
-    expect(explicit.getNodeById("101")).toBeUndefined();
+    expect(explicit.rows.getById("row:a")?.data?.profile.code).toBe(101);
+    expect(explicit.rows.getById("101")).toBeUndefined();
     explicit.destroy();
   });
 
@@ -86,18 +83,17 @@ describe("0.14 progressive DX", () => {
     api.destroy();
   });
 
-  it("persists and restores full state through stateKey", () => {
+  it("persists and restores selected state sections through one persistence option", () => {
     vi.useFakeTimers();
     const first: GridApi<Row> = createGrid(host(), {
       columnDefs: columns,
       rowData: rows,
       rowKey: "id",
       pagination: false,
-      stateKey: "orders",
-      stateSaveDebounceMs: 10
+      persistence: { key: "orders", debounceMs: 10 }
     });
-    first.setSortModel([{ colId: "name", direction: "desc" }]);
-    first.selectNodeById("b");
+    first.sorting.setModel([{ colId: "name", direction: "desc" }]);
+    first.selection.setById("b");
     vi.advanceTimersByTime(11);
     expect(localStorage.getItem("mach-table:grid-state:orders")).toBeTruthy();
     first.destroy();
@@ -107,10 +103,10 @@ describe("0.14 progressive DX", () => {
       rowData: rows,
       rowKey: "id",
       pagination: false,
-      stateKey: "orders"
+      persistence: { key: "orders" }
     });
-    expect(second.getSortModel()).toEqual([{ colId: "name", direction: "desc" }]);
-    expect(second.getSelectedIds()).toEqual(["b"]);
+    expect(second.sorting.getModel()).toEqual([{ colId: "name", direction: "desc" }]);
+    expect(second.selection.getIds()).toEqual(["b"]);
     second.destroy();
   });
 
@@ -119,8 +115,9 @@ describe("0.14 progressive DX", () => {
     const storage = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() };
     const store = createLocalGridStateStore({ storage, maxBytes: 1_024, onError });
     const huge = {
-      version: 1 as const,
+      version: 2 as const,
       columns: [], sortModel: [], filterModel: {}, quickFilterText: "x".repeat(2_000),
+      advancedFilterModel: null,
       pagination: { enabled: false, page: 1, pageSize: 20 },
       selectedRowIds: [], expandedRowIds: [], expandedGroupIds: []
     };
@@ -175,19 +172,18 @@ describe("0.14 progressive DX", () => {
     Object.defineProperty(fullscreenParent, "requestFullscreen", { value: defaultFullscreen });
     const api = {
       isDestroyed: vi.fn(() => false),
-      getRootElement: vi.fn(() => gridRoot),
-      setQuickFilter: vi.fn(),
-      refreshCells: vi.fn(),
-      isInfinite: vi.fn(() => false),
-      reload: vi.fn(async () => undefined),
-      openColumnWorkbench: vi.fn(),
-      setGridOption: vi.fn(),
-      resetColumnState: vi.fn(),
-      undo: vi.fn(() => true),
-      redo: vi.fn(() => true),
-      canUndo: vi.fn(() => true),
-      canRedo: vi.fn(() => false),
-      getDataAsCsv: vi.fn(() => "id\n1")
+      updateOptions: vi.fn(),
+      filtering: { setQuickText: vi.fn() },
+      view: { getRoot: vi.fn(() => gridRoot), refreshCells: vi.fn() },
+      rows: { isRemote: vi.fn(() => false), reload: vi.fn(async () => undefined) },
+      columns: { openWorkbench: vi.fn(), resetState: vi.fn() },
+      editing: {
+        undo: vi.fn(() => true),
+        redo: vi.fn(() => true),
+        canUndo: vi.fn(() => true),
+        canRedo: vi.fn(() => false)
+      },
+      io: { exportCsv: vi.fn(() => "id\n1") }
     } as unknown as GridApi<Row>;
     const reload = vi.fn(async () => undefined);
     const fullscreen = { requestFullscreen: vi.fn(async () => undefined) } as unknown as HTMLElement;
@@ -205,18 +201,18 @@ describe("0.14 progressive DX", () => {
     expect(commands.exportCsv("rows.csv")).toBe(true);
     expect(await commands.toggleFullscreen()).toBe(true);
     expect(reload).toHaveBeenCalledOnce();
-    expect(api.setQuickFilter).toHaveBeenCalledWith("alpha");
-    expect(api.openColumnWorkbench).toHaveBeenCalledOnce();
-    expect(api.setGridOption).toHaveBeenCalledWith("size", "compact");
-    expect(api.resetColumnState).toHaveBeenCalledOnce();
+    expect(api.filtering.setQuickText).toHaveBeenCalledWith("alpha");
+    expect(api.columns.openWorkbench).toHaveBeenCalledOnce();
+    expect(api.updateOptions).toHaveBeenCalledWith({ size: "compact" });
+    expect(api.columns.resetState).toHaveBeenCalledOnce();
     expect(fullscreen.requestFullscreen).toHaveBeenCalledOnce();
 
     const direct = createMachTableCommands({ getApi: () => api });
     await direct.refresh();
-    expect(api.refreshCells).toHaveBeenCalledOnce();
-    (api.isInfinite as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    expect(api.view.refreshCells).toHaveBeenCalledOnce();
+    (api.rows.isRemote as ReturnType<typeof vi.fn>).mockReturnValue(true);
     await direct.refresh();
-    expect(api.reload).toHaveBeenCalledOnce();
+    expect(api.rows.reload).toHaveBeenCalledOnce();
     expect(await direct.toggleFullscreen()).toBe(true);
     expect(defaultFullscreen).toHaveBeenCalledOnce();
 

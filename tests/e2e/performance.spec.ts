@@ -13,7 +13,7 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
     return {
       initMs: bench.initMs,
       renderedCells: document.querySelectorAll("#host .mach-cell").length,
-      renderedRows: bench.api.getDiagnostics().renderedRowCount
+      renderedRows: bench.api.diagnostics.get().renderedRowCount
     };
   });
   expect(initial.initMs).toBeLessThan(process.env.CI ? 10_000 : 5_000);
@@ -23,19 +23,19 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   const updateMs = await page.evaluate(async () => {
     const api = (window as any).__MACH_BENCH__.api;
     const updates = Array.from({ length: 1_000 }, (_, index) => {
-      const node = api.getNodeById(`r${index}`);
+      const node = api.rows.getById(`r${index}`);
       return node?.data ? { ...node.data, c2: index } : null;
     }).filter(Boolean);
     const started = performance.now();
-    await Promise.all(updates.map((row: any) => api.applyTransactionAsync({ update: [row] })));
+    await Promise.all(updates.map((row: any) => api.rows.transactAsync({ update: [row] })));
     return performance.now() - started;
   });
   expect(updateMs).toBeLessThan(process.env.CI ? 5_000 : 2_500);
 
   await page.evaluate(() => {
     const api = (window as any).__MACH_BENCH__.api;
-    api.resetPerformanceMetrics();
-    api.refreshLayout();
+    api.diagnostics.resetPerformance();
+    api.view.refreshLayout();
     const viewport = document.querySelector("#host .mach-body-viewport--scroll") as HTMLElement;
     viewport.scrollTop = viewport.scrollHeight;
     viewport.dispatchEvent(new Event("scroll"));
@@ -44,7 +44,7 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   expect(await page.locator("#host .mach-cell").count()).toBeLessThan(2_000);
 
   const performanceSnapshot = await page.evaluate(() =>
-    (window as any).__MACH_BENCH__.api.getPerformanceSnapshot()
+    (window as any).__MACH_BENCH__.api.diagnostics.getPerformance()
   );
   expect(performanceSnapshot.sampleCount).toBeGreaterThan(0);
   expect(performanceSnapshot.renderedRows).toBeLessThan(100);
@@ -67,14 +67,14 @@ test("continuous vertical scroll and a 500-column viewport stay bounded", async 
   const vertical = await page.evaluate(async () => {
     const api = (window as any).__MACH_BENCH__.api;
     const viewport = document.querySelector("#host .mach-body-viewport--scroll") as HTMLElement;
-    api.resetPerformanceMetrics();
+    api.diagnostics.resetPerformance();
     const started = performance.now();
     for (let step = 1; step <= 60; step++) {
       viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) * step / 60;
       viewport.dispatchEvent(new Event("scroll"));
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     }
-    return { elapsed: performance.now() - started, metrics: api.getPerformanceSnapshot() };
+    return { elapsed: performance.now() - started, metrics: api.diagnostics.getPerformance() };
   });
   expect(vertical.elapsed).toBeLessThan(process.env.CI ? 6_000 : 3_000);
   expect(vertical.metrics.p95RenderMs).toBeLessThan(process.env.CI ? 200 : 100);
@@ -87,12 +87,12 @@ test("continuous vertical scroll and a 500-column viewport stay bounded", async 
   const horizontal = await page.evaluate(async () => {
     const api = (window as any).__MACH_BENCH__.api;
     const viewport = document.querySelector("#host .mach-body-viewport--scroll") as HTMLElement;
-    api.resetPerformanceMetrics();
+    api.diagnostics.resetPerformance();
     viewport.scrollLeft = viewport.scrollWidth;
     viewport.dispatchEvent(new Event("scroll"));
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     return {
-      metrics: api.getPerformanceSnapshot(),
+      metrics: api.diagnostics.getPerformance(),
       cells: document.querySelectorAll("#host .mach-cell").length,
       columns: document.querySelectorAll("#host .mach-header-cell").length
     };

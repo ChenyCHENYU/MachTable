@@ -23,8 +23,8 @@ createGrid(host, {
 范围高亮为描边样式（四边 1.5px 主题色），不遮挡内容。状态栏 `rangeAggregate` 面板实时显示框选数值的 **和 / 均 / 计**。
 
 ```ts
-api.getRangeSelection();      // { row1, row2, colId1, colId2 } | null
-api.clearRangeSelection();
+api.selection.getRange();      // { row1, row2, colId1, colId2 } | null
+api.selection.clearRange();
 onRangeSelectionChanged: (e) => ...
 ```
 
@@ -41,7 +41,7 @@ onRangeSelectionChanged: (e) => ...
 
 ```ts
 // 系统剪贴板 API（右键菜单同款）
-await api.copyRangeToClipboard();
+await api.io.copyRange();
 ```
 
 `suppressClipboard: true` 可整体禁用快捷键与菜单剪贴板项（如含敏感数据的页面）。

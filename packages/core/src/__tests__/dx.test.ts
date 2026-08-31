@@ -46,7 +46,7 @@ describe("align / headerAlign", () => {
       columnDefs,
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     expect(cellAt(host, 0, "name").classList.contains("mach-cell--center")).toBe(true);
@@ -66,7 +66,7 @@ describe("align / headerAlign", () => {
       columnDefs: [{ field: "score", headerName: "分数" }],
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     expect(cellAt(host, 0, "score").classList.contains("mach-cell--num")).toBe(true);
     api.destroy();
@@ -78,7 +78,7 @@ describe("align / headerAlign", () => {
       columnDefs: [{ field: "name", headerName: "名称", align: "left", headerAlign: "center" }],
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const header = host.querySelector('.mach-header-cell[data-col-id="name"]') as HTMLElement;
     expect(header.classList.contains("mach-header-cell--center")).toBe(true);
@@ -161,10 +161,10 @@ describe("status bar with pagination", () => {
       rowData: Array.from({ length: 45 }, (_, i) => ({ id: String(i), name: `n${i}`, score: i })),
       rowSelection: "multiple",
       statusBar: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const bar = host.querySelector(".mach-statusbar") as HTMLElement;
-    expect(api.getDisplayedRowCount()).toBe(20);
+    expect(api.rows.getCount()).toBe(20);
     expect(bar.textContent).toContain("共 45 行");
     api.destroy();
   });

@@ -1,146 +1,189 @@
-# GridApi 命令接口
+# GridApi
 
-`createGrid` 返回值 / `onGridReady` 的 `e.api` / Vue `ref.getApi()` / React `apiRef.current`。新代码优先从 8 个领域入口发现能力；0.x 平面方法完整兼容并按类别列出。
-
-## 数据
-
-| 方法 | 说明 |
-| --- | --- |
-| `setRowData(rows)` | 全量替换（清空撤销栈；有 `getRowId` 时选中态按 id 保留） |
-| `getRootElement()` | 返回当前表格根元素，销毁后为 `null`；用于 Portal、测量和自定义全屏目标 |
-| `applyTransaction({ add?, addIndex?, remove?, update? })` | 增量事务。remove 按行引用或 `getRowId` 匹配；树形 remove 递归删整棵子树；update 后局部刷新 |
-| `applyTransactionAsync(transaction): Promise<void>` | 高频事务排队；默认 16ms 内按调用顺序合并并只刷新一次数据管线 |
-| `flushAsyncTransactions()` | 立即提交队列，不等待时间窗 |
-| `reload(): Promise<void>` | 无限模式重新从第 0 行加载并等待首块完成；客户端模式重放 rowData |
-| `ensureRowsLoaded(start, end, { signal? })` | 随机块模式主动加载 `[start, end)`；重复/重叠块请求自动复用 |
-| `purgeDatasourceCache()` | 中止随机块请求并释放 LRU 中的远程行 |
-| `getDatasourceCacheSnapshot()` | 读取缓存块、活跃/排队请求、缓存行、命中、未命中和淘汰计数 |
-| `isInfinite()` | 是否无限滚动模式 |
-| `importCsv(text, { mode?, separator?, headerRowIndex? })` | CSV 导入：`replace` 替换 / `append` 追加 / `paste` 走粘贴管线（可撤销），表头自动映射列，数值自动转型 |
-| `print({ title?, includeHeader? })` | 新窗口打印全部数据（跨页、过滤排序后），弹窗被拦截返回 false |
-| `getDisplayedRowCount()` | 当前展示行数（分页开启时为当前页行数） |
-| `getTotalRowCount()` | 过滤排序后的总行数（分页开启时分母） |
-| `getRowNode(rowIndex)` / `getNodeById(id)` | 行节点查询 |
-| `forEachNode(cb)` / `forEachNodeAfterFilterAndSort(cb)` | 遍历全部 / 过滤排序后（跨页全量，跳过分组与明细占位） |
-
-## 列
-
-| 方法 | 说明 |
-| --- | --- |
-| `setColumnDefs(defs)` | 更新列定义（列宽/顺序/显隐/排序状态按 colId 保留） |
-| `getColumnDefs()` | 取当前 defs |
-| `getColumnState()` / `setColumnState(state)` / `resetColumnState()` | 列状态读写与重置（含 width/flex/widthMode/hide/pinned/sort/sortIndex） |
-| `setColumnVisibility(colId, visible)` | 显示/隐藏列 |
-| `moveColumn(colId, toIndex)` | 编程式移动（同窗格/同分组内） |
-| `setColumnPinned(colId, "left" \| "right" \| null)` | 固定/取消固定 |
-| `setColumnWidth(colId, width)` | 安全设置单列宽度并触发统一事件/持久化；非法宽度或未知列返回 `false` |
-| `sizeColumnsToFit(width?)` | 按比例铺满容器 |
-| `autoSizeColumn(colId, skipHeader?)` / `autoSizeAllColumns(skipHeader?)` | 内容自适应列宽（Canvas 测量，取样前 2000 行） |
-| `openColumnWorkbench(anchor?)` / `closeColumnWorkbench()` | 打开/关闭可搜索的列工作台（显隐、固定、排序、自适应、重置） |
-| `getColumnWorkbenchItems()` | 读取自定义列工作台所需的 `colId/label/visible/pinned/width/movable/hideable` |
-| `openColumnPanel(anchor?)` | 0.x 兼容别名；新代码使用 `openColumnWorkbench()` |
-
-## 排序 / 过滤 / 分页
-
-| 方法 | 说明 |
-| --- | --- |
-| `setSortModel([{ colId, direction }])` / `getSortModel()` | 排序模型读写（表头指示器同步） |
-| `setFilterModel(model)` / `getFilterModel()` | 列过滤模型读写；`null` 清空。模型结构见[排序与过滤](/recipes/sorting-filtering) |
-| `setAdvancedFilterModel(model)` / `getAdvancedFilterModel()` | 嵌套 AND/OR/NOT 表达式读写；`null` 清空。见[高级过滤](/recipes/advanced-filter) |
-| `isColumnFilterPresent(colId)` | 某列是否有过滤 |
-| `setQuickFilter(text)` / `getQuickFilter()` | 全局快速过滤 |
-| `paginationEnabled()` / `setPaginationEnabled(bool)` | 内置分页开关（无数据自动隐藏，见[分页配方](/recipes/pagination-io)） |
-| `getPage()` / `setPage(n)` / `getPageCount()` | 页码读写 |
-| `getPageSize()` / `setPageSize(n)` | 每页条数（切换保持首个可见行所在页） |
-| `getTotalRowCount()` | 总行数 |
-
-## 选择
-
-| 方法 | 说明 |
-| --- | --- |
-| `getSelectedNodes()` / `getSelectedRows()` | 选中行（含被过滤隐藏的） |
-| `getSelectedIds()` | 选中行 id 列表（无限模式未加载行也在内） |
-| `selectNodeById(id, selected?, clearOthers?)` | 按 id 勾选 |
-| `setSelection(rows, clearOthers?)` | 按数据引用/id 批量选中 |
-| `getVisibleSelection()` | 仅当前过滤可见的选中行 |
-| `selectAll(filteredOnly?)` / `deselectAll()` | 全选（跳过禁选行）/ 清空 |
-| `setRowSelection(mode)` / `getRowSelection()` | 运行时切换选择模式 |
-
-## 编辑与撤销
-
-| 方法 | 说明 |
-| --- | --- |
-| `startEditingCell({ rowIndex, colId, keyPress? })` | 编程式进入编辑（返回是否成功） |
-| `startEditingRow(rowIndex)` | 暂存式整行编辑；所有可编辑格挂载编辑器，返回是否成功 |
-| `isRowEditing(rowIndex?)` | 查询当前是否有整行编辑，或指定显示行是否正在编辑 |
-| `stopEditing(cancel?)` | 结束编辑；兼容同步调用。异步校验时不阻塞调用栈 |
-| `stopEditingAsync(cancel?): Promise<boolean>` | 等待同步/异步校验；成功结束返回 `true`，校验失败保持编辑并返回 `false` |
-| `stopEditingRow(cancel?): Promise<boolean>` | 整行提交/取消；提交时全部校验通过后统一写值，并形成一个 undo 批次 |
-| `getDirtyRowIds()` / `getChanges()` | 查询尚未确认保存的行和逐单元格原值/当前值 |
-| `saveChanges(handler, rowIds?)` | 兼容简写：把稳定快照交给保存函数并返回成功确认的修改；保留请求期间产生的新编辑 |
-| `saveChangesDetailed(handler, rowIds?)` | 返回 `{ submitted, saved, failures, conflicts }`，用于部分成功、逐行校验和乐观锁冲突；见[批量保存](/recipes/batch-save) |
-| `markChangesSaved(rowIds?)` | 业务已自行保存时手动确认 |
-| `rollbackChanges(rowIds?)` | 回滚全部或指定行到最近已确认值 |
-| `undo()` / `redo()` / `canUndo()` / `canRedo()` | 撤销栈操作，见[配方](/recipes/undo-redo) |
-
-## 固定行 / 分组 / 树 / 明细
-
-| 方法 | 说明 |
-| --- | --- |
-| `setPinnedTopRowData(rows)` / `getPinnedTopRowData()` | 固定首行读写 |
-| `setPinnedBottomRowData(rows)` / `getPinnedBottomRowData()` | 固定末行读写 |
-| `toggleRowGroup(groupId)` / `isGroupExpanded(groupId)` | 分组行展开切换 |
-| `expandAllGroups()` / `collapseAllGroups()` | 全部分组展开/收起 |
-| `expandRow(id)` / `collapseRow(id)` / `toggleDetailRow(id)` / `isRowExpanded(id)` | 明细/树节点展开 |
-| `loadTreeChildren(id, { force? })` / `retryTreeChildren(id)` | 加载或强制重试懒加载树子级；并发请求自动去重 |
-| `isTreeRowLoading(id)` | 查询节点子级是否正在加载 |
-| `expandAllDetails()` / `collapseAllDetails()` | 全部展开/收起（树与明细通用） |
-| `reorderRows(fromIndex, toIndex)` | 编程式行重排（触发 `rowDragEnd` 同语义） |
-
-## 范围 / 剪贴板
-
-| 方法 | 说明 |
-| --- | --- |
-| `getRangeSelection()` / `clearRangeSelection()` | 框选范围 `{ row1, row2, colId1, colId2 }` 读写 |
-| `copyRangeToClipboard()` | 复制当前范围（或焦点格）为 TSV，返回 Promise\<boolean\> |
-
-## 视图与导出
-
-| 方法 | 说明 |
-| --- | --- |
-| `scrollToIndex(rowIndex, position?)` | 滚动到行（top/bottom/middle/nearest，变高行精确） |
-| `refreshCells({ rowIds?, rowIndexes?, columns?, force?, includePinned? })` | 无参刷新全部可见单元格；传参时只刷新脏行/列，`force` 强制重建 renderer |
-| `refreshLayout()` | 重测量尺寸（弹窗/Tab 切换后调用） |
-| `updateOptions(partial)` | 运行时改配置；先净化完整 patch，再通过一个调度批次提交视图更新 |
-| `setOverlay("loading" \| "noRows" \| null)` / `hideOverlays()` | 覆盖层控制 |
-| `getDataAsCsv(params?)` | CSV 导出；参数 `{ includeHeader, columnSeparator, prependBOM, onlySelected, protectFormulas }`，默认防公式注入 |
-
-## 事件与生命周期
-
-### 领域入口与批处理（0.23）
-
-| API | 说明 |
-| --- | --- |
-| `batch(callback)` | 合并回调内的同步模型、布局和渲染工作；支持嵌套，最外层退出时提交 |
-| `flushUpdates()` | 立即提交等待中的更新，主要用于测试和命令后同步测量 |
-| `rows / columns / selection / editing` | 数据、列、选择和编辑领域；按需惰性创建，不维护第二套状态 |
-| `filtering / pagination` | 过滤和分页的完整状态操作；不承载宿主请求副作用 |
-| `state / diagnostics` | 工作区状态和无业务数据的运行诊断 |
+`createGrid()`、Vue `useMachTable()` 与 React `useMachTable()` 返回同一套领域化 API。根级只负责生命周期、配置、事件和批处理；表格命令按职责归入 12 个只读领域。API 与各领域对象均被冻结，不能被页面意外改写。
 
 ```ts
-api.batch((grid) => {
-  grid.rows.apply({ update: rows });
-  grid.columns.setVisible("cost", canViewCost);
-  grid.refreshCells({ rowIds: rows.map((row) => row.id), columns: ["status"] });
-});
+api.rows.transact({ update: changedRows });
+api.filtering.setQuickText("pending");
+await api.editing.save(orderApi.saveChanges);
 ```
+
+## 根级能力
 
 | 方法 | 说明 |
 | --- | --- |
-| `addEventListener(type, fn)` | 订阅，返回取消函数 |
-| `removeEventListener(type, fn)` | 取消订阅 |
-| `whenReady(): Promise<GridApi>` | 首次布局帧与 `gridReady` 完成后 resolve；Vue/React Hook 的 `ready` 基于它 |
-| `getState()` / `applyState(state, options?)` | 读取/恢复 GridState v2；自动迁移 v1，输入先有界归一化；`emitEvents: false` 可静默恢复 |
-| `getDiagnostics()` | 返回版本、加载/虚拟 DOM/行列/选择/脏数据、Feature 清单、性能和最近结构化错误，不包含业务行数据 |
-| `getPerformanceSnapshot()` / `resetPerformanceMetrics()` | 读取/清空有界渲染、布局、模型 P95，长帧/Long Task、实际 DOM 范围与浏览器可用堆内存指标 |
-| `destroy()` / `isDestroyed()` | 销毁 / 状态查询 |
+| `batch(callback)` | 合并回调内的模型、布局和渲染更新；嵌套调用安全 |
+| `whenReady()` | 首次布局和 `gridReady` 后返回当前 API |
+| `getOption(key)` | 读取应用配置、预设和实例 props 合并后的当前值 |
+| `updateOptions(patch)` | 原子校验并更新配置；一次 patch 最多提交一次视觉刷新 |
+| `on(event, listener)` | 订阅事件并返回解除函数 |
+| `destroy()` | 释放观察器、监听器、计时器、编辑器和远程请求；可重复调用 |
+| `isDestroyed()` | 是否已销毁 |
+
+```ts
+const off = api.on("selectionChanged", ({ selectedRows }) => {
+  console.log(selectedRows.length);
+});
+off();
+```
+
+## `api.rows`
+
+| 方法 | 说明 |
+| --- | --- |
+| `setData(rows)` | 全量替换本地数据；稳定 `rowKey` 可保留选择语义 |
+| `transact({ add?, addIndex?, remove?, update? })` | 同步增量事务 |
+| `transactAsync(transaction, { signal? })` | 合并到异步事务队列，可取消 |
+| `flushTransactions()` | 立即提交待处理异步事务 |
+| `getCount()` | 当前展示行数 |
+| `getAt(index)` / `getById(id)` | 按展示索引或稳定 ID 取 RowNode |
+| `forEach(callback)` | 遍历当前 RowModel |
+| `forEachDisplayed(callback)` | 遍历过滤、排序后的展示行 |
+| `reorder(fromIndex, toIndex)` | 本地行重排，成功返回 `true` |
+| `isRemote()` | 是否使用远程数据源 |
+| `reload({ signal? })` | 重载远程数据 |
+| `ensureLoaded(start, end, { signal? })` | 确保随机块区间已加载 |
+| `purgeCache()` | 清空远程块缓存 |
+| `getCacheSnapshot()` | 返回有界缓存、命中、淘汰和请求队列诊断 |
+
+## `api.columns`
+
+| 方法 | 说明 |
+| --- | --- |
+| `getDefinitions()` / `setDefinitions(defs)` | 读取或替换列定义 |
+| `getState()` / `setState(state)` / `resetState()` | 列状态快照、恢复和重置 |
+| `setVisible(colId, visible)` | 设置显隐 |
+| `setPinned(colId, side)` | 固定到左/右或取消固定 |
+| `move(colId, toIndex)` | 调整列顺序 |
+| `setWidth(colId, width)` | 程序化调整宽度，成功返回 `true` |
+| `fit(width?)` | 按容器或指定宽度缩放列 |
+| `autoSize(colId, skipHeader?)` / `autoSizeAll(skipHeader?)` | 按内容自动宽度 |
+| `getWorkbenchItems()` | 获取无 UI 绑定的列工作台模型 |
+| `openWorkbench(anchor?)` / `closeWorkbench()` | 打开/关闭内置列工作台 |
+
+交互式列宽调整必须显式配置 `enableColumnResize: true`。程序化 `setWidth()` 不受该开关限制。
+
+## `api.selection`
+
+| 方法 | 说明 |
+| --- | --- |
+| `getRows()` / `getNodes()` / `getIds()` | 全部已选行、节点或 ID |
+| `getVisibleRows()` | 当前已加载且可见的已选行 |
+| `setRows(rows, clearOthers?)` | 按行对象设置选择 |
+| `setById(id, selected?, clearOthers?)` | 按稳定 ID 选择/取消 |
+| `selectAll(filteredOnly?)` | 选择全部或过滤结果 |
+| `clear()` | 清空行选择 |
+| `getMode()` / `setMode(mode)` | 获取/设置单选、多选或关闭 |
+| `getRange()` / `clearRange()` | 获取或清空单元格范围选择 |
+
+远程“全选全部查询结果”由框架 `/workflows` 的 `useMachTableQuery()` 表达为 `allMatching + excludedKeys`，不会要求客户端加载全部 ID。
+
+## `api.editing`
+
+| 方法 | 说明 |
+| --- | --- |
+| `startCell({ rowIndex, colId, keyPress? })` | 开始单元格编辑 |
+| `startRow(rowIndex)` | 开始原子整行编辑 |
+| `isRowActive(rowIndex?)` | 判断指定行或任意行是否编辑中 |
+| `stop({ cancel? })` | 异步提交或取消当前编辑；校验失败返回 `false` |
+| `getChanges()` / `getDirtyRowIds()` | 获取待保存变更或脏行 ID |
+| `markSaved(rowIds?)` | 确认指定或全部当前变更 |
+| `rollback(rowIds?)` | 回滚指定或全部脏行 |
+| `save(handler, rowIds?)` | 快照化保存，返回提交、成功、失败和冲突明细 |
+| `undo()` / `redo()` | 撤销/重做最近一次可逆编辑 |
+| `canUndo()` / `canRedo()` | 是否可撤销/重做 |
+
+`save()` 返回：
+
+```ts
+interface GridBatchSaveResult<T> {
+  submitted: GridChange<T>[];
+  saved: GridChange<T>[];
+  failures: SaveChangeIssue[];
+  conflicts: SaveChangeConflict<T>[];
+}
+```
+
+保存开始后产生的新编辑不会被旧请求误清除。参见[批量保存与冲突](/recipes/batch-save)。
+
+## `api.filtering` 与 `api.sorting`
+
+| 方法 | 说明 |
+| --- | --- |
+| `filtering.getModel()` / `setModel(model)` | 普通列过滤模型 |
+| `filtering.getAdvancedModel()` / `setAdvancedModel(model)` | 可序列化高级过滤 AST |
+| `filtering.getQuickText()` / `setQuickText(text)` | 全局快速搜索 |
+| `filtering.isPresent(colId?)` | 指定列或全局是否存在过滤 |
+| `sorting.getModel()` / `setModel(model)` | 排序模型 |
+
+## `api.pagination`
+
+| 方法 | 说明 |
+| --- | --- |
+| `isEnabled()` / `setEnabled(enabled)` | 分页开关 |
+| `getPage()` / `setPage(page)` | 页码（从 1 开始） |
+| `getPageSize()` / `setPageSize(size)` | 每页数量 |
+| `getPageCount()` | 总页数 |
+| `getTotalRowCount()` | 当前已知总量 |
+
+## `api.hierarchy`
+
+| 方法 | 说明 |
+| --- | --- |
+| `isRowExpanded(id)` / `setRowExpanded(id, expanded)` | 树节点展开状态 |
+| `isTreeRowLoading(id)` | 懒加载子节点是否请求中 |
+| `loadTreeChildren(id, { force? })` | 加载子节点；`force` 用于显式重试 |
+| `isGroupExpanded(id)` / `setGroupExpanded(id, expanded)` | 分组展开状态 |
+| `setAllGroupsExpanded(expanded)` | 展开/折叠全部分组 |
+| `setAllDetailsExpanded(expanded)` | 展开/折叠全部主从详情 |
+
+## `api.view`
+
+| 方法 | 说明 |
+| --- | --- |
+| `getRoot()` | 内部 grid 根元素；未挂载/已销毁为 `null` |
+| `scrollToRow(index, position?)` | 滚动到行，可选 `top/bottom/middle/nearest` |
+| `refreshCells(params?)` | 精确刷新行、列、固定行；`force` 可重建 renderer |
+| `refreshLayout()` | 重新测量容器并布局 |
+| `flush()` | 立即提交当前计划中的视图更新 |
+| `setOverlay("loading" | "noRows" | "error" | null)` | 显式覆盖层 |
+| `getPinnedRows(position)` / `setPinnedRows(position, rows)` | 顶部/底部固定行 |
+
+## `api.state`
+
+| 方法 | 说明 |
+| --- | --- |
+| `get()` | 获取版本化 `GridState` |
+| `apply(state, { sections?, emitEvents? })` | 原子恢复全部或指定状态区段 |
+
+可选区段：`columns`、`sort`、`filter`、`pagination`、`selection`、`expansion`。自动持久化使用同一契约：
+
+```ts
+persistence: {
+  key: "tenant:user:orders",
+  sections: ["columns"],
+  debounceMs: 160,
+  store: customStore
+}
+```
+
+## `api.io`
+
+| 方法 | 说明 |
+| --- | --- |
+| `exportCsv(params?)` | 生成 CSV 字符串，默认防公式注入 |
+| `importCsv(text, options?)` | 替换、追加或粘贴导入 |
+| `print(options?)` | 打印当前表格 |
+| `copyRange()` | 将当前范围复制到剪贴板 |
+
+XLSX 通过独立的 `@agile-team/mach-table-xlsx` 扩展提供，不进入 Core。
+
+## `api.diagnostics`
+
+| 方法 | 说明 |
+| --- | --- |
+| `get()` | 实例状态、活动 Feature、近期错误、远程/渲染/更新统计 |
+| `getPerformance()` | 渲染、布局、模型、DOM 数量、长任务和堆内存快照 |
+| `resetPerformance()` | 重置当前实例性能样本 |
+
+诊断 API 用于开发、测试和遥测采样，不应用来驱动业务状态。

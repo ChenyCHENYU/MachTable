@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGrid, createLocalColumnStateStore, validateGridOptions } from "../index";
-import type { ColDef, ColumnState, ColumnStateStore } from "../index";
+import { createGrid, validateGridOptions } from "../index";
+import type { ColDef, ColumnState, GridPersistenceOptions, GridState } from "../index";
+import { createLocalColumnStateStore } from "../lib/columnStateStore";
+import type { ColumnStateStore } from "../types/options";
 
 interface Row {
   id: string;
@@ -46,6 +48,33 @@ function requireStoredState(state: ColumnState[] | null): ColumnState[] {
   return state ?? [];
 }
 
+function columnPersistence(key: string, store: ColumnStateStore): GridPersistenceOptions {
+  const wrap = (columns: ColumnState[] | null): GridState | null => columns ? {
+    version: 2,
+    columns,
+    sortModel: [],
+    filterModel: {},
+    advancedFilterModel: null,
+    quickFilterText: null,
+    pagination: { enabled: false, page: 1, pageSize: 20 },
+    selectedRowIds: [],
+    expandedRowIds: [],
+    expandedGroupIds: []
+  } : null;
+  return {
+    key,
+    sections: ["columns"],
+    debounceMs: 0,
+    store: {
+      load: (storageKey) => {
+        const value = store.load(storageKey);
+        return value instanceof Promise ? value.then(wrap) : wrap(value);
+      },
+      save: (storageKey, state) => store.save(storageKey, state.columns)
+    }
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
   document.body.replaceChildren();
@@ -68,7 +97,7 @@ describe("opt-in column resizing", () => {
 
     const header = firstHost.querySelector<HTMLElement>('.mach-header-cell[data-col-id="name"]')!;
     header.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true }));
-    expect(first.getColumnState().find((state) => state.colId === "name")?.width).toBe(120);
+    expect(first.columns.getState().find((state) => state.colId === "name")?.width).toBe(120);
     first.destroy();
 
     const secondHost = createHost();
@@ -86,17 +115,17 @@ describe("opt-in column resizing", () => {
   it("can be enabled and disabled at runtime without rebuilding columns", () => {
     const host = createHost();
     const api = createGrid(host, { columnDefs: defs, rowData: rows, pagination: false });
-    const before = api.getColumnDefs();
+    const before = api.columns.getDefinitions();
 
-    api.setGridOption("enableColumnResize", true);
+    api.updateOptions({ enableColumnResize: true });
     const handle = resizeHandle(host);
     handle.dispatchEvent(pointer("pointerdown", 120));
     window.dispatchEvent(pointer("pointermove", 200));
-    expect(api.getColumnDefs()).toEqual(before);
+    expect(api.columns.getDefinitions()).toEqual(before);
 
-    api.setGridOption("enableColumnResize", false);
+    api.updateOptions({ enableColumnResize: false });
     expect(host.querySelector(".mach-header-resize")).toBeNull();
-    expect(api.getColumnState().find((state) => state.colId === "name")?.width).toBe(120);
+    expect(api.columns.getState().find((state) => state.colId === "name")?.width).toBe(120);
     api.destroy();
   });
 
@@ -113,10 +142,9 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       enableColumnResize: true,
-      columnStateKey: "orders",
-      columnStateStore: store
+      persistence: columnPersistence("orders", store)
     });
-    api.addEventListener("columnResized", resized);
+    api.on("columnResized", resized);
 
     const handle = resizeHandle(host);
     handle.dispatchEvent(pointer("pointerdown", 120));
@@ -124,7 +152,7 @@ describe("opt-in column resizing", () => {
     expect(save).not.toHaveBeenCalled();
     window.dispatchEvent(pointer("pointerup", 500));
 
-    expect(api.getColumnState().find((state) => state.colId === "name")).toMatchObject({
+    expect(api.columns.getState().find((state) => state.colId === "name")).toMatchObject({
       width: 240,
       flex: null,
       widthMode: "manual"
@@ -147,8 +175,7 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       enableColumnResize: true,
-      columnStateKey: "orders",
-      columnStateStore: { load: () => null, save }
+      persistence: columnPersistence("orders", { load: () => null, save })
     });
     const handle = resizeHandle(host);
 
@@ -156,7 +183,7 @@ describe("opt-in column resizing", () => {
     window.dispatchEvent(pointer("pointermove", 190));
     window.dispatchEvent(pointer("pointercancel", 190));
 
-    expect(api.getColumnState().find((state) => state.colId === "name")?.width).toBe(120);
+    expect(api.columns.getState().find((state) => state.colId === "name")?.width).toBe(120);
     expect(save).not.toHaveBeenCalled();
     expect(host.querySelector(".mach-root--resizing")).toBeNull();
     api.destroy();
@@ -170,16 +197,15 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       enableColumnResize: true,
-      columnStateKey: "orders",
-      columnStateStore: { load: () => null, save }
+      persistence: columnPersistence("orders", { load: () => null, save })
     });
-    const before = api.getColumnState().find((state) => state.colId === "amount")!;
+    const before = api.columns.getState().find((state) => state.colId === "amount")!;
     const handle = resizeHandle(host, "amount");
 
     handle.dispatchEvent(pointer("pointerdown", before.width!));
     window.dispatchEvent(pointer("pointerup", before.width!));
 
-    expect(api.getColumnState().find((state) => state.colId === "amount")?.flex).toBe(1);
+    expect(api.columns.getState().find((state) => state.colId === "amount")?.flex).toBe(1);
     expect(save).not.toHaveBeenCalled();
     api.destroy();
   });
@@ -193,9 +219,7 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       enableColumnResize: true,
-      stateKey: "orders",
-      stateSaveDebounceMs: 0,
-      stateStore: { load: () => null, save }
+      persistence: { key: "orders", debounceMs: 0, store: { load: () => null, save } }
     });
     const handle = resizeHandle(host);
 
@@ -229,8 +253,7 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       enableColumnResize: true,
-      columnStateKey: "orders",
-      columnStateStore: store
+      persistence: columnPersistence("orders", store)
     });
     resizeHandle(firstHost).dispatchEvent(pointer("pointerdown", 120));
     window.dispatchEvent(pointer("pointerup", 190));
@@ -246,12 +269,11 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       enableColumnResize: true,
-      columnStateKey: "orders",
-      columnStateStore: store
+      persistence: columnPersistence("orders", store)
     });
     setViewportWidth(secondHost, 1000);
-    second.refreshLayout();
-    const state = second.getColumnState();
+    second.view.refreshLayout();
+    const state = second.columns.getState();
     expect(state.find((entry) => entry.colId === "name")?.width).toBe(190);
     expect(state.find((entry) => entry.colId === "amount")?.flex).toBe(1);
     expect(state.find((entry) => entry.colId === "amount")?.width).toBeGreaterThan(600);
@@ -272,18 +294,17 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       columnLayout: "fit",
-      columnStateKey: "fit-orders",
-      columnStateStore: store
+      persistence: columnPersistence("fit-orders", store)
     });
     setViewportWidth(firstHost, 600);
-    first.refreshLayout();
+    first.view.refreshLayout();
 
-    expect(first.setColumnWidth("name", 300)).toBe(true);
-    expect(first.getColumnState().find((state) => state.colId === "name")).toMatchObject({
+    expect(first.columns.setWidth("name", 300)).toBe(true);
+    expect(first.columns.getState().find((state) => state.colId === "name")).toMatchObject({
       width: 300,
       widthMode: "manual"
     });
-    expect(first.getColumnState().find((state) => state.colId === "amount")).toMatchObject({
+    expect(first.columns.getState().find((state) => state.colId === "amount")).toMatchObject({
       width: 300,
       widthMode: "auto"
     });
@@ -295,13 +316,12 @@ describe("opt-in column resizing", () => {
       rowData: rows,
       pagination: false,
       columnLayout: "fit",
-      columnStateKey: "fit-orders",
-      columnStateStore: store
+      persistence: columnPersistence("fit-orders", store)
     });
     setViewportWidth(secondHost, 800);
-    second.refreshLayout();
-    expect(second.getColumnState().find((state) => state.colId === "name")?.width).toBe(300);
-    expect(second.getColumnState().find((state) => state.colId === "amount")?.width).toBe(500);
+    second.view.refreshLayout();
+    expect(second.columns.getState().find((state) => state.colId === "name")?.width).toBe(300);
+    expect(second.columns.getState().find((state) => state.colId === "amount")?.width).toBe(500);
     second.destroy();
   });
 
@@ -309,23 +329,23 @@ describe("opt-in column resizing", () => {
     const host = createHost();
     const resized = vi.fn();
     const api = createGrid(host, { columnDefs: defs, rowData: rows, pagination: false });
-    api.addEventListener("columnResized", resized);
+    api.on("columnResized", resized);
 
-    expect(api.setColumnWidth("name", Number.NaN)).toBe(false);
-    expect(api.setColumnWidth("missing", 180)).toBe(false);
-    api.setColumnState([{
+    expect(api.columns.setWidth("name", Number.NaN)).toBe(false);
+    expect(api.columns.setWidth("missing", 180)).toBe(false);
+    api.columns.setState([{
       colId: "name",
       width: Number.NaN,
       pinned: "invalid",
       sort: "invalid"
     }] as any);
-    expect(api.getColumnState().find((state) => state.colId === "name")).toMatchObject({
+    expect(api.columns.getState().find((state) => state.colId === "name")).toMatchObject({
       width: 120,
       pinned: null,
       sort: null
     });
-    expect(api.setColumnWidth("name", 10)).toBe(true);
-    expect(api.getColumnState().find((state) => state.colId === "name")?.width).toBe(100);
+    expect(api.columns.setWidth("name", 10)).toBe(true);
+    expect(api.columns.getState().find((state) => state.colId === "name")?.width).toBe(100);
     expect(resized).toHaveBeenCalledWith(expect.objectContaining({ width: 100, finished: true }));
     api.destroy();
   });

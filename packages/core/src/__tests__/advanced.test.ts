@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import {
-  createColumnStateKey,
   createGrid,
-  createLocalColumnStateStore,
   buildColDefsFromSchema,
   describeFilter,
   isColDefGroup
 } from "../index";
+import { createColumnStateKey, createLocalColumnStateStore } from "../lib/columnStateStore";
 import type { GridApi, ColDef, ColDefGroup } from "../index";
 
 interface Row {
@@ -109,30 +108,30 @@ describe("master detail", () => {
       masterDetail: true,
       detailRowHeight: 200,
       detailRowRenderer: renderer,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    expect(api.getDisplayedRowCount()).toBe(5);
-    expect(api.isRowExpanded("1")).toBe(false);
+    expect(api.rows.getCount()).toBe(5);
+    expect(api.hierarchy.isRowExpanded("1")).toBe(false);
 
-    expect(api.expandRow("1")).toBe(true);
-    expect(api.getDisplayedRowCount()).toBe(6);
-    expect(api.isRowExpanded("1")).toBe(true);
+    expect(api.hierarchy.setRowExpanded("1", true)).toBe(true);
+    expect(api.rows.getCount()).toBe(6);
+    expect(api.hierarchy.isRowExpanded("1")).toBe(true);
     expect(renderer).toHaveBeenCalled();
     expect(host.querySelector(".detail-content")?.textContent).toBe("detail-1");
 
-    expect(api.collapseRow("1")).toBe(false);
-    expect(api.getDisplayedRowCount()).toBe(5);
+    expect(api.hierarchy.setRowExpanded("1", false)).toBe(true);
+    expect(api.rows.getCount()).toBe(5);
 
-    api.toggleDetailRow("2");
-    api.toggleDetailRow("3");
-    expect(api.getDisplayedRowCount()).toBe(7);
+    api.hierarchy.setRowExpanded("2", !api.hierarchy.isRowExpanded("2"));
+    api.hierarchy.setRowExpanded("3", !api.hierarchy.isRowExpanded("3"));
+    expect(api.rows.getCount()).toBe(7);
 
-    api.collapseAllDetails();
-    expect(api.getDisplayedRowCount()).toBe(5);
+    api.hierarchy.setAllDetailsExpanded(false);
+    expect(api.rows.getCount()).toBe(5);
 
-    api.expandAllDetails();
-    expect(api.getDisplayedRowCount()).toBe(10);
+    api.hierarchy.setAllDetailsExpanded(true);
+    expect(api.rows.getCount()).toBe(10);
     api.destroy();
   });
 
@@ -144,14 +143,14 @@ describe("master detail", () => {
       rowData: makeRows(3),
       masterDetail: true,
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.addEventListener("detailToggled", listener);
-    api.expandRow("0");
+    api.on("detailToggled", listener);
+    api.hierarchy.setRowExpanded("0", true);
     expect(listener).toHaveBeenCalledWith(expect.objectContaining({ rowId: "0", expanded: true }));
 
-    api.selectNodeById("0");
-    expect(api.getSelectedRows().length).toBe(1);
+    api.selection.setById("0");
+    expect(api.selection.getRows().length).toBe(1);
     api.destroy();
   });
 
@@ -161,10 +160,10 @@ describe("master detail", () => {
       columnDefs: cols,
       rowData: makeRows(3),
       masterDetail: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.expandRow("0");
-    const lines = api.getDataAsCsv().split("\r\n");
+    api.hierarchy.setRowExpanded("0", true);
+    const lines = api.io.exportCsv().split("\r\n");
     expect(lines.length).toBe(4);
     api.destroy();
   });
@@ -232,18 +231,18 @@ describe("column state persistence", () => {
         { field: "name", headerName: "Name" }
       ],
       rowData: makeRows(2),
-      columnStateKey: "test-key",
-      getRowId: (p) => p.data.id
+      persistence: { key: "test-key", sections: ["columns"], debounceMs: 0 },
+      rowKey: (row) => row.id
     });
 
-    api.setColumnState([
+    api.columns.setState([
       { colId: "id", width: 222 },
       { colId: "name", hide: true }
     ]);
 
-    const saved = localStorage.getItem("mach-table:col-state:test-key");
+    const saved = localStorage.getItem("mach-table:grid-state:test-key");
     expect(saved).toBeTruthy();
-    expect(JSON.parse(saved!).columns.some((s: any) => s.colId === "id" && s.width === 222)).toBe(true);
+    expect(JSON.parse(saved!).state.columns.some((s: any) => s.colId === "id" && s.width === 222)).toBe(true);
 
     api.destroy();
 
@@ -254,10 +253,10 @@ describe("column state persistence", () => {
         { field: "name", headerName: "Name" }
       ],
       rowData: makeRows(2),
-      columnStateKey: "test-key"
+      persistence: { key: "test-key", sections: ["columns"], debounceMs: 0 }
     });
-    expect(api2.getColumnState().find((s) => s.colId === "id")?.width).toBe(222);
-    expect(api2.getColumnState().find((s) => s.colId === "name")?.hide).toBe(true);
+    expect(api2.columns.getState().find((s) => s.colId === "id")?.width).toBe(222);
+    expect(api2.columns.getState().find((s) => s.colId === "name")?.hide).toBe(true);
     api2.destroy();
     localStorage.clear();
   });
@@ -272,9 +271,9 @@ describe("column state persistence", () => {
         { field: "score", headerName: "Score" }
       ],
       rowData: makeRows(2),
-      columnStateKey: "order-key"
+      persistence: { key: "order-key", sections: ["columns"], debounceMs: 0 }
     });
-    api.moveColumn("score", 0);
+    api.columns.move("score", 0);
     api.destroy();
 
     const host2 = createHost();
@@ -285,7 +284,7 @@ describe("column state persistence", () => {
         { field: "score", headerName: "Score" }
       ],
       rowData: makeRows(2),
-      columnStateKey: "order-key"
+      persistence: { key: "order-key", sections: ["columns"], debounceMs: 0 }
     });
     const headerTexts = Array.from(host2.querySelectorAll(".mach-header-cell--leaf")).map((c) => c.textContent);
     expect(headerTexts[0]).toBe("Score");
@@ -340,13 +339,13 @@ describe("column state persistence", () => {
       ],
       rowData: makeRows(3),
       rowSelection: "single",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.selectNodeById("0");
-    expect(api.getSelectedRows().length).toBe(1);
-    api.selectNodeById("1");
-    expect(api.getSelectedRows().length).toBe(1);
-    expect(api.getSelectedRows()[0].id).toBe("1");
+    api.selection.setById("0");
+    expect(api.selection.getRows().length).toBe(1);
+    api.selection.setById("1");
+    expect(api.selection.getRows().length).toBe(1);
+    expect(api.selection.getRows()[0].id).toBe("1");
     const radio = host.querySelector(".mach-row-checkbox");
     expect(radio?.getAttribute("type")).toBe("radio");
     api.destroy();

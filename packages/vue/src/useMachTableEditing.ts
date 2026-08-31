@@ -72,8 +72,8 @@ export function useMachTableEditing<TData = any>(
       changes.value = [];
       return;
     }
-    dirtyRowIds.value = api.getDirtyRowIds();
-    changes.value = api.getChanges();
+    dirtyRowIds.value = api.editing.getDirtyRowIds();
+    changes.value = api.editing.getChanges();
   };
 
   watch(table.api, (api) => {
@@ -81,7 +81,7 @@ export function useMachTableEditing<TData = any>(
     removeDirtyListener = null;
     refresh();
     if (!api || api.isDestroyed()) return;
-    removeDirtyListener = api.addEventListener("dirtyStateChanged", refresh);
+    removeDirtyListener = api.on("dirtyStateChanged", refresh);
   }, { immediate: true });
 
   const saveDetailed = async (
@@ -95,7 +95,7 @@ export function useMachTableEditing<TData = any>(
     saveError.value = null;
     lastSaveResult.value = null;
     try {
-      const result = await api.saveChangesDetailed(handler, rowIds);
+      const result = await api.editing.save(handler, rowIds);
       lastSaveResult.value = result;
       refresh();
       options.onSaveSuccess?.(result.saved);
@@ -130,20 +130,20 @@ export function useMachTableEditing<TData = any>(
   };
 
   const rollback = (rowIds?: readonly string[]): boolean => {
-    const changed = table.api.value?.rollbackChanges(rowIds) ?? false;
+    const changed = table.api.value?.editing.rollback(rowIds) ?? false;
     refresh();
     return changed;
   };
   const markSaved = (rowIds?: readonly string[]): void => {
-    table.api.value?.markChangesSaved(rowIds);
+    table.api.value?.editing.markSaved(rowIds);
     refresh();
   };
   const reveal = (rowId: string, colId?: string, edit = false): boolean => {
     const api = table.api.value;
-    const node = api?.getNodeById(rowId);
+    const node = api?.rows.getById(rowId);
     if (!api || !node || node.rowIndex < 0) return false;
-    api.scrollToIndex(node.rowIndex, "middle");
-    return colId && edit ? api.startEditingCell({ rowIndex: node.rowIndex, colId }) : true;
+    api.view.scrollToRow(node.rowIndex, "middle");
+    return colId && edit ? api.editing.startCell({ rowIndex: node.rowIndex, colId }) : true;
   };
 
   const onBeforeUnload = (event: BeforeUnloadEvent): string | undefined => {

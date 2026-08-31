@@ -33,7 +33,7 @@ function createRangeGrid(overrides: Partial<Parameters<typeof createGrid<Row>>[1
     columnDefs,
     rowData: makeRows(6),
     enableRangeSelection: true,
-    getRowId: (p) => p.data.id,
+    rowKey: (row) => row.id,
     ...overrides
   });
   return { api, host };
@@ -68,7 +68,7 @@ describe("range selection", () => {
     cellAt(host, 2, "score").dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
     window.dispatchEvent(new MouseEvent("mouseup"));
 
-    const range = api.getRangeSelection();
+    const range = api.selection.getRange();
     expect(range).toEqual({ row1: 0, row2: 2, colId1: "name", colId2: "score" });
     expect(host.querySelectorAll(".mach-cell--range").length).toBe(6);
     expect(host.querySelectorAll(".mach-cell--range-top").length).toBe(2);
@@ -82,10 +82,10 @@ describe("range selection", () => {
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", shiftKey: true, bubbles: true, cancelable: true }));
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true, cancelable: true }));
 
-    expect(api.getRangeSelection()).toEqual({ row1: 1, row2: 2, colId1: "id", colId2: "name" });
+    expect(api.selection.getRange()).toEqual({ row1: 1, row2: 2, colId1: "id", colId2: "name" });
 
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-    expect(api.getRangeSelection()).toBeNull();
+    expect(api.selection.getRange()).toBeNull();
     expect(host.querySelectorAll(".mach-cell--range").length).toBe(0);
     api.destroy();
   });
@@ -93,7 +93,7 @@ describe("range selection", () => {
   it("emits rangeSelectionChanged events", () => {
     const listener = vi.fn();
     const { api, host } = createRangeGrid();
-    api.addEventListener("rangeSelectionChanged", listener);
+    api.on("rangeSelectionChanged", listener);
     cellAt(host, 0, "name").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener.mock.calls[0][0].range).toEqual({ row1: 0, row2: 0, colId1: "name", colId2: "name" });
@@ -132,9 +132,9 @@ describe("clipboard copy/paste", () => {
     (host.querySelector(".mach-root") as HTMLElement).dispatchEvent(ev);
 
     expect(captured).toBe("n0\nn1");
-    expect(api.getNodeById("0")?.data?.name).toBeNull();
-    expect(api.getNodeById("1")?.data?.name).toBeNull();
-    expect(api.getNodeById("0")?.data?.score).toBe(1);
+    expect(api.rows.getById("0")?.data?.name).toBeNull();
+    expect(api.rows.getById("1")?.data?.name).toBeNull();
+    expect(api.rows.getById("0")?.data?.score).toBe(1);
     api.destroy();
   });
 
@@ -149,10 +149,10 @@ describe("clipboard copy/paste", () => {
     });
     (host.querySelector(".mach-root") as HTMLElement).dispatchEvent(ev);
 
-    expect(api.getNodeById("0")?.data?.name).toBe("pasted");
-    expect(api.getNodeById("0")?.data?.score).toBe(42);
-    expect(api.getNodeById("1")?.data?.name).toBe("rows2");
-    expect(api.getNodeById("1")?.data?.score).toBe(7);
+    expect(api.rows.getById("0")?.data?.name).toBe("pasted");
+    expect(api.rows.getById("0")?.data?.score).toBe(42);
+    expect(api.rows.getById("1")?.data?.name).toBe("rows2");
+    expect(api.rows.getById("1")?.data?.score).toBe(7);
     expect(changed).toHaveBeenCalledTimes(4);
 
     const row0 = host.querySelector('.mach-row[data-index="0"]');
@@ -169,9 +169,9 @@ describe("clipboard copy/paste", () => {
       new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true })
     );
 
-    expect(api.getNodeById("0")?.data?.name).toBeNull();
-    expect(api.getNodeById("1")?.data?.score).toBeNull();
-    expect(api.getNodeById("0")?.data?.id).toBe("0");
+    expect(api.rows.getById("0")?.data?.name).toBeNull();
+    expect(api.rows.getById("1")?.data?.score).toBeNull();
+    expect(api.rows.getById("0")?.data?.id).toBe("0");
     api.destroy();
   });
 
@@ -190,7 +190,7 @@ describe("clipboard copy/paste", () => {
     const pasteEv = new Event("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(pasteEv, "clipboardData", { value: { getData: () => "x" } });
     (host.querySelector(".mach-root") as HTMLElement).dispatchEvent(pasteEv);
-    expect(api.getNodeById("0")?.data?.name).toBe("n0");
+    expect(api.rows.getById("0")?.data?.name).toBe("n0");
     api.destroy();
   });
 });
@@ -227,13 +227,13 @@ describe("column virtualization", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: manyCols,
       rowData: makeRows(10),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const viewport = host.querySelector(".mach-body-viewport--scroll") as HTMLElement;
     Object.defineProperty(viewport, "clientWidth", { value: 800, configurable: true });
     Object.defineProperty(viewport, "scrollLeft", { value: 0, configurable: true, writable: true });
-    api.refreshLayout();
+    api.view.refreshLayout();
 
     const row0 = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     const cells = Array.from(row0.querySelectorAll(".mach-cell")) as HTMLElement[];
@@ -242,7 +242,7 @@ describe("column virtualization", () => {
     expect(cells.every((c) => c.style.display !== "none")).toBe(true);
 
     Object.defineProperty(viewport, "scrollLeft", { value: 3600, configurable: true });
-    api.refreshLayout();
+    api.view.refreshLayout();
     const row0b = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     const cellsB = Array.from(row0b.querySelectorAll(".mach-cell")) as HTMLElement[];
     expect(cellsB.length).toBeLessThan(30);
@@ -262,7 +262,7 @@ describe("column virtualization", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: cols,
       rowData: makeRows(3),
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const row0 = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     const hidden = Array.from(row0.querySelectorAll(".mach-cell")).filter((c) => (c as HTMLElement).style.display === "none");

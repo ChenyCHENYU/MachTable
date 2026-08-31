@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createMachTableCommands, type GridOptions, type MachTableCommands } from "@agile-team/mach-table";
-import { useMachGrid, type UseMachGridReturn } from "./useMachGrid";
+import { useMachTable, type UseMachTableReturn } from "./useMachTable";
 import { useMachTableEditing, type UseMachTableEditingOptions, type UseMachTableEditingReturn } from "./useMachTableEditing";
 import type { UseMachTableQueryReturn } from "./useMachTableQuery";
 
@@ -12,7 +12,7 @@ export interface UseMachTableControllerOptions<TData> {
 }
 
 export interface UseMachTableControllerReturn<TData> {
-  table: UseMachGridReturn<TData>;
+  table: UseMachTableReturn<TData>;
   query: UseMachTableQueryReturn<TData> | null;
   editing: UseMachTableEditingReturn<TData>;
   bindings: GridOptions<TData>;
@@ -30,7 +30,7 @@ export interface UseMachTableControllerReturn<TData> {
 export function useMachTableController<TData>(
   options: UseMachTableControllerOptions<TData> = {}
 ): UseMachTableControllerReturn<TData> {
-  const table = useMachGrid<TData>();
+  const table = useMachTable<TData>();
   const editing = useMachTableEditing(table, options.editing);
   const [search, setSearch] = useState(options.initialSearch ?? "");
   const [localSelection, setLocalSelection] = useState<TData[]>([]);
@@ -39,19 +39,19 @@ export function useMachTableController<TData>(
   useEffect(() => {
     const api = table.api;
     if (!api || api.isDestroyed() || query) return;
-    const sync = () => setLocalSelection(api.getSelectedRows());
+    const sync = () => setLocalSelection(api.selection.getRows());
     sync();
-    return api.addEventListener("selectionChanged", sync);
+    return api.on("selectionChanged", sync);
   }, [query, table.api]);
   useEffect(() => {
-    if (!query) table.apiRef.current?.setQuickFilter(search || null);
+    if (!query) table.apiRef.current?.filtering.setQuickText(search || null);
     else query.setQuickFilterText(search || null);
   }, [query, search, table.apiRef]);
 
   const reload = useMemo(() => async (): Promise<void> => {
     if (query) await query.reload();
-    else if (table.apiRef.current?.isInfinite()) await table.apiRef.current.reload();
-    else table.apiRef.current?.refreshCells();
+    else if (table.apiRef.current?.rows.isRemote()) await table.apiRef.current.rows.reload();
+    else table.apiRef.current?.view.refreshCells();
   }, [query, table.apiRef]);
   const commands = useMemo(() => createMachTableCommands<TData>({
     getApi: () => table.apiRef.current,

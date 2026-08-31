@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: { index: "src/index.ts", worker: "src/worker.ts" },
+  entry: { index: "src/index.ts", adapter: "src/adapter.ts", worker: "src/worker.ts" },
   format: ["esm", "cjs"],
   splitting: false,
   dts: process.env.MACH_TABLE_DTS !== "false",

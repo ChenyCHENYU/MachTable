@@ -1,7 +1,13 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: { index: "src/index.ts", workflows: "src/workflows.ts", worker: "src/worker.ts" },
+  entry: {
+    index: "src/index.ts",
+    workflows: "src/workflows.ts",
+    adapters: "src/adapterEntry.ts",
+    ui: "src/ui.ts",
+    worker: "src/worker.ts"
+  },
   splitting: true,
   format: ["esm", "cjs"],
   dts: process.env.MACH_TABLE_DTS !== "false",
@@ -9,7 +15,7 @@ export default defineConfig({
   clean: true,
   minify: true,
   target: "es2020",
-  external: ["react", "react-dom", "@agile-team/mach-table", "@agile-team/mach-table/worker"],
+  external: ["react", "react-dom", "@agile-team/mach-table", "@agile-team/mach-table/adapter", "@agile-team/mach-table/worker"],
   outExtension({ format }) {
     return { js: format === "esm" ? ".js" : ".cjs" };
   }

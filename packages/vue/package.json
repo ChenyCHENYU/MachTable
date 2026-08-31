@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-vue",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "description": "Official Vue 3 adapter for the MachTable enterprise data grid",
   "keywords": [
     "vue",
@@ -60,6 +60,16 @@
       "require": {
         "types": "./dist/workflows.d.cts",
         "default": "./dist/workflows.cjs"
+      }
+    },
+    "./adapters": {
+      "import": {
+        "types": "./dist/adapters.d.ts",
+        "default": "./dist/adapters.js"
+      },
+      "require": {
+        "types": "./dist/adapters.d.cts",
+        "default": "./dist/adapters.cjs"
       }
     },
     "./worker": {

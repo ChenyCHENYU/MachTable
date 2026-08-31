@@ -37,7 +37,9 @@ for (const example of examples) {
     await expect(grid).toHaveAttribute("aria-activedescendant", await focused.getAttribute("id") ?? "__missing__");
 
     const editable = page.locator('.mach-row[data-index="0"] .mach-cell[aria-readonly="false"]:visible').first();
-    await editable.dblclick();
+    const editTrigger = editable.getByRole("button", { name: "Edit cell" });
+    if (await editTrigger.count()) await editTrigger.click();
+    else await editable.dblclick();
     const editor = page.locator(".mach-cell--editing input").first();
     await expect(editor).toBeVisible();
     await editor.fill("E2E-EDITED");
@@ -75,12 +77,14 @@ test("vanilla resizes a column and restores the completed width", async ({ page 
   await page.mouse.up();
 
   await expect.poll(async () => (await header.boundingBox())?.width).toBeCloseTo(before.width + 56, 0);
-  const savedWidth = await page.evaluate(() => {
-    const raw = localStorage.getItem("mach-table:col-state:demo-main-grid");
-    const state = raw ? JSON.parse(raw) : null;
-    return state?.columns?.find((column: { colId: string }) => column.colId === "code")?.width;
+  const readSavedWidth = () => page.evaluate(() => {
+    const raw = localStorage.getItem("mach-table:grid-state:demo-main-grid");
+    const payload = raw ? JSON.parse(raw) : null;
+    return payload?.state?.columns?.find((column: { colId: string }) => column.colId === "code")?.width as number | undefined;
   });
-  expect(savedWidth).toBeCloseTo(before.width + 56, 0);
+  await expect.poll(readSavedWidth).toBeCloseTo(before.width + 56, 0);
+  const savedWidth = await readSavedWidth();
+  if (savedWidth == null) throw new Error("resized column width was not persisted");
 
   await page.reload({ waitUntil: "domcontentloaded" });
   const restored = await page.locator('.mach-header-cell[data-col-id="code"]').first().boundingBox();

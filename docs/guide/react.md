@@ -1,160 +1,135 @@
-# React 接入
+# React 18+ 接入
 
-`@agile-team/mach-table-react` 以 `<MachTable>` 为规范组件名，要求 React / React DOM ≥ 18。`RobotGrid` 在 0.x 期间保留为弃用别名。
-
-## 安装
+`@agile-team/mach-table-react` 要求 React 与 React DOM ≥ 18。适配包自动依赖 Core，并重导出公共类型和能力。
 
 ```bash
 pnpm add @agile-team/mach-table-react
 ```
 
-适配包会自动安装匹配版本的 Core，并重导出完整 API、类型和主题样式；业务代码无需直接依赖 Core。
-
-## 选择加载模式
-
-React 没有 Vue `app.use()` 式的全局组件注册。把组件放入 Context 或挂到全局变量会削弱类型推断、测试隔离和代码分割，因此 MachTable 遵循 React 官方组件组合方式。
-
-### 路由页面内导入（推荐默认）
-
-如果页面由 React Router、TanStack Router 或框架路由懒加载，在该页面正常导入 `MachTable`，表格会自动进入页面 chunk。
-
-### 表格组件独立懒加载
-
-MachTable 提供默认组件导出，可直接交给 `React.lazy`：
-
-```tsx
-import { lazy, Suspense } from "react";
+```ts
+// 应用入口只引入一次
 import "@agile-team/mach-table-react/styles.css";
-
-const MachTable = lazy(() => import("@agile-team/mach-table-react"));
-
-export function OrdersPage() {
-  return (
-    <Suspense fallback={<div>正在加载表格...</div>}>
-      <MachTable columnDefs={columnDefs} rowData={rowData} />
-    </Suspense>
-  );
-}
-```
-
-CSS 在应用入口引入一次；只有表格 JS 与 Core 随异步边界加载。类型可以继续使用 `import type`，编译后不会产生运行时代码。
-
-## 全局与路由默认值
-
-React 不注册全局组件，但可以用 `MachTableProvider` 统一配置。Provider 可嵌套，离表格最近的配置覆盖上层，组件 props 最终优先：
-
-```tsx
-import { MachTableProvider } from "@agile-team/mach-table-react";
-
-root.render(
-  <MachTableProvider config={machTableConfig}>
-    <App />
-  </MachTableProvider>
-);
 ```
 
 ## 基础用法
 
 ```tsx
-import { useRef, useState } from "react";
-import "@agile-team/mach-table-react/styles.css";
-import { MachTable, type GridApi, type ColDef } from "@agile-team/mach-table-react";
+import { useMemo } from "react";
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
 
 interface Employee { id: string; name: string; salary: number }
 
-export default function Page() {
-  const [count, setCount] = useState(0);
-  const apiRef = useRef<GridApi<Employee> | null>(null);
-
-  const columnDefs: ColDef<Employee>[] = [
-    { colId: "sel", headerName: "", width: 46, checkboxSelection: true },
+export function Employees({ rows }: { rows: Employee[] }) {
+  const table = useMachTable<Employee>();
+  const columns = useMemo<ColDef<Employee>[]>(() => [
+    { colId: "select", width: 46, checkboxSelection: true },
     { field: "name", headerName: "姓名", flex: 1, editable: true },
-    { field: "salary", headerName: "薪资", width: 140, filter: "number", type: "rightAligned" }
-  ];
+    { field: "salary", headerName: "薪资", width: 140, filter: "number", align: "right" }
+  ], []);
 
   return (
     <div style={{ height: 600 }}>
       <MachTable<Employee>
-        apiRef={apiRef}
-        columnDefs={columnDefs}
+        apiRef={table.apiRef}
+        columnDefs={columns}
         rowData={rows}
-        rowSelection="multiple"
         rowKey="id"
-        stateKey="employees-list"
+        rowSelection="multiple"
         enableColumnResize
-        stripedRows
-        onSelectionChanged={(e) => setCount(e.selectedRows.length)}
-        onCellValueChanged={(e) => console.log(e.colDef.field, e.oldValue, "→", e.newValue)}
+        persistence={{ key: "tenant:user:employees" }}
+        onSelectionChanged={(event) => console.log(event.selectedRows.length)}
       />
-      <span>已选 {count} 行</span>
     </div>
   );
 }
 ```
 
-## Props
+`useMachTable()` 返回：
 
-`MachTableReactProps<TData> = Omit<GridOptions<TData>, adapterOnlyProps> & { className?, gridClassName?, style?, apiRef? }`
-
-- **所有 GridOptions 项都是 props**（camelCase），完整清单见 [GridOptions](/api/grid-options)
-- 事件既可用 `onCellClicked` 等 props，也可 `api.addEventListener`
-- `apiRef`（`MutableRefObject<GridApi | null>`）在 grid ready 后被赋值；也可用 `onGridReady` 事件
-- `className` 作用于 React 宿主，`gridClassName` 作用于内部 `.mach-root`
-
-## 响应式更新语义
-
-| Prop 变化 | 行为 |
-| --- | --- |
-| `rowData`（引用变化） | `api.setRowData` 全量替换 |
-| `columnDefs`（引用变化） | `api.setColumnDefs`（列宽/顺序/显隐状态保留） |
-| `quickFilterText` | `api.setQuickFilter` |
-| 尺寸、主题、选择、摘要、固定行、提示、状态栏、覆盖层等行为项 | `api.updateOptions` 增量应用 |
-| 事件回调变化 | 自动绑定最新闭包（无需 key 重挂） |
-
-组件挂载时创建 grid、卸载时自动 `destroy`，StrictMode 双挂载安全。
-
-## React 单元格渲染器
+- `apiRef`：传给组件，不触发不必要渲染。
+- `api`：挂载后的响应式领域 API，适合渲染按钮状态。
+- `ready`：首个布局帧和 `gridReady` 完成后为 `true`。
 
 ```tsx
-import { reactCellRenderer } from "@agile-team/mach-table-react";
-
-function SalaryCell(props: { value: number }) {
-  const color = props.value > 25000 ? "#dc2626" : "#16a34a";
-  return <strong style={{ color }}>¥{props.value.toLocaleString()}</strong>;
-}
-
-const columnDefs: ColDef<Employee>[] = [
-  { field: "salary", headerName: "薪资", cellRenderer: reactCellRenderer(SalaryCell) }
-];
+<button disabled={!table.ready} onClick={() => table.api?.editing.undo()}>
+  撤销
+</button>
 ```
 
-::: warning 性能提示
-`reactCellRenderer` 每个可见单元格一个 React root，适合低频/富交互单元格。纯文本格式化请优先用 `valueFormatter`（零开销），或 `cellRenderer` 返回字符串。
-:::
+对象型列定义和配置建议使用 `useMemo` 保持引用稳定。适配器会比较 Option 值，仅把实际变化合并为一次 `updateOptions()`；事件调用始终读取最新闭包。组件卸载与 StrictMode 重挂载会安全销毁实例。
 
-## 明细行渲染 React 组件
+## 应用与路由配置
 
-```tsx
-import { reactDetailRenderer } from "@agile-team/mach-table-react";
+React 不提供全局组件注册，使用类型安全的 Provider 管理应用约定：
 
-<MachTable
-  masterDetail
-  detailRowHeight={280}
-  detailRowRenderer={reactDetailRenderer(OrderDetailPanel)}
-  ...
-/>
+```ts
+// src/config/mach-table.config.ts
+import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-react";
+
+export default defineMachTableConfig({
+  defaults: {
+    size: "compact",
+    columnLayout: "fit",
+    enableColumnResize: true,
+    defaultColDef: { sortable: true, filter: true, resizable: true }
+  },
+  defaultPreset: "list",
+  presets: {
+    list: defineMachTablePreset({ stripedRows: true }),
+    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+  }
+});
 ```
 
-展开时挂载、收起时卸载，`destroy` 自动调用。
+```tsx
+<MachTableProvider config={machTableConfig}>
+  <App />
+</MachTableProvider>
+```
 
-## 远程查询、编辑与标准工具栏
+Provider 可以按路由/布局嵌套，最近一层覆盖外层，表格 props 优先级最高。配置对象放在模块级或用 `useMemo` 稳定引用。详见[配置中心](/guide/configuration)。
 
-页面工作流从独立子入口按需加载。React Hooks 必须无条件调用，因此先创建 query，再传给 controller：
+## 路由级按需加载
+
+路由本身懒加载时，页面内普通 import 已进入路由 chunk。需要表格独立边界时可直接使用默认导出：
 
 ```tsx
-import { MachTable, MachTableToolbar } from "@agile-team/mach-table-react";
-import { useMachTableQuery, useMachTableController } from "@agile-team/mach-table-react/workflows";
+import { lazy, Suspense } from "react";
 
+const MachTable = lazy(() => import("@agile-team/mach-table-react"));
+
+<Suspense fallback={<TableSkeleton />}>
+  <MachTable columnDefs={columns} rowData={rows} rowKey="id" />
+</Suspense>
+```
+
+## Props 与事件
+
+`MachTableReactProps<T>` 包含全部 `GridOptions<T>`，并增加：
+
+- `className`、`style`：React 宿主元素。
+- `gridClassName`：内部 grid 根元素。
+- `gridAriaLabel/gridAriaLabelledBy/gridAriaDescribedBy`：内部可访问语义。
+- `apiRef`：`MutableRefObject<GridApi<T> | null>`。
+
+事件可通过 `onCellClicked`、`onGridReady` 等 props 接收，也可以用 `api.on()` 动态订阅。
+
+## 远程查询、编辑与控制器
+
+页面工作流位于独立子入口：
+
+```tsx
+import {
+  useMachTableQuery,
+  useMachTableEditing,
+  useMachTableController
+} from "@agile-team/mach-table-react/workflows";
+import { MachTableToolbar } from "@agile-team/mach-table-react/ui";
+```
+
+React Hook 必须无条件调用，因此先创建 query，再传给 controller：
+
+```tsx
 const query = useMachTableQuery<Order, Filters>({
   query: filters,
   queryKey: filters,
@@ -162,44 +137,49 @@ const query = useMachTableQuery<Order, Filters>({
   request: orderApi.page,
   mode: "manual"
 });
+
 const controller = useMachTableController<Order>({ query });
 
-<MachTableToolbar
-  api={controller.table.api}
-  commands={controller.commands}
-  search={controller.search}
-  onSearchChange={controller.setSearch}
-  loading={controller.busy}
-/>;
-<MachTable apiRef={controller.table.apiRef} {...controller.bindings} />;
+return <>
+  <MachTableToolbar
+    api={controller.table.api}
+    commands={controller.commands}
+    search={controller.search}
+    onSearchChange={controller.setSearch}
+    loading={controller.busy}
+  />
+  <MachTable<Order>
+    apiRef={controller.table.apiRef}
+    columnDefs={columns}
+    {...controller.bindings}
+  />
+</>;
 ```
 
-详见[控制器与标准工具栏](/recipes/controller-toolbar)和[远程查询](/recipes/remote-query)。
+`useMachTableQuery` 管理请求取消、过期响应、服务端分页、加载/空/错状态与跨页选择；`useMachTableEditing` 管理脏数据、部分成功、失败定位和乐观锁冲突。
 
-## useMachGrid Hook（推荐）
+## 自定义 renderer
+
+React 桥接函数从 `/adapters` 导入：
 
 ```tsx
-import { MachTable, useMachGrid } from "@agile-team/mach-table-react";
+import { reactCellRenderer, reactDetailRenderer } from "@agile-team/mach-table-react/adapters";
 
-function Page() {
-  const grid = useMachGrid<Employee>();
-
-  return (
-    <>
-      <MachTable<Employee> apiRef={grid.apiRef} columnDefs={defs} rowData={rows} rowSelection="multiple" />
-      <button disabled={!grid.api} onClick={() => grid.api?.undo()}>撤销</button>
-    </>
-  );
+function SalaryCell({ value }: { value: number }) {
+  return <strong>¥{value.toLocaleString()}</strong>;
 }
+
+const columns = [
+  { field: "salary", cellRenderer: reactCellRenderer(SalaryCell) }
+];
 ```
 
-挂载后 `grid.api` 可用（渲染期安全判空），`grid.apiRef` 兼容现有 props 协议。
+简单文本和格式优先使用 `valueFormatter` 或普通函数 renderer。React 组件适合低频、富交互单元格；适配器会优先调用 renderer 的刷新路径，不能刷新时才重建 root。
 
-## Hooks 风格（状态式）
+## 大型本地数据 Worker
 
-当前推荐 `apiRef` + `onGridReady`。若偏好状态式：
-
-```tsx
-const [api, setApi] = useState<GridApi<Employee> | null>(null);
-<MachTable onGridReady={(e) => setApi(e.api)} ... />
+```ts
+import { createWorkerDataProcessor } from "@agile-team/mach-table-react/worker";
 ```
+
+该入口只在需要大型本地排序/过滤的页面加载，不进入普通列表 chunk。

@@ -38,7 +38,7 @@ const columns: ColDef<Order>[] = [
     :commands="controller.commands"
     :loading="controller.busy.value"
     :selected-count="controller.selectedCount.value"
-    @clear-selection="controller.table.api.value?.deselectAll()"
+    @clear-selection="controller.table.api.value?.selection.clear()"
   >
     <button @click="createOrder">新建订单</button>
   </MachTableToolbar>
@@ -70,7 +70,8 @@ import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
 React 没有全局组件注册；`MachTableProvider` 负责应用/路由配置，普通 import 仍可由路由分包和 tree-shaking 优化。
 
 ```tsx
-import { MachTable, MachTableToolbar } from "@agile-team/mach-table-react";
+import { MachTable } from "@agile-team/mach-table-react";
+import { MachTableToolbar } from "@agile-team/mach-table-react/ui";
 import { useMachTableController } from "@agile-team/mach-table-react/workflows";
 
 function OrdersPage({ rows }: { rows: Order[] }) {
@@ -83,7 +84,7 @@ function OrdersPage({ rows }: { rows: Order[] }) {
       onSearchChange={controller.setSearch}
       loading={controller.busy}
       selectedCount={controller.selectedCount}
-      onClearSelection={() => controller.table.apiRef.current?.deselectAll()}
+      onClearSelection={() => controller.table.apiRef.current?.selection.clear()}
       start={<button onClick={createOrder}>新建订单</button>}
     />
     <div style={{ height: 560 }}>
@@ -93,7 +94,7 @@ function OrdersPage({ rows }: { rows: Order[] }) {
         columnDefs={columns}
         rowData={rows}
         rowKey="id"
-        stateKey="orders-list"
+        :persistence="{ key: 'tenant:user:orders-list' }"
       />
     </div>
   </>;
@@ -140,8 +141,8 @@ const features = {
 
 - 默认 `domLayout: "normal"` 使用虚拟滚动，宿主容器必须有高度，适合大多数列表。
 - `domLayout: "autoHeight"` 会渲染全部客户端行，只用于弹窗详情、打印预览和几十/几百行的小表；不能和 `datasource` 混用。
-- `stateKey` 自动保存列、排序、过滤、分页、选择和展开状态。跨账号/多租户系统应把用户或租户维度放进 key，或注入自定义 `stateStore`。
-- `getRowId` 与 `rowKey` 同时存在时，以 `getRowId` 为准；简单主键优先使用 `rowKey`。
+- `persistence` 自动保存指定区段或完整工作区。跨账号/多租户系统应把用户或租户维度放进 key，可通过 `store` 注入后端或 IndexedDB。
+- `rowKey` 可以是字段路径或 `(row) => id`，必须保持稳定且全数据集唯一。
 
 ## 推荐页面颗粒度
 

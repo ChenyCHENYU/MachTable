@@ -1,89 +1,67 @@
 # Vue 3 接入
 
-`@agile-team/mach-table-vue` 以 `<MachTable>` 为规范组件名，要求 Vue ≥ 3.2。旧名称 `<RobotGrid>` 在 0.x 期间保留为弃用别名，新代码请使用 `MachTable`。
-
-## 安装
+`@agile-team/mach-table-vue` 要求 Vue ≥ 3.2。规范组件名只有 `<MachTable>`；适配包自动依赖 Core，并重导出公共类型和能力。
 
 ```bash
 pnpm add @agile-team/mach-table-vue
 ```
 
-适配包会自动安装匹配版本的 Core，并重导出完整 API、类型和主题样式；业务代码无需直接依赖 Core。
+```ts
+// main.ts：只引入一次
+import "@agile-team/mach-table-vue/styles.css";
+```
 
-## 选择组件注入模式
+## 三种接入模式
 
 ### 局部导入
 
-只有少量页面使用表格时，在页面中正常导入 `MachTable`。如果页面本身由 Vue Router 懒加载，表格代码会自然进入该路由 chunk，通常无需额外配置。
+只有少量路由使用表格时，在页面正常 import。若路由本身懒加载，表格自然进入路由 chunk。
 
-### 全局同步注入
+```vue
+<script setup lang="ts">
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
 
-大量页面都使用表格时，在应用入口注册一次，任意模板即可直接使用 `<MachTable>`。旧项目仍可使用 0.x 兼容别名 `<RobotGrid>`，新代码不再推荐该名称：
+interface Order { id: string; product: string; amount: number }
+const table = useMachTable<Order>();
+const columns: ColDef<Order>[] = [
+  { field: "product", headerName: "产品", flex: 1, editable: true },
+  { field: "amount", headerName: "金额", width: 140, filter: "number" }
+];
+</script>
 
-```ts
-// main.ts
-import { createApp } from "vue";
-import { MachTablePlugin } from "@agile-team/mach-table-vue";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
-
-createApp(App).use(MachTablePlugin).mount("#app");
+<template>
+  <div style="height: 600px">
+    <MachTable
+      :ref="table.ref"
+      :column-defs="columns"
+      :row-data="rows"
+      row-key="id"
+    />
+  </div>
+</template>
 ```
 
-推荐把跨页面一致的配置放进独立的 `src/config/mach-table.config.ts`；应用入口只保留一行安装，单表 props 仍会覆盖全局值：
+### 同步全局插件
+
+大多数页面都使用表格时，在入口注册一次，任意模板直接使用 `<MachTable>`。
 
 ```ts
-// src/config/mach-table.config.ts
-import { defineMachTableConfig } from "@agile-team/mach-table-vue";
-
-export default defineMachTableConfig({
-  defaults: {
-    size: "compact",
-    pagination: false,
-    enableColumnResize: true,
-    defaultColDef: { sortable: true, resizable: true, filter: true },
-    onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
-  }
-});
-
-// main.ts
+import { createApp } from "vue";
+import { MachTablePlugin } from "@agile-team/mach-table-vue";
 import machTableConfig from "@/config/mach-table.config";
+
 createApp(App).use(MachTablePlugin, machTableConfig).mount("#app");
 ```
 
-命名预设、语义列类型、动态路由配置、覆盖优先级和配置诊断见[配置中心与覆盖规则](/guide/configuration)。布局或路由可调用 `provideMachTableConfig(...)`，只覆盖默认值时也可继续使用 `provideMachTableDefaults(...)`。
+### 异步全局插件
 
-默认全局名称已包含 Volar / `vue-tsc` 类型。需要统一业务命名时可以配置：
-
-```ts
-app.use(MachTablePlugin, {
-  componentName: "BusinessTable",
-  registerRobotGridAlias: false
-});
-```
-
-### 全局异步注入（大型项目推荐）
-
-应用启动时只注册异步边界，首次真正渲染表格时才请求 Vue 适配组件与 Core：
+中后台平台希望保持首屏轻量时，注册异步边界，组件与 Core 在第一次渲染表格时加载。
 
 ```ts
-// main.ts
-import { createApp } from "vue";
 import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
 
-createApp(App).use(AsyncMachTablePlugin).mount("#app");
-
-// 可选：路由 hover、空闲时段或权限菜单预取时调用。
-void preloadMachTable();
-```
-
-生产项目可配置异步加载/错误边界：
-
-```ts
 app.use(AsyncMachTablePlugin, {
-  defaults: { size: "compact" },
+  ...machTableConfig,
   asyncComponentOptions: {
     loadingComponent: GridLoading,
     errorComponent: GridLoadError,
@@ -95,157 +73,95 @@ app.use(AsyncMachTablePlugin, {
     }
   }
 });
+
+// 可选：在路由 hover 时预取；重复调用安全。
+void preloadMachTable();
 ```
 
-页面无需运行时 import 组件：
+样式仍应同步引入，避免异步组件首次出现无样式闪烁。
 
-```vue
-<template>
-  <MachTable :column-defs="columnDefs" :row-data="rowData" />
-</template>
+## 专用配置文件
+
+```ts
+// src/config/mach-table.config.ts
+import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-vue";
+
+export default defineMachTableConfig({
+  defaults: {
+    size: "compact",
+    columnLayout: "fit",
+    enableColumnResize: true,
+    defaultColDef: { sortable: true, filter: true, resizable: true }
+  },
+  defaultPreset: "list",
+  presets: {
+    list: defineMachTablePreset({ stripedRows: true }),
+    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+  }
+});
 ```
 
-主题 CSS 约 6.4 KB gzip，建议始终在应用入口同步引入，避免异步组件出现无样式闪烁。`preloadMachTable()` 使用浏览器模块缓存，多次调用是安全的。
+路由或布局可以响应式叠加：
 
-## 基础用法
-
-```vue
-<script setup lang="ts">
-import { ref } from "vue";
-import "@agile-team/mach-table-vue/styles.css";
-import { MachTable } from "@agile-team/mach-table-vue";
-import type {
-  CellValueChangedEvent,
-  ColDef,
-  GridApi,
-  SelectionChangedEvent
-} from "@agile-team/mach-table-vue";
-
-interface Order { id: string; product: string; qty: number; region: string }
-
-const rowData = ref<Order[]>([]);
-const grid = ref<{ getApi: () => GridApi<Order> | null } | null>(null);
-const selectedCount = ref(0);
-
-const columnDefs: ColDef<Order>[] = [
-  { colId: "sel", headerName: "", width: 46, checkboxSelection: true },
-  { field: "product", headerName: "产品", flex: 1, editable: true, filter: "text" },
-  { field: "qty", headerName: "数量", width: 100, filter: "number", editable: true },
-  { field: "region", headerName: "区域", width: 110, filter: "set" }
-];
-
-const onSelectionChanged = (event: SelectionChangedEvent<Order>) => {
-  selectedCount.value = event.selectedRows.length;
-};
-const onCellValueChanged = (event: CellValueChangedEvent<Order>) => {
-  console.info(event.colDef.field, event.newValue);
-};
-</script>
-
-<template>
-  <div style="height: 600px">
-    <MachTable
-      ref="grid"
-      :column-defs="columnDefs"
-      :row-data="rowData"
-      row-selection="multiple"
-      row-key="id"
-      state-key="orders-list"
-      striped-rows
-      @selection-changed="onSelectionChanged"
-      @cell-value-changed="onCellValueChanged"
-    />
-  </div>
-</template>
+```ts
+provideMachTableConfig(() => ({
+  defaults: { theme: dark.value ? "dark" : "light" }
+}));
 ```
 
-## Props / Emits / Expose
+优先级为应用配置 → 路由/布局配置 → 命名预设 → 当前表格 props。详见[配置中心](/guide/configuration)。
 
-**Props**：所有 GridOptions 项均声明为 props（kebab-case 传参），完整清单见 [GridOptions](/api/grid-options)。
+## Props、事件和暴露实例
 
-`class` / `style` / `id` / `data-*` / `aria-*` 等普通属性透传到宿主元素；`grid-class-name` 单独作用于内部 `.mach-root`。
-
-**Emits**：`EVENT_TYPES` 中的全部事件以 camelCase 名 emit，模板中用 kebab-case 监听：
+- 所有 `GridOptions` 都可作为 props；模板使用 kebab-case。
+- `class/style/id/data-*/aria-*` 透传宿主；`grid-class-name` 作用于内部 grid 根元素。
+- Core 事件以 Vue kebab-case 监听，如 `@selection-changed`。
+- 组件暴露 `getApi()`、`getResolvedConfig()` 与 `explainOption()`。
 
 ```vue
 <MachTable
-  @grid-ready="onReady"
-  @cell-clicked="onCell"
-  @selection-changed="onSel"
-  @sort-changed="onSort"
-  @range-selection-changed="onRange"
-  @detail-toggled="onDetail"
+  :ref="table.ref"
+  :column-defs="columns"
+  :row-data="rows"
+  row-key="id"
+  row-selection="multiple"
+  enable-column-resize
+  :persistence="{ key: 'tenant:user:orders' }"
+  @selection-changed="onSelectionChanged"
+  @grid-error="reportGridError"
 />
 ```
 
-**Expose**：`getApi(): GridApi | null` —— 模板 ref 获取命令 API。
-
-## useMachTable 组合式 API（推荐）
-
-免去手动 ref + getApi 模板代码：
-
-```vue
-<script setup lang="ts">
-import { MachTable, useMachTable } from "@agile-team/mach-table-vue";
-
-const mt = useMachTable<Order>();
-
-function exportCsv() {
-  mt.api.value?.getDataAsCsv({ prependBOM: true });
-}
-</script>
-
-<template>
-  <MachTable :ref="mt.ref" :column-defs="defs" :row-data="rows" row-selection="multiple" />
-  <span v-if="mt.ready.value">共 {{ mt.api.value?.getTotalRowCount() }} 行</span>
-</template>
-```
-
-## 组合控制器与可选工具栏
-
-`useMachTableController` 把 API 就绪、查询、编辑、选择、忙碌/错误状态和常用命令组合为一个页面控制器。工具栏从独立 `/ui` 入口加载，不增加第二个安装依赖：
+## `useMachTable()`
 
 ```ts
-// main.ts：需要全局标准工具栏时
-import MachTableUiPlugin from "@agile-team/mach-table-vue/ui";
-app.use(MachTableUiPlugin);
+const table = useMachTable<Order>();
+
+function exportCsv() {
+  const csv = table.api.value?.io.exportCsv({ prependBOM: true });
+}
+
+function undo() {
+  table.api.value?.editing.undo();
+}
 ```
 
-```vue
-<script setup lang="ts">
-import { useMachTableController } from "@agile-team/mach-table-vue/workflows";
-const controller = useMachTableController<Order>();
-</script>
+返回：
 
-<template>
-  <MachTableToolbar
-    v-model="controller.search.value"
-    :api="controller.table.api.value"
-    :commands="controller.commands"
-    :selected-count="controller.selectedCount.value"
-  />
-  <MachTable :ref="controller.table.ref" :row-data="rows" :column-defs="columns" row-key="id" />
-</template>
-```
+- `ref`：绑定 `<MachTable :ref="table.ref">`。
+- `api`：挂载后的响应式领域 API，卸载后自动置空。
+- `ready`：首个布局帧和 `gridReady` 完成后为 `true`。
 
-详见[控制器与标准工具栏](/recipes/controller-toolbar)。
+## 原生 slots
 
-## 适配器上下文自动继承
-
-在 `<script setup>` 内调用 `vueCellRenderer` / `vueDetailRenderer` 工厂时会**自动捕获宿主 appContext**：单元格与明细内的 naive / EP 组件可继承 `ConfigProvider` 提供的主题、国际化等注入（也可通过第二参数 `{ appContext }` 显式指定）。这让 naive-ui 集成章节所述的上下文限制不再存在。
-
-## Vue 原生插槽
-
-常用页面不必再手写 renderer 工厂。列以 `colId`（未配置时为 `field`）匹配 `#cell-*`、`#header-*` 和 `#editor-*`；点路径会转换为短横线。
+列通过 `colId`（未配置时为 `field`）匹配 `#cell-*`、`#header-*` 与 `#editor-*`。还支持通用 `#cell/#header/#editor`、`#loading/#empty/#error/#detail/#actions`。
 
 ```vue
 <MachTable :column-defs="columns" :row-data="rows" :loading="loading">
   <template #header-status>订单状态</template>
-
   <template #cell-status="{ value }">
     <ElTag :type="value === 'done' ? 'success' : 'warning'">{{ value }}</ElTag>
   </template>
-
   <template #editor-amount="{ value, setValue, commit, cancel }">
     <ElInputNumber
       :model-value="value"
@@ -254,80 +170,52 @@ const controller = useMachTableController<Order>();
       @keyup.esc="cancel"
     />
   </template>
-
   <template #loading><AppTableSkeleton /></template>
   <template #empty><AppEmpty description="暂无订单" /></template>
-  <template #detail="{ data }"><OrderDetail :order="data" /></template>
 </MachTable>
 ```
 
-通用 `#cell` / `#header` / `#editor` 会作用于所有列；操作列 `colId: "op"` 还可使用 `#actions`。插槽组件继承应用 `appContext`，并在虚拟行复用、覆盖层替换和表格销毁时自动卸载。
+slot 自动继承宿主 appContext，并在虚拟行复用、覆盖层替换和表格销毁时卸载。
 
-`mt.ref` 绑定组件、挂载后 `mt.api` 自动可用、卸载自动置空；`mt.ready` 便于做加载态。
-
-## 响应式更新语义
-
-| Prop 变化 | 行为 |
-| --- | --- |
-| `rowData` | `api.setRowData` 全量替换 |
-| `columnDefs` | `api.setColumnDefs`（列状态保留） |
-| `quickFilterText` | `api.setQuickFilter` |
-| 尺寸/主题/选择/摘要/固定行/提示/状态栏/覆盖层等 | watch → `api.updateOptions` 增量应用 |
-
-`onMounted` 创建、`onBeforeUnmount` 自动 `destroy`。
-
-## Vue 单元格渲染器
+## 可选工作流与 UI
 
 ```ts
-import { h } from "vue";
-import { NTag } from "naive-ui";        // 或 ElTag
-import { vueCellRenderer } from "@agile-team/mach-table-vue";
-
-const columnDefs: ColDef<Order>[] = [
-  {
-    field: "region",
-    headerName: "区域",
-    cellRenderer: vueCellRenderer({
-      render: () => h(NTag, { type: "success", size: "small" }, () => "华东")
-    })
-  }
-];
+import {
+  useMachTableQuery,
+  useMachTableEditing,
+  useMachTableController
+} from "@agile-team/mach-table-vue/workflows";
+import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
 ```
 
-`vueCellRenderer(component)` 直接传 SFC 组件亦可：
+`useMachTableQuery` 管理请求取消、过期响应、分页、加载/空/错状态与跨页选择；`useMachTableEditing` 管理脏数据、部分成功和冲突；`useMachTableController` 将表格、查询、编辑、选择和工具栏命令组合为单个页面控制器。
+
+工具栏需要全局注册时：
 
 ```ts
+import MachTableUiPlugin from "@agile-team/mach-table-vue/ui";
+app.use(MachTableUiPlugin);
+```
+
+## 自定义 renderer 和 editor
+
+框架桥接函数从 `/adapters` 按需导入：
+
+```ts
+import { vueCellRenderer, vueDetailRenderer } from "@agile-team/mach-table-vue/adapters";
 import StatusBadge from "./StatusBadge.vue";
-cellRenderer: vueCellRenderer(StatusBadge)
+
+const columns = [{ field: "status", cellRenderer: vueCellRenderer(StatusBadge) }];
 ```
 
-::: tip 上下文自动继承
-适配器在组件 `setup` 内调用时会自动捕获宿主 appContext —— ConfigProvider 的主题、国际化注入随单元格生效。仅在模块顶层调用（无宿主实例）时才退化为独立根渲染，此时可用第二参数显式指定：`vueCellRenderer(Comp, { appContext })`。
-:::
-
-## 明细行渲染 Vue 组件
+通用 Vue 编辑器与 Element Plus 工厂从 `/editors` 导入：
 
 ```ts
-import { vueDetailRenderer } from "@agile-team/mach-table-vue";
-import OrderDetailPanel from "./OrderDetailPanel.vue";
-
-<MachTable master-detail :detail-row-height="280"
-           :detail-row-renderer="vueDetailRenderer(OrderDetailPanel)" ... />
+import { vueCellEditor, createElementPlusEditors } from "@agile-team/mach-table-vue/editors";
 ```
 
-## 自定义编辑器（挂任意 Vue 组件）
+纯文本格式化优先使用 `valueFormatter`，避免为每个可见单元格创建组件实例。
 
-```ts
-import { vueCellEditor } from "@agile-team/mach-table-vue/editors";
+## 响应式更新
 
-const departmentEditor = vueCellEditor(DepartmentSelect, {
-  props: ({ data }) => ({ tenantId: data.tenantId }),
-  focusSelector: "input"
-});
-
-const columns = [
-  { field: "departmentId", editable: true, cellEditor: departmentEditor }
-];
-```
-
-Element Plus 常用编辑器可以一次注册为字符串名称，见[Element Plus 集成](/guide/element-plus)。工厂统一处理 v-model、可选宿主 appContext、聚焦和销毁，不要在每次编辑时手写 `createApp()`。
+适配器只对实际变化的配置调用一次 `api.updateOptions()`。`rowData`、`columnDefs`、主题、密度、覆盖层和事件回调均可响应式更新；卸载时自动取消请求、监听器和渲染器。

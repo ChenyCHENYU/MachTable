@@ -7,9 +7,9 @@
 | 双击 | 默认（列 `editable: true`） |
 | Enter / F2 | 焦点格可编辑时 |
 | 单击 | `singleClickEdit: true`（全局）或列级 `singleClickEdit: true` |
-| 编程式 | `api.startEditingCell({ rowIndex: 0, colId: "name" })` |
+| 编程式 | `api.editing.startCell({ rowIndex: 0, colId: "name" })` |
 
-结束：Enter/Tab/点击他处（保存）；Escape（取消）；`api.stopEditing(cancel?)`。
+结束：Enter/Tab/点击他处（保存）；Escape（取消）；命令式流程使用 `await api.editing.stop({ cancel })`。
 
 可编辑格默认在 hover / 键盘聚焦时显示轻量铅笔入口。进入编辑后，当前格呈现输入框和就地的对勾/取消按钮；对勾与 Enter 走同一条校验提交链路，取消与 Escape 都不会写值：
 
@@ -49,10 +49,10 @@ const options = {
 也可完全由业务按钮控制：
 
 ```ts
-api.startEditingRow(rowIndex);
-api.isRowEditing(rowIndex);
-await api.stopEditingRow(false); // 校验并保存草稿到行数据
-await api.stopEditingRow(true);  // 丢弃整行草稿
+api.editing.startRow(rowIndex);
+api.editing.isRowActive(rowIndex);
+await api.editing.stop();                 // 校验并保存草稿到行数据
+await api.editing.stop({ cancel: true }); // 丢弃整行草稿
 ```
 
 同一表格同一时刻只允许一个编辑会话，避免多行草稿、排序过滤和虚拟滚动之间出现隐式冲突。横向或纵向虚拟滚动会保存整行草稿并在单元格重新出现时恢复编辑器。
@@ -133,13 +133,13 @@ rowEditValidator: async ({ values, data }) => {
   field: "code",
   editable: true,
   validate: async (value) => {
-    const available = await api.checkCode(value);
+    const available = await businessApi.checkCode(value);
     return available ? true : "编码已存在";
   }
 }
 ```
 
-异步校验期间编辑器进入 `aria-busy` 且禁止重复提交；校验失败恢复焦点，取消编辑或组件卸载会让迟到结果失效。命令式流程使用 `await gridApi.stopEditingAsync()`。
+异步校验期间编辑器进入 `aria-busy` 且禁止重复提交；校验失败恢复焦点，取消编辑或组件卸载会让迟到结果失效。命令式流程使用 `await gridApi.editing.stop()`。
 
 ## 自定义编辑器
 
@@ -182,33 +182,33 @@ onRowEditingStarted: (e) => console.log("开始编辑行", e.rowIndex),
 onRowEditingStopped: (e) => console.log("整行结束", e.cancelled, e.changes),
 onCellValueChanged: (e) => {
   // 编辑/粘贴/填充/清除/撤销 统一入口
-  api.autoSizeColumn(e.colDef.colId ?? "");
+  api.columns.autoSize(e.colDef.colId ?? "");
   submitDraft(e.data);
 }
 ```
 
 ## 与撤销联动
 
-每次成功写值自动入撤销栈；`api.undo()` 可回滚（含批量操作整体回滚），详见[撤销/重做](/recipes/undo-redo)。
+每次成功写值自动入撤销栈；`api.editing.undo()` 可回滚（含批量操作整体回滚），详见[撤销/重做](/recipes/undo-redo)。
 
 ## 脏数据、批量保存与回滚
 
 成功写值同时进入变更跟踪，无需业务层另建一份 diff：
 
 ```ts
-api.getDirtyRowIds();
-api.getChanges();
+api.editing.getDirtyRowIds();
+api.editing.getChanges();
 
 try {
-  await api.saveChangesDetailed((changes) => orderApi.saveBatch(changes));
+  await api.editing.save((changes) => orderApi.saveBatch(changes));
 } catch (error) {
   // 保存失败不会清理 dirty 集合，可重试或让用户回滚。
 }
 
-api.rollbackChanges([rowId]);
+api.editing.rollback([rowId]);
 ```
 
-`saveChangesDetailed` 先固定本次快照。若网络请求期间用户把同一格继续从 B 改为 C，服务端确认 B 后，本地仍保留 `B → C` 的待保存变更，不会把新编辑错误地标成已保存。完整失败/冲突协议见[批量保存、失败与版本冲突](/recipes/batch-save)。
+`api.editing.save()` 先固定本次快照。若网络请求期间用户把同一格继续从 B 改为 C，服务端确认 B 后，本地仍保留 `B → C` 的待保存变更，不会把新编辑错误地标成已保存。完整失败/冲突协议见[批量保存、失败与版本冲突](/recipes/batch-save)。
 
 Vue 页面推荐直接使用响应式控制器：
 

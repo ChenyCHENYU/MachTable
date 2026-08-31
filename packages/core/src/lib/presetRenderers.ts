@@ -316,7 +316,7 @@ function reportActionError<TData>(
   action: ActionItem<TData>,
   params: CellRendererParams<TData>
 ): void {
-  const policy = params.api.getGridOption("actionPolicy");
+  const policy = params.api.getOption("actionPolicy");
   try {
     if (policy?.onError) policy.onError(error, actionContext(action, params));
     else console.error("[mach-table] action handler failed", error);
@@ -328,7 +328,7 @@ function reportActionError<TData>(
 function canAccessAction<TData>(action: ActionItem<TData>, params: CellRendererParams<TData>): boolean {
   const permissions = actionPermissions(action);
   if (permissions.length === 0) return true;
-  const policy = params.api.getGridOption("actionPolicy");
+  const policy = params.api.getOption("actionPolicy");
   if (!policy?.canAccess) return true;
   try {
     return policy.canAccess(actionContext(action, params));
@@ -367,7 +367,7 @@ export function createActionButtonsRenderer<TData = any>(config: ActionButtonsCo
           const request = typeof action.confirm === "function" ? await action.confirm(params) : action.confirm;
           if (request === false) return;
           const message = typeof request === "string" ? request : (action.label ?? action.title ?? "Confirm action");
-          const policy = params.api.getGridOption("actionPolicy");
+          const policy = params.api.getOption("actionPolicy");
           const approved = policy?.confirm
             ? await policy.confirm(actionContext(action, params, message))
             : typeof window !== "undefined" && typeof window.confirm === "function"
@@ -416,7 +416,7 @@ export function createActionButtonsRenderer<TData = any>(config: ActionButtonsCo
       const more = document.createElement("button");
       more.type = "button";
       more.className = "mach-action-btn mach-action-btn--icon";
-      const locale = params.api.getGridOption("locale") ?? {};
+      const locale = params.api.getOption("locale") ?? {};
       const moreLabel = config.moreLabel ?? locale.actionMore ?? DEFAULT_LOCALE.actionMore;
       more.title = moreLabel;
       more.setAttribute("aria-label", moreLabel);
@@ -468,7 +468,7 @@ function resolveRowActionLabels<TData>(
   config: RowActionsConfig<TData>,
   params: CellRendererParams<TData>
 ): RowActionLabels {
-  const locale = params.api.getGridOption("locale") ?? {};
+  const locale = params.api.getOption("locale") ?? {};
   return {
     view: actionLabel(config.labels?.view, locale.actionView, DEFAULT_LOCALE.actionView),
     edit: actionLabel(config.labels?.edit, locale.actionEdit, DEFAULT_LOCALE.actionEdit),
@@ -485,14 +485,14 @@ function renderRowEditingActions<TData>(
   labels: RowActionLabels
 ): ReturnType<CellRendererFn> {
   const confirm = async (): Promise<void> => {
-    const committed = await params.api.stopEditingRow(false);
+    const committed = await params.api.editing.stop();
     if (!committed || !config.onSave) return;
-    const changes = params.api.getChanges().filter((change) => change.rowId === params.node.id);
+    const changes = params.api.editing.getChanges().filter((change) => change.rowId === params.node.id);
     try {
       await config.onSave(params, changes);
-      params.api.markChangesSaved([params.node.id]);
+      params.api.editing.markSaved([params.node.id]);
     } catch (error) {
-      params.api.startEditingRow(params.rowIndex);
+      params.api.editing.startRow(params.rowIndex);
       throw error;
     }
   };
@@ -502,7 +502,7 @@ function renderRowEditingActions<TData>(
   return createActionButtonsRenderer<TData>({
     actions: [
       { icon: "check", title: confirmTitle, variant: "primary", onClick: confirm },
-      { icon: "close", title: labels.cancel, onClick: () => params.api.stopEditingRow(true).then(() => undefined) }
+      { icon: "close", title: labels.cancel, onClick: () => params.api.editing.stop({ cancel: true }).then(() => undefined) }
     ],
     overflow: "inline"
   })(params);
@@ -522,7 +522,7 @@ function buildRowActions<TData>(
   if (config.edit !== false) actions.push({
     id: "edit", icon: "edit", title: labels.edit, variant: "warning",
     ...(config.permissions?.edit ? { permission: config.permissions.edit } : {}),
-    onClick: () => { params.api.startEditingRow(params.rowIndex); }
+    onClick: () => { params.api.editing.startRow(params.rowIndex); }
   });
   if (config.onDelete) actions.push({
     id: "delete", icon: "delete", title: labels.delete, variant: "danger",
@@ -537,7 +537,7 @@ function buildRowActions<TData>(
 export function createRowActionsRenderer<TData = any>(config: RowActionsConfig<TData> = {}): CellRendererFn {
   return (params: CellRendererParams<TData>) => {
     const labels = resolveRowActionLabels(config, params);
-    if (params.api.isRowEditing(params.rowIndex)) return renderRowEditingActions(config, params, labels);
+    if (params.api.editing.isRowActive(params.rowIndex)) return renderRowEditingActions(config, params, labels);
     const actions = buildRowActions(config, params, labels);
     return createActionButtonsRenderer<TData>({
       actions,
@@ -551,9 +551,8 @@ export function createRowActionsRenderer<TData = any>(config: RowActionsConfig<T
 
 export const presetStatusTagRenderer = createStatusTagRenderer();
 export const presetProgressBarRenderer = createProgressBarRenderer();
-
-export function registerBuiltinRenderers(register: (name: string, fn: CellRendererFn) => void): void {
-  register("statusTag", presetStatusTagRenderer);
-  register("progressBar", presetProgressBarRenderer);
-  register("link", linkRenderer);
-}
+export const BUILTIN_CELL_RENDERERS: Readonly<Record<string, CellRendererFn>> = Object.freeze({
+  statusTag: presetStatusTagRenderer,
+  progressBar: presetProgressBarRenderer,
+  link: linkRenderer
+});

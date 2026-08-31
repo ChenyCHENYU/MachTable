@@ -45,21 +45,21 @@ describe("header keyboard accessibility", () => {
       columnDefs: defs,
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const header = host.querySelector('.mach-header-cell[data-col-id="name"]') as HTMLElement;
     expect(header.tabIndex).toBe(0);
 
     header.focus();
     key(header, { key: "Enter" });
-    expect(api.getSortModel()).toEqual([{ colId: "name", direction: "asc" }]);
+    expect(api.sorting.getModel()).toEqual([{ colId: "name", direction: "asc" }]);
 
     key(header, { key: "Enter", shiftKey: true });
-    expect(api.getSortModel().length).toBe(1);
-    expect(api.getSortModel()[0].direction).toBe("desc");
+    expect(api.sorting.getModel().length).toBe(1);
+    expect(api.sorting.getModel()[0].direction).toBe("desc");
 
     key(header, { key: "Enter", shiftKey: true });
-    expect(api.getSortModel().length).toBe(0);
+    expect(api.sorting.getModel().length).toBe(0);
     api.destroy();
   });
 
@@ -71,9 +71,9 @@ describe("header keyboard accessibility", () => {
       rowData: rows,
       pagination: false,
       enableColumnResize: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.addEventListener("columnResized", resized);
+    api.on("columnResized", resized);
 
     const header = host.querySelector('.mach-header-cell[data-col-id="name"]') as HTMLElement;
     header.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, cancelable: true }));
@@ -91,9 +91,9 @@ describe("header keyboard accessibility", () => {
       columnDefs: defs,
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.addEventListener("columnMoved", moved);
+    api.on("columnMoved", moved);
     const nameHeader = host.querySelector('.mach-header-cell[data-col-id="name"]') as HTMLElement;
     nameHeader.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowRight", ctrlKey: true, cancelable: true })
@@ -109,7 +109,7 @@ describe("header keyboard accessibility", () => {
       rowData: rows,
       pagination: false,
       suppressHeaderFocus: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const header = host.querySelector('.mach-header-cell[data-col-id="name"]') as HTMLElement;
     expect(header.hasAttribute("tabindex")).toBe(false);
@@ -145,7 +145,7 @@ describe("body keyboard and ARIA accessibility", () => {
       pagination: false,
       rowSelection: "multiple",
       ariaLabel: "Inventory",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const root = host.querySelector('.mach-root') as HTMLElement;
     cellAt(host, 0, "name").dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -172,7 +172,7 @@ describe("body keyboard and ARIA accessibility", () => {
       defaultExpandAll: true,
       pagination: false,
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const root = host.querySelector('.mach-root') as HTMLElement;
     expect(root.getAttribute("role")).toBe("treegrid");
@@ -191,7 +191,7 @@ describe("body keyboard and ARIA accessibility", () => {
       rowData: rows,
       rowSelection: "multiple",
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const checkbox = host.querySelector('.mach-row[data-index="0"] .mach-row-checkbox') as HTMLInputElement;
     checkbox.click();
@@ -211,14 +211,14 @@ describe("async transaction batching", () => {
       rowData: data,
       pagination: false,
       asyncTransactionWaitMillis: 0,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const updated = vi.fn();
-    api.addEventListener("modelUpdated", updated);
-    const p1 = api.applyTransactionAsync({ update: [{ id: "1", name: "first", qty: 10 }] });
-    const p2 = api.applyTransactionAsync({ update: [{ id: "1", name: "second", qty: 20 }] });
+    api.on("modelUpdated", updated);
+    const p1 = api.rows.transactAsync({ update: [{ id: "1", name: "first", qty: 10 }] });
+    const p2 = api.rows.transactAsync({ update: [{ id: "1", name: "second", qty: 20 }] });
     await Promise.all([p1, p2]);
-    expect(api.getNodeById("1")?.data).toEqual({ id: "1", name: "second", qty: 20 });
+    expect(api.rows.getById("1")?.data).toEqual({ id: "1", name: "second", qty: 20 });
     expect(updated).toHaveBeenCalledTimes(1);
     api.destroy();
   });
@@ -232,13 +232,13 @@ describe("versioned grid state", () => {
       rowData: rows,
       pagination: { pageSize: 1 },
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    source.setSortModel([{ colId: "qty", direction: "desc" }]);
-    source.setQuickFilter("b");
-    source.selectNodeById("2", true, false);
-    source.setPage(1);
-    const state = source.getState();
+    source.sorting.setModel([{ colId: "qty", direction: "desc" }]);
+    source.filtering.setQuickText("b");
+    source.selection.setById("2", true, false);
+    source.pagination.setPage(1);
+    const state = source.state.get();
     source.destroy();
 
     const targetHost = createHost();
@@ -248,13 +248,13 @@ describe("versioned grid state", () => {
       pagination: { pageSize: 20 },
       rowSelection: "multiple",
       initialState: state,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    expect(target.getSortModel()).toEqual([{ colId: "qty", direction: "desc" }]);
-    expect(target.getQuickFilter()).toBe("b");
-    expect(target.getPageSize()).toBe(1);
-    expect(target.getSelectedIds()).toEqual(["2"]);
-    expect(target.getState()).toEqual(state);
+    expect(target.sorting.getModel()).toEqual([{ colId: "qty", direction: "desc" }]);
+    expect(target.filtering.getQuickText()).toBe("b");
+    expect(target.pagination.getPageSize()).toBe(1);
+    expect(target.selection.getIds()).toEqual(["2"]);
+    expect(target.state.get()).toEqual(state);
     target.destroy();
   });
 });
@@ -311,11 +311,11 @@ describe("enterprise DX helpers and change tracking", () => {
       rowData: rows,
       pagination: false
     });
-    const column = api.getColumnDefs()?.[0] as ColDef<Row>;
+    const column = api.columns.getDefinitions()?.[0] as ColDef<Row>;
     expect(column.type).toEqual(["numeric", "readonly"]);
     const rendered = document.querySelector<HTMLElement>(".mach-cell[data-col-id='qty']");
     expect(rendered?.classList.contains("mach-cell--right")).toBe(true);
-    expect(api.startEditingCell({ rowIndex: 0, colId: "qty" })).toBe(true);
+    expect(api.editing.startCell({ rowIndex: 0, colId: "qty" })).toBe(true);
     api.destroy();
   });
 
@@ -327,7 +327,7 @@ describe("enterprise DX helpers and change tracking", () => {
       columnDefs: [{ field: "name", editable: true }, { field: "qty" }],
       rowData: data,
       pagination: false,
-      getRowId: (p) => p.data.id,
+      rowKey: (row) => row.id,
       onDirtyStateChanged: dirty
     });
     await api.whenReady();
@@ -336,21 +336,21 @@ describe("enterprise DX helpers and change tracking", () => {
     const input = cell.querySelector("input") as HTMLInputElement;
     input.value = "edited";
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-    expect(api.getDirtyRowIds()).toEqual(["1"]);
-    expect(api.getChanges()[0]).toEqual(expect.objectContaining({
+    expect(api.editing.getDirtyRowIds()).toEqual(["1"]);
+    expect(api.editing.getChanges()[0]).toEqual(expect.objectContaining({
       rowId: "1",
       cells: [expect.objectContaining({ colId: "name", originalValue: "a", value: "edited" })]
     }));
-    expect(api.rollbackChanges()).toBe(true);
+    expect(api.editing.rollback()).toBe(true);
     expect(data[0].name).toBe("a");
-    expect(api.getDirtyRowIds()).toEqual([]);
+    expect(api.editing.getDirtyRowIds()).toEqual([]);
 
     cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     const input2 = cell.querySelector("input") as HTMLInputElement;
     input2.value = "saved";
     input2.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-    api.markChangesSaved(["1"]);
-    expect(api.getChanges()).toEqual([]);
+    api.editing.markSaved(["1"]);
+    expect(api.editing.getChanges()).toEqual([]);
     expect(dirty).toHaveBeenCalled();
     api.destroy();
   });
@@ -362,34 +362,34 @@ describe("enterprise DX helpers and change tracking", () => {
       columnDefs: [{ field: "name", editable: true }],
       rowData: data,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const editTo = async (value: string) => {
-      expect(api.startEditingCell({ rowIndex: 0, colId: "name" })).toBe(true);
+      expect(api.editing.startCell({ rowIndex: 0, colId: "name" })).toBe(true);
       (host.querySelector(".mach-editor-input") as HTMLInputElement).value = value;
-      await api.stopEditingAsync();
+      await api.editing.stop();
     };
 
     await editTo("pending-save");
     let finishSave: (() => void) | undefined;
-    const saving = api.saveChanges(() => new Promise<void>((resolve) => { finishSave = resolve; }));
+    const saving = api.editing.save(() => new Promise<void>((resolve) => { finishSave = resolve; }));
     await editTo("newer-local-edit");
     finishSave?.();
-    await expect(saving).resolves.toEqual([
-      expect.objectContaining({ rowId: "1", cells: [expect.objectContaining({ value: "pending-save" })] })
-    ]);
-    expect(api.getChanges()[0].cells[0]).toEqual(expect.objectContaining({
+    await expect(saving).resolves.toEqual(expect.objectContaining({
+      saved: [expect.objectContaining({ rowId: "1", cells: [expect.objectContaining({ value: "pending-save" })] })]
+    }));
+    expect(api.editing.getChanges()[0].cells[0]).toEqual(expect.objectContaining({
       originalValue: "pending-save",
       value: "newer-local-edit"
     }));
 
     let finishSecond: (() => void) | undefined;
-    const secondSave = api.saveChanges(() => new Promise<void>((resolve) => { finishSecond = resolve; }));
+    const secondSave = api.editing.save(() => new Promise<void>((resolve) => { finishSecond = resolve; }));
     await editTo("pending-save");
-    expect(api.getChanges()).toEqual([]);
+    expect(api.editing.getChanges()).toEqual([]);
     finishSecond?.();
     await secondSave;
-    expect(api.getChanges()[0].cells[0]).toEqual(expect.objectContaining({
+    expect(api.editing.getChanges()[0].cells[0]).toEqual(expect.objectContaining({
       originalValue: "newer-local-edit",
       value: "pending-save"
     }));
@@ -403,17 +403,17 @@ describe("enterprise DX helpers and change tracking", () => {
       columnDefs: [{ field: "name", editable: true }],
       rowData: data,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     for (let rowIndex = 0; rowIndex < 2; rowIndex++) {
-      api.startEditingCell({ rowIndex, colId: "name" });
+      api.editing.startCell({ rowIndex, colId: "name" });
       (host.querySelector(".mach-editor-input") as HTMLInputElement).value = `changed-${rowIndex}`;
-      await api.stopEditingAsync();
+      await api.editing.stop();
     }
-    const saved = await api.saveChanges(() => ({ savedRowIds: ["1"] }));
-    expect(saved.map((change) => change.rowId)).toEqual(["1"]);
-    expect(api.getDirtyRowIds()).toEqual(["2"]);
-    expect(api.getChanges()[0].cells[0].value).toBe("changed-1");
+    const saved = await api.editing.save(() => ({ savedRowIds: ["1"] }));
+    expect(saved.saved.map((change) => change.rowId)).toEqual(["1"]);
+    expect(api.editing.getDirtyRowIds()).toEqual(["2"]);
+    expect(api.editing.getChanges()[0].cells[0].value).toBe("changed-1");
     api.destroy();
   });
 });
@@ -429,9 +429,9 @@ describe("diagnostics and lifecycle hygiene", () => {
       }],
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    const diagnostics = api.getDiagnostics();
+    const diagnostics = api.diagnostics.get();
     expect(diagnostics).toEqual(expect.objectContaining({
       destroyed: false,
       rowCount: 3,
@@ -469,7 +469,7 @@ describe("diagnostics and lifecycle hygiene", () => {
         columnDefs: [{ field: "name" }, { field: "qty" }],
         rowData: rows,
         pagination: false,
-        getRowId: (p) => p.data.id
+        rowKey: (row) => row.id
       });
       api.destroy();
       expect(host.childElementCount).toBe(0);
@@ -494,7 +494,7 @@ describe("dev validation warnings", () => {
       ],
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const messages = warn.mock.calls.map((c) => String(c[0])).join("\n");
     expect(messages).toContain('重复的 colId/field "dup"');
@@ -511,11 +511,11 @@ describe("dev validation warnings", () => {
       columnDefs: bad,
       rowData: rows,
       pagination: false,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
     const afterCreate = warn.mock.calls.length;
 
-    api.setColumnVisibility("bad", false);
+    api.columns.setVisible("bad", false);
     expect(warn.mock.calls.length).toBe(afterCreate);
     warn.mockRestore();
     api.destroy();
@@ -566,7 +566,7 @@ describe("horizontal fill handle", () => {
       rowData: data,
       enableRangeSelection: true,
       fillHandle: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     // 选择 2×2 源区域 Q1:Q2 × 行0:行1
@@ -608,7 +608,7 @@ describe("horizontal fill handle", () => {
       rowData: data,
       enableRangeSelection: true,
       fillHandle: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     cellAt(host, 0, "a").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
@@ -641,7 +641,7 @@ describe("horizontal fill handle", () => {
       rowData: data,
       enableRangeSelection: true,
       fillHandle: true,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     cellAt(host, 0, "q1").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));

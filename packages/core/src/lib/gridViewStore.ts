@@ -1,16 +1,16 @@
 import type { GridApi } from "../types/api";
-import type { ColumnStateStorage } from "./columnStateStore";
+import type { GridStateStorage } from "./gridStateStore";
 import type {
   GridViewManager,
   GridViewState,
   GridViewStore,
   SavedGridView
 } from "../types/views";
-import { migrateGridState } from "./gridState";
+import { normalizeGridState } from "./gridState";
 
 export interface LocalGridViewStoreOptions {
   namespace?: string;
-  storage?: ColumnStateStorage;
+  storage?: GridStateStorage;
   maxViews?: number;
   maxBytes?: number;
   onError?(error: unknown, operation: "list" | "save" | "remove", scope: string): void;
@@ -22,7 +22,7 @@ interface StoredViews {
   views: SavedGridView[];
 }
 
-function currentStorage(): ColumnStateStorage | null {
+function currentStorage(): GridStateStorage | null {
   try { return typeof localStorage === "undefined" ? null : localStorage; }
   catch { return null; }
 }
@@ -41,7 +41,7 @@ export function normalizeGridViewState(input: unknown): GridViewState | null {
   if (input == null || typeof input !== "object") return null;
   const source = input as Partial<GridViewState>;
   if (source.version !== 1) return null;
-  const state = migrateGridState({
+  const state = normalizeGridState({
     version: 2,
     columns: source.columns,
     sortModel: source.sortModel,
@@ -76,7 +76,7 @@ export function normalizeSavedGridView(input: unknown): SavedGridView | null {
 }
 
 export function captureGridViewState<TData>(api: GridApi<TData>): GridViewState {
-  const state = api.getState();
+  const state = api.state.get();
   return {
     version: 1,
     columns: state.columns,
@@ -95,8 +95,8 @@ export function applyGridViewState<TData>(
 ): boolean {
   const normalized = normalizeGridViewState(view);
   if (!normalized || api.isDestroyed()) return false;
-  const current = api.getState();
-  api.applyState({
+  const current = api.state.get();
+  api.state.apply({
     ...current,
     columns: normalized.columns,
     sortModel: normalized.sortModel,

@@ -26,6 +26,8 @@ const coreEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/ind
 const coreCjs = require(resolve(root, "packages/core/dist/index.cjs"));
 const coreWorkerEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/worker.js")));
 const coreWorkerCjs = require(resolve(root, "packages/core/dist/worker.cjs"));
+const coreAdapterEsm = await import(pathToFileURL(resolve(root, "packages/core/dist/adapter.js")));
+const coreAdapterCjs = require(resolve(root, "packages/core/dist/adapter.cjs"));
 const vueEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/index.js")));
 const vueCjs = require(resolve(root, "packages/vue/dist/index.cjs"));
 const vueWorkflowsEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/workflows.js")));
@@ -34,10 +36,18 @@ const vueEditorsEsm = await import(pathToFileURL(resolve(root, "packages/vue/dis
 const vueEditorsCjs = require(resolve(root, "packages/vue/dist/editors.cjs"));
 const vueWorkerEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/worker.js")));
 const vueWorkerCjs = require(resolve(root, "packages/vue/dist/worker.cjs"));
+const vueAdaptersEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/adapters.js")));
+const vueAdaptersCjs = require(resolve(root, "packages/vue/dist/adapters.cjs"));
+const vueUiEsm = await import(pathToFileURL(resolve(root, "packages/vue/dist/ui.js")));
+const vueUiCjs = require(resolve(root, "packages/vue/dist/ui.cjs"));
 const reactEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/index.js")));
 const reactCjs = require(resolve(root, "packages/react/dist/index.cjs"));
 const reactWorkerEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/worker.js")));
 const reactWorkerCjs = require(resolve(root, "packages/react/dist/worker.cjs"));
+const reactAdaptersEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/adapters.js")));
+const reactAdaptersCjs = require(resolve(root, "packages/react/dist/adapters.cjs"));
+const reactUiEsm = await import(pathToFileURL(resolve(root, "packages/react/dist/ui.js")));
+const reactUiCjs = require(resolve(root, "packages/react/dist/ui.cjs"));
 const xlsxEsm = await import(pathToFileURL(resolve(root, "packages/xlsx/dist/index.js")));
 const xlsxCjs = require(resolve(root, "packages/xlsx/dist/index.cjs"));
 
@@ -45,6 +55,10 @@ for (const entry of [coreEsm, coreCjs]) {
   assert.equal(typeof entry.createGrid, "function");
   assert.equal(typeof entry.createColumnHelper, "function");
   assert.equal(typeof entry.createEnterprisePreset, "function");
+}
+for (const entry of [coreAdapterEsm, coreAdapterCjs]) {
+  assert.equal(typeof entry.normalizeMachTableConfig, "function");
+  assert.equal(typeof entry.resolveMachTableGridOptions, "function");
 }
 for (const entry of [coreWorkerEsm, coreWorkerCjs, vueWorkerEsm, vueWorkerCjs, reactWorkerEsm, reactWorkerCjs]) {
   assert.equal(typeof entry.createWorkerDataProcessor, "function");
@@ -54,7 +68,7 @@ for (const entry of [vueEsm, vueCjs]) {
   assert.equal(typeof entry.MachTable, "object");
   assert.equal(typeof entry.MachTablePlugin.install, "function");
   assert.equal(typeof entry.defineMachTableConfig, "function");
-  assert.equal(typeof entry.provideMachTableDefaults, "function");
+  assert.equal("provideMachTableDefaults" in entry, false);
 }
 for (const entry of [vueWorkflowsEsm, vueWorkflowsCjs]) {
   assert.equal(typeof entry.useMachTableEditing, "function");
@@ -64,9 +78,21 @@ for (const entry of [vueEditorsEsm, vueEditorsCjs]) {
   assert.equal(typeof entry.vueCellEditor, "function");
   assert.equal(typeof entry.createElementPlusEditors, "function");
 }
+for (const entry of [vueAdaptersEsm, vueAdaptersCjs]) {
+  assert.equal(typeof entry.vueCellRenderer, "function");
+}
+for (const entry of [vueUiEsm, vueUiCjs]) {
+  assert.equal(typeof entry.MachTableToolbar, "object");
+}
 for (const entry of [reactEsm, reactCjs]) {
   assert.equal(typeof entry.MachTable, "function");
   assert.equal(typeof entry.MachTableProvider, "function");
+}
+for (const entry of [reactAdaptersEsm, reactAdaptersCjs]) {
+  assert.equal(typeof entry.reactCellRenderer, "function");
+}
+for (const entry of [reactUiEsm, reactUiCjs]) {
+  assert.equal(typeof entry.MachTableToolbar, "function");
 }
 for (const entry of [xlsxEsm, xlsxCjs]) {
   assert.equal(typeof entry.createXlsxExtension, "function");

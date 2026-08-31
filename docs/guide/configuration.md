@@ -1,33 +1,32 @@
 # 配置中心与覆盖规则
 
-大型 B 端项目应把稳定的表格约定放在一个配置文件中。应用入口只负责安装插件，页面只描述当前业务数据和列，避免在 `main.ts` 或数百个页面中重复默认值。
-
-## 推荐目录
+大型 B 端项目应把稳定的表格约定放在一个专用配置文件中。应用入口只负责安装；页面只描述当前业务数据、列和实例身份。
 
 ```text
 src/
 ├─ config/
-│  └─ mach-table.config.ts   # 唯一表格配置中心
-├─ main.ts                   # 一行安装
-└─ views/                    # 页面按需覆盖
+│  └─ mach-table.config.ts
+├─ main.ts
+└─ views/
 ```
 
-## 完整配置文件
+## 推荐配置
 
 ```ts
 // src/config/mach-table.config.ts
 import {
+  createBusinessColumnTypes,
   defineMachTableConfig,
   defineMachTablePreset
 } from "@agile-team/mach-table-vue";
 
 export default defineMachTableConfig({
-  /** 每张表都继承的稳定约定；不要放 rowData、columnDefs 等页面状态。 */
+  /** 稳定、无实例身份的应用约定。 */
   defaults: {
     size: "compact",
     theme: "auto",
-    columnLayout: "fit", // ResizeObserver 自动填满容器，无需 grid-ready
-    enableColumnResize: true, // 默认关闭；开启后才显示列宽拖动把手
+    columnLayout: "fit",
+    enableColumnResize: true,
     stripedRows: true,
     columnMenu: true,
     pagination: {
@@ -48,19 +47,13 @@ export default defineMachTableConfig({
     }
   },
 
-  /** 未传 preset 的表默认采用 list。传 preset=false 可对单表禁用。 */
   defaultPreset: "list",
 
-  /** 预设只表达表格行为，主题、语言、密度仍放在 defaults。 */
   presets: {
-    list: defineMachTablePreset({
-      rowSelection: "none",
-      contextMenu: true
-    }),
+    list: defineMachTablePreset({ contextMenu: true }),
     crud: defineMachTablePreset({
       rowSelection: "multiple",
       editType: "fullRow",
-      editableIndicator: "hover",
       enableRangeSelection: true,
       statusBar: true
     }),
@@ -68,118 +61,56 @@ export default defineMachTableConfig({
       rowSelection: "multiple",
       pagination: { pageSize: 10, pageSizeOptions: [10, 20, 50] }
     }),
-    tree: defineMachTablePreset({
-      treeData: true,
-      defaultExpandAll: false
-    })
+    tree: defineMachTablePreset({ treeData: true, defaultExpandAll: false })
   },
 
-  /** 页面通过 type: "money" 使用，列本身仍可覆盖其中任何字段。 */
-  columnTypes: {
-    money: {
-      align: "right",
-      filter: "number",
-      cellEditor: "number",
-      valueFormatter: ({ value }) =>
-        value == null ? "" : `¥${Number(value).toLocaleString()}`
-    },
-    status: {
-      filter: "set",
-      cellRenderer: "statusTag"
-    },
-    readonly: { editable: false }
+  /** 使用 colDef.type: "money" 等语义名称。 */
+  columnTypes: createBusinessColumnTypes({
+    locale: "zh-CN",
+    currency: "CNY",
+    timeZone: "Asia/Shanghai"
+  }),
+
+  /** 应用级 renderer/editor 名称，可被单表 components 覆盖。 */
+  components: {
+    statusTag: StatusTagRenderer
   },
 
-  /** 未知 preset 等非致命配置错误可统一进入监控。 */
   onConfigWarning: (warning) => telemetry.captureMessage(warning.message)
 });
 ```
 
-应用入口保持清爽：
+## 哪些内容不能放进 defaults/preset
+
+配置中心默认 `strict: true`。以下实例级字段放入 `defaults` 或 `presets` 会直接抛出带字段名的错误：
+
+- `rowData`、`columnDefs`、`datasource`
+- `loading`、`error`
+- `initialState`、`persistence`
+- `components`、`columnTypes`（应使用配置对象的顶层专用字段）
+
+这样能防止跨页面数据、请求状态、用户偏好 key 或组件注册被意外共享。只有兼容外部低代码配置时才考虑 `strict: false`；此时非法字段会被丢弃并通过 `onConfigWarning` 上报，绝不会静默进入表格。
 
 ```ts
-import { createApp } from "vue";
-import AsyncMachTablePlugin from "@agile-team/mach-table-vue/async";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
+defineMachTableConfig({
+  strict: false,
+  onConfigWarning: reportConfigWarning,
+  defaults: externalDefaults
+});
+```
+
+## 安装
+
+Vue：
+
+```ts
+import { MachTablePlugin } from "@agile-team/mach-table-vue";
 import machTableConfig from "@/config/mach-table.config";
 
-createApp(App).use(AsyncMachTablePlugin, machTableConfig).mount("#app");
+app.use(MachTablePlugin, machTableConfig);
 ```
 
-页面只保留业务信息：
-
-```vue
-<MachTable
-  preset="crud"
-  :column-defs="columns"
-  :row-data="rows"
-  row-key="orderId"
-/>
-```
-
-## 覆盖优先级
-
-从低到高依次为：
-
-1. MachTable 内置默认值。
-2. `app.use()` 应用配置。
-3. `provideMachTableConfig()` 路由或布局配置。
-4. 当前表选择的命名 `preset`。
-5. 当前 `<MachTable>` 的显式 props。
-
-`undefined` 表示继承；`false`、`0` 和空字符串都是有效覆盖值。数组整体替换。`defaultColDef`、`locale`、`components`、`columnTypes`、`pagination`、`statusBar` 和 `watermark` 使用各自明确的对象合并规则。全局和路由事件处理器会依次执行。
-
-## 路由和租户级动态配置
-
-配置源可以是对象、ref 或 getter。getter 中读取的 Vue 状态变化后，后代表格会原子更新：
-
-```ts
-const tenantTheme = computed(() => tenantStore.dark ? "dark" : "light");
-
-provideMachTableConfig(() => ({
-  defaults: {
-    theme: tenantTheme.value,
-    pagination: { pageSize: route.meta.tablePageSize ?? 20 }
-  }
-}));
-```
-
-只需要默认值时仍可使用兼容 API：
-
-```ts
-provideMachTableDefaults(() => ({ size: compact.value ? "compact" : "normal" }));
-```
-
-## 多预设组合与禁用
-
-```vue
-<!-- 从左到右合并，editable 覆盖 list 的同名字段 -->
-<MachTable :preset="['list', 'editable']" />
-
-<!-- 不使用 defaultPreset，但仍继承应用 defaults -->
-<MachTable :preset="false" />
-```
-
-未知预设不会让生产页面白屏，而是忽略该预设并触发 `onConfigWarning`。
-
-## 配置来源诊断
-
-组件实例暴露最终输入配置和来源解释，适合开发工具和排错：
-
-```ts
-tableRef.value?.getResolvedConfig();
-tableRef.value?.explainOption("pagination");
-// { source: "preset:crud", layers: [...], value: ... }
-```
-
-这能回答“为什么这张表是 50 条一页”“是谁关闭了过滤”等企业项目中很常见的问题。
-
-远程 B 端列表不要把请求逻辑塞进全局配置；使用 [`useMachTableQuery`](/recipes/remote-query) 把页面查询、分页、竞态取消和跨页选择组合起来。
-
-## React 使用同一份配置模型
-
-`defineMachTableConfig`、命名 preset、语义列类型和覆盖顺序由 Core 统一实现，Vue 与 React 不存在两套规则：
+React：
 
 ```tsx
 import { MachTableProvider } from "@agile-team/mach-table-react";
@@ -192,4 +123,77 @@ root.render(
 );
 ```
 
-React 路由可再次嵌套 Provider 覆盖配置；组件 `preset` 与 props 的优先级和 Vue 相同。配置对象应在模块级导出或用 `useMemo` 保持引用稳定。
+页面保持业务化：
+
+```vue
+<MachTable
+  preset="crud"
+  :column-defs="columns"
+  :row-data="rows"
+  row-key="orderId"
+  :persistence="{ key: `${tenantId}:${userId}:orders` }"
+/>
+```
+
+## 覆盖优先级
+
+从低到高：
+
+1. MachTable 内置默认值。
+2. 应用 `defaults`。
+3. 路由/布局 scoped 配置。
+4. 选中的命名 `preset`（数组按从左到右合并）。
+5. 当前 `<MachTable>` 显式 props。
+
+`undefined` 表示继承；`false`、`0` 和空字符串是有效覆盖值。数组整体替换；`defaultColDef`、`locale`、`components`、`columnTypes`、`pagination`、`statusBar` 和 `watermark` 采用各自的对象合并规则。
+
+```vue
+<!-- editable 覆盖 list 中的同名字段 -->
+<MachTable :preset="['list', 'editable']" />
+
+<!-- 不使用 defaultPreset，但仍继承应用 defaults -->
+<MachTable :preset="false" />
+```
+
+未知 preset 会被忽略并触发 `onConfigWarning`，不会让生产页面白屏。
+
+## Vue 路由/布局响应式配置
+
+```ts
+provideMachTableConfig(() => ({
+  defaults: {
+    theme: tenantStore.dark ? "dark" : "light",
+    pagination: { pageSize: route.meta.tablePageSize ?? 20 }
+  }
+}));
+```
+
+该配置与父级合并，来源变化后适配器原子更新表格。只有一套 `provideMachTableConfig()`，不再维护重复的 defaults 注入 API。
+
+## React 路由配置
+
+按路由再嵌套一层 Provider：
+
+```tsx
+const routeConfig = useMemo(() => ({
+  defaults: { theme: dark ? "dark" : "light" }
+}), [dark]);
+
+<MachTableProvider config={routeConfig}>
+  <OrdersPage />
+</MachTableProvider>
+```
+
+## 配置来源诊断
+
+Vue 组件实例可解释任意配置来自哪一层：
+
+```ts
+tableRef.value?.getResolvedConfig();
+tableRef.value?.explainOption("pagination");
+// { source: "preset:crud", layers: [...], value: ... }
+```
+
+Core/React 可通过已解析配置和 `api.getOption()` 查看当前值。配置解释只用于开发工具和排错，不应驱动业务逻辑。
+
+远程请求不要放进配置中心；使用适配包 `/workflows` 的 [`useMachTableQuery`](/recipes/remote-query)，让查询参数、请求取消和页面状态保持在业务路由内。

@@ -60,15 +60,15 @@ console.info(api.rows.getCacheSnapshot());
 // }
 
 api.rows.purgeCache();
-await api.reload({ signal: controller.signal });
+await api.rows.reload({ signal: controller.signal });
 ```
 
-平面兼容方法 `ensureRowsLoaded()`、`purgeDatasourceCache()`、`getDatasourceCacheSnapshot()` 与上述领域 API 等价。
+随机块命令只通过 `api.rows.ensureLoaded()`、`api.rows.purgeCache()` 与 `api.rows.getCacheSnapshot()` 暴露。
 
 ## 行为边界
 
 - 未加载行是稳定的 `RowNode` 占位对象：`loading: true`、`data: null`。内核显示轻量骨架，不调用业务 renderer/editor，也不允许选择。
-- `getDisplayedRowCount()` 返回远程总量；`forEachNode()`、`getSelectedRows()` 和导出只处理当前已加载并留在缓存中的真实行。全量服务端导出应调用业务导出接口，而不是遍历浏览器缓存。
+- `api.rows.getCount()` 返回远程总量；`rows.forEach()`、`selection.getRows()` 和导出只处理当前已加载并留在缓存中的真实行。全量服务端导出应调用业务导出接口，而不是遍历浏览器缓存。
 - 随机块模式使用固定 `rowHeight` 计算任意远程位置。`getRowHeight`、autoHeight、主从详情和本地分组不应与该模式组合；这些场景需要服务端模型或顺序模式。
 - LRU 淘汰只移除行数据与 DOM 可达引用，稳定选择 ID 仍由 SelectionService 管理；重新加载同一 ID 后会恢复选中状态。
 - 排序、普通/高级过滤和快速搜索变化会取消旧请求、清空块缓存并从第 0 块重新加载，乱序响应不会污染新查询。

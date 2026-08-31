@@ -15,10 +15,10 @@
 ## API
 
 ```ts
-api.undo();       // 回滚上一单元，返回是否成功
-api.redo();
-api.canUndo();    // 栈非空
-api.canRedo();
+api.editing.undo();       // 回滚上一单元，返回是否成功
+api.editing.redo();
+api.editing.canUndo();    // 栈非空
+api.editing.canRedo();
 
 // 配置
 createGrid(host, { undoStackSize: 200 });   // 默认 100
@@ -29,8 +29,8 @@ createGrid(host, { undoStackSize: 0 });     // 关闭
 
 ```ts
 toolbar.render(() => [
-  button("撤销").disabled(!api.canUndo()).onClick(() => api.undo()),
-  button("重做").disabled(!api.canRedo()).onClick(() => api.redo())
+  button("撤销").disabled(!api.editing.canUndo()).onClick(() => api.editing.undo()),
+  button("重做").disabled(!api.editing.canRedo()).onClick(() => api.editing.redo())
 ]);
 ```
 
@@ -41,13 +41,13 @@ toolbar.render(() => [
 | undo 后编辑新值 | 历史分叉，redo 分支丢弃（标准编辑器语义） |
 | undo/redo 的值写回 | 走 `valueSetter`（与编辑同链路），并触发 `cellValueChanged`（oldValue/newValue 对调） |
 | 视图刷新 | undo 自动刷新受影响行、合计行、状态栏 |
-| `setRowData` 全量替换 | **清空撤销栈**（历史指向的行已不存在） |
-| 行删除（applyTransaction remove） | 不自动入栈（当前版本仅追踪单元格值变更） |
+| `api.rows.setData` 全量替换 | **清空撤销栈**（历史指向的行已不存在） |
+| 行删除（`api.rows.transact` remove） | 不自动入栈（当前版本仅追踪单元格值变更） |
 
 ## 监听撤销产生的变更
 
 ```ts
-api.addEventListener("cellValueChanged", (e) => {
+api.on("cellValueChanged", (e) => {
   // 无法直接区分"用户编辑"与"undo 回放"；
   // 需要区分时在 undo() 前后设置标记位
   audit(e.rowNode.id, e.colDef.field, e.oldValue, e.newValue);

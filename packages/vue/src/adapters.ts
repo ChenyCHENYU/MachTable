@@ -21,12 +21,7 @@ import type {
 
 export type VueCellRendererProps<TData = any, TValue = any> = CellRendererParams<TData, TValue>;
 
-/**
- * 解析适配器可用的 appContext：
- * 1. 显式传入优先；
- * 2. 否则在 <script setup> 内同步调用工厂时自动捕获宿主组件上下文
- *    （使单元格/明细内的 naive、EP 组件继承 ConfigProvider 的主题与国际化）。
- */
+/** Uses an explicit app context, or captures the current Vue component context. */
 function resolveAppContext(explicit?: AppContext): AppContext | undefined {
   if (explicit) return explicit;
   try {
@@ -180,8 +175,8 @@ export function vueCellEditorSlot<TData = any, TValue = any>(
       ...params,
       value: state.value,
       setValue: (value) => { state.value = value; },
-      commit: () => params.api.stopEditing(false),
-      cancel: () => params.api.stopEditing(true)
+      commit: () => { void params.api.editing.stop(); },
+      cancel: () => { void params.api.editing.stop({ cancel: true }); }
     });
     const unmount = mountSlot(slot, slotProps as () => Record<string, any>, host, appContext, false);
     return {

@@ -22,7 +22,7 @@ describe("optional XLSX extension", () => {
   it("loads the engine on demand and exports a sanitized workbook", async () => {
     const adapter = engine();
     const loader = vi.fn(async () => ({ default: adapter }));
-    const api = { getDataAsCsv: () => "Name,Age\nMach,3" } as GridApi;
+    const api = { io: { exportCsv: () => "Name,Age\nMach,3" } } as unknown as GridApi;
     const workbook = await exportGridToXlsx(api, loader, { fileName: "report", sheetName: "B/Data" });
     expect(loader).toHaveBeenCalledOnce();
     expect(workbook.SheetNames).toEqual(["B Data"]);
@@ -33,7 +33,7 @@ describe("optional XLSX extension", () => {
     const adapter = engine();
     const workbook = { SheetNames: ["Data"], Sheets: { Data: [["name", "note"], ["Mach", "a,b"]] } };
     const importCsv = vi.fn(() => true);
-    const api = { importCsv } as unknown as GridApi;
+    const api = { io: { importCsv } } as unknown as GridApi;
     await expect(importGridFromXlsx(api, adapter, workbook, { mode: "append" })).resolves.toBe(true);
     expect(importCsv).toHaveBeenCalledWith('name,note\nMach,"a,b"', { mode: "append" });
   });
@@ -43,7 +43,7 @@ describe("optional XLSX extension", () => {
     const loader = vi.fn(async () => adapter);
     const extension = createXlsxExtension(loader);
     expect(loader).not.toHaveBeenCalled();
-    await extension.export({ getDataAsCsv: () => "A\n1" } as GridApi);
+    await extension.export({ io: { exportCsv: () => "A\n1" } } as unknown as GridApi);
     expect(loader).toHaveBeenCalledOnce();
   });
 
@@ -56,7 +56,7 @@ describe("optional XLSX extension", () => {
       row === 1 && column === 0 ? Number(value) : value
     );
     const workbook = await exportGridToXlsx(
-      { getDataAsCsv: () => "Value\n42" } as GridApi,
+      { io: { exportCsv: () => "Value\n42" } } as unknown as GridApi,
       adapter,
       { fileName: "report.XLSX", sheetName: "/?:*[]", transformCell, writeOptions: { compression: true } }
     );
@@ -68,7 +68,7 @@ describe("optional XLSX extension", () => {
 
   it("sanitizes browser filenames and validates CSV bridge separators", async () => {
     const adapter = engine();
-    const api = { getDataAsCsv: () => "A\n1" } as GridApi;
+    const api = { io: { exportCsv: () => "A\n1" } } as unknown as GridApi;
     await exportGridToXlsx(api, adapter, { fileName: "../unsafe:name" });
     expect(adapter.writeFileXLSX).toHaveBeenCalledWith(expect.any(Object), ".. unsafe name.xlsx", undefined);
     await expect(exportGridToXlsx(api, adapter, { columnSeparator: "||" })).rejects.toThrow(
@@ -77,7 +77,7 @@ describe("optional XLSX extension", () => {
   });
 
   it("rejects invalid engines and engines without a writer", async () => {
-    const api = { getDataAsCsv: () => "A\n1" } as GridApi;
+    const api = { io: { exportCsv: () => "A\n1" } } as unknown as GridApi;
     await expect(exportGridToXlsx(api, null as unknown as XlsxEngine)).rejects.toThrow(
       "Invalid XLSX engine adapter"
     );
@@ -116,7 +116,7 @@ describe("optional XLSX extension", () => {
     adapter.read = vi.fn(() => workbook);
     const importCsv = vi.fn(() => true);
     const parseValue = vi.fn((params: { value: string }) => params.value);
-    const api = { importCsv } as unknown as GridApi;
+    const api = { io: { importCsv } } as unknown as GridApi;
     await expect(importGridFromXlsx(api, adapter, new Uint8Array(), {
       sheet: 1,
       separator: ";",
@@ -134,7 +134,7 @@ describe("optional XLSX extension", () => {
   });
 
   it("validates import capabilities and worksheet selection", async () => {
-    const api = { importCsv: vi.fn() } as unknown as GridApi;
+    const api = { io: { importCsv: vi.fn() } } as unknown as GridApi;
     const missingReader = engine();
     delete missingReader.read;
     await expect(importGridFromXlsx(api, missingReader, {})).rejects.toThrow(
@@ -159,6 +159,6 @@ describe("optional XLSX extension", () => {
 
     const extension = createXlsxExtension(adapter);
     await expect(extension.import(api, workbook)).resolves.toBeUndefined();
-    expect(api.importCsv).toHaveBeenCalledWith("", {});
+    expect(api.io.importCsv).toHaveBeenCalledWith("", {});
   });
 });

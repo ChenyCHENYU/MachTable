@@ -37,7 +37,7 @@ createGrid(host, {
 | CSV 导出 / 打印 | 始终覆盖**全部页**（不只当前页） |
 | 事件 | `paginationChanged: { page, pageSize, pageCount, total }` |
 
-API：`api.setPage(n)` `api.setPageSize(n)` `api.getPage()` `api.getPageCount()` `api.getTotalRowCount()` `api.paginationEnabled()` `api.setPaginationEnabled(bool)`；运行时 `api.updateOptions({ pagination: false })`。
+API：`api.pagination.setPage(n)` `api.pagination.setPageSize(n)` `api.pagination.getPage()` `api.pagination.getPageCount()` `api.pagination.getTotalRowCount()` `api.pagination.isEnabled()` `api.pagination.setEnabled(bool)`；运行时 `api.updateOptions({ pagination: false })`。
 
 服务端分页：用 `manualSorting` + `manualFiltering` + 自己的分页 UI，或走 [无限滚动](/recipes/infinite-scroll)。
 
@@ -47,30 +47,30 @@ API：`api.setPage(n)` `api.setPageSize(n)` `api.getPage()` `api.getPageCount()`
 import { downloadFile } from "@agile-team/mach-table";
 
 // 全量导出（跨页、含表头、防公式注入、Excel 中文 BOM）
-const csv = api.getDataAsCsv({ prependBOM: true });
+const csv = api.io.exportCsv({ prependBOM: true });
 downloadFile("设备清单.csv", csv, "text/csv;charset=utf-8");
 
 // 仅选中行
-api.getDataAsCsv({ onlySelected: true, prependBOM: true });
+api.io.exportCsv({ onlySelected: true, prependBOM: true });
 
 // 模板下载：只有表头
-downloadFile("导入模板.csv", api.getDataAsCsv({ headersOnly: true, prependBOM: true }));
+downloadFile("导入模板.csv", api.io.exportCsv({ headersOnly: true, prependBOM: true }));
 ```
 
 ## 导入（CSV → 表格）
 
 ```ts
 // 模式一：替换全部数据（表头自动映射到列：headerName / field / colId）
-api.importCsv(csvText);
+api.io.importCsv(csvText);
 
 // 模式二：追加
-api.importCsv(csvText, { mode: "append" });
+api.io.importCsv(csvText, { mode: "append" });
 
 // 模式三：走粘贴管线（只写可编辑格、支持撤销、逐格触发 cellValueChanged）
-api.importCsv(csvText, { mode: "paste" });
+api.io.importCsv(csvText, { mode: "paste" });
 
 // 自定义分隔符（默认逗号）
-api.importCsv(text, { separator: ";" });
+api.io.importCsv(text, { separator: ";" });
 ```
 
 配合文件选择：
@@ -82,7 +82,7 @@ api.importCsv(text, { separator: ";" });
 ```ts
 document.getElementById("file")!.addEventListener("change", async (e) => {
   const text = await (e.target as HTMLInputElement).files![0].text();
-  api.importCsv(text);
+  api.io.importCsv(text);
 });
 ```
 
@@ -91,7 +91,7 @@ document.getElementById("file")!.addEventListener("change", async (e) => {
 ## 打印
 
 ```ts
-api.print({ title: "设备清单" });
+api.io.print({ title: "设备清单" });
 // 打开新窗口：过滤/排序后的全部数据（跨页）、可见列、简洁表格样式，自动唤起打印
 // 弹窗被拦截时返回 false
 ```

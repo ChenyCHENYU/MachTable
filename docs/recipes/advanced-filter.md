@@ -31,9 +31,9 @@ const model: AdvancedFilterModel = {
   ])
 };
 
-api.setAdvancedFilterModel(model);
-api.getAdvancedFilterModel();
-api.setAdvancedFilterModel(null); // 清空
+api.filtering.setAdvancedModel(model);
+api.filtering.getAdvancedModel();
+api.filtering.setAdvancedModel(null); // 清空
 ```
 
 `advancedFilterGroup("and" | "or", children, { not?: true })` 可对整组取反。普通列过滤、快速过滤和高级过滤同时存在时，三者按 `AND` 合并。

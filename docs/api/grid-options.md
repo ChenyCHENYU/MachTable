@@ -1,183 +1,187 @@
-# GridOptions 全量配置
+# GridOptions 配置参考
 
-`createGrid(container, options)` 的完整配置项。React/Vue 组件将下表所有项作为 props 透传（camelCase）。
-
-按类别分组；「默认值」列为未配置时的取值。
-
-## 数据
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `columnDefs` | `(ColDef \| ColDefGroup)[] \| null` | `[]` | 列定义，支持分组表头嵌套，见 [ColDef](/api/col-def) |
-| `rowData` | `TData[] \| null` | `[]` | 行数据。与 `datasource` 互斥（datasource 优先进入无限模式） |
-| `getRowId` | `(p: GetRowIdParams) => string` | 自动 id | 行唯一标识。**强烈建议提供**：编辑/选择保持/撤销/无限滚动均依赖；全量替换数据时选中态保留也依赖它 |
-| `defaultColDef` | `Partial<ColDef>` | 见注 | 全列默认值。内置默认：`{ sortable: true, resizable: true, movable: true, filter: false, minWidth: 80 }` |
-| `datasource` | `GridDatasource` | — | 无限滚动数据源，见[配方](/recipes/infinite-scroll) |
-| `datasourceMode` | `"sequential" \| "block"` | `"sequential"` | 顺序追加兼容模式；`block` 启用随机访问 LRU，见[随机访问数据源](/recipes/random-access-datasource) |
-| `blockSize` | `number` | `100` | 无限滚动每块请求行数 |
-| `infiniteBufferRows` | `number` | `40` | 距已加载末尾 N 行时预取下一块 |
-| `maxBlocksInCache` | `number` | `12` | 随机访问模式保留的最大块数，超出后淘汰最久未使用块 |
-| `datasourceMaxConcurrentRequests` | `number` | `4` | 随机块模式同时执行的请求上限；主动加载优先于滚动预取 |
-| `blockPrefetch` | `number` | `1` | 随机访问目标块两侧预取半径；`0` 关闭 |
-| `datasourceRowCount` | `number \| null` | `null` | 首次响应前的远程总行数，用于立即建立可跳转滚动范围 |
-| `datasourceRetryCount` | `number` | `2` | 数据源失败后的自动重试次数；`0` 关闭 |
-| `datasourceRetryDelay` | `number` | `300` | 首次重试基础延迟（ms），之后指数退避，最长 30 秒 |
-| `datasourceRetryJitter` | `number` | `0.15` | 退避延迟的对称抖动比例（0..1），避免多个表格同时重试形成尖峰 |
-| `dataProcessor` | `GridDataProcessor<TData>` | — | 可选异步/Worker 本地过滤排序边界；失败时回退主线程 |
-| `dataProcessorMinRows` | `number` | `5000` | 达到该数据量且存在本地排序/过滤时才调用 Processor |
-| `asyncTransactionWaitMillis` | `number` | `16` | `applyTransactionAsync` 合并时间窗；事务保持调用顺序，管线只刷新一次 |
-| `initialState` | `GridStateInput` | — | 列、排序、过滤、分页、选择、展开等版本化首屏状态；接受 v1/v2，列和初始行就绪后迁移并应用 |
-| `pagination.mode` | `"client" \| "server"` | `"client"` | server 模式按传入页面原样展示，不二次切片；配合 `page`、`pageSize`、`total`，见[远程查询](/recipes/remote-query) |
-
-## 尺寸与密度
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `size` | `"compact" \| "normal" \| "large"` | `"normal"` | 密度预设，字号/行高/内边距联动（12/13/14px，30/36/44px，6/9/12px），可运行时切换 |
-| `theme` | `"light" \| "dark" \| "auto"` | `"light"` | 主题：`dark` 应用内置暗色；`auto` 跟随系统 `prefers-color-scheme` 并实时响应切换（水印同步适配）。传 `className: "mach-theme-dark"` 的旧写法仍兼容 |
-| `rowHeight` | `number` | 按密度 | 行高 px。提供 `getRowHeight` 时作为兜底 |
-| `headerHeight` | `number` | 按密度 | 单层表头高度 px（多级表头自动 × 层数） |
-| `getRowHeight` | `(p: GetRowHeightParams) => number` | — | 变高行回调，见[配方](/recipes/variable-height)。无限模式未加载行使用固定 `rowHeight` |
-| `rowBuffer` | `number` | `8` | 视口上下各预渲染的行数 |
-| `columnLayout` | `"normal" \| "fit"` | `"normal"` | `fit` 使用 ResizeObserver 持续填满容器，无需在 grid-ready/resize 中手调 `sizeColumnsToFit` |
-| `enableColumnResize` | `boolean` | `false` | 表格级列宽拖动总开关；开启后仍可用列级 `resizable: false` 排除操作列。支持拖动、双击自适应及表头 `Alt+方向键` |
-| `className` | `string` | `""` | 追加到根元素的类名（如 `mach-theme-dark`、主题桥接类） |
-
-## 视觉
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `stripedRows` | `boolean` | `false` | 斑马纹（奇数行 `--mach-zebra-bg`） |
-| `showCellBorders` | `boolean` | `false` | 纵向网格线（默认留白分区风格） |
-| `loading` | `boolean` | `false` | 显示加载覆盖层 |
-| `overlayLoadingTemplate` | `string \| HTMLElement \| () => string \| HTMLElement` | 内置 spinner | 加载覆盖层。字符串默认按纯文本渲染，推荐返回 HTMLElement |
-| `overlayNoRowsTemplate` | `string \| HTMLElement \| () => string \| HTMLElement` | 内置空状态 | 空数据覆盖层。字符串默认按纯文本渲染，推荐返回 HTMLElement |
-| `allowUnsafeOverlayHtml` | `boolean` | `false` | 将上述字符串按 HTML 渲染；只能用于完全可信的静态内容，禁止传入服务端/用户输入 |
-| `suppressNoRowsOverlay` | `boolean` | `false` | 关闭空数据覆盖层 |
-| `suppressRowHoverHighlight` | `boolean` | `false` | 关闭行悬停高亮（跨三窗格同步） |
-| `suppressWarnings` | `boolean` | `false` | 静默配置校验告警（重复 colId、缺字段值来源等；treeData 组合告警同样受控） |
-
-## 选择
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `rowSelection` | `"none" \| "single" \| "multiple"` | `"none"` | 选择模式。`single` 时复选框列呈 radio 形态 |
-| `treeData` 相关 | 见下 | — | `autoCheckedChildren` 默认 `true`：树形父子复选框级联 + 父节点三态 |
-
-## 排序 / 过滤
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `multiSort` | `boolean` | `true` | Shift 点击表头叠加多列排序（带序号徽标） |
-| `quickFilterText` | `string \| null` | `null` | 全局快速过滤（分词 AND、跨列 OR 包含） |
-| `advancedFilterModel` | `AdvancedFilterModel \| null` | `null` | 可序列化的嵌套 AND/OR/NOT 表达式；与普通列、快速过滤按 AND 合并，见[高级过滤](/recipes/advanced-filter) |
-| `manualSorting` | `boolean` | `false` | 服务端排序：跳过本地排序但更新指示器并触发 `sortChanged` |
-| `manualFiltering` | `boolean` | `false` | 服务端过滤：跳过本地过滤但触发 `filterChanged` |
-| `aggFuncs` | `Record<string, (values) => any>` | — | 自定义聚合函数（内置 sum/avg/count/min/max/first/last） |
-
-## 编辑
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `editType` | `"cell" \| "fullRow"` | `"cell"` | 单元格就地编辑，或整行暂存后统一校验/提交；见[编辑配方](/recipes/editing) |
-| `editableIndicator` | `"hover" \| "always" \| "none"` | `"hover"` | 单元格模式下铅笔入口的显示策略；不影响双击和键盘编辑 |
-| `rowEditValidator` | `(params) => result \| Promise<result>` | — | 整行跨字段校验；`params.values` 按 colId 提供草稿，返回字符串或 colId→错误映射 |
-| `singleClickEdit` | `boolean` | `false` | 单击进入编辑（可被列级 `singleClickEdit` 覆盖） |
-| `undoStackSize` | `number` | `100` | 撤销栈深度；`0` 关闭撤销，见[配方](/recipes/undo-redo) |
-
-## 范围 / 剪贴板 / 交互反馈
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `enableRangeSelection` | `boolean` | `false` | 单元格范围框选（拖选 / Shift+点击 / Shift+方向键） |
-| `fillHandle` | `boolean` | `true` | 填充柄（依赖 enableRangeSelection） |
-| `contextMenu` | `boolean` | `false` | 右键菜单；默认项（复制/粘贴/清除），`getContextMenuItems` 可完全自定义 |
-| `getContextMenuItems` | `(p: ContextMenuParams) => ContextMenuItem[] \| null` | — | 自定义菜单项（label/action/danger/disabled/separator）；返回 `null` 不弹菜单 |
-| `suppressClipboard` | `boolean` | `false` | 禁用 Ctrl+C/X/V 与菜单剪贴板项 |
-| `flashCells` | `boolean` | `true` | 单元格值变更（编辑/粘贴/填充/撤销）后闪烁高亮反馈 |
-| `tooltipComponent` | `(p: TooltipParams) => string \| HTMLElement` | — | 富悬停提示（替代原生 title；返回 DOM 可放任意内容）。未配置时保持原生 title |
-| `tooltipShowDelay` | `number` | `600` | 悬停多少毫秒后显示提示 |
-
-## 行结构
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `treeData` | `boolean` | `false` | 树形数据模式 |
-| `childrenKey` | `string` | `"children"` | 树形子节点字段 |
-| `isTreeRowExpandable` | `(p) => boolean` | — | 标记尚无本地 children 但可从服务端展开的节点 |
-| `loadTreeChildren` | `async ({ data, node, api, signal }) => rows` | — | 首次展开时懒加载子级；支持取消、去重、错误状态与重试 |
-| `defaultExpandAll` | `boolean` | `false` | 初始展开全部树节点 |
-| `autoCheckedChildren` | `boolean` | `true` | 树形复选框父子级联 |
-| `masterDetail` | `boolean` | `false` | 主从明细模式 |
-| `detailRowHeight` | `number` | `240` | 明细行高度 |
-| `detailRowRenderer` | `(p: DetailRowRendererParams) => RenderOutput` | — | 明细内容渲染器（可返回 `{ el, destroy }` 嵌套子表格） |
-| `isRowExpandable` | `(p) => boolean` | 全部可展开 | 行级展开开关（无子节点时隐藏箭头由 treeData 自动处理） |
-| `detailToggleColumn` | `boolean` | `true` | 自动插入左侧 ▶ 展开列 |
-| `applyRowDrag` | `boolean` | `true` | 行拖拽后自动应用重排；`false` 时仅发 `rowDragEnd` 事件自行处理 |
-| `indexOffset` | `number` | `0` | 序号列起始偏移（配合 `type: "index"`） |
-| `pinnedTopRowData` | `TData[] \| null` | `[]` | 固定首行（只读汇总条），见[配方](/recipes/pinned-rows) |
-| `pinnedBottomRowData` | `TData[] \| null` | `[]` | 固定末行 |
-| `pagination` | `boolean \| PaginationConfig` | **开启** | 内置分页器：`{ pageSize: 20, pageSizeOptions: [10,20,50,100], showTotal, showPageSizeSelector }`。无数据自动隐藏；`datasource` 模式自动关闭；见[配方](/recipes/pagination-io) |
-| `watermark` | `boolean \| WatermarkConfig` | 关闭 | 水印：`{ text, fontSize?, opacity?, gap?, angle?, color? }`，canvas 平铺斜纹、pointer-events none、暗色自动适配 |
-
-## 汇总
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `showSummary` | `boolean` | `false` | 显示底部合计行 |
-| `summaryMethod` | `(p: { colId, column, values }) => string` | 行数 | 每列合计文本；默认首列显示总行数 |
-| `statusBar` | `boolean \| { panels: StatusBarPanel[] }` | `false` | 状态栏；panels 可选 `rowCount` / `selectedRowCount` / `rangeAggregate`（框选数值实时 和·均·计） |
-
-## 列设置与状态记忆
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `columnMenu` | `boolean` | `false` | 每列表头 ⋯ 菜单（排序/固定/自适应/隐藏/列显示清单），可运行时切换 |
-| `columnStateKey` | `string \| null` | `null` | 列状态（宽/序/显隐/固定/排序）自动持久化键，见[配方](/recipes/column-state) |
-| `columnStateStore` | `{ load(key), save(key, state) }` | localStorage | 自定义存储；`load` 支持返回 Promise（接后端接口） |
-
-## 国际化与杂项
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `locale` | `RgLocale` | 中文 | 覆盖内置文案，提供 `LOCALE_EN` 英文预设，见 [i18n](/advanced/i18n) |
-| `components` | `GridComponents` | — | 当前 Grid 的渲染器/编辑器注册表，优先级高于全局注册，适合微前端和多租户隔离 |
-| `features` | `GridFeature[]` | `[]` | 实例级扩展；`requires` 支持 key 与 semver 范围，冲突/缺失/版本不兼容/循环在 setup 前隔离 |
-| `suppressCellFocus` | `boolean` | `false` | 关闭单元格焦点（同时关闭键盘导航） |
-| `suppressHeaderFocus` | `boolean` | `false` | 关闭表头焦点环 |
-| `ariaLabel` | `string` | `"MachTable data grid"` | 内部 `role=grid/treegrid` 元素的可访问名称 |
-| `ariaLabelledBy` | `string` | `""` | 外部标签元素 id；配置后优先于 `ariaLabel` |
-| `ariaDescribedBy` | `string` | `""` | 外部操作说明元素 id |
-| 事件回调 | `onCellClicked`、`onGridError` 等 | — | 见 [事件](/api/events)；用户回调异常会被隔离并上报 |
-
-## 使用体验配置（0.14+）
-
-| 属性 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `rowKey` | `FieldPath<TData> \| (row) => string \| number` | — | 稳定行主键简写；支持点路径。与 `getRowId` 同时配置时后者优先 |
-| `domLayout` | `"normal" \| "autoHeight"` | `"normal"` | 自动高度会渲染全部客户端行，只用于小表；不能与 `datasource` 混用 |
-| `error` | `unknown \| null` | `null` | 一等请求/页面错误状态；非空时显示错误 overlay，优先级高于 empty |
-| `overlayErrorTemplate` | `OverlayTemplate` | 内置可访问错误提示 | 错误 overlay；字符串仍按纯文本安全渲染 |
-| `stateKey` | `string \| null` | `null` | 自动加载和防抖保存完整 GridState |
-| `stateStore` | `GridStateStore` | 安全 localStorage store | 可替换为后端、IndexedDB 或测试内存 store；支持异步 |
-| `stateSaveDebounceMs` | `number` | `160` | 自动状态保存防抖时间；销毁前会刷新待保存内容 |
-
-默认虚拟布局必须给宿主容器明确高度。`autoHeight` 的意义是免高度的小型详情表，不是大数据表性能开关。状态 key 应包含用户/租户/视图维度，避免不同主体共享选择和筛选状态。
-
-## 类型速查
+`GridOptions<TData>` 是 Core、Vue 与 React 的统一配置契约。Vue 模板使用 kebab-case，React/TypeScript 使用 camelCase。建议用 `defineGridOptions<T>()` 或 `satisfies GridOptions<T>` 保留完整类型推断。
 
 ```ts
-import type { GridOptions, GridDatasource, StatusBarPanel } from "@agile-team/mach-table";
-
-const options: GridOptions<Row> = { /* ... */ };
+const options = defineGridOptions<Order>({
+  rowKey: "id",
+  columnDefs,
+  rowData,
+  columnLayout: "fit"
+});
 ```
 
-安全的自定义空状态：
+## 数据与身份
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `columnDefs` | `(ColDef<T> \| ColDefGroup<T>)[] \| null` | `[]` | 列与分组表头定义 |
+| `rowData` | `T[] \| null` | `[]` | 本地行数据；与 `datasource` 不同时使用 |
+| `rowKey` | `FieldPath<T> \| (row: T) => string \| number` | 自动 ID | 稳定业务主键。编辑、选择保持、事务、树和远程数据强烈建议提供 |
+| `defaultColDef` | `Partial<ColDef<T>>` | 内置默认列 | 全列默认值 |
+| `columnTypes` | `Record<string, Partial<ColDef<T>>>` | `{}` | 通过 `colDef.type` 复用的语义列类型 |
+| `initialState` | `GridState` | — | 列与首批数据就绪后原子恢复的 v2 状态 |
+
+`rowKey` 支持点路径和派生函数：
 
 ```ts
-overlayNoRowsTemplate: () => {
-  const element = document.createElement("strong");
-  element.textContent = "暂无数据";
-  return element;
+rowKey: "identity.id"
+// 或
+rowKey: (row) => `${row.tenantId}:${row.id}`
+```
+
+返回值必须稳定、非空且在整个数据集唯一。
+
+## 布局、主题与密度
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `size` | `"compact" \| "normal" \| "large"` | `"normal"` | 联动字号、行高和间距 |
+| `theme` | `"light" \| "dark" \| "auto"` | `"light"` | 明暗主题；`auto` 跟随系统 |
+| `rowHeight` / `headerHeight` | `number` | 随密度 | 行高/单层表头高度 |
+| `getRowHeight` | `(params) => number` | — | 可变行高 |
+| `rowBuffer` | `number` | `8` | 视口上下预渲染行数 |
+| `columnLayout` | `"normal" \| "fit"` | `"normal"` | `fit` 持续填满容器 |
+| `enableColumnResize` | `boolean` | `false` | 开启鼠标、触控、双击和键盘列宽调整 |
+| `domLayout` | `"normal" \| "autoHeight"` | `"normal"` | 自动高度只用于小型本地表 |
+| `stripedRows` | `boolean` | `false` | 斑马纹 |
+| `showCellBorders` | `boolean` | `false` | 纵向单元格边框 |
+| `className` | `string` | `""` | Core 根元素附加类名 |
+
+默认虚拟布局的宿主必须有明确高度。`autoHeight` 会渲染全部本地行，不能与 `datasource` 混用。
+
+## 列交互
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `columnMenu` | `boolean` | `false` | 表头排序、固定、宽度和显隐菜单 |
+| `multiSort` | `boolean` | `true` | Shift 叠加多列排序 |
+| `manualSorting` | `boolean` | `false` | 只更新排序模型和事件，由服务端执行 |
+| `manualFiltering` | `boolean` | `false` | 只更新过滤模型和事件，由服务端执行 |
+| `quickFilterText` | `string \| null` | `null` | 跨列快速搜索 |
+| `advancedFilterModel` | `AdvancedFilterModel \| null` | `null` | 可序列化 AND/OR/NOT 表达式树 |
+| `aggFuncs` | `Record<string, (values) => unknown>` | 内置函数 | 自定义聚合函数 |
+
+## 选择、编辑和剪贴板
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `rowSelection` | `"none" \| "single" \| "multiple"` | `"none"` | 行选择模式 |
+| `editType` | `"cell" \| "fullRow"` | `"cell"` | 单元格或原子整行编辑 |
+| `editableIndicator` | `"hover" \| "always" \| "none"` | `"hover"` | 可编辑铅笔提示策略 |
+| `singleClickEdit` | `boolean` | `false` | 单击开始编辑 |
+| `rowEditValidator` | `(params) => result \| Promise<result>` | — | 整行跨字段校验 |
+| `undoStackSize` | `number` | `100` | 撤销栈容量；`0` 关闭 |
+| `enableRangeSelection` | `boolean` | `false` | Excel 式单元格范围 |
+| `fillHandle` | `boolean` | `true` | 范围填充柄 |
+| `suppressClipboard` | `boolean` | `false` | 禁用复制、剪切和粘贴 |
+| `contextMenu` | `boolean` | `false` | 内置右键菜单 |
+| `getContextMenuItems` | `(params) => items \| null` | 内置项 | 自定义菜单 |
+| `flashCells` | `boolean` | `true` | 值变化后的短暂高亮 |
+
+编辑提交、失败与冲突由 `api.editing` 管理，参见[编辑配方](/recipes/editing)。
+
+## 树、分组、详情和固定行
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `treeData` | `boolean` | `false` | 树数据模式 |
+| `childrenKey` | `string` | `"children"` | 本地子节点字段 |
+| `isTreeRowExpandable` | `(params) => boolean` | — | 标记可远程展开节点 |
+| `loadTreeChildren` | `async ({ data, node, api, signal }) => rows` | — | 可取消、去重的懒加载 |
+| `autoCheckedChildren` | `boolean` | `true` | 树选择父子联动 |
+| `defaultExpandAll` | `boolean` | `false` | 初始展开全部 |
+| `masterDetail` | `boolean` | `false` | 主从详情 |
+| `detailRowHeight` | `number` | `240` | 详情行高度 |
+| `detailRowRenderer` | `(params) => RenderOutput` | — | 详情 renderer |
+| `isRowExpandable` | `(params) => boolean` | 全部 | 详情行展开条件 |
+| `detailToggleColumn` | `boolean` | `true` | 自动详情展开列 |
+| `applyRowDrag` | `boolean` | `true` | 行拖动后自动应用重排 |
+| `pinnedTopRowData` / `pinnedBottomRowData` | `T[] \| null` | `[]` | 顶部/底部固定行 |
+
+## 分页与远程数据
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `pagination` | `boolean \| PaginationConfig` | `true` | 客户端或受控服务端分页 |
+| `datasource` | `GridDatasource<T>` | — | 无限/随机访问数据源 |
+| `datasourceMode` | `"sequential" \| "block"` | `"sequential"` | 顺序追加或随机块模型 |
+| `blockSize` | `number` | `100` | 每块行数 |
+| `infiniteBufferRows` | `number` | `40` | 顺序模式预取阈值 |
+| `maxBlocksInCache` | `number` | `12` | 随机块 LRU 容量 |
+| `datasourceMaxConcurrentRequests` | `number` | `4` | 活动请求上限 |
+| `blockPrefetch` | `number` | `1` | 相邻块预取半径 |
+| `datasourceRowCount` | `number` | — | 首次响应前的已知总量 |
+| `datasourceRetryCount` | `number` | `2` | 自动重试次数 |
+| `datasourceRetryDelay` | `number` | `300` | 首次退避毫秒数 |
+| `datasourceRetryJitter` | `number` | `0.15` | 0..1 抖动比例 |
+| `asyncTransactionWaitMillis` | `number` | `16` | 异步事务合并窗口 |
+
+普通 B 端请求分页优先使用适配包 `/workflows` 的 `useMachTableQuery()`；百万级可跳转长列表再选择 `datasourceMode: "block"`。
+
+## 大型本地数据处理
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `dataProcessor` | `GridDataProcessor<T>` | — | 将可序列化过滤/排序移入 Worker |
+| `dataProcessorMinRows` | `number` | `5000` | 启用 Processor 的最小行数 |
+
+Processor 失败会安全回退主线程。Worker 工厂位于适配包或 Core 的 `/worker` 子入口。
+
+## 状态持久化
+
+自动持久化只有一个入口：
+
+```ts
+interface GridPersistenceOptions {
+  key: string;
+  sections?: readonly ("columns" | "sort" | "filter" | "pagination" | "selection" | "expansion")[];
+  store?: GridStateStore;
+  debounceMs?: number; // 默认 160
 }
 ```
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `persistence` | `false` | 自动加载并保存 v2 GridState；`sections: ["columns"]` 仅保存列偏好 |
+| `initialState` | — | 首屏恢复，不自动保存 |
+
+`key` 应包含应用、租户、用户和表格场景，避免不同身份共享偏好。未提供 `store` 时使用安全的 localStorage store；也可接后端或 IndexedDB。详见[状态持久化](/recipes/grid-state)。
+
+## 呈现、辅助信息与安全
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `loading` | `boolean` | `false` | 加载覆盖层 |
+| `error` | `unknown \| null` | `null` | 错误覆盖层，优先于空状态 |
+| `overlayLoadingTemplate` / `overlayNoRowsTemplate` / `overlayErrorTemplate` | `OverlayTemplate` | 内置 | 文本、HTMLElement 或工厂 |
+| `allowUnsafeOverlayHtml` | `boolean` | `false` | 仅对完全可信静态 HTML 开启 |
+| `suppressNoRowsOverlay` | `boolean` | `false` | 关闭空状态 |
+| `tooltipComponent` | `(params) => string \| HTMLElement` | 原生 title | 自定义 Tooltip |
+| `tooltipShowDelay` | `number` | `600` | Tooltip 延迟 |
+| `watermark` | `boolean \| WatermarkConfig` | `false` | Canvas 平铺水印 |
+| `showSummary` | `boolean` | `false` | 底部合计行 |
+| `summaryMethod` | `(params) => string` | 行数 | 每列合计文本 |
+| `statusBar` | `boolean \| StatusBarConfig` | `false` | 行数、选择数和范围聚合状态栏 |
+
+Overlay 字符串默认按纯文本渲染。富内容优先返回 HTMLElement，避免将服务端或用户输入交给 HTML 渲染。
+
+## 国际化、可访问性与扩展
+
+| 配置 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `locale` | `MachTableLocale` | 中文 | 文案覆盖；提供 `LOCALE_EN` |
+| `components` | `GridComponents` | `{}` | 当前实例 renderer/editor 注册表 |
+| `features` | `readonly GridFeature[]` | `[]` | 实例级扩展与生命周期 |
+| `actionPolicy` | `ActionPolicy<T>` | — | 操作列权限、确认和异常策略 |
+| `ariaLabel` | `string` | 内置英文 | grid/treegrid 可访问名称 |
+| `ariaLabelledBy` / `ariaDescribedBy` | `string` | — | 外部标签/说明元素 ID |
+| `suppressCellFocus` / `suppressHeaderFocus` | `boolean` | `false` | 关闭相应键盘焦点 |
+| `suppressRowHoverHighlight` | `boolean` | `false` | 关闭行悬停高亮 |
+| `suppressWarnings` | `boolean` | `false` | 关闭开发期配置警告；生产排错不建议开启 |
+
+应用级 `components` 和 `columnTypes` 应放在 `defineMachTableConfig()` 顶层专用字段；页面字段仍可覆盖。Feature 的依赖、版本、冲突与销毁由 Core 统一治理。
+
+## 事件回调
+
+所有事件既可通过 `onGridReady`、`onCellClicked`、`onGridError` 等 `GridOptions` 回调接收，也可用 `api.on()` 动态订阅。完整清单见[事件参考](/api/events)。用户回调异常会被隔离并上报为稳定错误事件。

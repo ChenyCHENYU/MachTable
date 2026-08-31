@@ -1,25 +1,25 @@
 <p align="center">
-  <img src="./assets/mach-table-logo.svg" alt="MachTable — Enterprise Data Grid" width="920" />
+  <img src="./assets/mach-table-logo.svg" alt="MachTable Enterprise Data Grid" width="920" />
 </p>
 
 <p align="center">
-  <strong>面向复杂业务的高性能 TypeScript 数据表格。</strong><br />
-  框架无关内核，Vue 3 优先，React 18+ 官方支持。
+  <strong>面向复杂 B 端业务的高性能 TypeScript 数据表格</strong><br />
+  框架无关内核 · Vue 3 优先 · React 18+ 官方支持
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.23.0-2563eb" alt="Source version 0.23.0" />
-  <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
+  <img src="https://img.shields.io/badge/source-0.24.0-2563eb" alt="Source version 0.24.0" />
+  <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
-  <img src="https://img.shields.io/badge/core%20dependencies-0-14b8a6" alt="Zero core runtime dependencies" />
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
+  <img src="https://img.shields.io/badge/core%20runtime%20dependencies-0-14b8a6" alt="Zero core runtime dependencies" />
   <img src="https://img.shields.io/badge/TypeScript-first-6366f1" alt="TypeScript first" />
 </p>
 
 <p align="center">
   <a href="./docs/guide/getting-started.md"><strong>快速开始</strong></a> ·
-  <a href="./docs/guide/enterprise-integration.md"><strong>企业接入手册</strong></a> ·
-  <a href="./docs/guide/vue.md">Vue 3</a> ·
+  <a href="./docs/guide/enterprise-integration.md"><strong>企业接入</strong></a> ·
+  <a href="./docs/guide/vue.md">Vue</a> ·
   <a href="./docs/guide/react.md">React</a> ·
   <a href="./docs/api/grid-options.md">API</a> ·
   <a href="./examples">示例</a> ·
@@ -30,29 +30,38 @@
 
 ## 为什么选择 MachTable
 
-MachTable 为后台管理、工业台账、财务报表、订单工单和低代码平台提供完整的数据网格能力，同时保持内核小、依赖少、扩展边界清晰。
+MachTable 为后台管理、工业台账、订单/工单、财务报表和低代码平台提供一套可组合的数据网格能力。它不追求堆叠相似 API，而是把高频复杂场景做成稳定、类型安全且可诊断的产品能力。
 
-| 你需要的能力 | MachTable 的实现 |
+| 维度 | 已具备的能力 |
 | --- | --- |
-| 大数据量稳定滚动 | 行/列双虚拟化、行池复用、rAF 合帧、变高行前缀和定位 |
-| Excel 式操作 | 框选、复制/剪切/粘贴、Delete、填充柄、撤销/重做 |
-| 企业级数据模型 | 排序、四类过滤、受控远程分页、请求取消/重试、查询级全选、树表懒加载、分组聚合、主从明细 |
-| 复杂布局 | 左右固定列、多级表头、变高行、固定首末行、行列拖拽、行合并 |
-| 业务组件集成 | Vue 原生 cell/header/editor/overlay/detail/actions 插槽、React 适配器、自定义编辑器 |
-| 长期可维护 | 分层配置与来源解释、版本化状态迁移、托管 `GridFeature`、稳定错误码与运行时校验 |
-| 复杂编辑流程 | 精致单元格就地编辑、原子化整行编辑、同步/异步校验、脏数据、保存与回滚 |
-| 操作列 | 查看/编辑/删除图标、整行对勾/取消、任意业务动作、菜单/抽屉/全部展开 |
-| 用户个性化 | 可搜索列工作台、显隐/固定/排序、自适应、版本化列偏好与工作区状态 |
-| 按需 Excel | 独立 XLSX 桥接包、动态加载工作簿引擎，不进入 Core 和普通页面 chunk |
-| 安全与治理 | 安全 Overlay 默认值、CSV 公式注入防护、原型污染防护、体积/覆盖率门禁 |
+| 大数据 | 行列双虚拟化、行池复用、可变行高索引、随机访问远程块、LRU 与并发控制、可选 Worker |
+| 数据模型 | 本地/服务端排序过滤、分页、无限滚动、树与懒加载、分组聚合、主从详情、固定行 |
+| 编辑 | 单元格与原子整行编辑、对勾/取消、同步/异步校验、脏数据、撤销重做、部分保存与冲突处理 |
+| 交互 | 多选/范围选择、复制粘贴、填充柄、拖拽、列宽调整、列工作台、上下文菜单、操作列 |
+| 框架体验 | Vue 原生 slots、React renderer、全局/局部/异步接入、远程查询与编辑工作流 |
+| 治理 | 分层配置、命名预设、配置来源解释、领域化 API、版本化状态、稳定错误码、诊断快照 |
+| 安全 | CSV 公式注入防护、安全字段路径、Overlay 默认文本渲染、资源销毁与请求取消 |
+
+## 安装：业务只装一个适配包
+
+Vue 或 React 包会自动安装匹配的 Core，并重导出公共类型与核心能力；使用方不需要再手动安装第二个表格包。
+
+```bash
+# Vue 3
+pnpm add @agile-team/mach-table-vue
+
+# React 18+
+pnpm add @agile-team/mach-table-react
+
+# 仅原生 TypeScript/JavaScript
+pnpm add @agile-team/mach-table
+```
+
+主题样式在应用入口只引入一次。
 
 ## 60 秒开始
 
-### Vue 3（推荐）
-
-```bash
-pnpm add @agile-team/mach-table-vue
-```
+### Vue 3
 
 ```vue
 <script setup lang="ts">
@@ -60,37 +69,27 @@ import { ref } from "vue";
 import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
 import "@agile-team/mach-table-vue/styles.css";
 
-interface Order {
-  id: string;
-  customer: string;
-  amount: number;
-  status: "待处理" | "已完成";
-}
+interface Order { id: string; customer: string; amount: number }
 
-const grid = useMachTable<Order>();
-const rows = ref<Order[]>([
-  { id: "SO-001", customer: "Acme", amount: 12800, status: "待处理" }
-]);
-
+const table = useMachTable<Order>();
+const rows = ref<Order[]>([{ id: "SO-001", customer: "Acme", amount: 12800 }]);
 const columns: ColDef<Order>[] = [
-  { colId: "select", width: 46, checkboxSelection: true, pinned: "left" },
   { field: "id", headerName: "订单号", width: 130, pinned: "left" },
   { field: "customer", headerName: "客户", flex: 1, editable: true, filter: "text" },
-  { field: "amount", headerName: "金额", width: 140, filter: "number", type: "rightAligned" },
-  { field: "status", headerName: "状态", width: 120, filter: "set" }
+  { field: "amount", headerName: "金额", width: 140, filter: "number" }
 ];
 </script>
 
 <template>
   <div style="height: 560px">
     <MachTable
-      :ref="grid.ref"
+      :ref="table.ref"
       :column-defs="columns"
       :row-data="rows"
       row-key="id"
       row-selection="multiple"
       enable-column-resize
-      state-key="orders-list"
+      :persistence="{ key: 'orders:list' }"
       striped-rows
     />
   </div>
@@ -99,44 +98,37 @@ const columns: ColDef<Order>[] = [
 
 ### React 18+
 
-```bash
-pnpm add @agile-team/mach-table-react
-```
-
 ```tsx
-import { MachTable, useMachGrid, type ColDef } from "@agile-team/mach-table-react";
+import { useMemo } from "react";
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
 import "@agile-team/mach-table-react/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
 
 export function OrdersPage({ rows }: { rows: Order[] }) {
-  const grid = useMachGrid<Order>();
-  const columns: ColDef<Order>[] = [
+  const table = useMachTable<Order>();
+  const columns = useMemo<ColDef<Order>[]>(() => [
     { field: "id", headerName: "订单号", width: 130, pinned: "left" },
     { field: "customer", headerName: "客户", flex: 1, editable: true },
     { field: "amount", headerName: "金额", width: 140, filter: "number" }
-  ];
+  ], []);
 
   return (
     <div style={{ height: 560 }}>
       <MachTable<Order>
-        apiRef={grid.apiRef}
+        apiRef={table.apiRef}
         columnDefs={columns}
         rowData={rows}
         rowKey="id"
         enableColumnResize
-        stateKey="orders-list"
+        persistence={{ key: "orders:list" }}
       />
     </div>
   );
 }
 ```
 
-### 原生 TypeScript / JavaScript
-
-```bash
-pnpm add @agile-team/mach-table
-```
+### 原生 TypeScript
 
 ```ts
 import { createGrid } from "@agile-team/mach-table";
@@ -148,127 +140,15 @@ const api = createGrid(document.querySelector("#grid")!, {
   rowKey: "id"
 });
 
-// 原生接入需在宿主销毁时调用；Vue/React 适配器会自动处理。
+// Vue/React 适配器会自动销毁；原生接入由宿主在卸载时调用。
 api.destroy();
 ```
 
-> 默认布局的容器必须有明确高度，并且必须引入主题 CSS。小数据详情表可使用 `domLayout: "autoHeight"` 由内容撑开；不要将自动高度用于虚拟大表或远程无限数据源。完整的生产项目配置、SSR、错误治理、状态持久化和上线检查见[企业级项目接入手册](./docs/guide/enterprise-integration.md)。
+> 默认虚拟布局要求容器具有明确高度。小型详情表可使用 `domLayout: "autoHeight"`，大表或远程无限数据源不要使用自动高度。
 
-## 0.23：产品级 API 与有界性能
+## 一份清爽的应用配置
 
-0.23 把“好用”落实为可检查的契约，现有 0.x 平面 API 保持兼容，新代码优先使用职责清晰的领域入口：
-
-- `api.batch()` 合并同一业务动作中的模型、布局和渲染更新；`refreshCells({ rowIds, rowIndexes, columns })` 精确刷新脏单元格。
-- `api.rows / columns / selection / editing / filtering / pagination / state / diagnostics` 是八个稳定领域入口；按需惰性创建，不维护第二套状态。
-- `updateOptions()` 的一组配置只提交一次视图更新；简单 `update` 事务绕过完整行管线，排序、过滤、分组、树、变高与合并场景自动回退安全全量路径。
-- 表头与正文共享前缀宽度 + 二分列窗口，500 列也只保留可视 DOM；变量行高使用 Fenwick 增量索引，单行高度变化不再重建整张偏移表。
-- `datasourceMode: "block"` 提供随机区块访问、并发上限、请求去重、AbortSignal、带抖动退避、滚动方向预取、LRU 淘汰与加载骨架行。
-- 大型本地排序/过滤可通过 `dataProcessor` 移入 Worker；标准桥接不使用 Blob/eval，适配严格 CSP。
-- 多表实例共享 Long Tasks Observer；API/适配器快照、语义契约、100k×100、500 列、连续滚动、生命周期和发布产物预算共同防回归。
-
-```ts
-api.batch((grid) => {
-  grid.rows.apply({ update: changedRows });
-  grid.columns.setVisible("internalNote", false);
-  grid.refreshCells({ rowIds: changedIds, columns: ["status"] });
-});
-```
-
-百万级远程数据按块访问：
-
-```ts
-const options = defineGridOptions<Order>({
-  columnDefs,
-  rowData: [],
-  rowKey: "id",
-  datasource,
-  datasourceMode: "block",
-  datasourceRowCount: 1_000_000,
-  blockSize: 200,
-  maxBlocksInCache: 12,
-  datasourceMaxConcurrentRequests: 4,
-  blockPrefetch: 1
-});
-
-await api.rows.ensureLoaded(40_000, 40_200, { signal });
-console.info(api.rows.getCacheSnapshot());
-```
-
-详见[随机访问数据源](./docs/recipes/random-access-datasource.md)、[Worker 数据处理](./docs/advanced/worker-processing.md)、[性能指南](./docs/advanced/performance.md)与 [API 治理](./docs/advanced/api-governance.md)。
-
-## 0.18：可治理、可迁移、可诊断的业务工作区
-
-0.18 把高频 B 端表格从“能配置”推进到“可长期治理”：
-
-- `GridFeature` 支持 `version`、`requires`、`conflicts`，初始化前完成依赖排序、循环/冲突隔离，并通过诊断快照公开实际启用清单。
-- `updateOptions()` 对 JavaScript、低代码 JSON 等非 TypeScript 输入执行元数据驱动的运行时校验，非法字段只告警、不污染现有实例。
-- 高级过滤 AST 支持嵌套 `AND / OR / NOT`，同一模型可用于本地计算、远程分页和状态持久化；恶意深度、循环引用和超大集合会被有界归一化。
-- `GridState` 升级到 v2 并自动迁移 v1；命名视图只保存列、排序、过滤与页大小，不误带业务选择和树展开状态。
-- `saveChangesDetailed()` 返回成功、失败和版本冲突明细；请求期间的新编辑不会被旧保存结果吞掉，Vue/React 工作流提供失败行定位与冲突处理。
-- Vue/React 单元格 renderer 支持原地 `refresh`，避免数据刷新时重复挂载富组件；内置滚动性能快照包含平均值、P95、长帧与实际 DOM 范围。
-
-```ts
-const views = createGridViewManager(api, { scope: `${tenantId}:${userId}:orders` });
-await views.save("我的待办");
-
-const result = await api.saveChangesDetailed(orderApi.saveChanges);
-console.table(result.conflicts);
-console.info(api.getPerformanceSnapshot());
-```
-
-详见[高级过滤](./docs/recipes/advanced-filter.md)、[命名视图](./docs/recipes/saved-views.md)、[批量保存与冲突](./docs/recipes/batch-save.md)和[性能指南](./docs/advanced/performance.md)。
-
-## 0.15：可控、可恢复的列宽体验
-
-列宽拖动现在由 `enableColumnResize: true` 显式开启，默认保持关闭。开启后支持鼠标/触控拖动、双击内容自适应和表头 `Alt+←/→`；配合 `stateKey` 即可记忆完整工作区，配合 `columnStateKey` 则只记忆列偏好。拖动取消会完整回滚，松手只保存一次，未拖动的自动列与 flex 列继续响应容器宽度。
-
-```ts
-export default defineMachTableConfig({
-  defaults: { enableColumnResize: true }
-});
-
-// 每个页面只提供稳定 key；无需自行监听 columnResized。
-<MachTable stateKey="orders-list" />
-```
-
-程序化调整不受交互开关限制：`api.setColumnWidth("amount", 180)` 会统一触发完成事件和状态持久化。详见[列状态记忆](./docs/recipes/column-state.md)。
-
-## 0.14：把常见页面胶水收进标准工作流
-
-Vue 与 React 现在共享同一套配置/预设内核，并提供 `useMachTableController` 聚合 API 就绪、查询、选择、编辑、错误和工具栏命令。标准工具栏覆盖搜索、刷新、列工作台、密度、导出、撤销/重做和全屏；不需要的能力可逐项关闭或通过插槽/ReactNode 扩展。
-
-- `rowKey: "id"` 是稳定行标识的简写；复杂规则继续使用 `getRowId`，且后者优先。
-- `stateKey` 自动、版本化地保存完整 GridState；无需页面监听十余个状态事件。
-- `error` / `overlayErrorTemplate` 是独立错误态，不再借用空数据态。
-- `useMachTableQuery({ mode: "manual" })` 适合“填写条件后点击查询”，不会在表单输入期间暗中请求。
-- Vue 标准工具栏位于同一安装包的 `/ui` 可选入口，基础组件首屏不会携带 UI 代码；React 工具栏支持正常 tree-shaking。
-
-完整范式见[控制器与标准工具栏](./docs/recipes/controller-toolbar.md)。
-
-## 全局注入与按需加载
-
-主题 CSS 只需在应用入口引入一次。Vue 组件支持三种模式，业务可按表格覆盖面选择：
-
-| 模式 | 页面是否 import 组件 | JS 加载时机 | 适合场景 |
-| --- | --- | --- | --- |
-| 局部导入 | 是 | 所属路由加载时 | 只有少量表格页面 |
-| 全局同步插件 | 否 | 应用启动时 | 大多数页面都有表格 |
-| 全局异步插件 | 否 | 首次渲染 `<MachTable>` 时 | 中后台平台、低代码平台，推荐 |
-
-```ts
-// main.ts：全局注册名称和类型均已提供，页面无需运行时 import。
-import { createApp } from "vue";
-import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
-import "@agile-team/mach-table-vue/styles.css";
-import App from "./App.vue";
-
-createApp(App).use(AsyncMachTablePlugin).mount("#app");
-
-// 可选：在路由 hover/预取阶段提前加载，首次进入页面更顺滑。
-void preloadMachTable();
-```
-
-建议把全局约定单独放进配置文件，入口只保留一行，页面仍可用 props 覆盖：
+把通用约定集中在 `mach-table.config.ts`。应用入口只负责安装，具体页面通过 props 覆盖；优先级为：应用默认值 → 命名预设 → 表格 props。
 
 ```ts
 // src/config/mach-table.config.ts
@@ -283,178 +163,144 @@ export default defineMachTableConfig({
     size: "compact",
     columnLayout: "fit",
     enableColumnResize: true,
-    pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] },
     defaultColDef: { sortable: true, resizable: true, filter: true },
-    onGridError: ({ code, error }) => telemetry.captureException(error, { tags: { code } })
+    pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] }
   },
   defaultPreset: "list",
   presets: {
     list: defineMachTablePreset({ stripedRows: true, columnMenu: true }),
     crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
   },
-  columnTypes: createBusinessColumnTypes({
-    locale: "zh-CN",
-    currency: "CNY",
-    timeZone: "Asia/Shanghai"
-  })
+  columnTypes: createBusinessColumnTypes({ locale: "zh-CN", currency: "CNY" })
 });
-
-// main.ts
-import machTableConfig from "@/config/mach-table.config";
-createApp(App).use(AsyncMachTablePlugin, machTableConfig).mount("#app");
-```
-
-路由或布局还可通过响应式 `provideMachTableConfig(...)` 叠加局部约定；命名预设、覆盖顺序与配置来源诊断见[配置中心](./docs/guide/configuration.md)。
-
-注册后任意 Vue 页面直接使用：
-
-```vue
-<template>
-  <MachTable :column-defs="columns" :row-data="rows" />
-</template>
-```
-
-React 没有全局组件注册惯例。包提供默认组件导出，可直接使用标准 `React.lazy`，并由路由级 `<Suspense>` 控制加载状态：
-
-```tsx
-import { lazy, Suspense } from "react";
-import "@agile-team/mach-table-react/styles.css";
-
-const MachTable = lazy(() => import("@agile-team/mach-table-react"));
-
-export function Orders() {
-  return <Suspense fallback={<div>Loading table...</div>}><MachTable columnDefs={columns} rowData={rows} /></Suspense>;
-}
-```
-
-跨页面统一默认值使用类型安全的 Provider，单表 props 优先：
-
-```tsx
-<MachTableProvider config={machTableConfig}>
-  <App />
-</MachTableProvider>
-```
-
-## 功能全景
-
-| 数据与性能 | 交互与编辑 | 布局与呈现 | 工程与扩展 |
-| --- | --- | --- | --- |
-| 行/列虚拟化 | 单/多选、Ctrl/Shift | 左右固定列 | Vue 3 / React 18+ |
-| 客户端排序过滤 | 单元格/整行编辑 | 多级分组表头 | TypeScript 类型 |
-| 服务端排序过滤 | 原子校验、自定义编辑器 | 列宽拖拽与自适应 | 组件注册表 |
-| 无限滚动数据源 | Undo / Redo | 行列拖拽 | `GridFeature` 插件 |
-| 分页与同步/异步事务 | 框选与剪贴板 | 变高行与换行 | Schema 驱动、类型化列助手 |
-| 树形/懒加载树与分组聚合 | 填充柄、右键菜单 | 行合并、固定行 | i18n、主题令牌 |
-| 主从明细 | Tooltip、状态栏 | 明暗主题与密度 | 状态持久化 |
-| CSV + 可选 XLSX | 图标操作列、菜单/抽屉 | 空态/加载态/水印 | 列工作台、全量状态、诊断与稳定错误码 |
-
-## 为框架适配，也为包体积负责
-
-MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配层独立发布；适配包自动安装 Core 并重新导出完整核心 API，框架本身仍保持 peer dependency：
-
-| 包 | 用途 | gzip 预算 / 当前值 |
-| --- | --- | --- |
-| `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 全公开 ESM 86 KiB / 约 85.2 KiB；`createGrid` 真实消费约 75.5 KiB |
-| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部 ESM 10.5 KiB / 约 9.7 KiB；基础入口约 6.5 KiB，工作流约 3.2 KiB，可选 UI 约 1.3 KiB |
-| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 全部 ESM 8 KiB / 约 6.4 KiB；基础消费约 6.2 KiB，工作流约 3.5 KiB |
-| `@agile-team/mach-table-xlsx` | 仅 Excel 页面按需安装；工作簿引擎由宿主动态注入 | 3 KiB / 约 1.2 KiB；不进入适配器/Core |
-
-Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
-
-远程查询、编辑和组合控制器可从同包的 `@agile-team/mach-table-vue/workflows` 或 `@agile-team/mach-table-react/workflows` 子入口导入，不增加第二个安装依赖。Vue 标准工具栏从 `@agile-team/mach-table-vue/ui` 按需引入。
-
-只有需要 Excel 的页面才额外安装 XLSX 扩展：
-
-```bash
-pnpm add @agile-team/mach-table-xlsx xlsx
 ```
 
 ```ts
-import { createXlsxExtension } from "@agile-team/mach-table-xlsx";
-const excel = createXlsxExtension(() => import("xlsx"));
-await excel.export(api, { fileName: "orders.xlsx" });
+// Vue main.ts
+app.use(MachTablePlugin, machTableConfig);
 ```
 
-## 架构
-
-```mermaid
-flowchart TB
-  App[业务应用] --> Vue[Vue 3 Adapter]
-  App --> React[React 18+ Adapter]
-  App --> Vanilla[createGrid API]
-  Vue --> Core
-  React --> Core
-  Vanilla --> Core
-  Core[GridCore 生命周期编排] --> Models[Row / Column Models]
-  Core --> Services[Selection / Editing / Filter / Drag]
-  Core --> Render[Virtualized DOM Renderers]
-  Features[GridFeature / Components] --> Core
-  Xlsx[Optional XLSX Extension] -. on demand .-> Core
-  Models --> Render
-  Services --> Render
+```tsx
+// React root.tsx
+<MachTableProvider config={machTableConfig}><App /></MachTableProvider>
 ```
 
-- 状态型能力使用明确生命周期的 class Service；它适合封装资源所有权、缓存和销毁边界。
-- 排序、过滤、布局、预设合并和编解码保持为纯函数；函数式并非被替代，而是用于无状态逻辑。
-- 业务扩展通过 `GridFeature` 与实例级组件组合完成，不建议继承 `GridCore`。这种“有状态用类、算法用函数、扩展用组合”的混合架构比全类或全函数更容易长期维护。
-- `GRID_OPTION_META` 是 Core、Vue 和 React 运行时配置的单一事实源。
+`rowData`、`columnDefs`、请求状态、初始状态和 `persistence` 属于具体实例，配置中心默认严格拒绝它们进入 defaults/preset，避免跨页面数据或身份串用；应用级 `components`、`columnTypes` 使用配置对象顶层专用字段。详见[配置中心](./docs/guide/configuration.md)。
 
-更多细节见[架构说明](./docs/advanced/architecture.md)。
+## 领域化 API：找到能力，不记方法海洋
 
-## 企业级质量基线
+0.24 只保留一套公共命令模型。根级仅负责生命周期、配置、事件和批处理；业务命令进入 12 个职责明确的领域。
 
-- Core、Vue、React、XLSX 共 336 个单元测试，并包含请求排队、增量失效与重复挂载/销毁的资源泄漏检查。
-- Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 的键盘、编辑和过滤交互；Chromium 额外执行 10 万行 × 100 列性能预算。
-- 类型感知 ESLint、TypeScript、复杂度防回升、依赖/循环引用、覆盖率阈值、publint、真实消费端类型检查、ESM/CJS exports、gzip 预算、示例与文档构建统一进入 `pnpm verify`。
-- Husky + lint-staged 只检查暂存文件；完整任务由并行 CI 承担，兼顾严格门禁与日常开发效率。详见[质量门禁与高效开发](./docs/advanced/quality-gates.md)。
-- Overlay 字符串默认按文本渲染；可信 HTML 必须显式开启 `allowUnsafeOverlayHtml`。
-- 所有框架渲染器、编辑器、Feature、全局监听器和异步数据源都有销毁/取消边界。
-- CSV 导出默认防公式注入，字段路径写入拒绝危险原型键。
+```ts
+api.batch((grid) => {
+  grid.rows.transact({ update: changedRows });
+  grid.columns.setVisible("internalNote", false);
+  grid.view.refreshCells({ rowIds: changedIds, columns: ["status"] });
+});
+
+const result = await api.editing.save(orderApi.saveChanges);
+console.table(result.failures);
+console.info(api.diagnostics.getPerformance());
+```
+
+| 领域 | 职责 |
+| --- | --- |
+| `rows` | 数据、事务、行遍历、远程加载与缓存 |
+| `columns` | 列定义、状态、宽度、固定、顺序和列工作台 |
+| `selection` | 行选择与范围选择 |
+| `editing` | 编辑、变更、保存、回滚、撤销重做 |
+| `filtering` / `sorting` | 普通/高级/快速过滤与排序模型 |
+| `pagination` | 页码、页大小和总量 |
+| `hierarchy` | 树、分组和详情展开 |
+| `view` | 滚动、局部刷新、布局、覆盖层与固定行 |
+| `state` | 完整可序列化状态 |
+| `io` | CSV、打印、范围复制 |
+| `diagnostics` | 实例、性能、错误和调度快照 |
+
+完整签名见 [GridApi](./docs/api/grid-api.md)。
+
+## 按需加载与包边界
+
+| 入口 | 用途 |
+| --- | --- |
+| `@agile-team/mach-table-vue` / `-react` | 基础组件、生命周期 Hook、Core 类型 |
+| `.../workflows` | 远程查询、编辑闭环、组合控制器 |
+| `.../ui` | 可选标准工具栏 |
+| `.../adapters` | 自定义 Vue/React renderer 桥接 |
+| `.../worker` | 大型本地数据 Worker 处理 |
+| `@agile-team/mach-table-vue/editors` | 可选 Element Plus 编辑器 |
+| `@agile-team/mach-table-xlsx` | 可选 XLSX 导入导出 |
+
+Vue 可按项目覆盖率选择局部导入、同步全局插件或异步全局插件。React 采用模块导入和路由级 `lazy`，不模拟全局组件注册。详见 [Vue 接入](./docs/guide/vue.md)与 [React 接入](./docs/guide/react.md)。
+
+## 可控的列宽与状态记忆
+
+列宽交互默认关闭。开启 `enableColumnResize` 后支持鼠标/触控拖动、双击自动宽度和键盘调整；不配置 `persistence` 时不会写入存储。
+
+```ts
+const options = {
+  enableColumnResize: true,
+  // 只保存列宽、顺序、显隐、固定和排序
+  persistence: { key: "tenant:user:orders", sections: ["columns"] }
+};
+```
+
+需要恢复完整工作区时省略 `sections`；可通过 `store` 接入后端或 IndexedDB，通过 `debounceMs` 调整保存节奏。持久化、`initialState` 与手动 `api.state.apply()` 均走同一份 GridState 契约。
+
+## 编辑与复杂业务工作流
+
+单元格编辑默认提供轻量编辑提示与就地对勾/取消；`editType: "fullRow"` 将可编辑单元格作为一个原子事务提交。操作列支持内置查看/编辑/删除图标，也支持纯自定义动作，以及 `menu`、`drawer`、`inline` 三种溢出模式。
+
+```ts
+import { rowActionsColumn } from "@agile-team/mach-table-vue";
+
+const columns = [
+  { field: "name", editable: true },
+  { field: "amount", editable: true, cellEditor: "number" },
+  rowActionsColumn({ onView, onDelete, overflow: "drawer", actions: customActions })
+];
+```
+
+远程 B 端列表从适配包的 `/workflows` 使用 `useMachTableQuery`：内置取消旧请求、防止过期响应覆盖、加载/空/错状态、服务端分页和跨页选择。`useMachTableEditing` 提供脏状态、部分成功、失败定位和乐观锁冲突闭环。
+
+## 架构原则
+
+- 有资源所有权、缓存与销毁边界的能力使用 class service。
+- 排序、过滤、状态归一化和配置合并使用纯函数。
+- 业务扩展通过 `GridFeature` 与实例级组件组合，不继承内部 `GridCore`。
+- `GRID_OPTION_META` 是 Core 与两套框架适配器的配置事实源。
+- Core 保持零运行时依赖；可选 UI、Worker、编辑器和 XLSX 均为独立子入口。
+
+详见[架构设计](./docs/advanced/architecture.md)与 [API 治理](./docs/advanced/api-governance.md)。
+
+## 质量基线
+
+提交前统一执行：
 
 ```bash
 pnpm install
 pnpm verify
-pnpm exec playwright install chromium firefox webkit
 pnpm test:e2e
 ```
+
+门禁覆盖 ESLint、TypeScript、单元与覆盖率、复杂度预算、依赖循环、API 快照、Vue SFC 消费端、ESM/CJS exports、publint、gzip 预算、发布产物、示例与文档构建。E2E 覆盖 Chromium、Firefox、WebKit，并包含大数据与生命周期性能场景。
 
 ## 文档地图
 
 | 目标 | 文档 |
 | --- | --- |
-| 第一次接入 | [快速开始](./docs/guide/getting-started.md) |
-| 企业项目落地 | [企业级项目接入手册](./docs/guide/enterprise-integration.md) |
-| Vue / React | [Vue 3](./docs/guide/vue.md) · [React](./docs/guide/react.md) |
-| Nuxt / Next.js | [SSR 与客户端挂载](./docs/guide/ssr.md) |
-| 配置与命令 | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) |
-| 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
-| 高频业务 | [场景配方](./docs/recipes/selection.md) |
-| 0.23 API 与性能治理 | [API 治理](./docs/advanced/api-governance.md) · [性能诊断](./docs/advanced/performance.md) · [随机访问数据源](./docs/recipes/random-access-datasource.md) |
-| 0.15 列宽体验 | [列宽拖动与状态记忆](./docs/recipes/column-state.md) · [完整状态持久化](./docs/recipes/grid-state.md) |
-| 0.14 使用体验 | [控制器与标准工具栏](./docs/recipes/controller-toolbar.md) · [远程查询](./docs/recipes/remote-query.md) |
-| 竞品与后续规划 | [竞品分析](./docs/advanced/competitive-analysis.md) · [AG Grid 源码审计](./docs/advanced/ag-grid-source-study.md) · [路线图](./docs/advanced/roadmap.md) |
-| 贡献与质量体系 | [架构边界](./docs/advanced/architecture.md) · [质量门禁](./docs/advanced/quality-gates.md) · [贡献指南](./CONTRIBUTING.md) |
-| 故障定位 | [排错手册](./docs/guide/troubleshooting.md) |
-| 版本升级 | [升级指南](./docs/guide/upgrading.md) · [Changelog](./packages/core/CHANGELOG.md) |
+| 首次接入 | [快速开始](./docs/guide/getting-started.md) · [企业接入手册](./docs/guide/enterprise-integration.md) |
+| 框架 | [Vue 3](./docs/guide/vue.md) · [React 18+](./docs/guide/react.md) · [SSR](./docs/guide/ssr.md) |
+| API | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) · [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
+| 高频场景 | [远程查询](./docs/recipes/remote-query.md) · [编辑](./docs/recipes/editing.md) · [状态持久化](./docs/recipes/grid-state.md) · [列宽](./docs/recipes/column-state.md) |
+| 工程治理 | [质量门禁](./docs/advanced/quality-gates.md) · [性能](./docs/advanced/performance.md) · [升级指南](./docs/guide/upgrading.md) |
 
-## 浏览器与版本
+## 版本与授权
 
-- Vue `>= 3.2`
-- React / React DOM `>= 18`
-- Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
-- 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前源码版本为 `0.23.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
-
-## 参与贡献
-
-提交代码前请先阅读[架构边界](./docs/advanced/architecture.md)与[质量门禁](./docs/advanced/quality-gates.md)。新增配置必须登记到 `GRID_OPTION_META`，服务改动必须补测试，可选业务能力优先实现为 `GridFeature`，Core 不接受新增运行时依赖。提交信息必须使用 `type(scope): subject`，也可通过 `pnpm commit` 交互生成。
-
-问题与建议请通过 [GitHub Issues](https://github.com/ChenyCHENYU/MachTable/issues) 提交。
-
-## License
+当前源码版本为 `0.24.0`，仍处于 0.x 产品打磨期，尚未冻结 1.0 API。0.24 已移除项目尚未正式接入前积累的旧别名和重复入口，公共 API 只保留文档中的规范名称。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
-MachTable 从 `0.9.1` 起采用 [MachTable Source-Available License 1.0](./LICENSE)：源码公开可查看，但不是 OSI 定义下的开源软件。任何安装、运行、测试、修改、集成、部署、分发或商业使用均须事先取得作者书面授权。申请流程见[授权说明](./LICENSING.md)。
+MachTable 采用 [MachTable Source-Available License 1.0](./LICENSE)，不是 MIT，也不是 OSI 定义的开源软件。查看源码不代表取得使用权；安装、运行、测试、修改、集成、部署、分发或商业使用均须事先取得作者书面授权。申请流程见[授权说明](./LICENSING.md)。
 
-历史上已按 MIT 文本公开的版本保留其当时的授权事实；旧版许可不延伸到 `0.9.1` 及后续版本。
+提交信息使用 `type(scope): subject`。问题与建议请通过 [GitHub Issues](https://github.com/ChenyCHENYU/MachTable/issues) 提交。

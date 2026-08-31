@@ -41,10 +41,10 @@ describe("row grouping and aggregation", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: groupedDefs(),
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    expect(api.getDisplayedRowCount()).toBe(3);
+    expect(api.rows.getCount()).toBe(3);
 
     const groupTexts = Array.from(host.querySelectorAll(".mach-group-text")).map((e) => e.textContent);
     expect(groupTexts).toEqual(["区域: 华东", "区域: 华北", "区域: 华南"]);
@@ -61,20 +61,20 @@ describe("row grouping and aggregation", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: groupedDefs(),
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const firstGroupText = host.querySelector(".mach-group-text")?.textContent;
     expect(firstGroupText).toContain("华东");
 
-    api.expandAllGroups();
-    expect(api.getDisplayedRowCount()).toBe(8);
+    api.hierarchy.setAllGroupsExpanded(true);
+    expect(api.rows.getCount()).toBe(8);
     const leafTexts = Array.from(host.querySelectorAll(".mach-row")).map((r) => r.textContent);
     expect(leafTexts.some((t) => t?.includes("A"))).toBe(true);
     expect(leafTexts.some((t) => t?.includes("B"))).toBe(true);
 
-    api.collapseAllGroups();
-    expect(api.getDisplayedRowCount()).toBe(3);
+    api.hierarchy.setAllGroupsExpanded(false);
+    expect(api.rows.getCount()).toBe(3);
     api.destroy();
   });
 
@@ -89,7 +89,7 @@ describe("row grouping and aggregation", () => {
       aggFuncs: {
         doubleSum: (values) => values.reduce((a: number, v: any) => a + (typeof v === "number" ? v * 2 : 0), 0)
       },
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
     const groupAggs = Array.from(host.querySelectorAll(".mach-row")).map((r) => r.textContent);
@@ -103,17 +103,17 @@ describe("row grouping and aggregation", () => {
       columnDefs: groupedDefs(),
       rowData: rows,
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.expandAllGroups();
-    const leafCount = api.getDisplayedRowCount() - 3;
+    api.hierarchy.setAllGroupsExpanded(true);
+    const leafCount = api.rows.getCount() - 3;
     expect(leafCount).toBe(5);
 
-    api.selectNodeById("1", true, false);
-    api.selectNodeById("2", true, false);
-    expect(api.getSelectedRows().length).toBe(2);
-    expect(api.getVisibleSelection().length).toBe(2);
+    api.selection.setById("1", true, false);
+    api.selection.setById("2", true, false);
+    expect(api.selection.getRows().length).toBe(2);
+    expect(api.selection.getVisibleRows().length).toBe(2);
     api.destroy();
   });
 
@@ -122,10 +122,10 @@ describe("row grouping and aggregation", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: groupedDefs(),
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
-    api.expandAllGroups();
-    const lines = api.getDataAsCsv().split("\r\n");
+    api.hierarchy.setAllGroupsExpanded(true);
+    const lines = api.io.exportCsv().split("\r\n");
     expect(lines.length).toBe(6);
     expect(lines[1]).toContain("华东");
     api.destroy();
@@ -146,15 +146,15 @@ describe("cellStyle", () => {
         }
       ],
       rowData: rows,
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.setSortModel([{ colId: "amount", direction: "asc" }]);
+    api.sorting.setModel([{ colId: "amount", direction: "asc" }]);
     const firstRow = host.querySelector('.mach-row[data-index="0"]');
     const amountCell = Array.from(firstRow?.querySelectorAll(".mach-cell") ?? [])[1] as HTMLElement;
     expect(amountCell.style.color).toBe("green");
 
-    api.setSortModel([{ colId: "amount", direction: "desc" }]);
+    api.sorting.setModel([{ colId: "amount", direction: "desc" }]);
     const topRow = host.querySelector('.mach-row[data-index="0"]');
     const topAmountCell = Array.from(topRow?.querySelectorAll(".mach-cell") ?? [])[1] as HTMLElement;
     expect(topAmountCell.style.color).toBe("red");
@@ -170,15 +170,15 @@ describe("setSelection", () => {
       columnDefs: [{ field: "id", headerName: "ID" }],
       rowData: rows,
       rowSelection: "multiple",
-      getRowId: (p) => p.data.id
+      rowKey: (row) => row.id
     });
 
-    api.setSelection([rows[0], rows[2]]);
-    expect(api.getSelectedRows().length).toBe(2);
+    api.selection.setRows([rows[0], rows[2]]);
+    expect(api.selection.getRows().length).toBe(2);
 
-    api.setSelection([rows[4]]);
-    expect(api.getSelectedRows().length).toBe(1);
-    expect(api.getSelectedRows()[0].id).toBe("5");
+    api.selection.setRows([rows[4]]);
+    expect(api.selection.getRows().length).toBe(1);
+    expect(api.selection.getRows()[0].id).toBe("5");
     api.destroy();
   });
 });
