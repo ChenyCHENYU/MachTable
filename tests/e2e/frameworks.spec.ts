@@ -38,8 +38,14 @@ for (const example of examples) {
 
     const editable = page.locator('.mach-row[data-index="0"] .mach-cell[aria-readonly="false"]:visible').first();
     const editTrigger = editable.getByRole("button", { name: "Edit cell" });
-    if (await editTrigger.count()) await editTrigger.click();
-    else await editable.dblclick();
+    // The dedicated editing suite verifies pointer actionability. Dispatch the
+    // control here so this cross-framework lifecycle test is not coupled to its
+    // hover-only transition under a resource-constrained WebKit worker.
+    if (await editTrigger.count()) {
+      await editTrigger.evaluate((button: HTMLButtonElement) => button.click());
+    } else {
+      await editable.dblclick();
+    }
     const editor = page.locator(".mach-cell--editing input").first();
     await expect(editor).toBeVisible();
     await editor.fill("E2E-EDITED");

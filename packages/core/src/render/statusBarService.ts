@@ -56,6 +56,50 @@ export class StatusBarService {
     this.refresh();
   }
 
+  private text(locale: AnyLocale, key: MachTableLocaleKey, value?: number | string): string {
+    const template = locale[key] ?? DEFAULT_LOCALE[key];
+    if (value === undefined) return template;
+    const numeric = typeof value === "number" ? value : parseFloat(String(value)) || 0;
+    return formatText(template, numeric);
+  }
+
+  private updateItem(panel: StatusBarPanel, value: string): void {
+    const item = this.items[panel];
+    if (item && item.textContent !== value) item.textContent = value;
+  }
+
+  private rowCountText(locale: AnyLocale): string {
+    const rm = this.core.rowModel;
+    const total = rm.getDisplayTotalCount();
+    const loaded = rm.paginationActive ? rm.getTotalRowCount() : rm.getDisplayedRowCount();
+    const loadedText = formatText(this.text(locale, "totalRowsLabel"), loaded);
+    return rm.isInfinite && total > loaded ? `${loadedText} / ${total}` : loadedText;
+  }
+
+  private rangeAggregateText(locale: AnyLocale): string {
+    const range = this.core.bodyRenderer.normalizedRange();
+    if (!range) return "";
+    const flat = this.core.columnModel.getOrderedVisible();
+    let sum = 0;
+    let count = 0;
+    for (let rowIndex = range.r1; rowIndex <= range.r2; rowIndex++) {
+      const node = this.core.rowModel.getDisplayedRow(rowIndex);
+      if (!node || node.isDetail || node.isGroup) continue;
+      for (let columnIndex = range.c1; columnIndex <= range.c2; columnIndex++) {
+        const column = flat[columnIndex];
+        if (!column) continue;
+        const value = this.core.getCellValue(node, column);
+        if (typeof value !== "number" || Number.isNaN(value)) continue;
+        sum += value;
+        count++;
+      }
+    }
+    if (count === 0) return "";
+    const average = Math.round((sum / count) * 100) / 100;
+    const sumText = Number.isInteger(sum) ? String(sum) : String(Math.round(sum * 100) / 100);
+    return `${this.text(locale, "statusSum", sumText)} · ${this.text(locale, "statusAvg", String(average))} · ${this.text(locale, "statusCount", String(count))}`;
+  }
+
   refresh(): void {
     if (!this.barEl || this.core.isDestroyed()) return;
     const options = this.core.options;
@@ -63,58 +107,12 @@ export class StatusBarService {
     if (!options.statusBarEnabled) return;
 
     const locale: AnyLocale = { ...DEFAULT_LOCALE, ...options.locale };
-    const text = (key: MachTableLocaleKey, value?: number | string): string => {
-      const template = locale[key] ?? DEFAULT_LOCALE[key];
-      return value === undefined ? template : formatText(template, typeof value === "number" ? value : parseFloat(String(value)) || 0);
-    };
-
-    if (this.items.rowCount) {
-      const rm = this.core.rowModel;
-      const total = rm.getDisplayTotalCount();
-      const loaded = rm.paginationActive ? rm.getTotalRowCount() : rm.getDisplayedRowCount();
-      const value =
-        rm.isInfinite && total > loaded
-          ? `${formatText(text("totalRowsLabel"), loaded)} / ${total}`
-          : formatText(text("totalRowsLabel"), loaded);
-      if (this.items.rowCount.textContent !== value) this.items.rowCount.textContent = value;
-    }
-
+    if (this.items.rowCount) this.updateItem("rowCount", this.rowCountText(locale));
     if (this.items.selectedRowCount) {
       const count = this.core.selectionService.getSelectedNodes().length;
-      const value = formatText(text("statusSelected"), count);
-      if (this.items.selectedRowCount.textContent !== value) {
-        this.items.selectedRowCount.textContent = value;
-      }
+      this.updateItem("selectedRowCount", formatText(this.text(locale, "statusSelected"), count));
     }
-
-    if (this.items.rangeAggregate) {
-      const range = this.core.bodyRenderer.normalizedRange();
-      let value = "";
-      if (range) {
-        const flat = this.core.columnModel.getOrderedVisible();
-        let sum = 0;
-        let count = 0;
-        for (let r = range.r1; r <= range.r2; r++) {
-          const node = this.core.rowModel.getDisplayedRow(r);
-          if (!node || node.isDetail || node.isGroup) continue;
-          for (let c = range.c1; c <= range.c2; c++) {
-            const col = flat[c];
-            if (!col) continue;
-            const v = this.core.getCellValue(node, col);
-            if (typeof v === "number" && !isNaN(v)) {
-              sum += v;
-              count++;
-            }
-          }
-        }
-        if (count > 0) {
-          const avg = Math.round((sum / count) * 100) / 100;
-          const sumText = Number.isInteger(sum) ? String(sum) : String(Math.round(sum * 100) / 100);
-          value = `${text("statusSum", sumText)} · ${text("statusAvg", String(avg))} · ${text("statusCount", String(count))}`;
-        }
-      }
-      if (this.items.rangeAggregate.textContent !== value) this.items.rangeAggregate.textContent = value;
-    }
+    if (this.items.rangeAggregate) this.updateItem("rangeAggregate", this.rangeAggregateText(locale));
   }
 
   destroy(): void {

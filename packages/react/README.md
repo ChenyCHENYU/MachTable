@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.25 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.28 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 ```bash
 pnpm add @agile-team/mach-table-react

@@ -344,6 +344,155 @@ function visibleActions<TData>(actions: readonly ActionItem<TData>[], params: Ce
   });
 }
 
+type ActionRunner<TData> = (action: ActionItem<TData>, button: HTMLButtonElement) => void;
+
+function finishActionButton<TData>(
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>,
+  button: HTMLButtonElement
+): void {
+  if (!button.isConnected) return;
+  button.disabled = resolveActionFlag(action.disabled, params) || resolveActionFlag(action.loading, params);
+  button.classList.toggle("mach-action-btn--loading", resolveActionFlag(action.loading, params));
+}
+
+function observeActionResult<TData>(
+  result: unknown,
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>,
+  button: HTMLButtonElement
+): void {
+  void Promise.resolve(result)
+    .catch((error) => reportActionError(error, action, params))
+    .finally(() => finishActionButton(action, params, button));
+}
+
+function runUnconfirmedAction<TData>(
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>,
+  button: HTMLButtonElement
+): void {
+  try {
+    observeActionResult(action.onClick(params), action, params, button);
+  } catch (error) {
+    reportActionError(error, action, params);
+    finishActionButton(action, params, button);
+  }
+}
+
+function resolveConfirmation<TData>(
+  request: boolean | string,
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>
+): boolean | Promise<boolean> {
+  if (request === false) return false;
+  const message = typeof request === "string" ? request : (action.label ?? action.title ?? "Confirm action");
+  const policy = params.api.getOption("actionPolicy");
+  if (policy?.confirm) return policy.confirm(actionContext(action, params, message));
+  if (typeof window === "undefined" || typeof window.confirm !== "function") return false;
+  return window.confirm(message);
+}
+
+function confirmAction<TData>(
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>
+): boolean | Promise<boolean> {
+  if (action.confirm == null || action.confirm === false) return true;
+  if (typeof action.confirm !== "function") return resolveConfirmation(action.confirm, action, params);
+  const request = action.confirm(params);
+  if (request instanceof Promise) {
+    return request.then((resolved) => resolveConfirmation(resolved, action, params));
+  }
+  return resolveConfirmation(request, action, params);
+}
+
+function createActionRunner<TData>(params: CellRendererParams<TData>): ActionRunner<TData> {
+  return (action, button) => {
+    if (resolveActionFlag(action.disabled, params)) return;
+    button.disabled = true;
+    button.classList.add("mach-action-btn--loading");
+    if (action.confirm == null || action.confirm === false) {
+      runUnconfirmedAction(action, params, button);
+      return;
+    }
+    const execute = async (): Promise<void> => {
+      if (!await confirmAction(action, params)) return;
+      await action.onClick(params);
+    };
+    void execute().catch((error) => reportActionError(error, action, params)).finally(() => {
+      finishActionButton(action, params, button);
+    });
+  };
+}
+
+function createInlineActionButton<TData>(
+  action: ActionItem<TData>,
+  params: CellRendererParams<TData>,
+  run: ActionRunner<TData>
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "mach-action-btn";
+  const variant = actionVariant(action);
+  if (variant !== "default") button.classList.add(`mach-action-btn--${variant}`);
+  const title = action.title ?? action.label ?? "Action";
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.disabled = resolveActionFlag(action.disabled, params);
+  if (resolveActionFlag(action.loading, params)) {
+    button.disabled = true;
+    button.classList.add("mach-action-btn--loading");
+  }
+  if (action.icon && ICON_PATHS[action.icon]) {
+    button.innerHTML = iconSvg(action.icon);
+    button.classList.add("mach-action-btn--icon");
+  } else {
+    button.textContent = action.label ?? title;
+  }
+  button.addEventListener("mousedown", (event) => event.stopPropagation());
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    run(action, button);
+  });
+  return button;
+}
+
+function createOverflowActionButton<TData>(
+  actions: readonly ActionItem<TData>[],
+  mode: ActionOverflowMode,
+  config: ActionButtonsConfig<TData>,
+  params: CellRendererParams<TData>,
+  run: ActionRunner<TData>
+): HTMLButtonElement {
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "mach-action-btn mach-action-btn--icon";
+  const locale = params.api.getOption("locale") ?? {};
+  const label = config.moreLabel ?? locale.actionMore ?? DEFAULT_LOCALE.actionMore;
+  more.title = label;
+  more.setAttribute("aria-label", label);
+  more.setAttribute("aria-haspopup", mode === "drawer" ? "dialog" : "menu");
+  more.setAttribute("aria-expanded", "false");
+  more.innerHTML = `${iconSvg("more", 16)}<span class="mach-sr-only">⋯</span>`;
+  more.addEventListener("mousedown", (event) => event.stopPropagation());
+  more.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const items = actions.map((action): SurfaceItem => ({
+      label: action.label ?? action.title ?? "Action",
+      icon: action.icon,
+      variant: actionVariant(action),
+      disabled: resolveActionFlag(action.disabled, params) || resolveActionFlag(action.loading, params),
+      pick: (button) => {
+        closeActionSurface();
+        run(action, button);
+      }
+    }));
+    if (mode === "drawer") showActionDrawer(more, config.drawerTitle ?? label, items);
+    else showActionMenu(more, items);
+  });
+  return more;
+}
+
 export function createActionButtonsRenderer<TData = any>(config: ActionButtonsConfig<TData>): CellRendererFn {
   const max = Math.max(0, config.max ?? 3);
   const overflowMode = config.overflow ?? "menu";
@@ -355,89 +504,14 @@ export function createActionButtonsRenderer<TData = any>(config: ActionButtonsCo
     wrap.className = "mach-actions";
     const shown = overflowMode === "inline" ? visible : visible.slice(0, max);
     const overflow = overflowMode === "inline" ? [] : visible.slice(max);
-
-    const run = (action: ActionItem<TData>, button: HTMLButtonElement): void => {
-      if (resolveActionFlag(action.disabled, params)) return;
-      button.disabled = true;
-      button.classList.add("mach-action-btn--loading");
-      const execute = async (): Promise<void> => {
-        if (action.confirm != null && action.confirm !== false) {
-          const request = typeof action.confirm === "function" ? await action.confirm(params) : action.confirm;
-          if (request === false) return;
-          const message = typeof request === "string" ? request : (action.label ?? action.title ?? "Confirm action");
-          const policy = params.api.getOption("actionPolicy");
-          const approved = policy?.confirm
-            ? await policy.confirm(actionContext(action, params, message))
-            : typeof window !== "undefined" && typeof window.confirm === "function"
-              ? window.confirm(message)
-              : false;
-          if (!approved) return;
-        }
-        await action.onClick(params);
-      };
-      void execute().catch((error) => reportActionError(error, action, params)).finally(() => {
-        if (!button.isConnected) return;
-        button.disabled = resolveActionFlag(action.disabled, params) || resolveActionFlag(action.loading, params);
-        button.classList.toggle("mach-action-btn--loading", resolveActionFlag(action.loading, params));
-      });
-    };
+    const run = createActionRunner(params);
 
     for (const action of shown) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "mach-action-btn";
-      const variant = actionVariant(action);
-      if (variant !== "default") button.classList.add(`mach-action-btn--${variant}`);
-      const title = action.title ?? action.label ?? "Action";
-      button.title = title;
-      button.setAttribute("aria-label", title);
-      button.disabled = resolveActionFlag(action.disabled, params);
-      if (resolveActionFlag(action.loading, params)) {
-        button.disabled = true;
-        button.classList.add("mach-action-btn--loading");
-      }
-      if (action.icon && ICON_PATHS[action.icon]) {
-        button.innerHTML = iconSvg(action.icon);
-        button.classList.add("mach-action-btn--icon");
-      } else {
-        button.textContent = action.label ?? title;
-      }
-      button.addEventListener("mousedown", (event) => event.stopPropagation());
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
-        run(action, button);
-      });
-      wrap.appendChild(button);
+      wrap.appendChild(createInlineActionButton(action, params, run));
     }
 
     if (overflow.length > 0) {
-      const more = document.createElement("button");
-      more.type = "button";
-      more.className = "mach-action-btn mach-action-btn--icon";
-      const locale = params.api.getOption("locale") ?? {};
-      const moreLabel = config.moreLabel ?? locale.actionMore ?? DEFAULT_LOCALE.actionMore;
-      more.title = moreLabel;
-      more.setAttribute("aria-label", moreLabel);
-      more.setAttribute("aria-haspopup", overflowMode === "drawer" ? "dialog" : "menu");
-      more.setAttribute("aria-expanded", "false");
-      more.innerHTML = `${iconSvg("more", 16)}<span class="mach-sr-only">⋯</span>`;
-      more.addEventListener("mousedown", (event) => event.stopPropagation());
-      more.addEventListener("click", (event) => {
-        event.stopPropagation();
-        const items = overflow.map((action): SurfaceItem => ({
-          label: action.label ?? action.title ?? "Action",
-          icon: action.icon,
-          variant: actionVariant(action),
-          disabled: resolveActionFlag(action.disabled, params) || resolveActionFlag(action.loading, params),
-          pick: (button) => {
-            closeActionSurface();
-            run(action, button);
-          }
-        }));
-        if (overflowMode === "drawer") showActionDrawer(more, config.drawerTitle ?? moreLabel, items);
-        else showActionMenu(more, items);
-      });
-      wrap.appendChild(more);
+      wrap.appendChild(createOverflowActionButton(overflow, overflowMode, config, params, run));
     }
 
     return {

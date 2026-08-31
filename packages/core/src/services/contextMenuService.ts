@@ -1,5 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
+import type { ContextMenuItem } from "../types/params";
+import type { RowNode } from "../types/row";
 import { el, clamp } from "../lib/dom";
 
 type ContextMenuContext = Pick<
@@ -22,109 +24,107 @@ export class ContextMenuService {
 
   constructor(private core: ContextMenuContext) {}
 
-  open(x: number, y: number, anchor?: { rowIndex: number; colId: string }): void {
-    this.close();
-    const core = this.core;
-    let node: import("../types/row").RowNode<any> | undefined;
-    let anchorCol: Column | undefined;
-
+  private resolveAnchor(anchor?: { rowIndex: number; colId: string }): { node: RowNode<any>; column: Column } | null {
     if (anchor) {
-      node = core.rowModel.getDisplayedRow(anchor.rowIndex);
-      anchorCol = core.columnModel.getColumn(anchor.colId);
-    } else {
-      const range = core.bodyRenderer.getNormalizedRangeOrFocus();
-      if (!range) return;
-      const flat = core.columnModel.getOrderedVisible();
-      node = core.rowModel.getDisplayedRow(range.r1);
-      anchorCol = flat[range.c1];
+      const node = this.core.rowModel.getDisplayedRow(anchor.rowIndex);
+      const column = this.core.columnModel.getColumn(anchor.colId);
+      return node && column ? { node, column } : null;
     }
-    if (!node || !anchorCol) return;
-    const anchorIndex = node.rowIndex;
+    const range = this.core.bodyRenderer.getNormalizedRangeOrFocus();
+    if (!range) return null;
+    const node = this.core.rowModel.getDisplayedRow(range.r1);
+    const column = this.core.columnModel.getOrderedVisible()[range.c1];
+    return node && column ? { node, column } : null;
+  }
 
-    const panel = el("div", "mach-context-menu");
-    panel.setAttribute("role", "menu");
-
-    const customGetter = core.options.getContextMenuItems;
-    if (customGetter) {
-      let items;
-      try {
-        items = customGetter({
-          data: node.data,
-          node,
-          api: core.getApi(),
-          colId: anchorCol.id,
-          value: core.getCellValue(node, anchorCol),
-          rowIndex: anchorIndex
-        });
-      } catch (error) {
-        core.reportError(error, "getContextMenuItems", { colId: anchorCol.id, rowId: node.id });
-        return;
-      }
-      if (items === null || items === undefined) return;
-      let hasEnabled = false;
-      for (const item of items) {
-        if (item.separator) {
-          const sep = el("div", "mach-context-menu-separator");
-          panel.appendChild(sep);
-          continue;
-        }
-        const btn = el("button", "mach-context-menu-item") as HTMLButtonElement;
-        btn.type = "button";
-        btn.textContent = item.label ?? "";
-        if (item.danger) btn.classList.add("mach-context-menu-item--danger");
-        if (item.disabled) {
-          btn.disabled = true;
-        } else {
-          hasEnabled = true;
-          btn.addEventListener("click", () => {
-            this.close();
-            try {
-              item.action?.();
-            } catch (error) {
-              core.reportError(error, "contextMenu.action", { colId: anchorCol.id, rowId: node.id });
-            }
-          });
-        }
-        panel.appendChild(btn);
-      }
-      if (!hasEnabled) {
-        panel.remove();
-        return;
-      }
-      this.attach(panel, x, y);
-      return;
+  private readCustomItems(node: RowNode<any>, column: Column): readonly ContextMenuItem[] | null {
+    const getter = this.core.options.getContextMenuItems;
+    if (!getter) return null;
+    try {
+      return getter({
+        data: node.data, node, api: this.core.getApi(), colId: column.id,
+        value: this.core.getCellValue(node, column), rowIndex: node.rowIndex
+      }) ?? null;
+    } catch (error) {
+      this.core.reportError(error, "getContextMenuItems", { colId: column.id, rowId: node.id });
+      return null;
     }
+  }
 
-    const copyBtn = el("button", "mach-context-menu-item") as HTMLButtonElement;
-    copyBtn.type = "button";
-    copyBtn.textContent = core.getLocaleText("menuCopy");
-    copyBtn.addEventListener("click", () => {
+  private populateCustomPanel(
+    panel: HTMLElement,
+    items: readonly ContextMenuItem[],
+    node: RowNode<any>,
+    column: Column
+  ): boolean {
+    let hasEnabled = false;
+    for (const item of items) {
+      if (item.separator) {
+        panel.appendChild(el("div", "mach-context-menu-separator"));
+        continue;
+      }
+      const button = el("button", "mach-context-menu-item") as HTMLButtonElement;
+      button.type = "button";
+      button.textContent = item.label ?? "";
+      if (item.danger) button.classList.add("mach-context-menu-item--danger");
+      button.disabled = item.disabled === true;
+      if (!button.disabled) {
+        hasEnabled = true;
+        button.addEventListener("click", () => this.runCustomItem(item, node, column));
+      }
+      panel.appendChild(button);
+    }
+    return hasEnabled;
+  }
+
+  private runCustomItem(item: ContextMenuItem, node: RowNode<any>, column: Column): void {
+    this.close();
+    try {
+      item.action?.();
+    } catch (error) {
+      this.core.reportError(error, "contextMenu.action", { colId: column.id, rowId: node.id });
+    }
+  }
+
+  private appendDefaultButton(panel: HTMLElement, label: string, action: () => void): void {
+    const button = el("button", "mach-context-menu-item") as HTMLButtonElement;
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", action);
+    panel.appendChild(button);
+  }
+
+  private populateDefaultPanel(panel: HTMLElement): void {
+    const core = this.core;
+    this.appendDefaultButton(panel, core.getLocaleText("menuCopy"), () => {
       void core.copyActiveRange();
       this.close();
     });
-    panel.appendChild(copyBtn);
+    if (core.options.suppressClipboard) return;
+    this.appendDefaultButton(panel, core.getLocaleText("menuPaste"), () => {
+      void core.pasteFromSystemClipboard();
+      this.close();
+    });
+    this.appendDefaultButton(panel, core.getLocaleText("menuClearContents"), () => {
+      const active = core.bodyRenderer.getNormalizedRangeOrFocus();
+      if (active) core.clearRangeValues(active);
+      this.close();
+    });
+  }
 
-    if (!core.options.suppressClipboard) {
-      const pasteBtn = el("button", "mach-context-menu-item") as HTMLButtonElement;
-      pasteBtn.type = "button";
-      pasteBtn.textContent = core.getLocaleText("menuPaste");
-      pasteBtn.addEventListener("click", () => {
-        void core.pasteFromSystemClipboard();
-        this.close();
-      });
-      panel.appendChild(pasteBtn);
-
-      const clearBtn = el("button", "mach-context-menu-item") as HTMLButtonElement;
-      clearBtn.type = "button";
-      clearBtn.textContent = core.getLocaleText("menuClearContents");
-      clearBtn.addEventListener("click", () => {
-        const active = core.bodyRenderer.getNormalizedRangeOrFocus();
-        if (active) core.clearRangeValues(active);
-        this.close();
-      });
-      panel.appendChild(clearBtn);
+  open(x: number, y: number, anchor?: { rowIndex: number; colId: string }): void {
+    this.close();
+    const resolved = this.resolveAnchor(anchor);
+    if (!resolved) return;
+    const panel = el("div", "mach-context-menu");
+    panel.setAttribute("role", "menu");
+    if (this.core.options.getContextMenuItems) {
+      const items = this.readCustomItems(resolved.node, resolved.column);
+      if (!items || !this.populateCustomPanel(panel, items, resolved.node, resolved.column)) return;
+      this.attach(panel, x, y);
+      return;
     }
-
+    this.populateDefaultPanel(panel);
     this.attach(panel, x, y);
   }
 

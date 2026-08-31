@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.25 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。
+MachTable 0.28 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。0.28 保持公共 API 不变并清零历史复杂度豁免。
 
 ```bash
 pnpm add @agile-team/mach-table

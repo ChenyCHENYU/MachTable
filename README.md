@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.25.0-2563eb" alt="Source version 0.25.0" />
+  <img src="https://img.shields.io/badge/source-0.28.0-2563eb" alt="Source version 0.28.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -189,7 +189,7 @@ app.use(MachTablePlugin, machTableConfig);
 
 ## 领域化 API：找到能力，不记方法海洋
 
-0.25 只保留一套公共命令模型。根级仅负责生命周期、配置、事件和批处理；业务命令进入 12 个职责明确的领域。
+0.28 只保留一套公共命令模型。根级仅负责生命周期、配置、事件和批处理；业务命令进入 12 个职责明确的领域。
 
 ```ts
 api.batch((grid) => {
@@ -283,7 +283,7 @@ pnpm verify
 pnpm test:e2e
 ```
 
-门禁覆盖 ESLint、TypeScript、单元与覆盖率、复杂度预算、依赖循环、API 快照、Vue SFC 消费端、ESM/CJS exports、publint、gzip 预算、发布产物、示例与文档构建。E2E 覆盖 Chromium、Firefox、WebKit，并包含大数据与生命周期性能场景。
+门禁覆盖 ESLint、TypeScript、单元与覆盖率、复杂度预算、依赖循环、API 快照、Vue SFC 消费端、ESM/CJS exports、publint、gzip 预算、发布产物、示例与文档构建。当前历史复杂度豁免为 `0`，所有生产函数统一受 `15` 的上限约束。E2E 覆盖 Chromium、Firefox、WebKit，并包含大数据与生命周期性能场景。
 
 ## 文档地图
 
@@ -297,7 +297,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.25.0`，仍处于 0.x 产品打磨期，尚未冻结 1.0 API。0.25 完成正式接入前终审：持久化区段、异步顺序、框架事件与查询重置契约均有语义测试，旧别名、死代码和过期文档示例已经清理。
+当前源码版本为 `0.28.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。0.28 不新增公共能力：沿用已通过快照锁定的接入契约，清零 31 项历史复杂度豁免，并对配置、渲染、筛选、选择、布局与交互内部边界做稳定性治理。若真实项目没有暴露新的契约问题，下一阶段进入 `1.0.0-rc`，不再以堆叠 API 推动版本。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

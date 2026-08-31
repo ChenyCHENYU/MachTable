@@ -3,10 +3,19 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.25.0
+pnpm up @agile-team/mach-table-vue@^0.28.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.25.0
+pnpm up @agile-team/mach-table-react@^0.28.0
 ```
+
+## 0.25 → 0.28
+
+0.28 是稳定性治理版本，没有新增、删除或改名公共 API，也不要求修改现有 Vue/React 页面：
+
+- 31 项历史圈复杂度豁免已全部清零，所有生产函数统一受 `15` 的门禁约束。
+- 配置解析、布局、渲染、选择、筛选、编辑动作和交互事件按职责拆分，公共 API 快照保持不变。
+- 集合筛选在搜索后会保留不可见选项的已选状态，并正确区分同文本的数字/字符串/空值；列菜单按下不再进入列拖拽路径。
+- 直接把框架适配包升级到 `^0.28.0` 即可；无需额外安装 Core，也无需迁移配置文件。
 
 ## 0.24 → 0.25
 

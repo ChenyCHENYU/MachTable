@@ -36,35 +36,37 @@ export function evaluateTextFilter(value: any, conditions: TextFilterCondition[]
   return operator === "or" ? results.some(Boolean) : results.every(Boolean);
 }
 
+function compareNumberCondition(
+  numericValue: number,
+  filterValue: number,
+  condition: NumberFilterCondition
+): boolean {
+  switch (condition.match) {
+    case "equals": return numericValue === filterValue;
+    case "notEquals": return numericValue !== filterValue;
+    case "lessThan": return numericValue < filterValue;
+    case "lessThanOrEqual": return numericValue <= filterValue;
+    case "greaterThan": return numericValue > filterValue;
+    case "greaterThanOrEqual": return numericValue >= filterValue;
+    case "inRange": return numericValue >= filterValue && numericValue <= (condition.value2 ?? filterValue);
+    default: return true;
+  }
+}
+
+function evaluateNumberCondition(value: any, condition: NumberFilterCondition): boolean {
+  const blank = value == null || value === "";
+  if (condition.match === "blank") return blank;
+  if (condition.match === "notBlank") return !blank;
+  if (blank) return false;
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (Number.isNaN(numericValue)) return false;
+  const filterValue = condition.value;
+  if (filterValue == null || Number.isNaN(filterValue)) return false;
+  return compareNumberCondition(numericValue, filterValue, condition);
+}
+
 export function evaluateNumberFilter(value: any, conditions: NumberFilterCondition[], operator: "and" | "or"): boolean {
-  const results = conditions.map((c) => {
-    const isBlank = value == null || value === "";
-    if (c.match === "blank") return isBlank;
-    if (c.match === "notBlank") return !isBlank;
-    if (isBlank) return false;
-    const n = typeof value === "number" ? value : Number(value);
-    if (isNaN(n)) return false;
-    const f = c.value;
-    if (f == null || isNaN(f)) return false;
-    switch (c.match) {
-      case "equals":
-        return n === f;
-      case "notEquals":
-        return n !== f;
-      case "lessThan":
-        return n < f;
-      case "lessThanOrEqual":
-        return n <= f;
-      case "greaterThan":
-        return n > f;
-      case "greaterThanOrEqual":
-        return n >= f;
-      case "inRange":
-        return n >= f && n <= (c.value2 ?? f);
-      default:
-        return true;
-    }
-  });
+  const results = conditions.map((condition) => evaluateNumberCondition(value, condition));
   if (results.length === 0) return true;
   return operator === "or" ? results.some(Boolean) : results.every(Boolean);
 }

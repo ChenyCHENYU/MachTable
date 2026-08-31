@@ -141,9 +141,7 @@ function validateMetadataValues(source: Record<string, unknown>): GridValidation
   return issues;
 }
 
-/** Runtime validation for JavaScript, JSON/schema driven and dynamic options. */
-export function validateGridOptions(options: Partial<GridOptions<any>> | Record<string, unknown>): GridValidationIssue[] {
-  const source = options as Record<string, unknown>;
+function validateKnownOptions(source: Record<string, unknown>): GridValidationIssue[] {
   const issues: GridValidationIssue[] = [];
   for (const option of Object.keys(source)) {
     if (KNOWN_OPTIONS.has(option)) continue;
@@ -157,7 +155,35 @@ export function validateGridOptions(options: Partial<GridOptions<any>> | Record<
         : `未知 GridOption "${option}"，该值不会生效`
     });
   }
+  return issues;
+}
 
+function validateServerPagination(
+  source: Record<string, unknown>,
+  config: Record<string, unknown>
+): GridValidationIssue[] {
+  if (config.mode !== "server") return [];
+  const issues: GridValidationIssue[] = [];
+  if (!hasStableRowId(source)) {
+    issues.push({
+      code: "MISSING_STABLE_ROW_ID",
+      option: "rowKey",
+      message: "服务端分页建议提供稳定 rowKey，否则跨页选择与增量更新无法可靠保持"
+    });
+  }
+  const total = config.total;
+  if (total !== undefined && (typeof total !== "number" || !Number.isFinite(total) || total < 0)) {
+    issues.push({
+      code: "INVALID_OPTION_VALUE",
+      option: "pagination.total",
+      message: "服务端分页 total 必须是非负有限数"
+    });
+  }
+  return issues;
+}
+
+function validatePagination(source: Record<string, unknown>): GridValidationIssue[] {
+  const issues: GridValidationIssue[] = [];
   const pagination = source.pagination;
   if (pagination != null && typeof pagination !== "boolean" && typeof pagination !== "object") {
     issues.push({ code: "INVALID_OPTION_VALUE", option: "pagination", message: "pagination 必须是 boolean 或配置对象" });
@@ -170,31 +196,26 @@ export function validateGridOptions(options: Partial<GridOptions<any>> | Record<
     });
   }
   if (pagination && typeof pagination === "object") {
-    const config = pagination as Record<string, unknown>;
-    if (config.mode === "server" && !hasStableRowId(source)) {
-      issues.push({
-        code: "MISSING_STABLE_ROW_ID",
-        option: "rowKey",
-        message: "服务端分页建议提供稳定 rowKey，否则跨页选择与增量更新无法可靠保持"
-      });
-    }
-    if (config.mode === "server" && config.total !== undefined && (
-      typeof config.total !== "number" || !Number.isFinite(config.total) || config.total < 0
-    )) {
-      issues.push({
-        code: "INVALID_OPTION_VALUE",
-        option: "pagination.total",
-        message: "服务端分页 total 必须是非负有限数"
-      });
-    }
+    issues.push(...validateServerPagination(source, pagination as Record<string, unknown>));
   }
-  if (source.treeData === true && source.masterDetail === true) {
-    issues.push({
-      code: "OPTION_CONFLICT",
-      option: "masterDetail",
-      message: "treeData 与 masterDetail 不能同时启用，主从明细将被忽略"
-    });
-  }
+  return issues;
+}
+
+function validateTreeDetailConflict(source: Record<string, unknown>): GridValidationIssue[] {
+  if (source.treeData !== true || source.masterDetail !== true) return [];
+  return [{
+    code: "OPTION_CONFLICT",
+    option: "masterDetail",
+    message: "treeData 与 masterDetail 不能同时启用，主从明细将被忽略"
+  }];
+}
+
+/** Runtime validation for JavaScript, JSON/schema driven and dynamic options. */
+export function validateGridOptions(options: Partial<GridOptions<any>> | Record<string, unknown>): GridValidationIssue[] {
+  const source = options as Record<string, unknown>;
+  const issues = validateKnownOptions(source);
+  issues.push(...validatePagination(source));
+  issues.push(...validateTreeDetailConflict(source));
   issues.push(...validateMetadataValues(source));
   issues.push(...validateIdentityAndLayout(source));
   return issues;

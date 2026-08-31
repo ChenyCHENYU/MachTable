@@ -1,5 +1,16 @@
 # @agile-team/mach-table-vue
 
+## 0.28.0
+
+### Minor Changes
+
+- Adopt the complexity-free 0.28 Core baseline without changing Vue component, plugin, slot or composable contracts.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.28.0
+
 ## 0.25.0
 
 ### Minor Changes

@@ -52,6 +52,7 @@ import type {
 
 const DATA_SOURCE_ERROR_PREFIXES = ["datasource", "treeData"] as const;
 const STATE_ERROR_PREFIXES = ["columnState.", "gridState."] as const;
+const RENDERER_ERROR_SOURCES = new Set(["valueFormatter", "cellStyle", "cellClass"]);
 const GRID_STATE_CHANGE_EVENTS = new Set<GridEventType>([
   "selectionChanged",
   "sortChanged",
@@ -470,35 +471,10 @@ export class GridCore<TData = any> {
     this.undoService.beginBatch();
     try {
       for (const line of grid) {
-        while (r < rowCount) {
-          const node = this.rowModel.getDisplayedRow(r);
-          if (node && !node.isDetail && !node.isGroup) break;
-          r++;
-        }
-        if (r >= rowCount) break;
-        const node = this.rowModel.getDisplayedRow(r)!;
-        let c = startColIdx;
-        for (const token of line) {
-          while (c < flat.length) {
-            const skip = flat[c] && (flat[c].hasCheckbox || flat[c].isDetailToggle || flat[c].colDef.rowDrag);
-            if (!skip) break;
-            c++;
-          }
-          if (c >= flat.length) break;
-          const col = flat[c];
-          if (this.editingService.isEditable(node, col)) {
-            const old = this.getCellValue(node, col);
-            let value: any = token;
-            if (token === "") {
-              value = null;
-            } else if (typeof old === "number" && !isNaN(Number(token))) {
-              value = Number(token);
-            }
-            if (this.setCellValue(node, col, value, old)) changedRows.add(r);
-          }
-          c++;
-        }
-        r++;
+        const row = this.nextPasteRow(r, rowCount);
+        if (!row) break;
+        this.pasteLine(row.node, row.index, line, flat, startColIdx, changedRows);
+        r = row.index + 1;
       }
     } finally {
       this.undoService.endBatch();
@@ -508,6 +484,49 @@ export class GridCore<TData = any> {
       this.bodyRenderer.refreshRows([...changedRows]);
       this.summaryRenderer.refresh();
     }
+  }
+
+  private nextPasteRow(start: number, rowCount: number): { index: number; node: RowNode<TData> } | null {
+    for (let index = start; index < rowCount; index++) {
+      const node = this.rowModel.getDisplayedRow(index);
+      if (node && !node.isDetail && !node.isGroup) return { index, node };
+    }
+    return null;
+  }
+
+  private nextPasteColumn(columns: Column[], start: number): number {
+    let index = start;
+    while (index < columns.length) {
+      const column = columns[index];
+      if (!column.hasCheckbox && !column.isDetailToggle && !column.colDef.rowDrag) break;
+      index++;
+    }
+    return index;
+  }
+
+  private pasteLine(
+    node: RowNode<TData>,
+    rowIndex: number,
+    line: readonly string[],
+    columns: Column[],
+    startColIdx: number,
+    changedRows: Set<number>
+  ): void {
+    let columnIndex = startColIdx;
+    for (const token of line) {
+      columnIndex = this.nextPasteColumn(columns, columnIndex);
+      if (columnIndex >= columns.length) return;
+      if (this.pasteCell(node, columns[columnIndex], token)) changedRows.add(rowIndex);
+      columnIndex++;
+    }
+  }
+
+  private pasteCell(node: RowNode<TData>, column: Column, token: string): boolean {
+    if (!this.editingService.isEditable(node, column)) return false;
+    const oldValue = this.getCellValue(node, column);
+    const numeric = typeof oldValue === "number" && token !== "" && !Number.isNaN(Number(token));
+    const value = token === "" ? null : numeric ? Number(token) : token;
+    return this.setCellValue(node, column, value, oldValue);
   }
 
   pasteFromSystemClipboard(): Promise<void> {
@@ -567,12 +586,7 @@ export class GridCore<TData = any> {
     const message = error instanceof Error ? error.message : String(error);
     if (source === "rowKey" || message.includes("Duplicate row id")) return "DATA_INTEGRITY_ERROR";
     if (source === "validate") return "VALIDATION_ERROR";
-    if (
-      source.toLowerCase().includes("renderer") ||
-      source === "valueFormatter" ||
-      source === "cellStyle" ||
-      source === "cellClass"
-    ) return "RENDERER_ERROR";
+    if (source.toLowerCase().includes("renderer") || RENDERER_ERROR_SOURCES.has(source)) return "RENDERER_ERROR";
     if (source.toLowerCase().includes("editor") || source === "editable") return "EDITOR_ERROR";
     if (source.startsWith("feature.")) return "FEATURE_ERROR";
     if (STATE_ERROR_PREFIXES.some((prefix) => source.startsWith(prefix))) return "STATE_ERROR";

@@ -58,6 +58,35 @@ function selectFormatter(options: SchemaSelectOption[]): (p: { value: any }) => 
   };
 }
 
+function filterForField(field: GridSchemaField, type: GridSchemaFieldType): ColDef<any>["filter"] {
+  if (field.filterable === false) return false;
+  if (type === "number") return "number";
+  if (type === "date") return "date";
+  if (type === "select" || type === "boolean") return "set";
+  return "text";
+}
+
+function applyFieldType(colDef: ColDef<any>, field: GridSchemaField, type: GridSchemaFieldType): void {
+  if (type === "number") {
+    colDef.type = "rightAligned";
+    return;
+  }
+  if (type === "date") {
+    colDef.valueFormatter = dateFormatter(field.format);
+    return;
+  }
+  if (type === "boolean") {
+    colDef.valueFormatter = booleanFormatter;
+    return;
+  }
+  if (type !== "select") return;
+  const options = field.options ?? [];
+  colDef.valueFormatter = selectFormatter(options);
+  if (!field.editable) return;
+  colDef.cellEditor = "select";
+  colDef.cellEditorParams = { values: options.map((option) => option.value) };
+}
+
 function fieldToColDef(field: GridSchemaField): ColDef<any> {
   const type = field.type ?? "string";
   const colDef: ColDef<any> = {
@@ -73,26 +102,10 @@ function fieldToColDef(field: GridSchemaField): ColDef<any> {
     editable: field.editable ?? false,
     sortable: field.sortable ?? true,
     resizable: field.resizable ?? true,
-    filter: field.filterable === false ? false : type === "number" ? "number" : type === "date" ? "date" : type === "select" ? "set" : "text",
+    filter: filterForField(field, type),
     cellClass: field.cellClass
   };
-
-  if (type === "number") {
-    colDef.type = "rightAligned";
-  } else if (type === "date") {
-    colDef.valueFormatter = dateFormatter(field.format);
-  } else if (type === "boolean") {
-    colDef.valueFormatter = booleanFormatter;
-    colDef.filter = field.filterable === false ? false : "set";
-  } else if (type === "select") {
-    const options = field.options ?? [];
-    colDef.valueFormatter = selectFormatter(options);
-    if (field.editable) {
-      colDef.cellEditor = "select";
-      colDef.cellEditorParams = { values: options.map((o) => o.value) };
-    }
-  }
-
+  applyFieldType(colDef, field, type);
   return colDef;
 }
 

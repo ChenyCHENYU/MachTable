@@ -99,6 +99,19 @@ export class PaginationBar {
     this.refresh();
   }
 
+  private setText(element: HTMLElement | null, text: string): void {
+    if (element && element.textContent !== text) element.textContent = text;
+  }
+
+  private refreshNavigation(page: number, pageCount: number): void {
+    const atStart = page <= 1;
+    const atEnd = page >= pageCount;
+    if (this.firstBtn) this.firstBtn.disabled = atStart;
+    if (this.prevBtn) this.prevBtn.disabled = atStart;
+    if (this.nextBtn) this.nextBtn.disabled = atEnd;
+    if (this.lastBtn) this.lastBtn.disabled = atEnd;
+  }
+
   refresh(): void {
     if (!this.barEl || this.core.isDestroyed()) return;
     const rm = this.core.rowModel;
@@ -112,17 +125,10 @@ export class PaginationBar {
     const pageCount = rm.getPageCount();
 
     if (this.totalEl && this.core.options.paginationShowTotal) {
-      const text = formatText(this.t("paginationTotal"), total);
-      if (this.totalEl.textContent !== text) this.totalEl.textContent = text;
+      this.setText(this.totalEl, formatText(this.t("paginationTotal"), total));
     }
-    if (this.pageEl) {
-      const text = formatTwo(this.t("paginationPage"), page, pageCount);
-      if (this.pageEl.textContent !== text) this.pageEl.textContent = text;
-    }
-    if (this.firstBtn) this.firstBtn.disabled = page <= 1;
-    if (this.prevBtn) this.prevBtn.disabled = page <= 1;
-    if (this.nextBtn) this.nextBtn.disabled = page >= pageCount;
-    if (this.lastBtn) this.lastBtn.disabled = page >= pageCount;
+    this.setText(this.pageEl, formatTwo(this.t("paginationPage"), page, pageCount));
+    this.refreshNavigation(page, pageCount);
     if (this.sizeSelect && Number(this.sizeSelect.value) !== this.core.options.paginationPageSize) {
       this.sizeSelect.value = String(this.core.options.paginationPageSize);
     }

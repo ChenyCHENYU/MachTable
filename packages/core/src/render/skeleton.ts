@@ -1,5 +1,5 @@
 import type { GridCore } from "../core/gridCore";
-import type { GridSize, OverlayTemplate, ResolvedGridOptions, ThemeMode } from "../types/options";
+import type { GridSize, OverlayContent, OverlayTemplate, ResolvedGridOptions, ThemeMode } from "../types/options";
 import type { PaneType } from "../services/columnModel";
 import { el } from "../lib/dom";
 
@@ -249,6 +249,40 @@ export class GridSkeleton {
     }
   }
 
+  private resolveOverlayContent(content: OverlayTemplate): OverlayContent {
+    try {
+      return typeof content === "function" ? content() : content;
+    } catch (error) {
+      this.core.reportError(error, "overlayTemplate");
+      return "";
+    }
+  }
+
+  private renderOverlayContent(
+    type: "loading" | "noRows" | "error",
+    resolved: OverlayContent,
+    allowUnsafeHtml: boolean
+  ): void {
+    if (typeof resolved === "object" && resolved != null && "el" in resolved) {
+      this.overlayContent.appendChild(resolved.el);
+      this.overlayCleanup = resolved.destroy ?? null;
+      return;
+    }
+    if (resolved instanceof HTMLElement) {
+      this.overlayContent.appendChild(resolved);
+      return;
+    }
+    if (resolved) {
+      if (allowUnsafeHtml) this.overlayContent.innerHTML = resolved;
+      else this.overlayContent.textContent = resolved;
+      return;
+    }
+    if (type !== "loading") return;
+    const spinner = el("div", "mach-spinner");
+    spinner.setAttribute("aria-label", "loading");
+    this.overlayContent.appendChild(spinner);
+  }
+
   showOverlay(type: "loading" | "noRows" | "error", content: OverlayTemplate, allowUnsafeHtml = false): void {
     if (
       this.currentOverlay === type &&
@@ -260,29 +294,7 @@ export class GridSkeleton {
     this.currentOverlayAllowsHtml = allowUnsafeHtml;
     this.cleanupOverlayContent();
     this.overlayContent.replaceChildren();
-
-    let resolved: import("../types/options").OverlayContent;
-    try {
-      resolved = typeof content === "function" ? content() : content;
-    } catch (error) {
-      this.core.reportError(error, "overlayTemplate");
-      resolved = "";
-    }
-
-    if (typeof resolved === "object" && resolved != null && "el" in resolved) {
-      this.overlayContent.appendChild(resolved.el);
-      this.overlayCleanup = resolved.destroy ?? null;
-    } else if (resolved instanceof HTMLElement) {
-      this.overlayContent.appendChild(resolved);
-    } else if (resolved && allowUnsafeHtml) {
-      this.overlayContent.innerHTML = resolved;
-    } else if (resolved) {
-      this.overlayContent.textContent = resolved;
-    } else if (type === "loading") {
-      const spinner = el("div", "mach-spinner");
-      spinner.setAttribute("aria-label", "loading");
-      this.overlayContent.appendChild(spinner);
-    }
+    this.renderOverlayContent(type, this.resolveOverlayContent(content), allowUnsafeHtml);
     this.overlayWrapper.style.display = "";
     this.applyOverlayRole(type);
     this.root.setAttribute("aria-busy", type === "loading" ? "true" : "false");

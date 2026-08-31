@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.25 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.28 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 ```bash
 pnpm add @agile-team/mach-table-vue

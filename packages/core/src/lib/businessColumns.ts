@@ -247,6 +247,21 @@ export function createCachedDictionary<TKey extends DictionaryKey = DictionaryKe
     while (cache.size > maxSize) cache.delete(cache.keys().next().value as string);
   };
 
+  const resolveEntries = (entries: readonly (readonly [string, TKey])[]): void => {
+    for (const [id, key] of entries) {
+      const value = get(key);
+      for (const waiter of waiting.get(id) ?? []) waiter.resolve(value);
+      waiting.delete(id);
+    }
+  };
+
+  const rejectEntries = (entries: readonly (readonly [string, TKey])[], error: unknown): void => {
+    for (const [id] of entries) {
+      for (const waiter of waiting.get(id) ?? []) waiter.reject(error);
+      waiting.delete(id);
+    }
+  };
+
   const flush = async (): Promise<void> => {
     timer = null;
     if (destroyed || queued.size === 0) return;
@@ -259,17 +274,10 @@ export function createCachedDictionary<TKey extends DictionaryKey = DictionaryKe
       const loaded = await options.load(keys, active.signal);
       if (destroyed || active.signal.aborted) return;
       prime(loaded);
-      for (const [id, key] of entries) {
-        const value = get(key);
-        for (const waiter of waiting.get(id) ?? []) waiter.resolve(value);
-        waiting.delete(id);
-      }
+      resolveEntries(entries);
     } catch (error) {
       if (!active.signal.aborted) options.onError?.(error, keys);
-      for (const [id] of entries) {
-        for (const waiter of waiting.get(id) ?? []) waiter.reject(error);
-        waiting.delete(id);
-      }
+      rejectEntries(entries, error);
     } finally {
       if (controller === active) controller = null;
       if (!destroyed && queued.size > 0 && timer == null) timer = setTimeout(() => { void flush(); }, delay);

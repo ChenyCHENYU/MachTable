@@ -72,10 +72,7 @@ export function computeColumnWidths(cols: WidthInput[], availableWidth: number):
 }
 
 /** Fits columns into a viewport while honoring every min/max bound. */
-export function fitColumnWidths(cols: WidthInput[], availableWidth: number): number[] {
-  const widths = cols.map((column) => clampWidth(column.width ?? DEFAULT_COLUMN_WIDTH, column));
-  if (!Number.isFinite(availableWidth) || availableWidth <= 0 || cols.length === 0) return widths;
-
+function distributeFittedWidths(cols: WidthInput[], widths: number[], availableWidth: number): void {
   const active = new Set(cols.map((_column, index) => index));
   let remainingWidth = availableWidth;
   for (let pass = 0; pass < cols.length + 1 && active.size > 0; pass++) {
@@ -106,16 +103,25 @@ export function fitColumnWidths(cols: WidthInput[], availableWidth: number): num
     }
     remainingWidth = Math.max(0, remainingWidth);
   }
+}
 
+function correctWidthDrift(cols: WidthInput[], widths: number[], availableWidth: number): void {
   const drift = availableWidth - widths.reduce((sum, width) => sum + width, 0);
-  if (Math.abs(drift) > 0.01) {
-    for (let index = widths.length - 1; index >= 0; index--) {
-      const candidate = clampWidth(widths[index] + drift, cols[index]);
-      if (Math.abs(candidate - widths[index]) > 0.01) {
-        widths[index] = candidate;
-        break;
-      }
+  if (Math.abs(drift) <= 0.01) return;
+  for (let index = widths.length - 1; index >= 0; index--) {
+    const candidate = clampWidth(widths[index] + drift, cols[index]);
+    if (Math.abs(candidate - widths[index]) > 0.01) {
+      widths[index] = candidate;
+      return;
     }
   }
+}
+
+/** Fits columns into a viewport while honoring every min/max bound. */
+export function fitColumnWidths(cols: WidthInput[], availableWidth: number): number[] {
+  const widths = cols.map((column) => clampWidth(column.width ?? DEFAULT_COLUMN_WIDTH, column));
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0 || cols.length === 0) return widths;
+  distributeFittedWidths(cols, widths, availableWidth);
+  correctWidthDrift(cols, widths, availableWidth);
   return widths;
 }

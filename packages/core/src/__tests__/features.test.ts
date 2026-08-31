@@ -664,6 +664,60 @@ describe("locale", () => {
     expect(panel.querySelector(".mach-filter-btn-apply")?.textContent).toBe("Apply");
     api.destroy();
   });
+
+  it("preserves set-filter selections that are hidden by search", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [{ field: "name", headerName: "Name", filter: "set" }],
+      rowData: [
+        { id: "1", name: "alpha" },
+        { id: "2", name: "beta" },
+        { id: "3", name: "gamma" }
+      ],
+      locale: LOCALE_EN,
+      rowKey: (row) => row.id
+    });
+    host.querySelector<HTMLButtonElement>(".mach-filter-btn")!.click();
+    const panel = document.querySelector<HTMLElement>(".mach-filter-panel")!;
+    const beta = [...panel.querySelectorAll<HTMLLabelElement>(".mach-filter-set-item")]
+      .find((label) => label.textContent === "beta")!;
+    const betaCheckbox = beta.querySelector<HTMLInputElement>("input")!;
+    betaCheckbox.checked = false;
+    betaCheckbox.dispatchEvent(new Event("change"));
+
+    const search = panel.querySelector<HTMLInputElement>(".mach-filter-input--search")!;
+    search.value = "alpha";
+    search.dispatchEvent(new Event("input"));
+    panel.querySelector<HTMLButtonElement>(".mach-filter-btn-apply")!.click();
+
+    expect(api.filtering.getModel()).toEqual({ name: { type: "set", values: ["alpha", "gamma"] } });
+    expect(api.rows.getCount()).toBe(2);
+    api.destroy();
+  });
+
+  it("keeps numeric, string and null set-filter values distinct", () => {
+    interface MixedRow { id: string; value: string | number | null }
+    const host = createHost();
+    const api = createGrid<MixedRow>(host, {
+      columnDefs: [{ field: "value", filter: "set" }],
+      rowData: [
+        { id: "number", value: 1 },
+        { id: "string", value: "1" },
+        { id: "null", value: null }
+      ],
+      rowKey: "id"
+    });
+    host.querySelector<HTMLButtonElement>(".mach-filter-btn")!.click();
+    const panel = document.querySelector<HTMLElement>(".mach-filter-panel")!;
+    const checkboxes = panel.querySelectorAll<HTMLInputElement>(".mach-filter-set-item input");
+    checkboxes[1].checked = false;
+    checkboxes[1].dispatchEvent(new Event("change"));
+    panel.querySelector<HTMLButtonElement>(".mach-filter-btn-apply")!.click();
+
+    expect(api.filtering.getModel()).toEqual({ value: { type: "set", values: [1, null] } });
+    expect(api.rows.getCount()).toBe(2);
+    api.destroy();
+  });
 });
 
 describe("column workbench", () => {

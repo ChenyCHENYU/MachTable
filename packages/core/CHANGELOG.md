@@ -1,5 +1,13 @@
 # @agile-team/mach-table
 
+## 0.28.0
+
+### Minor Changes
+
+- Eliminate all 31 historical complexity allowances while retaining the strict per-function ceiling of 15; configuration, rendering, selection, filtering, layout and interaction paths now use focused internal units.
+- Preserve the frozen 0.25 public API snapshot and existing runtime behavior while strengthening maintainability before real-project adoption.
+- Keep set-filter selections stable while searching, distinguish numeric/string/null values with the same label, and prevent column-menu pointer presses from entering the column-drag path.
+
 ## 0.25.0
 
 ### Minor Changes

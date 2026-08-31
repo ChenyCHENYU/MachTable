@@ -124,42 +124,46 @@ export class SelectionService {
     if (node) this.setNodeSelected(node, selected, clearOthers);
   }
 
-  onRowClick(node: RowNode<any>, event: MouseEvent, fromCheckbox: boolean): void {
-    const mode = this.core.options.rowSelection;
-    if (mode === "none") return;
-    if (!this.isSelectable(node)) return;
+  private selectFromCheckbox(node: RowNode<any>, mode: "single" | "multiple"): void {
+    const single = mode === "single";
+    this.applySelection([{ node, selected: single ? true : !node.selected, clearOthers: single }]);
+    this.anchorId = node.id;
+  }
 
-    if (fromCheckbox) {
-      const single = mode === "single";
-      this.applySelection([{ node, selected: single ? true : !node.selected, clearOthers: single }]);
-      this.anchorId = node.id;
-      return;
-    }
+  private toggleFromModifier(node: RowNode<any>, event: MouseEvent, multiple: boolean): boolean {
+    if (!multiple || (!event.ctrlKey && !event.metaKey)) return false;
+    this.applySelection([{ node, selected: !node.selected }]);
+    this.anchorId = node.id;
+    return true;
+  }
 
-    const multi = mode === "multiple";
-    if (multi && (event.ctrlKey || event.metaKey)) {
-      this.applySelection([{ node, selected: !node.selected }]);
-      this.anchorId = node.id;
-      return;
-    }
-
-    if (multi && event.shiftKey && this.anchorId != null) {
-      const anchor = this.core.rowModel.getNodeById(this.anchorId);
-      if (anchor && anchor.rowIndex >= 0 && node.rowIndex >= 0) {
-        const start = Math.min(anchor.rowIndex, node.rowIndex);
-        const end = Math.max(anchor.rowIndex, node.rowIndex);
-        const changes = [];
-        for (let i = start; i <= end; i++) {
-          const row = this.core.rowModel.getDisplayedRow(i);
-          if (row && !row.isDetail && !row.isGroup && this.isSelectable(row)) {
-            changes.push({ node: row, selected: true });
-          }
-        }
-        this.applySelection(changes);
-        return;
+  private selectAnchorRange(node: RowNode<any>, event: MouseEvent, multiple: boolean): boolean {
+    if (!multiple || !event.shiftKey || this.anchorId == null) return false;
+    const anchor = this.core.rowModel.getNodeById(this.anchorId);
+    if (!anchor || anchor.rowIndex < 0 || node.rowIndex < 0) return false;
+    const start = Math.min(anchor.rowIndex, node.rowIndex);
+    const end = Math.max(anchor.rowIndex, node.rowIndex);
+    const changes = [];
+    for (let index = start; index <= end; index++) {
+      const row = this.core.rowModel.getDisplayedRow(index);
+      if (row && !row.isDetail && !row.isGroup && this.isSelectable(row)) {
+        changes.push({ node: row, selected: true });
       }
     }
+    this.applySelection(changes);
+    return true;
+  }
 
+  onRowClick(node: RowNode<any>, event: MouseEvent, fromCheckbox: boolean): void {
+    const mode = this.core.options.rowSelection;
+    if (mode === "none" || !this.isSelectable(node)) return;
+    if (fromCheckbox) {
+      this.selectFromCheckbox(node, mode);
+      return;
+    }
+    const multi = mode === "multiple";
+    if (this.toggleFromModifier(node, event, multi)) return;
+    if (this.selectAnchorRange(node, event, multi)) return;
     this.applySelection([{ node, selected: true, clearOthers: true }]);
     this.anchorId = node.id;
   }
@@ -211,35 +215,67 @@ export class SelectionService {
     this.applySelection(changes, clearOthers);
   }
 
+  private replaceSelection(
+    changes: { node: RowNode<any>; selected: boolean; clearOthers?: boolean }[],
+    clearAll: boolean,
+    cascadeTree: boolean
+  ): void {
+    if (!clearAll && !changes.some((change) => change.clearOthers)) return;
+    this.selectedIds = clearAll
+      ? new Set<string>()
+      : new Set(changes.filter((change) => change.selected).flatMap(
+        (change) => cascadeTree ? this.subtreeIds(change.node) : [change.node.id]
+      ));
+  }
+
+  private applySelectionChanges(
+    changes: { node: RowNode<any>; selected: boolean; clearOthers?: boolean }[],
+    cascadeTree: boolean
+  ): void {
+    for (const change of changes) {
+      if (!this.isSelectable(change.node)) continue;
+      const targets = cascadeTree ? this.subtreeIds(change.node) : [change.node.id];
+      for (const id of targets) {
+        if (change.selected) this.selectedIds.add(id);
+        else this.selectedIds.delete(id);
+      }
+    }
+  }
+
+  private changedSelectionIds(before: ReadonlySet<string>): Set<string> {
+    const changed = new Set<string>();
+    for (const id of new Set([...before, ...this.selectedIds])) {
+      if (before.has(id) !== this.selectedIds.has(id)) changed.add(id);
+    }
+    return changed;
+  }
+
+  private synchronizeNodeSelection(
+    changedIds: ReadonlySet<string>,
+    previousSelected: ReadonlyMap<string, boolean>,
+    previousIndeterminate: ReadonlySet<string>
+  ): number[] {
+    const refreshIndexes: number[] = [];
+    const touched = new Set<string>([...changedIds, ...previousIndeterminate, ...this.indeterminateIds]);
+    for (const node of this.core.rowModel.getAllNodes()) {
+      const selected = this.selectedIds.has(node.id);
+      node.selected = selected;
+      if ((touched.has(node.id) || previousSelected.get(node.id) !== selected) && node.rowIndex >= 0) {
+        refreshIndexes.push(node.rowIndex);
+      }
+    }
+    return refreshIndexes;
+  }
+
   private applySelection(
     changes: { node: RowNode<any>; selected: boolean; clearOthers?: boolean }[],
     clearAll = false
   ): void {
     const before = new Set(this.selectedIds);
-    const clearOthers = clearAll || changes.some((c) => c.clearOthers);
-    const isTree = this.core.rowModel.isTree && this.core.options.autoCheckedChildren;
-
-    if (clearOthers) {
-      const keep = clearAll
-        ? new Set<string>()
-        : new Set(changes.filter((c) => c.selected).flatMap((c) => (isTree ? this.subtreeIds(c.node) : [c.node.id])));
-      this.selectedIds = keep;
-    }
-
-    for (const c of changes) {
-      if (!this.isSelectable(c.node)) continue;
-      const targets = isTree ? this.subtreeIds(c.node) : [c.node.id];
-      for (const id of targets) {
-        if (c.selected) this.selectedIds.add(id);
-        else this.selectedIds.delete(id);
-      }
-    }
-
-    const changedIds = new Set<string>();
-    for (const id of new Set([...before, ...this.selectedIds])) {
-      if (before.has(id) !== this.selectedIds.has(id)) changedIds.add(id);
-    }
-
+    const cascadeTree = this.core.rowModel.isTree && this.core.options.autoCheckedChildren;
+    this.replaceSelection(changes, clearAll, cascadeTree);
+    this.applySelectionChanges(changes, cascadeTree);
+    const changedIds = this.changedSelectionIds(before);
     const prevSelected = new Map<string, boolean>();
     for (const node of this.core.rowModel.getAllNodes()) {
       prevSelected.set(node.id, node.selected);
@@ -247,17 +283,7 @@ export class SelectionService {
     const prevIndeterminate = new Set(this.indeterminateIds);
 
     this.recomputeTriState();
-
-    const refreshIndexes: number[] = [];
-    const touched = new Set<string>([...changedIds, ...prevIndeterminate, ...this.indeterminateIds]);
-    for (const node of this.core.rowModel.getAllNodes()) {
-      const isSel = this.selectedIds.has(node.id);
-      node.selected = isSel;
-      if (touched.has(node.id) || prevSelected.get(node.id) !== isSel) {
-        if (node.rowIndex >= 0) refreshIndexes.push(node.rowIndex);
-      }
-    }
-
+    const refreshIndexes = this.synchronizeNodeSelection(changedIds, prevSelected, prevIndeterminate);
     if (changedIds.size > 0) {
       this.core.bodyRenderer.refreshRows(refreshIndexes);
       this.core.headerRenderer.refreshSelectAllCheckbox();

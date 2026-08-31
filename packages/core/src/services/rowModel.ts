@@ -1334,63 +1334,79 @@ export class RowModel<TData = any> {
     return out;
   }
 
+  private collectSpanMasters(): RowNode<TData>[] {
+    const masters = this.mastersBuf;
+    let count = 0;
+    for (const node of this.displayed) {
+      if (!node.isDetail && !node.isGroup) masters[count++] = node;
+    }
+    masters.length = count;
+    return masters;
+  }
+
+  private explicitRowSpan(node: RowNode<TData>, column: ColumnLike, value: any, remaining: number): number {
+    const rowSpan = column.colDef.rowSpan;
+    if (!rowSpan) return 1;
+    try {
+      const requested = rowSpan({
+        api: this.core.getApi(), colDef: column.colDef, column, node,
+        data: node.data, value, rowIndex: node.rowIndex
+      });
+      return Math.max(1, Math.min(Math.round(requested) || 1, remaining));
+    } catch (error) {
+      this.core.reportError(error, "rowSpan", { colId: column.id, rowId: node.id });
+      return 1;
+    }
+  }
+
+  private automaticRowSpan(
+    masters: RowNode<TData>[],
+    index: number,
+    column: ColumnLike,
+    value: any,
+    getCellValue: (node: RowNode<any>, column: ColumnLike) => any
+  ): number {
+    if (!column.colDef.autoRowSpan || value == null || value === "") return 1;
+    let span = 1;
+    while (
+      index + span < masters.length &&
+      defaultComparator(value, getCellValue(masters[index + span], column)) === 0
+    ) span++;
+    return span;
+  }
+
+  private computeColumnSpans(
+    masters: RowNode<TData>[],
+    column: ColumnLike,
+    getCellValue: (node: RowNode<any>, column: ColumnLike) => any
+  ): Int32Array {
+    const spans = new Int32Array(masters.length);
+    let index = 0;
+    while (index < masters.length) {
+      const node = masters[index];
+      const value = getCellValue(node, column);
+      const span = column.colDef.rowSpan
+        ? this.explicitRowSpan(node, column, value, masters.length - index)
+        : this.automaticRowSpan(masters, index, column, value, getCellValue);
+      spans[index] = span;
+      for (let offset = 1; offset < span; offset++) spans[index + offset] = -1;
+      index += span;
+    }
+    return spans;
+  }
+
   private computeSpans(getCellValue: (node: RowNode<any>, column: ColumnLike) => any): void {
     this.spanInfo.clear();
-    if (this.isTree) return;
-    if (this.core.options.masterDetail) return;
+    if (this.isTree || this.core.options.masterDetail) return;
     if (this.core.columnModel.getRowGroupColumns().length > 0) return;
-
-    const spanColumns = this.core.columnModel.getOrderedVisible().filter(
-      (c) => c.colDef.rowSpan != null || c.colDef.autoRowSpan === true
+    const columns = this.core.columnModel.getOrderedVisible().filter(
+      (column) => column.colDef.rowSpan != null || column.colDef.autoRowSpan === true
     );
-    if (spanColumns.length === 0) return;
-
-    const masters = this.mastersBuf;
-    let m = 0;
-    for (const node of this.displayed) {
-      if (!node.isDetail && !node.isGroup) masters[m++] = node;
-    }
-    masters.length = m;
-    const n = m;
-    if (n === 0) return;
-
-    for (const col of spanColumns) {
-      const arr = new Int32Array(n);
-      let i = 0;
-      while (i < n) {
-        const node = masters[i];
-        const value = getCellValue(node, col);
-        let span = 1;
-        if (col.colDef.rowSpan) {
-          try {
-            const out = col.colDef.rowSpan({
-              api: this.core.getApi(),
-              colDef: col.colDef,
-              column: col,
-              node,
-              data: node.data,
-              value,
-              rowIndex: node.rowIndex
-            });
-            span = Math.max(1, Math.min(Math.round(out) || 1, n - i));
-          } catch (error) {
-            this.core.reportError(error, "rowSpan", { colId: col.id, rowId: node.id });
-          }
-        } else if (col.colDef.autoRowSpan) {
-          while (
-            i + span < n &&
-            value != null &&
-            value !== "" &&
-            defaultComparator(value, getCellValue(masters[i + span], col)) === 0
-          ) {
-            span++;
-          }
-        }
-        arr[i] = span;
-        for (let k = 1; k < span; k++) arr[i + k] = -1;
-        i += span;
-      }
-      this.spanInfo.set(col.id, arr);
+    if (columns.length === 0) return;
+    const masters = this.collectSpanMasters();
+    if (masters.length === 0) return;
+    for (const column of columns) {
+      this.spanInfo.set(column.id, this.computeColumnSpans(masters, column, getCellValue));
     }
   }
 

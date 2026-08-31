@@ -49,6 +49,18 @@ interface PaneTree {
   children: PaneTree[];
 }
 
+type HeaderComponentOutput = string | HTMLElement | { el: HTMLElement; destroy?: () => void } | null | undefined;
+
+const HEADER_CONTROL_SELECTOR = ".mach-header-resize, .mach-filter-btn, .mach-menu-btn, .mach-select-all";
+
+function isHeaderControl(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.closest(HEADER_CONTROL_SELECTOR) != null;
+}
+
+function isHorizontalArrow(key: string): boolean {
+  return key === "ArrowLeft" || key === "ArrowRight";
+}
+
 export class HeaderRenderer {
   private leafCells: HeaderCell[] = [];
   private groupCells: GroupCell[] = [];
@@ -173,138 +185,168 @@ export class HeaderRenderer {
   }
 
   private createLeafCell(column: Column, rowSpan: number, perRowHeight: number): HeaderCell {
-    const colDef = column.colDef;
     const cellEl = el("div", "mach-header-cell mach-header-cell--leaf");
     cellEl.dataset.colId = column.id;
     cellEl.setAttribute("role", "columnheader");
     cellEl.style.height = `${rowSpan * perRowHeight}px`;
+    this.applyLeafPresentation(cellEl, column);
+    this.attachHeaderFocus(cellEl, column);
 
+    const selectAllEl = this.appendSelectAll(cellEl, column);
+    this.appendHeaderContent(cellEl, column);
+    const sortEl = el("span", "mach-sort-indicator");
+    cellEl.appendChild(sortEl);
+    const { filterBtn, filterTagEl } = this.appendFilterControls(cellEl, column);
+    this.appendColumnMenu(cellEl, column);
+    this.appendResizeHandle(cellEl, column);
+    this.attachLeafInteractions(cellEl, column);
+    return { column, el: cellEl, sortEl, filterBtn, filterTagEl, selectAllEl };
+  }
+
+  private applyLeafPresentation(cellEl: HTMLElement, column: Column): void {
+    const colDef = column.colDef;
     if (typeof colDef.headerClass === "string") cellEl.classList.add(colDef.headerClass);
     else if (Array.isArray(colDef.headerClass)) cellEl.classList.add(...colDef.headerClass);
     if (colDef.headerTooltip) cellEl.setAttribute("title", colDef.headerTooltip);
-
     const headerAlign = colDef.headerAlign ?? colDef.align;
     if (headerAlign === "center") cellEl.classList.add("mach-header-cell--center");
     else if (headerAlign === "right") cellEl.classList.add("mach-header-cell--right");
+  }
 
-    if (!this.core.options.suppressHeaderFocus) {
-      cellEl.tabIndex = -1;
-      cellEl.addEventListener("mousedown", () => this.focusHeaderCell(column));
-      cellEl.addEventListener("keydown", (e: KeyboardEvent) => this.onHeaderKeyDown(e, column));
-    }
+  private attachHeaderFocus(cellEl: HTMLElement, column: Column): void {
+    if (this.core.options.suppressHeaderFocus) return;
+    cellEl.tabIndex = -1;
+    cellEl.addEventListener("mousedown", () => this.focusHeaderCell(column));
+    cellEl.addEventListener("keydown", (event: KeyboardEvent) => this.onHeaderKeyDown(event, column));
+  }
 
-    let selectAllEl: HTMLInputElement | undefined;
-    if (column.hasCheckbox && this.core.options.rowSelection === "multiple") {
-      selectAllEl = document.createElement("input");
-      selectAllEl.type = "checkbox";
-      selectAllEl.className = "mach-select-all";
-      selectAllEl.setAttribute("aria-label", "select all rows");
-      selectAllEl.addEventListener("click", (e) => e.stopPropagation());
-      selectAllEl.addEventListener("change", () => {
-        if (selectAllEl!.checked) this.core.selectionService.selectAll(true);
-        else this.core.selectionService.deselectAll();
-      });
-      cellEl.appendChild(selectAllEl);
-    }
+  private appendSelectAll(cellEl: HTMLElement, column: Column): HTMLInputElement | undefined {
+    if (!column.hasCheckbox || this.core.options.rowSelection !== "multiple") return undefined;
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "mach-select-all";
+    checkbox.setAttribute("aria-label", "select all rows");
+    checkbox.addEventListener("click", (event) => event.stopPropagation());
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) this.core.selectionService.selectAll(true);
+      else this.core.selectionService.deselectAll();
+    });
+    cellEl.appendChild(checkbox);
+    return checkbox;
+  }
 
+  private appendHeaderContent(cellEl: HTMLElement, column: Column): void {
+    const colDef = column.colDef;
     const headerComponent = colDef.headerComponent;
-    if (headerComponent) {
-      let out: string | HTMLElement | { el: HTMLElement; destroy?: () => void } | null | undefined;
-      try {
-        out = headerComponent({ colDef, column, api: this.core.getApi() });
-      } catch (err) {
-        this.core.reportError(err, "headerComponent", { colId: column.id });
-        out = null;
-      }
-      if (typeof out === "string") {
-        const labelEl = el("span", "mach-header-label");
-        labelEl.textContent = out;
-        cellEl.appendChild(labelEl);
-      } else if (out instanceof HTMLElement) {
-        const wrapper = el("span", "mach-header-label mach-header-label--custom");
-        wrapper.appendChild(out);
-        cellEl.appendChild(wrapper);
-      } else if (out && typeof out === "object" && out.el instanceof HTMLElement) {
-        const wrapper = el("span", "mach-header-label mach-header-label--custom");
-        wrapper.appendChild(out.el);
-        cellEl.appendChild(wrapper);
-        setHeaderDestroyer(cellEl, out.destroy);
-      } else {
-        const labelEl = el("span", "mach-header-label");
-        labelEl.textContent = colDef.headerName ?? colDef.field ?? column.id;
-        cellEl.appendChild(labelEl);
-      }
-    } else {
-      const labelEl = el("span", "mach-header-label");
-      labelEl.textContent = colDef.headerName ?? colDef.field ?? column.id;
-      cellEl.appendChild(labelEl);
+    let output: HeaderComponentOutput;
+    if (!headerComponent) {
+      this.appendHeaderLabel(cellEl, colDef.headerName ?? colDef.field ?? column.id);
+      return;
     }
-
-    const sortEl = el("span", "mach-sort-indicator");
-    cellEl.appendChild(sortEl);
-
-    let filterBtn: HTMLButtonElement | undefined;
-    let filterTagEl: HTMLElement | undefined;
-    if (column.filterable) {
-      filterBtn = document.createElement("button");
-      filterBtn.type = "button";
-      filterBtn.className = "mach-filter-btn";
-      filterBtn.setAttribute("aria-label", `filter ${column.id}`);
-      filterBtn.innerHTML = FILTER_ICON;
-      filterBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.core.filterPopup.toggle(column, filterBtn!);
-      });
-      cellEl.appendChild(filterBtn);
-      filterTagEl = el("span", "mach-filter-tag");
-      cellEl.appendChild(filterTagEl);
+    try {
+      output = headerComponent({ colDef, column, api: this.core.getApi() });
+    } catch (error) {
+      this.core.reportError(error, "headerComponent", { colId: column.id });
+      output = null;
     }
+    this.appendHeaderComponentOutput(cellEl, column, output);
+  }
 
-    if (this.core.options.columnMenu) {
-      const menuBtn = document.createElement("button");
-      menuBtn.type = "button";
-      menuBtn.className = "mach-menu-btn";
-      menuBtn.setAttribute("aria-label", "column menu");
-      menuBtn.textContent = "⋯";
-      menuBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.core.columnMenu.toggle(column, menuBtn);
-      });
-      cellEl.appendChild(menuBtn);
+  private appendHeaderComponentOutput(
+    cellEl: HTMLElement,
+    column: Column,
+    output: HeaderComponentOutput
+  ): void {
+    if (typeof output === "string") {
+      this.appendHeaderLabel(cellEl, output);
+      return;
     }
-
-    if (this.canResizeColumn(column)) {
-      const resizeEl = el("div", "mach-header-resize");
-      resizeEl.setAttribute("aria-hidden", "true");
-      resizeEl.addEventListener("pointerdown", (e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        this.core.resizeService.startResize(e, column);
-      });
-      resizeEl.addEventListener("dblclick", (e) => {
-        e.stopPropagation();
-        this.core.getApi().columns.autoSize(column.id);
-      });
-      resizeEl.addEventListener("click", (e) => e.stopPropagation());
-      cellEl.appendChild(resizeEl);
+    if (output instanceof HTMLElement) {
+      this.appendCustomHeader(cellEl, output);
+      return;
     }
+    if (output && typeof output === "object" && output.el instanceof HTMLElement) {
+      this.appendCustomHeader(cellEl, output.el);
+      setHeaderDestroyer(cellEl, output.destroy);
+      return;
+    }
+    const colDef = column.colDef;
+    this.appendHeaderLabel(cellEl, colDef.headerName ?? colDef.field ?? column.id);
+  }
 
-    cellEl.addEventListener("click", (e) => {
-      if (this.core.columnDragService.didDrag()) return;
-      const target = e.target as HTMLElement;
-      if (target.closest(".mach-header-resize, .mach-filter-btn, .mach-select-all")) return;
-      if (column.sortable) this.core.cycleSort(column, e.shiftKey);
+  private appendHeaderLabel(cellEl: HTMLElement, value: string): void {
+    const labelEl = el("span", "mach-header-label");
+    labelEl.textContent = value;
+    cellEl.appendChild(labelEl);
+  }
+
+  private appendCustomHeader(cellEl: HTMLElement, content: HTMLElement): void {
+    const wrapper = el("span", "mach-header-label mach-header-label--custom");
+    wrapper.appendChild(content);
+    cellEl.appendChild(wrapper);
+  }
+
+  private appendFilterControls(
+    cellEl: HTMLElement,
+    column: Column
+  ): Pick<HeaderCell, "filterBtn" | "filterTagEl"> {
+    if (!column.filterable) return {};
+    const filterBtn = document.createElement("button");
+    filterBtn.type = "button";
+    filterBtn.className = "mach-filter-btn";
+    filterBtn.setAttribute("aria-label", `filter ${column.id}`);
+    filterBtn.innerHTML = FILTER_ICON;
+    filterBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.core.filterPopup.toggle(column, filterBtn);
     });
+    cellEl.appendChild(filterBtn);
+    const filterTagEl = el("span", "mach-filter-tag");
+    cellEl.appendChild(filterTagEl);
+    return { filterBtn, filterTagEl };
+  }
 
-    cellEl.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;
-      const target = e.target as HTMLElement;
-      if (target.closest(".mach-header-resize, .mach-filter-btn, .mach-select-all")) return;
-      this.core.columnDragService.onPointerDown(e, column);
+  private appendColumnMenu(cellEl: HTMLElement, column: Column): void {
+    if (!this.core.options.columnMenu) return;
+    const menuBtn = document.createElement("button");
+    menuBtn.type = "button";
+    menuBtn.className = "mach-menu-btn";
+    menuBtn.setAttribute("aria-label", "column menu");
+    menuBtn.textContent = "⋯";
+    menuBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.core.columnMenu.toggle(column, menuBtn);
     });
+    cellEl.appendChild(menuBtn);
+  }
 
-    return { column, el: cellEl, sortEl, filterBtn, filterTagEl, selectAllEl };
+  private appendResizeHandle(cellEl: HTMLElement, column: Column): void {
+    if (!this.canResizeColumn(column)) return;
+    const resizeEl = el("div", "mach-header-resize");
+    resizeEl.setAttribute("aria-hidden", "true");
+    resizeEl.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.core.resizeService.startResize(event, column);
+    });
+    resizeEl.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      this.core.getApi().columns.autoSize(column.id);
+    });
+    resizeEl.addEventListener("click", (event) => event.stopPropagation());
+    cellEl.appendChild(resizeEl);
+  }
+
+  private attachLeafInteractions(cellEl: HTMLElement, column: Column): void {
+    cellEl.addEventListener("click", (event) => {
+      if (this.core.columnDragService.didDrag() || isHeaderControl(event.target)) return;
+      if (column.sortable) this.core.cycleSort(column, event.shiftKey);
+    });
+    cellEl.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || isHeaderControl(event.target)) return;
+      this.core.columnDragService.onPointerDown(event, column);
+    });
   }
 
   private createGroupCell(group: ColumnGroup<any>): HTMLElement {
@@ -366,55 +408,68 @@ export class HeaderRenderer {
 
   private onHeaderKeyDown(e: KeyboardEvent, column: Column): void {
     if (this.core.isDestroyed()) return;
-    const resize = (delta: number): void => {
-      const next = Math.max(
-        column.colDef.minWidth ?? 40,
-        column.currentWidth + delta
-      );
-      this.core.columnModel.setColumnWidth(column, next);
-      this.core.relayoutColumns();
-      this.core.commitColumnWidths([column]);
-      e.preventDefault();
-    };
+    if (this.activateHeaderFromKeyboard(e, column)) return;
+    if (this.resizeColumnFromKeyboard(e, column)) return;
+    if (this.moveColumnFromKeyboard(e, column)) return;
+    if (this.focusAdjacentHeader(e, column)) return;
+    this.focusBoundaryHeader(e);
+  }
 
-    switch (true) {
-      case e.key === "Enter" || e.key === " ":
-        if ((e.target as HTMLElement).closest(".mach-header-resize, .mach-filter-btn, .mach-select-all")) return;
-        e.preventDefault();
-        if (column.sortable) this.core.cycleSort(column, e.shiftKey);
-        return;
-      case e.altKey && (e.key === "ArrowRight" || e.key === "ArrowLeft"):
-        if (!this.canResizeColumn(column)) return;
-        resize(e.key === "ArrowRight" ? 24 : -24);
-        return;
-      case e.ctrlKey && (e.key === "ArrowLeft" || e.key === "ArrowRight"):
-        if (!column.movable) return;
-        e.preventDefault(); {
-          const pane = this.core.columnModel.paneOf(column);
-          const siblings = this.core.columnModel.getPaneColumns(pane);
-          const from = siblings.indexOf(column);
-          const to = e.key === "ArrowRight" ? Math.min(siblings.length - 1, from + 1) : Math.max(0, from - 1);
-          if (to !== from) this.core.moveColumn(column.id, to);
-        }
-        return;
-      case !e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowLeft" || e.key === "ArrowRight"):
-        e.preventDefault(); {
-          const columns = this.core.columnModel.getOrderedVisible();
-          const current = columns.indexOf(column);
-          const next = e.key === "ArrowRight"
-            ? Math.min(columns.length - 1, current + 1)
-            : Math.max(0, current - 1);
-          if (current >= 0) this.focusHeaderCell(columns[next]);
-        }
-        return;
-      case e.key === "Home" || e.key === "End":
-        e.preventDefault();
-        const columns = this.core.columnModel.getOrderedVisible();
-        if (columns.length > 0) {
-          this.focusHeaderCell(e.key === "Home" ? columns[0] : columns[columns.length - 1]);
-        }
-        return;
+  private activateHeaderFromKeyboard(event: KeyboardEvent, column: Column): boolean {
+    if (event.key !== "Enter" && event.key !== " ") return false;
+    if (isHeaderControl(event.target)) return true;
+    event.preventDefault();
+    if (column.sortable) this.core.cycleSort(column, event.shiftKey);
+    return true;
+  }
+
+  private resizeColumnFromKeyboard(event: KeyboardEvent, column: Column): boolean {
+    if (!event.altKey || !isHorizontalArrow(event.key)) return false;
+    if (!this.canResizeColumn(column)) return true;
+    const delta = event.key === "ArrowRight" ? 24 : -24;
+    const next = Math.max(column.colDef.minWidth ?? 40, column.currentWidth + delta);
+    this.core.columnModel.setColumnWidth(column, next);
+    this.core.relayoutColumns();
+    this.core.commitColumnWidths([column]);
+    event.preventDefault();
+    return true;
+  }
+
+  private moveColumnFromKeyboard(event: KeyboardEvent, column: Column): boolean {
+    if (!event.ctrlKey || !isHorizontalArrow(event.key)) return false;
+    if (!column.movable) return true;
+    event.preventDefault();
+    const pane = this.core.columnModel.paneOf(column);
+    const siblings = this.core.columnModel.getPaneColumns(pane);
+    const from = siblings.indexOf(column);
+    const offset = event.key === "ArrowRight" ? 1 : -1;
+    const to = Math.max(0, Math.min(siblings.length - 1, from + offset));
+    if (to !== from) this.core.moveColumn(column.id, to);
+    return true;
+  }
+
+  private focusAdjacentHeader(event: KeyboardEvent, column: Column): boolean {
+    if (event.altKey || event.ctrlKey || event.metaKey || !isHorizontalArrow(event.key)) {
+      return false;
     }
+    event.preventDefault();
+    const columns = this.core.columnModel.getOrderedVisible();
+    const current = columns.indexOf(column);
+    if (current < 0) return true;
+    const offset = event.key === "ArrowRight" ? 1 : -1;
+    const next = Math.max(0, Math.min(columns.length - 1, current + offset));
+    this.focusHeaderCell(columns[next]);
+    return true;
+  }
+
+  private focusBoundaryHeader(event: KeyboardEvent): boolean {
+    if (event.key !== "Home" && event.key !== "End") return false;
+    event.preventDefault();
+    const columns = this.core.columnModel.getOrderedVisible();
+    if (columns.length === 0) return true;
+    const index = event.key === "Home" ? 0 : columns.length - 1;
+    this.focusHeaderCell(columns[index]);
+    return true;
   }
 
   private focusHeaderCell(column: Column): void {

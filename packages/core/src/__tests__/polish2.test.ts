@@ -102,6 +102,34 @@ describe("header keyboard accessibility", () => {
     api.destroy();
   });
 
+  it("does not start column dragging from the column menu button", () => {
+    const moved = vi.fn();
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: defs,
+      rowData: rows,
+      columnMenu: true,
+      pagination: false,
+      rowKey: (row) => row.id
+    });
+    api.on("columnMoved", moved);
+    const menu = host.querySelector<HTMLButtonElement>(
+      '.mach-header-cell[data-col-id="name"] .mach-menu-btn'
+    )!;
+    menu.dispatchEvent(new MouseEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      clientX: 10,
+      clientY: 10
+    }));
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 180, clientY: 10 }));
+    window.dispatchEvent(new MouseEvent("pointerup", { clientX: 180, clientY: 10 }));
+
+    expect(moved).not.toHaveBeenCalled();
+    expect(host.querySelector(".mach-drop-indicator")).toBeNull();
+    api.destroy();
+  });
+
   it("suppressHeaderFocus removes tabindex", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

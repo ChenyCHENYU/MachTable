@@ -1,6 +1,6 @@
 # 企业级项目接入手册
 
-本文面向真实 B 端项目落地，覆盖依赖、目录、全局约定、页面封装、远程查询、编辑保存、状态、监控、测试和上线。示例以 `0.25.x` 为基线。
+本文面向真实 B 端项目落地，覆盖依赖、目录、全局约定、页面封装、远程查询、编辑保存、状态、监控、测试和上线。示例以 `0.28.x` 为基线。
 
 ## 1. 接入前决策
 
@@ -22,9 +22,9 @@
 业务只安装一个框架适配包：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.25.0
+pnpm add @agile-team/mach-table-vue@^0.28.0
 # 或
-pnpm add @agile-team/mach-table-react@^0.25.0
+pnpm add @agile-team/mach-table-react@^0.28.0
 ```
 
 适配包自动安装匹配的 Core。Vue 项目只需提供 `vue >= 3.2`；React 项目提供 `react/react-dom >= 18`。

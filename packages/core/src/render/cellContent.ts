@@ -230,50 +230,63 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
   updateCellTooltip(core, cell, node, column, value, formatted);
 }
 
-export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
-  const value = core.getCellValue(node, column);
-  const classes = ["mach-cell"];
+function appendAlignmentClass(classes: string[], column: Column, value: any): void {
   const align = column.colDef.align;
   if (align === "center") {
     classes.push("mach-cell--center");
-  } else if (align === "right") {
+    return;
+  }
+  if (align === "right") {
     classes.push("mach-cell--right");
-  } else if (hasColumnType(column.colDef, "rightAligned") || hasColumnType(column.colDef, "numericColumn") || (typeof value === "number" && value != null)) {
-    classes.push("mach-cell--num");
+    return;
   }
+  const numeric = hasColumnType(column.colDef, "rightAligned") ||
+    hasColumnType(column.colDef, "numericColumn") || typeof value === "number";
+  if (numeric) classes.push("mach-cell--num");
+}
 
+function appendConfiguredClasses(
+  core: CellValueContext,
+  classes: string[],
+  node: RowNode<any>,
+  column: Column,
+  value: any
+): void {
   const rule = column.colDef.cellClass;
-  if (rule) {
-    if (typeof rule === "function") {
-      const params: CellClassParams = {
-        api: core.getApi(),
-        colDef: column.colDef,
-        column,
-        node,
-        data: node.data,
-        value,
-        rowIndex: node.rowIndex
-      };
-      try {
-        const result = rule(params);
-        if (typeof result === "string") classes.push(result);
-        else if (Array.isArray(result)) classes.push(...result);
-      } catch (error) {
-        core.reportError(error, "cellClass", { colId: column.id, rowId: node.id });
-      }
-    } else if (typeof rule === "string") {
-      classes.push(rule);
-    } else if (Array.isArray(rule)) {
-      classes.push(...rule);
-    }
+  if (!rule) return;
+  if (typeof rule === "string") {
+    classes.push(rule);
+    return;
   }
+  if (Array.isArray(rule)) {
+    classes.push(...rule);
+    return;
+  }
+  const params: CellClassParams = {
+    api: core.getApi(), colDef: column.colDef, column, node,
+    data: node.data, value, rowIndex: node.rowIndex
+  };
+  try {
+    const result = rule(params);
+    if (typeof result === "string") classes.push(result);
+    else if (Array.isArray(result)) classes.push(...result);
+  } catch (error) {
+    core.reportError(error, "cellClass", { colId: column.id, rowId: node.id });
+  }
+}
 
-  const hadFocus = cell.classList.contains("mach-cell--focus");
-  const hadEditing = cell.classList.contains("mach-cell--editing");
-  if (hadFocus) classes.push("mach-cell--focus");
-  if (hadEditing) classes.push("mach-cell--editing");
+function appendRuntimeClasses(classes: string[], cell: HTMLElement, column: Column): void {
+  if (cell.classList.contains("mach-cell--focus")) classes.push("mach-cell--focus");
+  if (cell.classList.contains("mach-cell--editing")) classes.push("mach-cell--editing");
   if (column.colDef.wrapText) classes.push("mach-cell--wrap");
+}
 
+export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
+  const value = core.getCellValue(node, column);
+  const classes = ["mach-cell"];
+  appendAlignmentClass(classes, column, value);
+  appendConfiguredClasses(core, classes, node, column, value);
+  appendRuntimeClasses(classes, cell, column);
   const className = classes.join(" ");
   if (cell.className !== className) cell.className = className;
 }

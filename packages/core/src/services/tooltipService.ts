@@ -62,6 +62,39 @@ export class TooltipService {
     this.panel = null;
   }
 
+  private resolveCell(cell: HTMLElement): { node: import("../types/row").RowNode<any>; column: Column; index: number } | null {
+    const colId = cell.dataset.colId ?? "";
+    const index = Number(cell.closest<HTMLElement>(".mach-row")?.dataset.index);
+    if (Number.isNaN(index)) return null;
+    const node = this.core.rowModel.getDisplayedRow(index);
+    const column = colId ? this.core.columnModel.getColumn(colId) : undefined;
+    if (!node || !column || node.isDetail || node.isGroup) return null;
+    return { node, column, index };
+  }
+
+  private createParams(
+    node: import("../types/row").RowNode<any>,
+    column: Column,
+    index: number
+  ): TooltipParams<any> {
+    return {
+      data: node.data, node, api: this.core.getApi(), colId: column.id,
+      value: this.core.getCellValue(node, column),
+      formatted: formatCellValue(this.core, node, column), rowIndex: index
+    };
+  }
+
+  private hasTooltipValue(params: TooltipParams<any>, column: Column): boolean {
+    const getter = column.colDef.tooltipValueGetter;
+    if (!getter) return Boolean(params.formatted);
+    try {
+      getter({ ...params, colDef: column.colDef, column });
+    } catch (error) {
+      this.core.reportError(error, "tooltipValueGetter", { colId: column.id, rowId: params.node.id });
+    }
+    return true;
+  }
+
   private onMouseOver = (e: MouseEvent): void => {
     if (this.core.isDestroyed()) return;
     if (!this.core.options.tooltipComponent) return;
@@ -72,36 +105,11 @@ export class TooltipService {
     this.clearTimers();
     this.removePanel();
     this.currentCell = cell;
-
-    const colId = cell.dataset.colId ?? "";
-    const rowEl = cell.closest<HTMLElement>(".mach-row");
-    const index = Number(rowEl?.dataset.index);
-    const node = Number.isNaN(index) ? undefined : this.core.rowModel.getDisplayedRow(index);
-    const column: Column | undefined = colId ? this.core.columnModel.getColumn(colId) : undefined;
-    if (!node || !column || node.isDetail || node.isGroup) return;
+    const resolved = this.resolveCell(cell);
+    if (!resolved) return;
     if (cell.classList.contains("mach-cell--editing")) return;
-
-    const value = this.core.getCellValue(node, column);
-    const params: TooltipParams<any> = {
-      data: node.data,
-      node,
-      api: this.core.getApi(),
-      colId: column.id,
-      value,
-      formatted: formatCellValue(this.core, node, column),
-      rowIndex: index
-    };
-
-    const getter = column.colDef.tooltipValueGetter;
-    let fallback = params.formatted;
-    if (getter) {
-      try {
-        fallback = getter({ ...params, colDef: column.colDef, column }) ?? params.formatted;
-      } catch (error) {
-        this.core.reportError(error, "tooltipValueGetter", { colId: column.id, rowId: node.id });
-      }
-    }
-    if (!fallback && !column.colDef.tooltipValueGetter) return;
+    const params = this.createParams(resolved.node, resolved.column, resolved.index);
+    if (!this.hasTooltipValue(params, resolved.column)) return;
 
     this.showTimer = setTimeout(() => {
       if (this.core.isDestroyed() || this.currentCell !== cell) return;

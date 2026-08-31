@@ -120,7 +120,7 @@ const metrics = api.diagnostics.getPerformance();
 
 日常只验证运行时代码可执行 `pnpm build:runtime`，跳过耗时的声明汇总；正式包必须执行 `pnpm build:release`，保留 `.d.ts` 但不发布约占旧包 70% 解压空间的 `.map`。项目仍使用 tsup + esbuild：当前瓶颈是 TypeScript 声明汇总，不是 JS 打包，因此没有为了工具潮流迁移到 tsdown。
 
-0.25 没有增加名不副实的 `/lite`：当前可选 Worker、工作流、UI、适配器、编辑器和 XLSX 已是独立子入口，业务 bundler 会按 import tree-shake；再复制一个能力残缺但内核相同的 Lite 入口不会降低实际应用体积，只会制造第二套 API。只有拆分后能在真实 Vue/React 消费样本中稳定减少至少 20% gzip，才会增加该入口。
+0.28 没有增加名不副实的 `/lite`：当前可选 Worker、工作流、UI、适配器、编辑器和 XLSX 已是独立子入口，业务 bundler 会按 import tree-shake；再复制一个能力残缺但内核相同的 Lite 入口不会降低实际应用体积，只会制造第二套 API。只有拆分后能在真实 Vue/React 消费样本中稳定减少至少 20% gzip，才会增加该入口。
 
 框架包把 Vue、React、ReactDOM 和 Core 声明为 external/peer dependency，因此 Vue 应用不会打入 React 适配代码，反之亦然。
 

@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.28.0
+
+### Patch Changes
+
+- Keep the optional XLSX bridge aligned with the governed 0.28 Core release; the workbook engine remains external and optional.
+- Updated dependencies:
+  - @agile-team/mach-table@0.28.0
+
 ## 0.25.0
 
 ### Patch Changes

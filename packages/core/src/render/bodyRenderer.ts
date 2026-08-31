@@ -55,6 +55,51 @@ interface RowSlot {
   detailRow?: HTMLElement;
 }
 
+interface RowLayoutState {
+  autoHeightColumns: Column[];
+  positionedCount: number;
+  rowCount: number;
+  rowHeight: number;
+  signature: string;
+  variable: boolean;
+}
+
+interface FillPattern {
+  difference: number;
+  integer: boolean;
+  numeric: boolean;
+  values: any[];
+}
+
+interface MasterRowState {
+  expanded: boolean;
+  expandable: boolean;
+  level: number | null;
+}
+
+function isFillableColumn(column: Column | undefined): column is Column {
+  return !!column && !column.hasCheckbox && !column.isDetailToggle && !column.colDef.rowDrag;
+}
+
+function createFillPattern(values: any[]): FillPattern {
+  const numeric = values.length > 1 && values.every(
+    (value) => typeof value === "number" && !Number.isNaN(value)
+  );
+  const difference = numeric
+    ? (values[values.length - 1] - values[0]) / (values.length - 1)
+    : 0;
+  const integer = !numeric || values.every((value) => Number.isInteger(value));
+  return { difference, integer, numeric, values };
+}
+
+function fillPatternValue(pattern: FillPattern, offset: number): any {
+  const count = pattern.values.length;
+  if (count === 1) return pattern.values[0];
+  if (!pattern.numeric) return pattern.values[offset % count];
+  const raw = pattern.values[count - 1] + pattern.difference * (offset - count + 1);
+  return pattern.integer ? Math.round(raw) : Math.round(raw * 1e6) / 1e6;
+}
+
 type CellRenderKind = "standard" | "group" | "detail" | "checkbox" | "drag" | "index" | "tree";
 
 export interface FocusedCell {
@@ -181,52 +226,92 @@ export class BodyRenderer {
     const widths = this.paneWidths();
     this.columnViewport.update(this.core.columnModel.getPaneColumns("center"));
     widths.center = this.columnViewport.totalWidth();
-    const viewport = sk.bodyViewports.center;
     const displayed = this.core.rowModel.getDisplayedRows();
+    const layout = this.resolveRowLayout(displayed.length);
+    this.syncRowSizeIndex(displayed, layout);
+    const totalHeight = this.totalRowLayoutHeight(layout);
+    this.applyRowContainerDimensions(widths, totalHeight);
+    this.applyDomLayoutHeight(totalHeight);
+    sk.root.setAttribute("aria-rowcount", String(layout.rowCount + sk.getHeaderRowCount()));
+  }
+
+  private resolveRowLayout(displayedCount: number): RowLayoutState {
     const rowCount = this.core.rowModel.getDisplayTotalCount();
-    const positionedCount = Math.min(rowCount, displayed.length);
     const rowHeight = this.core.options.rowHeight;
-    const autoHeightCols = this.core.options.masterDetail ? [] : this.collectAutoHeightColumns();
+    const autoHeightColumns = this.core.options.masterDetail ? [] : this.collectAutoHeightColumns();
     // Sparse random-access blocks cannot materialize a variable-height prefix for every remote row.
     const variable = this.core.options.datasourceMode !== "block" && (
-      this.core.options.masterDetail || this.core.options.getRowHeight != null || autoHeightCols.length > 0
+      this.core.options.masterDetail ||
+      this.core.options.getRowHeight != null ||
+      autoHeightColumns.length > 0
     );
     const signature = variable
-      ? `${this.core.rowModel.getDisplayRevision()}|${rowHeight}|${this.core.options.detailRowHeight}|${autoHeightCols.map((column) => `${column.id}:${column.currentWidth}`).join(",")}`
+      ? this.variableRowLayoutSignature(rowHeight, autoHeightColumns)
       : `fixed|${rowHeight}`;
-    if (!variable) {
-      if (this.rowSizes.length > 0) this.rowSizes.reset([], () => rowHeight);
-      this.rowLayoutSignature = signature;
-      this.dirtyHeightNodes.clear();
-      this.lastMinRowHeight = rowHeight;
-    } else if (signature !== this.rowLayoutSignature || this.rowSizes.length !== positionedCount) {
-      const positioned = displayed.slice(0, positionedCount);
-      this.rowSizes.reset(positioned, (node) => this.resolveRowHeight(node, autoHeightCols));
-      this.rowLayoutSignature = signature;
-      this.dirtyHeightNodes.clear();
-      this.lastMinRowHeight = this.rowSizes.minimumSize() || rowHeight;
-    } else if (this.dirtyHeightNodes.size > 0) {
-      for (const node of this.dirtyHeightNodes) {
-        const index = this.rowSizes.indexOf(node);
-        if (index >= 0) this.rowSizes.update(index, this.resolveRowHeight(node, autoHeightCols));
-      }
-      this.dirtyHeightNodes.clear();
-      this.lastMinRowHeight = this.rowSizes.minimumSize() || rowHeight;
-    }
-    const positionedHeight = variable ? this.rowSizes.totalSize() : positionedCount * rowHeight;
-    const totalHeight = positionedHeight + Math.max(0, rowCount - positionedCount) * rowHeight;
+    return {
+      autoHeightColumns,
+      positionedCount: Math.min(rowCount, displayedCount),
+      rowCount,
+      rowHeight,
+      signature,
+      variable
+    };
+  }
 
+  private variableRowLayoutSignature(rowHeight: number, columns: Column[]): string {
+    const columnWidths = columns.map((column) => `${column.id}:${column.currentWidth}`).join(",");
+    return `${this.core.rowModel.getDisplayRevision()}|${rowHeight}|${this.core.options.detailRowHeight}|${columnWidths}`;
+  }
+
+  private syncRowSizeIndex(displayed: RowNode<any>[], layout: RowLayoutState): void {
+    if (!layout.variable) {
+      this.resetFixedRowSizes(layout);
+      return;
+    }
+    if (layout.signature !== this.rowLayoutSignature || this.rowSizes.length !== layout.positionedCount) {
+      const positioned = displayed.slice(0, layout.positionedCount);
+      this.rowSizes.reset(positioned, (node) => this.resolveRowHeight(node, layout.autoHeightColumns));
+      this.completeRowSizeSync(layout);
+      return;
+    }
+    if (this.dirtyHeightNodes.size === 0) return;
+    for (const node of this.dirtyHeightNodes) {
+      const index = this.rowSizes.indexOf(node);
+      if (index >= 0) this.rowSizes.update(index, this.resolveRowHeight(node, layout.autoHeightColumns));
+    }
+    this.completeRowSizeSync(layout);
+  }
+
+  private resetFixedRowSizes(layout: RowLayoutState): void {
+    if (this.rowSizes.length > 0) this.rowSizes.reset([], () => layout.rowHeight);
+    this.rowLayoutSignature = layout.signature;
+    this.dirtyHeightNodes.clear();
+    this.lastMinRowHeight = layout.rowHeight;
+  }
+
+  private completeRowSizeSync(layout: RowLayoutState): void {
+    this.rowLayoutSignature = layout.signature;
+    this.dirtyHeightNodes.clear();
+    this.lastMinRowHeight = this.rowSizes.minimumSize() || layout.rowHeight;
+  }
+
+  private totalRowLayoutHeight(layout: RowLayoutState): number {
+    const positionedHeight = layout.variable
+      ? this.rowSizes.totalSize()
+      : layout.positionedCount * layout.rowHeight;
+    return positionedHeight + Math.max(0, layout.rowCount - layout.positionedCount) * layout.rowHeight;
+  }
+
+  private applyRowContainerDimensions(widths: Record<PaneType, number>, totalHeight: number): void {
+    const sk = this.core.skeleton;
+    const viewport = sk.bodyViewports.center;
     const centerAvailable = Math.max(0, viewport.clientWidth - widths.left - widths.right);
     const centerWidth = Math.max(widths.center, centerAvailable);
-
     for (const pane of PANES) {
       const container = sk.rowContainers[pane];
       container.style.height = `${totalHeight}px`;
       if (pane === "center") container.style.width = `${centerWidth}px`;
     }
-    this.applyDomLayoutHeight(totalHeight);
-
-    sk.root.setAttribute("aria-rowcount", String(rowCount + sk.getHeaderRowCount()));
   }
 
   invalidateRowHeight(node: RowNode<any>): void {
@@ -470,43 +555,59 @@ export class BodyRenderer {
   }
 
   applyCellLayout(): void {
-    const variableHeights =
-      this.core.options.masterDetail ||
-      this.core.options.getRowHeight != null ||
-      this.hasAnyAutoHeight;
+    const variableHeights = this.hasVariableRowHeights();
     for (const pane of PANES) {
       const allPaneCols = this.core.columnModel.getPaneColumns(pane);
-      const cols = this.activePaneColumns(pane);
-      let x = 0;
-      const lefts: number[] = [];
-      if (pane === "center" && cols.length > 0) {
-        const first = allPaneCols.indexOf(cols[0]);
-        this.columnViewport.update(allPaneCols);
-        x = this.columnViewport.offsetAt(first);
-      }
-      for (const col of cols) {
-        lefts.push(x);
-        x += col.currentWidth;
-      }
-      for (const slot of this.pool) {
-        const cells = slot.cells[pane];
-        const row = slot.rows[pane];
-        if (!cells || !row) continue;
-        if (!variableHeights) {
-          row.style.height = `${this.core.options.rowHeight}px`;
-        }
-        for (let i = 0; i < cols.length && i < cells.length; i++) {
-          cells[i].style.width = `${cols[i].currentWidth}px`;
-          cells[i].style.left = `${lefts[i]}px`;
-          cells[i].setAttribute("aria-colindex", String(this.core.columnModel.getFlatIndex(cols[i].id) + 1));
-        }
-      }
-      if (this.core.options.masterDetail) {
-        for (const slot of this.pool) {
-          slot.detailRow?.style.setProperty("--mach-detail-h", `${this.core.options.detailRowHeight}px`);
-        }
+      const columns = this.activePaneColumns(pane);
+      const lefts = this.paneColumnLefts(pane, columns, allPaneCols);
+      this.layoutPoolPane(pane, columns, lefts, variableHeights);
+    }
+    this.applyDetailRowHeight();
+  }
+
+  private hasVariableRowHeights(): boolean {
+    return this.core.options.masterDetail || this.core.options.getRowHeight != null || this.hasAnyAutoHeight;
+  }
+
+  private paneColumnLefts(pane: PaneType, columns: Column[], allPaneColumns: Column[]): number[] {
+    let offset = 0;
+    if (pane === "center" && columns.length > 0) {
+      this.columnViewport.update(allPaneColumns);
+      offset = this.columnViewport.offsetAt(allPaneColumns.indexOf(columns[0]));
+    }
+    const lefts: number[] = [];
+    for (const column of columns) {
+      lefts.push(offset);
+      offset += column.currentWidth;
+    }
+    return lefts;
+  }
+
+  private layoutPoolPane(
+    pane: PaneType,
+    columns: Column[],
+    lefts: number[],
+    variableHeights: boolean
+  ): void {
+    for (const slot of this.pool) {
+      const cells = slot.cells[pane];
+      const row = slot.rows[pane];
+      if (!cells || !row) continue;
+      if (!variableHeights) row.style.height = `${this.core.options.rowHeight}px`;
+      const count = Math.min(columns.length, cells.length);
+      for (let index = 0; index < count; index++) {
+        const column = columns[index];
+        cells[index].style.width = `${column.currentWidth}px`;
+        cells[index].style.left = `${lefts[index]}px`;
+        cells[index].setAttribute("aria-colindex", String(this.core.columnModel.getFlatIndex(column.id) + 1));
       }
     }
+  }
+
+  private applyDetailRowHeight(): void {
+    if (!this.core.options.masterDetail) return;
+    const height = `${this.core.options.detailRowHeight}px`;
+    for (const slot of this.pool) slot.detailRow?.style.setProperty("--mach-detail-h", height);
   }
 
   private computeColWindow(): boolean {
@@ -643,64 +744,85 @@ export class BodyRenderer {
     const h = this.rowTop(index + 1) - y;
 
     if (node.isDetail) {
-      slot.kind = "detail";
-      for (const pane of PANES) {
-        const row = slot.rows[pane];
-        if (row) row.style.display = "none";
-      }
-      const detailRow = slot.detailRow;
-      if (detailRow) {
-        detailRow.style.display = "";
-        detailRow.style.transform = `translateY(${y}px)`;
-        detailRow.style.height = `${h}px`;
-        detailRow.dataset.index = String(index);
-        detailRow.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
-        this.renderDetailContent(detailRow, node);
-      }
+      this.assignDetailSlot(slot, node, index, y, h);
       return;
     }
+    this.assignMasterSlot(slot, node, index, y, h);
+  }
 
+  private assignDetailSlot(slot: RowSlot, node: RowNode<any>, index: number, y: number, h: number): void {
+    slot.kind = "detail";
+    for (const pane of PANES) {
+      const row = slot.rows[pane];
+      if (row) row.style.display = "none";
+    }
+    const detailRow = slot.detailRow;
+    if (!detailRow) return;
+    detailRow.style.display = "";
+    detailRow.style.transform = `translateY(${y}px)`;
+    detailRow.style.height = `${h}px`;
+    detailRow.dataset.index = String(index);
+    detailRow.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
+    this.renderDetailContent(detailRow, node);
+  }
+
+  private assignMasterSlot(slot: RowSlot, node: RowNode<any>, index: number, y: number, h: number): void {
     slot.kind = "master";
     if (slot.detailRow) slot.detailRow.style.display = "none";
+    const state = this.resolveMasterRowState(node);
+    for (const pane of PANES) {
+      const row = slot.rows[pane];
+      if (!row) continue;
+      this.applyMasterRowState(row, node, index, y, h, state);
+      this.renderPaneCells(slot, node, pane);
+    }
+    if (this.focusedCell && this.focusedCell.rowIndex === index) {
+      this.applyFocusClass();
+    }
+  }
 
+  private resolveMasterRowState(node: RowNode<any>): MasterRowState {
     const isTreeRow = this.core.rowModel.isTree;
     const isGroupRow = node.isGroup === true;
     const hasTreeChildren = isTreeRow && this.core.rowModel.hasChildren(node.id);
-    const isExpandable = isGroupRow || hasTreeChildren ||
+    const expandable = isGroupRow || hasTreeChildren ||
       (this.core.options.masterDetail && this.core.rowModel.isRowExpandable(node));
     const expanded = isGroupRow
       ? this.core.rowModel.isGroupExpanded(node.id)
       : this.core.rowModel.isRowExpanded(node.id);
-    const level = isGroupRow
-      ? (node.groupLevel ?? 0) + 1
-      : isTreeRow
-        ? this.core.rowModel.getTreeDepth(node) + 1
-        : null;
+    let level: number | null = null;
+    if (isGroupRow) level = (node.groupLevel ?? 0) + 1;
+    else if (isTreeRow) level = this.core.rowModel.getTreeDepth(node) + 1;
+    return { expanded, expandable, level };
+  }
 
-    for (const pane of PANES) {
-      const row = slot.rows[pane];
-      if (!row) continue;
-      row.style.display = "";
-      row.style.transform = `translateY(${y}px)`;
-      row.style.height = `${h}px`;
-      row.dataset.index = String(index);
-      row.dataset.id = node.id;
-      row.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
-      row.classList.toggle("mach-row--selected", node.selected);
-      row.classList.toggle("mach-row--hover", this.hoverIndex === index && !this.core.options.suppressRowHoverHighlight);
-      row.classList.toggle("mach-row--odd", index % 2 === 1);
-      row.setAttribute("aria-selected", node.selected ? "true" : "false");
-      if (isExpandable) row.setAttribute("aria-expanded", expanded ? "true" : "false");
-      else row.removeAttribute("aria-expanded");
-      if (level != null) row.setAttribute("aria-level", String(level));
-      else row.removeAttribute("aria-level");
+  private applyMasterRowState(
+    row: HTMLElement,
+    node: RowNode<any>,
+    index: number,
+    y: number,
+    h: number,
+    state: MasterRowState
+  ): void {
+    row.style.display = "";
+    row.style.transform = `translateY(${y}px)`;
+    row.style.height = `${h}px`;
+    row.dataset.index = String(index);
+    row.dataset.id = node.id;
+    row.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
+    row.classList.toggle("mach-row--selected", node.selected);
+    const hovered = this.hoverIndex === index && !this.core.options.suppressRowHoverHighlight;
+    row.classList.toggle("mach-row--hover", hovered);
+    row.classList.toggle("mach-row--odd", index % 2 === 1);
+    row.setAttribute("aria-selected", node.selected ? "true" : "false");
+    this.applyExpandableRowState(row, state);
+  }
 
-      this.renderPaneCells(slot, node, pane);
-    }
-
-    if (this.focusedCell && this.focusedCell.rowIndex === index) {
-      this.applyFocusClass();
-    }
+  private applyExpandableRowState(row: HTMLElement, state: MasterRowState): void {
+    if (state.expandable) row.setAttribute("aria-expanded", state.expanded ? "true" : "false");
+    else row.removeAttribute("aria-expanded");
+    if (state.level != null) row.setAttribute("aria-level", String(state.level));
+    else row.removeAttribute("aria-level");
   }
 
   private renderPaneCells(slot: RowSlot, node: RowNode<any>, pane: PaneType): void {
@@ -1009,53 +1131,69 @@ export class BodyRenderer {
   }
 
   private renderGroupCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
-    const base = "mach-cell";
     if (column.hasCheckbox) {
-      const input = cell.querySelector<HTMLInputElement>(".mach-row-checkbox");
-      if (input) {
-        const state = this.core.selectionService.getGroupSelectionState(node);
-        input.checked = state.all;
-        input.indeterminate = state.some && !state.all;
-      }
-      if (cell.className !== `${base} mach-cell--selection`) cell.className = `${base} mach-cell--selection`;
+      this.renderGroupCheckbox(cell, node);
       return;
     }
     if (column.isDetailToggle) {
-      cell.textContent = "";
-      if (cell.className !== base) cell.className = base;
+      this.clearGroupCell(cell);
       return;
     }
     const labelCol = this.core.columnModel.getGroupLabelColumn();
     if (labelCol && column.id === labelCol.id) {
-      cell.setAttribute("aria-expanded", this.core.rowModel.isGroupExpanded(node.id) ? "true" : "false");
-      cell.setAttribute("aria-level", String((node.groupLevel ?? 0) + 1));
-      const wrap = el("span", "mach-group-label");
-      wrap.style.paddingLeft = `${(node.groupLevel ?? 0) * 16}px`;
-      const toggle = el("span", `mach-detail-toggle${this.core.rowModel.isGroupExpanded(node.id) ? " mach-detail-toggle--open" : ""}`);
-      toggle.textContent = "▶";
-      const text = el("span", "mach-group-text");
-      const groupCol = this.core.columnModel.getRowGroupColumns()[node.groupLevel ?? 0];
-      const prefix = groupCol?.colDef.headerName ? `${groupCol.colDef.headerName}: ` : "";
-      text.textContent = `${prefix}${node.groupKey ?? ""}`;
-      const count = el("span", "mach-group-count");
-      count.textContent = `(${node.leafNodes?.length ?? 0})`;
-      wrap.append(toggle, text, count);
-      cell.replaceChildren(wrap);
-      if (cell.className !== `${base} mach-cell--group`) cell.className = `${base} mach-cell--group`;
+      this.renderGroupLabel(cell, node);
       return;
     }
-    if (column.colDef.aggFunc && node.aggValues && Object.prototype.hasOwnProperty.call(node.aggValues, column.id)) {
-      const value = node.aggValues[column.id];
-      const formatted =
-        column.colDef.valueFormatter != null
-          ? formatCellValueWith(this.core, node, column, value)
-          : defaultFormat(value);
-      cell.textContent = formatted;
-      if (cell.className !== `${base} mach-cell--num`) cell.className = `${base} mach-cell--num`;
-      return;
+    if (this.renderGroupAggregate(cell, node, column)) return;
+    this.clearGroupCell(cell);
+  }
+
+  private renderGroupCheckbox(cell: HTMLElement, node: RowNode<any>): void {
+    const input = cell.querySelector<HTMLInputElement>(".mach-row-checkbox");
+    if (input) {
+      const state = this.core.selectionService.getGroupSelectionState(node);
+      input.checked = state.all;
+      input.indeterminate = state.some && !state.all;
     }
+    if (cell.className !== "mach-cell mach-cell--selection") {
+      cell.className = "mach-cell mach-cell--selection";
+    }
+  }
+
+  private renderGroupLabel(cell: HTMLElement, node: RowNode<any>): void {
+    const expanded = this.core.rowModel.isGroupExpanded(node.id);
+    const level = node.groupLevel ?? 0;
+    cell.setAttribute("aria-expanded", expanded ? "true" : "false");
+    cell.setAttribute("aria-level", String(level + 1));
+    const wrap = el("span", "mach-group-label");
+    wrap.style.paddingLeft = `${level * 16}px`;
+    const toggle = el("span", `mach-detail-toggle${expanded ? " mach-detail-toggle--open" : ""}`);
+    toggle.textContent = "▶";
+    const text = el("span", "mach-group-text");
+    const groupColumn = this.core.columnModel.getRowGroupColumns()[level];
+    const prefix = groupColumn?.colDef.headerName ? `${groupColumn.colDef.headerName}: ` : "";
+    text.textContent = `${prefix}${node.groupKey ?? ""}`;
+    const count = el("span", "mach-group-count");
+    count.textContent = `(${node.leafNodes?.length ?? 0})`;
+    wrap.append(toggle, text, count);
+    cell.replaceChildren(wrap);
+    if (cell.className !== "mach-cell mach-cell--group") cell.className = "mach-cell mach-cell--group";
+  }
+
+  private renderGroupAggregate(cell: HTMLElement, node: RowNode<any>, column: Column): boolean {
+    if (!column.colDef.aggFunc || !node.aggValues) return false;
+    if (!Object.prototype.hasOwnProperty.call(node.aggValues, column.id)) return false;
+    const value = node.aggValues[column.id];
+    cell.textContent = column.colDef.valueFormatter != null
+      ? formatCellValueWith(this.core, node, column, value)
+      : defaultFormat(value);
+    if (cell.className !== "mach-cell mach-cell--num") cell.className = "mach-cell mach-cell--num";
+    return true;
+  }
+
+  private clearGroupCell(cell: HTMLElement): void {
     cell.textContent = "";
-    if (cell.className !== base) cell.className = base;
+    if (cell.className !== "mach-cell") cell.className = "mach-cell";
   }
 
   refreshRows(indexes: number[]): void {
@@ -1483,38 +1621,7 @@ export class BodyRenderer {
     this.core.undoService.beginBatch();
     try {
       for (let r = r1; r <= r2; r++) {
-        const srcNode = this.core.rowModel.getDisplayedRow(r);
-        if (!srcNode || srcNode.isDetail || srcNode.isGroup) continue;
-        const sources: any[] = [];
-        for (let c = c1; c <= c2; c++) {
-          const col = flat[c];
-          sources.push(col ? this.core.getCellValue(srcNode, col) : undefined);
-        }
-        const n = c2 - c1 + 1;
-        const allNumeric =
-          n > 1 && sources.every((v) => typeof v === "number" && !isNaN(v));
-        const diff = allNumeric ? (sources[n - 1] - sources[0]) / (n - 1) : 0;
-        const intPattern =
-          !allNumeric || sources.every((v) => Number.isInteger(v));
-
-        for (let t = c2 + 1; t <= targetEnd; t++) {
-          const col = flat[t];
-          if (!col || col.hasCheckbox || col.isDetailToggle || col.colDef.rowDrag) continue;
-          if (!this.core.editingService.isEditable(srcNode, col)) continue;
-          const colOffset = t - c1;
-          let value: any;
-          if (n === 1) {
-            value = sources[0];
-          } else if (allNumeric) {
-            const steps = colOffset - (n - 1);
-            value = sources[n - 1] + diff * steps;
-            value = intPattern ? Math.round(value) : Math.round(value * 1e6) / 1e6;
-          } else {
-            value = sources[colOffset % n];
-          }
-          const old = this.core.getCellValue(srcNode, col);
-          if (this.core.setCellValue(srcNode, col, value, old)) changedRows.add(r);
-        }
+        this.fillHorizontalRow(r, c1, c2, targetEnd, flat, changedRows);
       }
     } finally {
       this.core.undoService.endBatch();
@@ -1524,6 +1631,31 @@ export class BodyRenderer {
       this.refreshRows([...changedRows]);
       this.core.summaryRenderer.refresh();
       this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
+    }
+  }
+
+  private fillHorizontalRow(
+    rowIndex: number,
+    sourceStart: number,
+    sourceEnd: number,
+    targetEnd: number,
+    columns: Column[],
+    changedRows: Set<number>
+  ): void {
+    const node = this.core.rowModel.getDisplayedRow(rowIndex);
+    if (!node || node.isDetail || node.isGroup) return;
+    const sources: any[] = [];
+    for (let index = sourceStart; index <= sourceEnd; index++) {
+      const column = columns[index];
+      sources.push(column ? this.core.getCellValue(node, column) : undefined);
+    }
+    const pattern = createFillPattern(sources);
+    for (let index = sourceEnd + 1; index <= targetEnd; index++) {
+      const column = columns[index];
+      if (!isFillableColumn(column) || !this.core.editingService.isEditable(node, column)) continue;
+      const value = fillPatternValue(pattern, index - sourceStart);
+      const oldValue = this.core.getCellValue(node, column);
+      if (this.core.setCellValue(node, column, value, oldValue)) changedRows.add(rowIndex);
     }
   }
 
@@ -1600,49 +1732,38 @@ export class BodyRenderer {
   ): void {
     for (let c = c1; c <= c2; c++) {
       const col = flat[c];
-      if (!col || col.hasCheckbox || col.isDetailToggle || col.colDef.rowDrag) continue;
-
-      const sources: any[] = [];
-      let allNumeric = r1 < r2;
-      for (let r = r1; r <= r2; r++) {
-        const node = this.core.rowModel.getDisplayedRow(r);
-        if (!node) {
-          allNumeric = false;
-          sources.push(undefined);
-          continue;
-        }
-        const v = this.core.getCellValue(node, col);
-        sources.push(v);
-        if (typeof v !== "number" || isNaN(v)) allNumeric = false;
-      }
-      if (sources[0] === undefined && sources.length === 1) continue;
-
-      const n = r2 - r1 + 1;
-      let diff = 0;
-      let intPattern = true;
-      if (allNumeric) {
-        diff = (sources[n - 1] - sources[0]) / (n - 1);
-        for (const v of sources) if (!Number.isInteger(v)) intPattern = false;
-      }
-
-      for (let r = r2 + 1; r <= targetEnd; r++) {
-        const node = this.core.rowModel.getDisplayedRow(r);
-        if (!node || node.isDetail || node.isGroup) continue;
-        if (!this.core.editingService.isEditable(node, col)) continue;
-        let value: any;
-        if (n === 1) {
-          value = sources[0];
-        } else if (allNumeric) {
-          const steps = r - r2;
-          value = sources[n - 1] + diff * steps;
-          value = intPattern ? Math.round(value) : Math.round(value * 1e6) / 1e6;
-        } else {
-          value = sources[(r - r1) % n];
-        }
-        const old = this.core.getCellValue(node, col);
-        if (this.core.setCellValue(node, col, value, old)) changedRows.add(r);
-      }
+      if (!isFillableColumn(col)) continue;
+      this.fillColumnDown(col, r1, r2, targetEnd, changedRows);
     }
+  }
+
+  private fillColumnDown(
+    column: Column,
+    sourceStart: number,
+    sourceEnd: number,
+    targetEnd: number,
+    changedRows: Set<number>
+  ): void {
+    const values = this.verticalSourceValues(column, sourceStart, sourceEnd);
+    if (values.length === 1 && values[0] === undefined) return;
+    const pattern = createFillPattern(values);
+    for (let rowIndex = sourceEnd + 1; rowIndex <= targetEnd; rowIndex++) {
+      const node = this.core.rowModel.getDisplayedRow(rowIndex);
+      if (!node || node.isDetail || node.isGroup) continue;
+      if (!this.core.editingService.isEditable(node, column)) continue;
+      const value = fillPatternValue(pattern, rowIndex - sourceStart);
+      const oldValue = this.core.getCellValue(node, column);
+      if (this.core.setCellValue(node, column, value, oldValue)) changedRows.add(rowIndex);
+    }
+  }
+
+  private verticalSourceValues(column: Column, start: number, end: number): any[] {
+    const values: any[] = [];
+    for (let rowIndex = start; rowIndex <= end; rowIndex++) {
+      const node = this.core.rowModel.getDisplayedRow(rowIndex);
+      values.push(node ? this.core.getCellValue(node, column) : undefined);
+    }
+    return values;
   }
 
   setFocusedCell(rowIndex: number | null, colId: string | null): void {
@@ -1760,66 +1881,77 @@ export class BodyRenderer {
     const resolved = this.resolveEventTarget(e);
     if (!resolved) return;
     const { node, index, cellEl } = resolved;
-
-    if (node.isGroup) {
-      this.focusGridRoot();
-      const checkbox = (e.target as HTMLElement).closest?.(".mach-row-checkbox");
-      if (checkbox) {
-        this.core.selectionService.setGroupSelected(node, !this.core.selectionService.getGroupSelectionState(node).all);
-        return;
-      }
-      const labelCol = this.core.columnModel.getGroupLabelColumn();
-      if (!labelCol || !cellEl || cellEl.dataset.colId === labelCol.id) {
-        this.core.rowModel.toggleGroup(node.id);
-      }
-      return;
-    }
-
     const target = e.target as HTMLElement;
-
+    if (this.handleGroupRowClick(target, node, cellEl)) return;
     if (this.handleTreeToggleClick(target, node, cellEl)) return;
-
     const colId = cellEl?.dataset.colId ?? "";
     const column = colId ? this.core.columnModel.getColumn(colId) : undefined;
-
-    if (column?.isDetailToggle && !node.isDetail) {
-      this.focusGridRoot();
-      this.core.toggleDetail(node.id);
-      return;
-    }
-
+    if (this.handleDetailToggleClick(node, column)) return;
     if (node.isDetail) return;
-
-    if (target.closest?.(".mach-row-checkbox")) {
-      this.focusGridRoot();
-      if (!this.core.options.suppressCellFocus) this.setFocusedCell(index, this.firstCheckboxColId());
-      this.core.selectionService.onRowClick(node, e, true);
-      return;
-    }
-
+    if (this.handleSelectionCheckboxClick(target, node, index, e)) return;
     if (!cellEl || !column) return;
-
     this.focusGridRoot();
     if (!this.core.options.suppressCellFocus) this.setFocusedCell(index, colId);
     this.core.selectionService.onRowClick(node, e, false);
+    this.emitCellClick(e, node, index, column);
+    this.maybeStartSingleClickEdit(node, index, column);
+  };
 
+  private handleGroupRowClick(target: HTMLElement, node: RowNode<any>, cell: HTMLElement | null): boolean {
+    if (!node.isGroup) return false;
+    this.focusGridRoot();
+    if (target.closest(".mach-row-checkbox")) {
+      const selected = this.core.selectionService.getGroupSelectionState(node).all;
+      this.core.selectionService.setGroupSelected(node, !selected);
+      return true;
+    }
+    const labelColumn = this.core.columnModel.getGroupLabelColumn();
+    if (!labelColumn || !cell || cell.dataset.colId === labelColumn.id) {
+      this.core.rowModel.toggleGroup(node.id);
+    }
+    return true;
+  }
+
+  private handleDetailToggleClick(node: RowNode<any>, column: Column | undefined): boolean {
+    if (!column?.isDetailToggle || node.isDetail) return false;
+    this.focusGridRoot();
+    this.core.toggleDetail(node.id);
+    return true;
+  }
+
+  private handleSelectionCheckboxClick(
+    target: HTMLElement,
+    node: RowNode<any>,
+    index: number,
+    event: MouseEvent
+  ): boolean {
+    if (!target.closest(".mach-row-checkbox")) return false;
+    this.focusGridRoot();
+    if (!this.core.options.suppressCellFocus) this.setFocusedCell(index, this.firstCheckboxColId());
+    this.core.selectionService.onRowClick(node, event, true);
+    return true;
+  }
+
+  private emitCellClick(event: MouseEvent, node: RowNode<any>, index: number, column: Column): void {
     const value = this.core.getCellValue(node, column);
-    const event = this.core.emit("cellClicked", {
-      event: e,
+    const cellEvent = this.core.emit("cellClicked", {
+      event,
       rowNode: node,
       rowIndex: index,
       column,
       colDef: column.colDef,
       value
     });
-    column.colDef.onCellClick?.(event);
-    this.core.emit("rowClicked", { event: e, rowNode: node, rowIndex: index });
+    column.colDef.onCellClick?.(cellEvent);
+    this.core.emit("rowClicked", { event, rowNode: node, rowIndex: index });
+  }
 
+  private maybeStartSingleClickEdit(node: RowNode<any>, index: number, column: Column): void {
     const singleClick = this.core.options.singleClickEdit || column.colDef.singleClickEdit === true;
-    if (singleClick && !node.isGroup && this.core.editingService.isEditable(node, column)) {
+    if (singleClick && this.core.editingService.isEditable(node, column)) {
       this.core.editingService.start(index, column);
     }
-  };
+  }
 
   private handleTreeToggleClick(target: HTMLElement, node: RowNode<any>, cell: HTMLElement | null): boolean {
     if (!this.core.rowModel.isTree || !target.closest(".mach-detail-toggle")) return false;

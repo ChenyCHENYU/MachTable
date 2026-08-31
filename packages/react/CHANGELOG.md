@@ -1,5 +1,16 @@
 # @agile-team/mach-table-react
 
+## 0.28.0
+
+### Minor Changes
+
+- Adopt the complexity-free 0.28 Core baseline without changing React component, Provider, hook or workflow contracts.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.28.0
+
 ## 0.25.0
 
 ### Minor Changes

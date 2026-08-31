@@ -28,6 +28,41 @@ function composeHandlers(base: unknown, next: unknown): unknown {
   };
 }
 
+function mergeComponents<TData>(base: GridOptions<TData>, next: Partial<GridOptions<TData>>): GridOptions<TData>["components"] {
+  if (!base.components && !next.components) return undefined;
+  return {
+    cellRenderers: { ...base.components?.cellRenderers, ...next.components?.cellRenderers },
+    cellEditors: { ...base.components?.cellEditors, ...next.components?.cellEditors }
+  };
+}
+
+function mergeColumnTypes<TData>(base: GridOptions<TData>, next: Partial<GridOptions<TData>>): GridOptions<TData>["columnTypes"] {
+  if (!base.columnTypes && !next.columnTypes) return undefined;
+  const columnTypes: Record<string, Record<string, unknown>> = {};
+  const names = new Set([...Object.keys(base.columnTypes ?? {}), ...Object.keys(next.columnTypes ?? {})]);
+  for (const name of names) {
+    columnTypes[name] = {
+      ...(base.columnTypes?.[name] as Record<string, unknown> | undefined),
+      ...(next.columnTypes?.[name] as Record<string, unknown> | undefined)
+    };
+  }
+  return columnTypes as GridOptions<TData>["columnTypes"];
+}
+
+function composeOptionHandlers<TData>(
+  merged: GridOptions<TData>,
+  base: GridOptions<TData>,
+  next: Partial<GridOptions<TData>>
+): void {
+  for (const key of new Set([...Object.keys(base), ...Object.keys(next)])) {
+    if (!/^on[A-Z]/.test(key)) continue;
+    const previousHandler = (base as Record<string, unknown>)[key];
+    const nextHandler = (next as Record<string, unknown>)[key];
+    if (typeof previousHandler !== "function" || typeof nextHandler !== "function") continue;
+    (merged as Record<string, unknown>)[key] = composeHandlers(previousHandler, nextHandler);
+  }
+}
+
 function mergeOptions<TData>(base: GridOptions<TData>, next: Partial<GridOptions<TData>>): GridOptions<TData> {
   const merged: GridOptions<TData> = {
     ...base,
@@ -40,37 +75,17 @@ function mergeOptions<TData>(base: GridOptions<TData>, next: Partial<GridOptions
   if (base.locale || next.locale) {
     merged.locale = { ...base.locale, ...next.locale };
   }
-  if (base.components || next.components) {
-    merged.components = {
-      cellRenderers: { ...base.components?.cellRenderers, ...next.components?.cellRenderers },
-      cellEditors: { ...base.components?.cellEditors, ...next.components?.cellEditors }
-    };
-  }
-  if (base.columnTypes || next.columnTypes) {
-    const columnTypes: Record<string, Record<string, unknown>> = {};
-    for (const name of new Set([...Object.keys(base.columnTypes ?? {}), ...Object.keys(next.columnTypes ?? {})])) {
-      columnTypes[name] = {
-        ...(base.columnTypes?.[name] as Record<string, unknown> | undefined),
-        ...(next.columnTypes?.[name] as Record<string, unknown> | undefined)
-      };
-    }
-    merged.columnTypes = columnTypes;
-  }
+  const components = mergeComponents(base, next);
+  if (components) merged.components = components;
+  const columnTypes = mergeColumnTypes(base, next);
+  if (columnTypes) merged.columnTypes = columnTypes;
   if (base.aggFuncs || next.aggFuncs) {
     merged.aggFuncs = { ...base.aggFuncs, ...next.aggFuncs };
   }
   merged.pagination = mergeSwitchableObject(base.pagination, next.pagination);
   merged.statusBar = mergeSwitchableObject(base.statusBar, next.statusBar);
   merged.watermark = mergeSwitchableObject(base.watermark, next.watermark);
-
-  for (const key of new Set([...Object.keys(base), ...Object.keys(next)])) {
-    if (!/^on[A-Z]/.test(key)) continue;
-    const previousHandler = (base as Record<string, unknown>)[key];
-    const nextHandler = (next as Record<string, unknown>)[key];
-    if (typeof previousHandler === "function" && typeof nextHandler === "function") {
-      (merged as Record<string, unknown>)[key] = composeHandlers(previousHandler, nextHandler);
-    }
-  }
+  composeOptionHandlers(merged, base, next);
   return merged;
 }
 
