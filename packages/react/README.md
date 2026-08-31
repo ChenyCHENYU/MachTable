@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-Official React 18+ adapter for MachTable 0.19. It provides a generic `<MachTable>`, full app/route configuration, advanced-filter aware remote query, conflict-aware editing workflows, persistent named views, a cohesive controller, optional and persistent column resizing, random-access remote blocks, batched/domain APIs, optional Worker processing, a standard toolbar, in-place React cell refresh, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official React 18+ adapter for MachTable 0.23. It provides a generic `<MachTable>`, full app/route configuration, advanced-filter aware remote query, conflict-aware editing workflows, persistent named views, a cohesive controller, optional and persistent column resizing, bounded random-access remote blocks, governed domain APIs, optional Worker processing, a standard toolbar, in-place React cell refresh, latest-closure event handling and StrictMode-safe cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 

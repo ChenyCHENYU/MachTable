@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-Official Vue 3 adapter for MachTable 0.19. It provides a generic `<MachTable>`, native typed slots, dedicated app/route configuration, cohesive controllers, advanced-filter aware remote query, conflict-aware editing composables, persistent named views, optional and persistent column resizing, random-access remote blocks, batched/domain APIs, optional Worker processing, an optional standard toolbar, optional Element Plus editors, async boundaries, in-place renderer refresh and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
+Official Vue 3 adapter for MachTable 0.23. It provides a generic `<MachTable>`, native typed slots, dedicated app/route configuration, cohesive controllers, advanced-filter aware remote query, conflict-aware editing composables, persistent named views, optional and persistent column resizing, bounded random-access remote blocks, governed domain APIs, optional Worker processing, an optional standard toolbar, optional Element Plus editors, async boundaries, in-place renderer refresh and automatic lifecycle cleanup. `RobotGrid` remains a deprecated 0.x alias.
 
 ## Install
 

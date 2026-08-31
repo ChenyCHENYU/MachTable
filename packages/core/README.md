@@ -41,7 +41,7 @@ await api.applyTransactionAsync({ update: realtimeRows });
 api.applyState(state);
 ```
 
-0.19 adds a lower-cost rendering pipeline and a smaller, more discoverable imperative surface without removing the flat 0.x API:
+0.23 adds governed domain APIs, incremental update invalidation and bounded remote-resource scheduling without removing the flat 0.x API:
 
 ```ts
 api.batch((grid) => {

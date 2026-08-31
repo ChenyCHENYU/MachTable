@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.19.1-2563eb" alt="Source version 0.19.1" />
+  <img src="https://img.shields.io/badge/source-0.23.0-2563eb" alt="Source version 0.23.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm%20published&color=3178c6" alt="npm published version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Prior written authorization required" /></a>
@@ -154,16 +154,17 @@ api.destroy();
 
 > 默认布局的容器必须有明确高度，并且必须引入主题 CSS。小数据详情表可使用 `domLayout: "autoHeight"` 由内容撑开；不要将自动高度用于虚拟大表或远程无限数据源。完整的生产项目配置、SSR、错误治理、状态持久化和上线检查见[企业级项目接入手册](./docs/guide/enterprise-integration.md)。
 
-## 0.19：性能内核与 API 治理闭环
+## 0.23：产品级 API 与有界性能
 
-0.19 聚焦“外部更简单、内部更便宜、扩展更可控”，现有 0.x 平面 API 保持兼容：
+0.23 把“好用”落实为可检查的契约，现有 0.x 平面 API 保持兼容，新代码优先使用职责清晰的领域入口：
 
 - `api.batch()` 合并同一业务动作中的模型、布局和渲染更新；`refreshCells({ rowIds, rowIndexes, columns })` 精确刷新脏单元格。
-- `api.rows / columns / selection / editing / state / diagnostics` 提供可发现的领域入口，平面方法继续可用，业务可渐进迁移。
-- 横向虚拟列使用前缀宽度 + 二分窗口，变量行高使用 Fenwick 增量索引；单行高度变化不再重建整张偏移表。
-- `datasourceMode: "block"` 提供随机区块访问、并发去重、AbortSignal、重试、相邻预取、LRU 淘汰与加载骨架行；默认仍是兼容的顺序追加模式。
+- `api.rows / columns / selection / editing / filtering / pagination / state / diagnostics` 是八个稳定领域入口；按需惰性创建，不维护第二套状态。
+- `updateOptions()` 的一组配置只提交一次视图更新；简单 `update` 事务绕过完整行管线，排序、过滤、分组、树、变高与合并场景自动回退安全全量路径。
+- 表头与正文共享前缀宽度 + 二分列窗口，500 列也只保留可视 DOM；变量行高使用 Fenwick 增量索引，单行高度变化不再重建整张偏移表。
+- `datasourceMode: "block"` 提供随机区块访问、并发上限、请求去重、AbortSignal、带抖动退避、滚动方向预取、LRU 淘汰与加载骨架行。
 - 大型本地排序/过滤可通过 `dataProcessor` 移入 Worker；标准桥接不使用 Blob/eval，适配严格 CSP。
-- 性能快照新增布局、模型、Long Task 与可用堆内存指标；API surface snapshot 会阻止未经评审的公开接口漂移。
+- 多表实例共享 Long Tasks Observer；API/适配器快照、语义契约、100k×100、500 列、连续滚动、生命周期和发布产物预算共同防回归。
 
 ```ts
 api.batch((grid) => {
@@ -185,6 +186,7 @@ const options = defineGridOptions<Order>({
   datasourceRowCount: 1_000_000,
   blockSize: 200,
   maxBlocksInCache: 12,
+  datasourceMaxConcurrentRequests: 4,
   blockPrefetch: 1
 });
 
@@ -352,10 +354,10 @@ MachTable 不是把 Vue、React 和全部功能塞进一个包。内核与适配
 
 | 包 | 用途 | gzip 预算 / 当前值 |
 | --- | --- | --- |
-| `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 80 KB / 约 70.7 KB |
-| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部 ESM 10.5 KB / 约 10.1 KB；基础入口约 6.5 KB，工作流约 3.2 KB，可选 UI 约 1.3 KB |
-| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 全部 ESM 8 KB / 约 6.5 KB；基础消费约 6.2 KB，工作流约 3.5 KB |
-| `@agile-team/mach-table-xlsx` | 仅 Excel 页面按需安装；工作簿引擎由宿主动态注入 | 3 KB 预算；不进入适配器/Core |
+| `@agile-team/mach-table` | 零运行时依赖 Core、原生 API、主题 CSS | 全公开 ESM 86 KiB / 约 85.2 KiB；`createGrid` 真实消费约 75.5 KiB |
+| `@agile-team/mach-table-vue` | Vue 3 单包入口；自动安装 Core，含局部/全局同步/全局异步模式 | 全部 ESM 10.5 KiB / 约 9.7 KiB；基础入口约 6.5 KiB，工作流约 3.2 KiB，可选 UI 约 1.3 KiB |
+| `@agile-team/mach-table-react` | React 单包入口；自动安装 Core，含组件、Hook、类型和样式入口 | 全部 ESM 8 KiB / 约 6.4 KiB；基础消费约 6.2 KiB，工作流约 3.5 KiB |
+| `@agile-team/mach-table-xlsx` | 仅 Excel 页面按需安装；工作簿引擎由宿主动态注入 | 3 KiB / 约 1.2 KiB；不进入适配器/Core |
 
 Vue 用户只需安装 Vue 包，React 用户只需安装 React 包；Vue 项目不会安装 React，React 项目也不会安装 Vue。原生项目仍可单独使用 Core。
 
@@ -401,7 +403,7 @@ flowchart TB
 
 ## 企业级质量基线
 
-- Core、Vue、React、XLSX 共 290+ 个单元测试，并包含重复挂载/销毁的监听器泄漏检查。
+- Core、Vue、React、XLSX 共 336 个单元测试，并包含请求排队、增量失效与重复挂载/销毁的资源泄漏检查。
 - Chromium、Firefox、WebKit 覆盖 Vanilla、Vue、React 的键盘、编辑和过滤交互；Chromium 额外执行 10 万行 × 100 列性能预算。
 - 类型感知 ESLint、TypeScript、复杂度防回升、依赖/循环引用、覆盖率阈值、publint、真实消费端类型检查、ESM/CJS exports、gzip 预算、示例与文档构建统一进入 `pnpm verify`。
 - Husky + lint-staged 只检查暂存文件；完整任务由并行 CI 承担，兼顾严格门禁与日常开发效率。详见[质量门禁与高效开发](./docs/advanced/quality-gates.md)。
@@ -427,7 +429,7 @@ pnpm test:e2e
 | 配置与命令 | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) |
 | 列与事件 | [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频业务 | [场景配方](./docs/recipes/selection.md) |
-| 0.18 API 与业务治理 | [高级过滤](./docs/recipes/advanced-filter.md) · [命名视图](./docs/recipes/saved-views.md) · [批量保存与冲突](./docs/recipes/batch-save.md) · [性能诊断](./docs/advanced/performance.md) |
+| 0.23 API 与性能治理 | [API 治理](./docs/advanced/api-governance.md) · [性能诊断](./docs/advanced/performance.md) · [随机访问数据源](./docs/recipes/random-access-datasource.md) |
 | 0.15 列宽体验 | [列宽拖动与状态记忆](./docs/recipes/column-state.md) · [完整状态持久化](./docs/recipes/grid-state.md) |
 | 0.14 使用体验 | [控制器与标准工具栏](./docs/recipes/controller-toolbar.md) · [远程查询](./docs/recipes/remote-query.md) |
 | 竞品与后续规划 | [竞品分析](./docs/advanced/competitive-analysis.md) · [AG Grid 源码审计](./docs/advanced/ag-grid-source-study.md) · [路线图](./docs/advanced/roadmap.md) |
@@ -441,7 +443,7 @@ pnpm test:e2e
 - React / React DOM `>= 18`
 - Chrome / Edge `>= 88`、Firefox `>= 89`、Safari `>= 14`
 - 包运行时面向浏览器；仓库开发使用 Node.js `>= 22.22.2` 与 pnpm `11.8.0`
-- 当前源码版本为 `0.19.1`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
+- 当前源码版本为 `0.23.0`，仍处于 0.x 打磨阶段，不发布 `1.0.0`。`MachTable` 是规范名称，`RobotGrid` 仅作为 0.x 兼容别名保留；破坏性调整只通过 minor 版本发布，并在 Changelog 与升级指南中说明。
 
 ## 参与贡献
 

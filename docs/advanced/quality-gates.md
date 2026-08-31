@@ -21,9 +21,12 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 | `pnpm lint` / `pnpm lint:fix` | ESLint 全量检查 / 自动修复 |
 | `pnpm typecheck` | Core、Vue、React 严格类型检查 |
 | `pnpm check:complexity` | 圈复杂度增量门禁 |
+| `pnpm check:complexity:update` | 仅在评审确认后收紧历史复杂度基线；不得用于放宽上限 |
 | `pnpm check:api` / `pnpm check:api:update` | 校验公开 export、Grid API/Options/Event 成员签名快照 / 评审后更新快照 |
 | `pnpm check:deps` | 生产依赖、未声明引用、无法解析引用和循环依赖检查 |
 | `pnpm check:package-readmes` | 校验 npm README 嵌入开关、包名与授权说明，防止包页面文档为空或漂移 |
+| `pnpm build:runtime` / `pnpm build:release` | 跳过声明的快速运行时构建 / 含声明且不发布 sourcemap 的正式构建 |
+| `pnpm check:release-artifacts` | 校验发布目录解压体积并阻止 `.map` 泄漏到 npm 包 |
 | `pnpm test` / `pnpm test:coverage` | 单元测试 / 覆盖率阈值 |
 | `pnpm quality:quick` | 推送前的快速代码检查 |
 | `pnpm verify` | 不含浏览器 E2E 的完整仓库验证 |
@@ -42,7 +45,7 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 
 ## 类型与异步安全
 
-公开 API 结构由 `api/public-api.snapshot.json` 锁定。任何删除、改名、新增或参数/返回值签名变化都会让 `check:api` 失败；贡献者必须先确认兼容策略、同步 Changelog/升级文档，再显式更新快照。它和 TypeScript consumer fixture 互补：前者检查结构漂移，后者检查真实 ESM/CJS/Vue SFC 消费。
+公开 API 结构由 `api/public-api.snapshot.json` 锁定，生命周期规则由 `api/public-api-policy.json` 声明。任何删除、改名、新增或参数/返回值签名变化都会让 `check:api` 失败；贡献者必须先确认兼容策略、同步 Changelog/升级文档，再显式更新快照。快照覆盖 Core/Worker、Vue/React 和 XLSX 公开入口，并与 TypeScript consumer fixture 互补：前者检查结构漂移，后者检查真实 ESM/CJS/Vue SFC 消费。
 
 生产源码启用 TypeScript ESLint 的类型感知规则，重点阻止：
 
@@ -57,7 +60,7 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 
 - 缺陷修复必须包含能复现问题的回归测试。
 - Core 纯逻辑优先单元测试；DOM 生命周期使用 jsdom；Vue/React 行为放入对应适配器测试。
-- 键盘、焦点、编辑、真实浏览器差异和大数据性能变化使用 Playwright。
+- 键盘、焦点、编辑、真实浏览器差异和大数据性能变化使用 Playwright；性能专门覆盖 100k×100、500 列、连续滚动和重复挂载/销毁。
 - CI 将重试后才通过的 E2E 视为失败，避免以重试掩盖不稳定测试。
 - 覆盖率阈值、包体积预算、ESM/CJS 导出、真实消费端类型检查和许可证检查不得通过降低阈值绕过。
 - 发布任务只有在静态、单测、包、文档和 E2E 五类任务全部通过后才会启动。

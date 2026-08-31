@@ -1,5 +1,15 @@
 # @agile-team/mach-table
 
+## 0.23.0
+
+### Minor Changes
+
+- Establish API Governance V3 with eight lazy, responsibility-focused domain facades, cross-package signature snapshots and an explicit stable/experimental/internal policy while preserving the 0.x flat compatibility surface.
+- Commit runtime option patches through one scheduler batch and skip the full local row pipeline for safe update-only transactions; sorted, filtered, grouped, tree, spanned and variable-height models retain the conservative full path.
+- Bound random-access datasource concurrency, prioritize explicit loads and scroll-direction prefetch, add retry jitter and expose active/queued request diagnostics.
+- Share browser Long Tasks observation across grid instances, strengthen 100k-row/500-column/continuous-scroll/lifecycle gates, and add semantic API/resource contract tests.
+- Add fast runtime-only and map-free release builds plus publishable artifact budgets, reducing installed package size without changing consumer code.
+
 ## 0.19.1
 
 ### Patch Changes

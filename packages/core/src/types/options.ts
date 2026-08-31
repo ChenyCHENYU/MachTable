@@ -310,6 +310,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   infiniteBufferRows?: number;
   /** Maximum retained blocks in random-access mode. */
   maxBlocksInCache?: number;
+  /** Upper bound for active random-access datasource requests. Defaults to 4. */
+  datasourceMaxConcurrentRequests?: number;
   /** Number of adjacent blocks prefetched around a requested viewport. */
   blockPrefetch?: number;
   /** Optional initial total enables immediate scrollbar range before the first response. */
@@ -322,6 +324,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   datasourceRetryCount?: number;
   /** Base retry delay in milliseconds. Retries use capped exponential backoff. */
   datasourceRetryDelay?: number;
+  /** Symmetric retry jitter ratio in the 0..1 range. Defaults to 0.15. */
+  datasourceRetryJitter?: number;
   suppressCellFocus?: boolean;
   suppressRowHoverHighlight?: boolean;
   suppressNoRowsOverlay?: boolean;
@@ -430,12 +434,14 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   blockSize: number;
   infiniteBufferRows: number;
   maxBlocksInCache: number;
+  datasourceMaxConcurrentRequests: number;
   blockPrefetch: number;
   datasourceRowCount: number | null;
   dataProcessor?: GridDataProcessor<TData>;
   dataProcessorMinRows: number;
   datasourceRetryCount: number;
   datasourceRetryDelay: number;
+  datasourceRetryJitter: number;
   suppressCellFocus: boolean;
   suppressRowHoverHighlight: boolean;
   suppressNoRowsOverlay: boolean;

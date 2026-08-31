@@ -11,7 +11,7 @@ MachTable 当前处于 `0.x`。Core、Vue、React 与可选 XLSX 包固定版本
 从 `0.4.1` 起，Vue/React 适配器会自动安装匹配版本的 Core；框架项目只需升级自己的适配包。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.19.1
+pnpm up @agile-team/mach-table-vue@^0.23.0
 ```
 
 如果框架项目没有直接使用 Core 包路径，升级后可以移除原来的显式依赖：
@@ -21,6 +21,19 @@ pnpm remove @agile-team/mach-table
 ```
 
 原有 Core import 和 CSS 路径继续兼容；新代码推荐统一从适配包导入 API、类型及 `styles.css`，从而保持真正的单包接入。
+
+## 0.19.1 → 0.23.0
+
+0.23 不删除既有平面 API，也不改变 Vue/React 的单包安装方式。升级后可渐进采用：
+
+- 新代码优先从 `rows/columns/selection/editing/filtering/pagination/state/diagnostics` 八个领域入口发现命令；旧调用无需一次性迁移。
+- `updateOptions()` 现在把一个 patch 作为一次调度提交；运行时非法字段仍只告警并被丢弃。
+- 仅更新数据且没有排序、过滤、分组、树、主从、变高或行合并时走局部刷新；复杂模型自动保持完整管线，无需使用侧配置。
+- 随机块数据源默认最多并行 4 个请求。依赖更高并发的页面显式设置 `datasourceMaxConcurrentRequests`；重试新增默认 `0.15` 抖动，可设 `datasourceRetryJitter: 0` 恢复固定延迟。
+- 缓存快照新增 `activeRequestCount/queuedRequestCount`，原字段保持不变。
+- npm 发布产物不再携带 sourcemap，但类型声明与运行时代码不变；仓库开发构建仍可生成 map。
+
+贡献者需重新运行 `pnpm check:api:update` 评审新的跨包快照；业务项目重点回归远程并发限制、实时 update 事务和配置热更新。
 
 ## 0.19.0 → 0.19.1
 

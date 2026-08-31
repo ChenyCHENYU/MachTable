@@ -205,13 +205,15 @@ function resolveDatasource(options: GridOptions) {
     blockSize: finiteAtLeast(options.blockSize, 100, 1, true),
     infiniteBufferRows: finiteAtLeast(options.infiniteBufferRows, 40, 0, true),
     maxBlocksInCache: finiteAtLeast(options.maxBlocksInCache, 12, 1, true),
+    datasourceMaxConcurrentRequests: finiteAtLeast(options.datasourceMaxConcurrentRequests, 4, 1, true),
     blockPrefetch: finiteAtLeast(options.blockPrefetch, 1, 0, true),
     datasourceRowCount: options.datasourceRowCount == null
       ? null
       : finiteAtLeast(options.datasourceRowCount, 0, 0, true),
     dataProcessorMinRows: finiteAtLeast(options.dataProcessorMinRows, 5_000, 1, true),
     datasourceRetryCount: finiteAtLeast(options.datasourceRetryCount, 2, 0, true),
-    datasourceRetryDelay: finiteAtLeast(options.datasourceRetryDelay, 300, 0, true)
+    datasourceRetryDelay: finiteAtLeast(options.datasourceRetryDelay, 300, 0, true),
+    datasourceRetryJitter: Math.min(1, finiteAtLeast(options.datasourceRetryJitter, 0.15, 0))
   };
 }
 

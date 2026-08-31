@@ -17,10 +17,12 @@
 | `blockSize` | `number` | `100` | 无限滚动每块请求行数 |
 | `infiniteBufferRows` | `number` | `40` | 距已加载末尾 N 行时预取下一块 |
 | `maxBlocksInCache` | `number` | `12` | 随机访问模式保留的最大块数，超出后淘汰最久未使用块 |
+| `datasourceMaxConcurrentRequests` | `number` | `4` | 随机块模式同时执行的请求上限；主动加载优先于滚动预取 |
 | `blockPrefetch` | `number` | `1` | 随机访问目标块两侧预取半径；`0` 关闭 |
 | `datasourceRowCount` | `number \| null` | `null` | 首次响应前的远程总行数，用于立即建立可跳转滚动范围 |
 | `datasourceRetryCount` | `number` | `2` | 数据源失败后的自动重试次数；`0` 关闭 |
 | `datasourceRetryDelay` | `number` | `300` | 首次重试基础延迟（ms），之后指数退避，最长 30 秒 |
+| `datasourceRetryJitter` | `number` | `0.15` | 退避延迟的对称抖动比例（0..1），避免多个表格同时重试形成尖峰 |
 | `dataProcessor` | `GridDataProcessor<TData>` | — | 可选异步/Worker 本地过滤排序边界；失败时回退主线程 |
 | `dataProcessorMinRows` | `number` | `5000` | 达到该数据量且存在本地排序/过滤时才调用 Processor |
 | `asyncTransactionWaitMillis` | `number` | `16` | `applyTransactionAsync` 合并时间窗；事务保持调用顺序，管线只刷新一次 |

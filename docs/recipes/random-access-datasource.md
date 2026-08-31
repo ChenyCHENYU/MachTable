@@ -1,6 +1,6 @@
 # 随机访问远程数据源
 
-`datasourceMode: "block"` 面向十万到百万级、允许滚动条任意跳转的远程数据。它与默认的 `"sequential"` 顺序追加模式使用同一个 `GridDatasource` 协议，但增加并发请求去重、取消、重试、相邻预取和 LRU 缓存。
+`datasourceMode: "block"` 面向十万到百万级、允许滚动条任意跳转的远程数据。它与默认的 `"sequential"` 顺序追加模式使用同一个 `GridDatasource` 协议，但增加有界并发、请求去重、优先级、取消、退避抖动、滚动方向预取和 LRU 缓存。
 
 ## 最小配置
 
@@ -15,9 +15,11 @@ export const options: GridOptions<Order> = {
   datasourceRowCount: 1_000_000,
   blockSize: 200,
   maxBlocksInCache: 12,
+  datasourceMaxConcurrentRequests: 4,
   blockPrefetch: 1,
   datasourceRetryCount: 2,
   datasourceRetryDelay: 300,
+  datasourceRetryJitter: 0.15,
   datasource: {
     async getRows(params) {
       try {
@@ -52,7 +54,8 @@ await api.rows.ensureLoaded(20_000, 20_400, {
 
 console.info(api.rows.getCacheSnapshot());
 // {
-//   cachedBlockCount, loadingBlockCount, cachedRowCount,
+//   cachedBlockCount, loadingBlockCount,
+//   activeRequestCount, queuedRequestCount, cachedRowCount,
 //   hitCount, missCount, evictionCount
 // }
 
@@ -69,13 +72,14 @@ await api.reload({ signal: controller.signal });
 - 随机块模式使用固定 `rowHeight` 计算任意远程位置。`getRowHeight`、autoHeight、主从详情和本地分组不应与该模式组合；这些场景需要服务端模型或顺序模式。
 - LRU 淘汰只移除行数据与 DOM 可达引用，稳定选择 ID 仍由 SelectionService 管理；重新加载同一 ID 后会恢复选中状态。
 - 排序、普通/高级过滤和快速搜索变化会取消旧请求、清空块缓存并从第 0 块重新加载，乱序响应不会污染新查询。
+- `ensureRowsLoaded()` 的主动加载优先级高于视口预取；并发达到上限后请求在内存队列中等待，调用方取消时不会继续占用网络槽位。
 
 ## 参数建议
 
-| 场景 | `blockSize` | `maxBlocksInCache` | `blockPrefetch` |
-| --- | ---: | ---: | ---: |
-| 普通后台列表 | 100–200 | 8–12 | 1 |
-| 高延迟接口 | 200–500 | 12–20 | 1–2 |
-| 低内存终端 | 50–100 | 4–6 | 0 |
+| 场景 | `blockSize` | `maxBlocksInCache` | `blockPrefetch` | 最大并发 |
+| --- | ---: | ---: | ---: | ---: |
+| 普通后台列表 | 100–200 | 8–12 | 1 | 4 |
+| 高延迟接口 | 200–500 | 12–20 | 1–2 | 4–6 |
+| 低内存终端 | 50–100 | 4–6 | 0 | 2 |
 
 缓存容量应根据单行对象大小、renderer 成本和目标设备实测。预取越大并不一定越快，它会增加带宽与后端并发；默认 `1` 是保守值。

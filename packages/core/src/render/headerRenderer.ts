@@ -5,6 +5,7 @@ import type { PaneType } from "../services/columnModel";
 import { el, FILTER_ICON, SORT_ASC_ICON, SORT_DESC_ICON } from "../lib/dom";
 import { describeFilter } from "../lib/filterSummary";
 import { setHeaderDestroyer, takeHeaderDestroyer } from "./runtimeState";
+import { ColumnViewportIndex } from "../services/columnViewportIndex";
 
 type HeaderContext = Pick<
   GridCore<any>,
@@ -52,10 +53,14 @@ export class HeaderRenderer {
   private leafCells: HeaderCell[] = [];
   private groupCells: GroupCell[] = [];
   private paneTrees: Record<PaneType, PaneTree[]> = { left: [], center: [], right: [] };
+  private columnViewport = new ColumnViewportIndex();
+  private centerFirst = 0;
+  private centerLastExcl = Number.MAX_SAFE_INTEGER;
 
   constructor(private core: HeaderContext) {}
 
   build(): void {
+    this.updateColumnWindowState();
     this.core.resizeService.cancelResize();
     for (const cell of this.leafCells) {
       const destroy = takeHeaderDestroyer(cell.el);
@@ -95,8 +100,13 @@ export class HeaderRenderer {
     };
 
     const roots = this.core.columnModel.getRootChildren();
+    const centerColumns = this.core.columnModel.getPaneColumns("center");
+    const activeCenter = new Set(centerColumns.slice(this.centerFirst, this.centerLastExcl));
     for (const pane of ["left", "center", "right"] as PaneType[]) {
-      this.paneTrees[pane] = buildTree(roots, 0, pane);
+      const trees = buildTree(roots, 0, pane);
+      this.paneTrees[pane] = pane === "center"
+        ? this.filterTreeColumns(trees, activeCenter)
+        : trees;
     }
 
     const perRowHeight = this.core.options.headerHeight;
@@ -129,6 +139,37 @@ export class HeaderRenderer {
     this.refreshSortIndicators();
     this.refreshFilterIcons();
     this.refreshSelectAllCheckbox();
+  }
+
+  updateColumnWindow(): void {
+    const previousFirst = this.centerFirst;
+    const previousLast = this.centerLastExcl;
+    this.updateColumnWindowState();
+    if (previousFirst !== this.centerFirst || previousLast !== this.centerLastExcl) this.build();
+  }
+
+  private updateColumnWindowState(): void {
+    const columns = this.core.columnModel.getPaneColumns("center");
+    const viewport = this.core.skeleton.bodyViewports.center;
+    this.columnViewport.update(columns);
+    const range = columns.length > 20
+      ? this.columnViewport.visibleRange(viewport.scrollLeft, viewport.clientWidth, 2)
+      : { first: 0, lastExcl: columns.length };
+    this.centerFirst = range.first;
+    this.centerLastExcl = range.lastExcl;
+  }
+
+  private filterTreeColumns(trees: PaneTree[], active: ReadonlySet<Column>): PaneTree[] {
+    const output: PaneTree[] = [];
+    for (const tree of trees) {
+      if (tree.column) {
+        if (active.has(tree.column)) output.push(tree);
+        continue;
+      }
+      const children = this.filterTreeColumns(tree.children, active);
+      if (children.length > 0) output.push({ ...tree, children });
+    }
+    return output;
   }
 
   private createLeafCell(column: Column, rowSpan: number, perRowHeight: number): HeaderCell {
@@ -280,17 +321,15 @@ export class HeaderRenderer {
   }
 
   applyLayout(): void {
-    let flatIndex = 1;
     const widths: Record<PaneType, number> = { left: 0, center: 0, right: 0 };
 
     for (const pane of ["left", "center", "right"] as PaneType[]) {
       const rows = this.core.skeleton.headerRows[pane];
       let x = 0;
       const leafLefts = new Map<string, number>();
-      for (const cell of this.leafCells) {
-        if (this.core.columnModel.paneOf(cell.column) !== pane) continue;
-        leafLefts.set(cell.column.id, x);
-        x += cell.column.currentWidth;
+      for (const column of this.core.columnModel.getPaneColumns(pane)) {
+        leafLefts.set(column.id, x);
+        x += column.currentWidth;
       }
       const perRowHeight = this.core.options.headerHeight;
       for (const cell of this.leafCells) {
@@ -298,7 +337,7 @@ export class HeaderRenderer {
         const left = leafLefts.get(cell.column.id) ?? 0;
         cell.el.style.width = `${cell.column.currentWidth}px`;
         cell.el.style.left = `${left}px`;
-        cell.el.setAttribute("aria-colindex", String(flatIndex++));
+        cell.el.setAttribute("aria-colindex", String(this.core.columnModel.getFlatIndex(cell.column.id) + 1));
       }
 
       for (const gc of this.groupCells) {
@@ -360,27 +399,48 @@ export class HeaderRenderer {
         return;
       case !e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowLeft" || e.key === "ArrowRight"):
         e.preventDefault(); {
-          const current = this.leafCells.findIndex((cell) => cell.column.id === column.id);
+          const columns = this.core.columnModel.getOrderedVisible();
+          const current = columns.indexOf(column);
           const next = e.key === "ArrowRight"
-            ? Math.min(this.leafCells.length - 1, current + 1)
+            ? Math.min(columns.length - 1, current + 1)
             : Math.max(0, current - 1);
-          if (current >= 0) this.focusHeaderCell(this.leafCells[next].column);
+          if (current >= 0) this.focusHeaderCell(columns[next]);
         }
         return;
       case e.key === "Home" || e.key === "End":
         e.preventDefault();
-        if (this.leafCells.length > 0) {
-          this.focusHeaderCell(e.key === "Home" ? this.leafCells[0].column : this.leafCells[this.leafCells.length - 1].column);
+        const columns = this.core.columnModel.getOrderedVisible();
+        if (columns.length > 0) {
+          this.focusHeaderCell(e.key === "Home" ? columns[0] : columns[columns.length - 1]);
         }
         return;
     }
   }
 
   private focusHeaderCell(column: Column): void {
-    const target = this.leafCells.find((cell) => cell.column.id === column.id);
+    let target = this.leafCells.find((cell) => cell.column.id === column.id);
+    if (!target && !column.pinned) {
+      this.scrollColumnIntoView(column);
+      this.updateColumnWindow();
+      target = this.leafCells.find((cell) => cell.column.id === column.id);
+    }
     if (!target) return;
     for (const cell of this.leafCells) cell.el.tabIndex = cell === target ? 0 : -1;
     target.el.focus({ preventScroll: true });
+  }
+
+  private scrollColumnIntoView(column: Column): void {
+    const columns = this.core.columnModel.getPaneColumns("center");
+    const index = columns.indexOf(column);
+    if (index < 0) return;
+    const viewport = this.core.skeleton.bodyViewports.center;
+    this.columnViewport.update(columns);
+    const left = this.columnViewport.offsetAt(index);
+    const right = left + column.currentWidth;
+    if (left < viewport.scrollLeft) viewport.scrollLeft = left;
+    else if (right > viewport.scrollLeft + viewport.clientWidth) {
+      viewport.scrollLeft = right - viewport.clientWidth;
+    }
   }
 
   private canResizeColumn(column: Column): boolean {

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { ESLint } from "eslint";
@@ -31,6 +31,30 @@ for (const result of results) {
     values.push(Number(match[2]));
     current.set(key, values);
   }
+}
+
+if (process.argv.includes("--update")) {
+  const regressions = [];
+  for (const [key, values] of current) {
+    const allowed = baseline.allowances[key];
+    const actual = [...values].sort((left, right) => right - left);
+    const ceilings = allowed ? [...allowed].sort((left, right) => right - left) : [];
+    if (!allowed || actual.length > ceilings.length || actual.some((value, index) => value > ceilings[index])) {
+      regressions.push(key);
+    }
+  }
+  if (regressions.length > 0) {
+    console.error(`Refusing to widen complexity baseline: ${regressions.join(", ")}`);
+    process.exit(1);
+  }
+  const allowances = Object.fromEntries(
+    [...current.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, values]) => [key, [...values].sort((left, right) => right - left)])
+  );
+  await writeFile(baselinePath, `${JSON.stringify({ ...baseline, allowances }, null, 2)}\n`);
+  console.log(`Updated complexity baseline with ${current.size} tracked function(s).`);
+  process.exit(0);
 }
 
 const failures = [];

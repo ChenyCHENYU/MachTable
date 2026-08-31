@@ -14,9 +14,9 @@ const reactEsmFiles = (await readdir(new URL("../packages/react/dist/", import.m
   .map((file) => `packages/react/dist/${file}`);
 
 const budgets = [
-  // 0.19 adds random block caching, indexed geometry and API scheduling. The
-  // Worker runtime remains a separate subpath; keep the default Core below 84 KiB.
-  ["Core ESM", ["packages/core/dist/index.js"], 84 * 1024],
+  // The full entry includes every public utility for compatibility; keep it
+  // bounded while separately enforcing the smaller real createGrid consumer.
+  ["Core ESM", ["packages/core/dist/index.js"], 86 * 1024],
   ["Optional Worker", ["packages/core/dist/worker.js"], 8 * 1024],
   ["Vue ESM artifacts", vueEsmFiles, 10.5 * 1024],
   ["React ESM artifacts", reactEsmFiles, 8 * 1024],
@@ -36,6 +36,14 @@ for (const [label, paths, limit] of budgets) {
 }
 
 const consumerBudgets = [
+  {
+    label: "Core createGrid consumer",
+    source: `
+      import { createGrid } from "./packages/core/dist/index.js";
+      globalThis.__machTableCreateGrid = createGrid;
+    `,
+    limit: 79 * 1024
+  },
   {
     label: "Vue initial adapter",
     source: `

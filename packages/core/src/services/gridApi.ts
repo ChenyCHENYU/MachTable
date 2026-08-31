@@ -5,6 +5,8 @@ import type {
   GridColumnsApi,
   GridDiagnosticsApi,
   GridEditingApi,
+  GridFilteringApi,
+  GridPaginationApi,
   GridRowsApi,
   GridSelectionApi,
   GridStateApi,
@@ -28,7 +30,16 @@ import { formatCellValue } from "../render/cellContent";
 import { sanitizeGridOptionPatch } from "../core/gridOptionRuntime";
 import { migrateGridState } from "../lib/gridState";
 import { createSaveSnapshot, normalizeBatchSaveResult } from "../lib/batchSave";
-import { createGridApiDomains } from "./gridApiDomains";
+import {
+  createGridColumnsApi,
+  createGridDiagnosticsApi,
+  createGridEditingApi,
+  createGridFilteringApi,
+  createGridPaginationApi,
+  createGridRowsApi,
+  createGridSelectionApi,
+  createGridStateApi
+} from "./gridApiDomains";
 
 interface OptionUpdateEffects {
   datasourceChanged: boolean;
@@ -41,6 +52,7 @@ interface OptionUpdateEffects {
   needsRowRebuild: boolean;
   needsStateLoad: boolean;
   needsSummaryRefresh: boolean;
+  needsFeatureReload: boolean;
   stateToApply?: GridStateInput;
 }
 
@@ -86,7 +98,8 @@ function createOptionUpdateEffects(): OptionUpdateEffects {
     needsRelayout: false,
     needsRowRebuild: false,
     needsStateLoad: false,
-    needsSummaryRefresh: false
+    needsSummaryRefresh: false,
+    needsFeatureReload: false
   };
 }
 
@@ -110,24 +123,33 @@ function changedFinite(
 }
 
 export class GridApiImpl<TData = any> implements GridApi<TData> {
-  readonly rows: GridRowsApi<TData>;
-  readonly columns: GridColumnsApi;
-  readonly selection: GridSelectionApi<TData>;
-  readonly editing: GridEditingApi<TData>;
-  readonly state: GridStateApi;
-  readonly diagnostics: GridDiagnosticsApi;
+  private rowsFacade?: GridRowsApi<TData>;
+  private columnsFacade?: GridColumnsApi;
+  private selectionFacade?: GridSelectionApi<TData>;
+  private editingFacade?: GridEditingApi<TData>;
+  private stateFacade?: GridStateApi;
+  private diagnosticsFacade?: GridDiagnosticsApi;
+  private filteringFacade?: GridFilteringApi;
+  private paginationFacade?: GridPaginationApi;
   private measureCanvas: HTMLCanvasElement | null = null;
   private asyncTransactions: AsyncTransactionEntry<TData>[] = [];
   private asyncTransactionTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private core: GridCore<TData>) {
-    const domains = createGridApiDomains(this);
-    this.rows = domains.rows;
-    this.columns = domains.columns;
-    this.selection = domains.selection;
-    this.editing = domains.editing;
-    this.state = domains.state;
-    this.diagnostics = domains.diagnostics;
+  constructor(private core: GridCore<TData>) {}
+
+  get rows(): GridRowsApi<TData> { return this.rowsFacade ??= createGridRowsApi(this); }
+  get columns(): GridColumnsApi { return this.columnsFacade ??= createGridColumnsApi(this); }
+  get selection(): GridSelectionApi<TData> { return this.selectionFacade ??= createGridSelectionApi(this); }
+  get editing(): GridEditingApi<TData> { return this.editingFacade ??= createGridEditingApi(this); }
+  get state(): GridStateApi { return this.stateFacade ??= createGridStateApi(this); }
+  get diagnostics(): GridDiagnosticsApi {
+    return this.diagnosticsFacade ??= createGridDiagnosticsApi(this);
+  }
+  get filtering(): GridFilteringApi {
+    return this.filteringFacade ??= createGridFilteringApi(this);
+  }
+  get pagination(): GridPaginationApi {
+    return this.paginationFacade ??= createGridPaginationApi(this);
   }
 
   batch<TResult>(callback: (api: GridApi<TData>) => TResult): TResult {
@@ -154,8 +176,8 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
 
   applyTransaction(transaction: RowTransaction<TData>): void {
     if (this.core.isDestroyed() || this.core.rowModel.isInfinite) return;
-    this.core.rowModel.applyTransaction(transaction);
-    this.core.requestUpdate({ data: true });
+    const impact = this.core.rowModel.applyTransaction(transaction);
+    this.requestTransactionRefresh(impact);
   }
 
   applyTransactionAsync(transaction: RowTransaction<TData>, options: GridAsyncOptions = {}): Promise<void> {
@@ -195,13 +217,26 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     this.asyncTransactions = [];
     const transactions = entries.filter((entry) => !entry.aborted).map((entry) => entry.transaction);
     if (transactions.length > 0 && !this.core.isDestroyed() && !this.core.rowModel.isInfinite) {
-      this.core.rowModel.applyTransactions(transactions);
-      this.core.requestUpdate({ data: true });
+      const impact = this.core.rowModel.applyTransactions(transactions);
+      this.requestTransactionRefresh(impact);
     }
     for (const entry of entries) {
       if (entry.signal && entry.onAbort) entry.signal.removeEventListener("abort", entry.onAbort);
       if (!entry.aborted) entry.resolve();
     }
+  }
+
+  private requestTransactionRefresh(impact: import("./rowModel").RowTransactionImpact): void {
+    if (impact.pipelineChanged) {
+      this.core.requestUpdate({ data: true });
+      return;
+    }
+    if (impact.updatedRowIds.length === 0) return;
+    this.core.requestUpdate({
+      cells: { rowIds: impact.updatedRowIds },
+      summary: true,
+      overlays: true
+    });
   }
 
   getColumnDefs(): ColDefOrGroup<TData>[] | null {
@@ -925,20 +960,23 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     if (this.core.isDestroyed()) return;
     this.core.checkWarnings(options);
     options = sanitizeGridOptionPatch(options);
-    const effects = createOptionUpdateEffects();
-    const previousColumnMenu = this.core.options.columnMenu;
+    if (Object.keys(options).length === 0) return;
+    this.core.batchUpdates(() => {
+      const effects = createOptionUpdateEffects();
+      const previousColumnMenu = this.core.options.columnMenu;
 
-    this.updateSourceOptions(options, effects);
-    this.updateDimensionOptions(options, effects);
-    this.updateEditingOptions(options, effects);
-    this.updateInteractionOptions(options, effects);
-    this.updatePaginationOptions(options);
-    this.updatePresentationOptions(options, effects);
-    this.updateAccessibilityOptions(options, effects);
-    this.updateRowModelOptions(options, effects);
-    this.updateExtensionOptions(options, effects);
-    this.updateDatasourceOptions(options, effects);
-    this.applyOptionUpdateEffects(options, effects, previousColumnMenu);
+      this.updateSourceOptions(options, effects);
+      this.updateDimensionOptions(options, effects);
+      this.updateEditingOptions(options, effects);
+      this.updateInteractionOptions(options, effects);
+      this.updatePaginationOptions(options);
+      this.updatePresentationOptions(options, effects);
+      this.updateAccessibilityOptions(options, effects);
+      this.updateRowModelOptions(options, effects);
+      this.updateExtensionOptions(options, effects);
+      this.updateDatasourceOptions(options, effects);
+      this.applyOptionUpdateEffects(options, effects, previousColumnMenu);
+    });
   }
 
   private updateSourceOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -1325,7 +1363,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     }
     if (hasOwnOption(options, "features")) {
       resolved.features = Array.isArray(options.features) ? options.features : [];
-      this.core.setFeatures(resolved.features);
+      effects.needsFeatureReload = true;
     }
     this.updateProcessorOptions(options, effects);
     this.updatePersistenceOptions(options, effects);
@@ -1381,9 +1419,11 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
     const blockSize = normalizeFinite(options.blockSize, 1, true);
     const bufferRows = normalizeFinite(options.infiniteBufferRows, 0, true);
     const maxBlocks = normalizeFinite(options.maxBlocksInCache, 1, true);
+    const maxConcurrent = normalizeFinite(options.datasourceMaxConcurrentRequests, 1, true);
     const blockPrefetch = normalizeFinite(options.blockPrefetch, 0, true);
     const retryCount = normalizeFinite(options.datasourceRetryCount, 0, true);
     const retryDelay = normalizeFinite(options.datasourceRetryDelay, 0, true);
+    const retryJitter = normalizeFinite(options.datasourceRetryJitter, 0);
     if (blockSize !== undefined && blockSize !== resolved.blockSize) {
       resolved.blockSize = blockSize;
       effects.datasourceChanged = effects.datasourceChanged || resolved.datasourceMode === "block";
@@ -1393,9 +1433,14 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       resolved.maxBlocksInCache = maxBlocks;
       effects.datasourceChanged = effects.datasourceChanged || resolved.datasourceMode === "block";
     }
+    if (maxConcurrent !== undefined && maxConcurrent !== resolved.datasourceMaxConcurrentRequests) {
+      resolved.datasourceMaxConcurrentRequests = maxConcurrent;
+      effects.datasourceChanged = effects.datasourceChanged || resolved.datasourceMode === "block";
+    }
     if (blockPrefetch !== undefined) resolved.blockPrefetch = blockPrefetch;
     if (retryCount !== undefined) resolved.datasourceRetryCount = retryCount;
     if (retryDelay !== undefined) resolved.datasourceRetryDelay = retryDelay;
+    if (retryJitter !== undefined) resolved.datasourceRetryJitter = Math.min(1, retryJitter);
   }
 
   private updateDatasourceMode(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -1464,6 +1509,7 @@ export class GridApiImpl<TData = any> implements GridApi<TData> {
       this.core.loadPersistedColumnState();
       this.core.onColumnsStructureChanged();
     }
+    if (effects.needsFeatureReload) this.core.setFeatures(resolved.features);
     this.applyRowUpdateEffect(effects);
     if (effects.filterChanged) {
       this.emitFilterChanged();

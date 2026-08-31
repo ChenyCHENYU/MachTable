@@ -1,6 +1,6 @@
 # GridApi 命令接口
 
-`createGrid` 返回值 / `onGridReady` 的 `e.api` / Vue `ref.getApi()` / React `apiRef.current`。共 60+ 方法，按类别列出。
+`createGrid` 返回值 / `onGridReady` 的 `e.api` / Vue `ref.getApi()` / React `apiRef.current`。新代码优先从 8 个领域入口发现能力；0.x 平面方法完整兼容并按类别列出。
 
 ## 数据
 
@@ -14,7 +14,7 @@
 | `reload(): Promise<void>` | 无限模式重新从第 0 行加载并等待首块完成；客户端模式重放 rowData |
 | `ensureRowsLoaded(start, end, { signal? })` | 随机块模式主动加载 `[start, end)`；重复/重叠块请求自动复用 |
 | `purgeDatasourceCache()` | 中止随机块请求并释放 LRU 中的远程行 |
-| `getDatasourceCacheSnapshot()` | 读取缓存块、加载块、缓存行、命中、未命中和淘汰计数 |
+| `getDatasourceCacheSnapshot()` | 读取缓存块、活跃/排队请求、缓存行、命中、未命中和淘汰计数 |
 | `isInfinite()` | 是否无限滚动模式 |
 | `importCsv(text, { mode?, separator?, headerRowIndex? })` | CSV 导入：`replace` 替换 / `append` 追加 / `paste` 走粘贴管线（可撤销），表头自动映射列，数值自动转型 |
 | `print({ title?, includeHeader? })` | 新窗口打印全部数据（跨页、过滤排序后），弹窗被拦截返回 false |
@@ -111,19 +111,21 @@
 | `scrollToIndex(rowIndex, position?)` | 滚动到行（top/bottom/middle/nearest，变高行精确） |
 | `refreshCells({ rowIds?, rowIndexes?, columns?, force?, includePinned? })` | 无参刷新全部可见单元格；传参时只刷新脏行/列，`force` 强制重建 renderer |
 | `refreshLayout()` | 重测量尺寸（弹窗/Tab 切换后调用） |
-| `updateOptions(partial)` | 运行时改配置（尺寸/视觉/行为类选项） |
+| `updateOptions(partial)` | 运行时改配置；先净化完整 patch，再通过一个调度批次提交视图更新 |
 | `setOverlay("loading" \| "noRows" \| null)` / `hideOverlays()` | 覆盖层控制 |
 | `getDataAsCsv(params?)` | CSV 导出；参数 `{ includeHeader, columnSeparator, prependBOM, onlySelected, protectFormulas }`，默认防公式注入 |
 
 ## 事件与生命周期
 
-### 领域入口与批处理（0.19）
+### 领域入口与批处理（0.23）
 
 | API | 说明 |
 | --- | --- |
 | `batch(callback)` | 合并回调内的同步模型、布局和渲染工作；支持嵌套，最外层退出时提交 |
 | `flushUpdates()` | 立即提交等待中的更新，主要用于测试和命令后同步测量 |
-| `rows / columns / selection / editing / state / diagnostics` | 对现有平面方法的稳定领域 facade，不维护第二套状态 |
+| `rows / columns / selection / editing` | 数据、列、选择和编辑领域；按需惰性创建，不维护第二套状态 |
+| `filtering / pagination` | 过滤和分页的完整状态操作；不承载宿主请求副作用 |
+| `state / diagnostics` | 工作区状态和无业务数据的运行诊断 |
 
 ```ts
 api.batch((grid) => {

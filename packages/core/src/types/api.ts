@@ -85,6 +85,8 @@ export interface GridUpdateSchedulerSnapshot {
 export interface RemoteBlockCacheSnapshot {
   cachedBlockCount: number;
   loadingBlockCount: number;
+  activeRequestCount: number;
+  queuedRequestCount: number;
   cachedRowCount: number;
   hitCount: number;
   missCount: number;
@@ -183,6 +185,29 @@ export interface GridDiagnosticsApi {
   resetPerformance(): void;
 }
 
+/** Filtering owns filter state only; server requests remain in the host query layer. */
+export interface GridFilteringApi {
+  getModel(): FilterModel;
+  setModel(model: FilterModel | null): void;
+  getAdvancedModel(): AdvancedFilterModel | null;
+  setAdvancedModel(model: AdvancedFilterModel | null): void;
+  getQuickText(): string | null;
+  setQuickText(text: string | null | undefined): void;
+  isPresent(colId?: string): boolean;
+}
+
+/** Pagination is a bounded facade over the existing flat compatibility methods. */
+export interface GridPaginationApi {
+  isEnabled(): boolean;
+  setEnabled(enabled: boolean): void;
+  getPage(): number;
+  setPage(page: number): void;
+  getPageSize(): number;
+  setPageSize(size: number): void;
+  getPageCount(): number;
+  getTotalRowCount(): number;
+}
+
 export interface SaveChangeIssue {
   rowId: string;
   code?: string;
@@ -226,6 +251,8 @@ export interface GridApi<TData = any> {
   readonly editing: GridEditingApi<TData>;
   readonly state: GridStateApi;
   readonly diagnostics: GridDiagnosticsApi;
+  readonly filtering: GridFilteringApi;
+  readonly pagination: GridPaginationApi;
   /** Coalesces model/layout/render work from nested synchronous API calls. */
   batch<TResult>(callback: (api: GridApi<TData>) => TResult): TResult;
   /** Flushes deferred work; normally only needed by tests and imperative measurements. */

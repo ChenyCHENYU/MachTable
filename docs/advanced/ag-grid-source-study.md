@@ -22,7 +22,7 @@ AG 的 [`moduleRegistry.ts`](https://github.com/ag-grid/ag-grid/blob/b51ca642a2f
 - 模块自己的运行时校验与注册钩子；
 - Grid 销毁后的作用域模块清理。
 
-MachTable 0.19 的 `GridFeature` 已支持 `version/requires/conflicts` 和依赖 semver 范围，初始化前执行依赖排序、缺失/版本不兼容/冲突/循环隔离，并在 `getDiagnostics().activeFeatures` 暴露 per-grid 清单。它仍不照搬 AG 的 Bean/Module 规模：扩展只获得稳定 Context，生命周期资源由宿主统一托管。
+MachTable 0.23 的 `GridFeature` 已支持 `version/requires/conflicts` 和依赖 semver 范围，初始化前执行依赖排序、缺失/版本不兼容/冲突/循环隔离，并在 `getDiagnostics().activeFeatures` 暴露 per-grid 清单。它仍不照搬 AG 的 Bean/Module 规模：扩展只获得稳定 Context，生命周期资源由宿主统一托管。
 
 ### 2. 生命周期治理是 AG 稳定性的关键
 
@@ -53,7 +53,7 @@ AG Community 的 [`InfiniteCache`](https://github.com/ag-grid/ag-grid/blob/b51ca
 - 未知总数的虚拟尾部与最终 rowCount 收敛；
 - 可观察的块状态。
 
-MachTable 0.19 保留可靠的顺序追加默认模型，并新增显式 `datasourceMode: "block"`：按任意块请求、并发去重、AbortSignal、指数退避、相邻预取、LRU 淘汰、占位骨架与缓存诊断。`useMachTableQuery` 继续覆盖普通 B 端分页。它已解决 Infinite Model 的高频随机跳转问题，但仍不宣称等同 AG SSRM：服务端分组/聚合/事务更新和分层 Store 协议尚未实现。
+MachTable 0.23 保留可靠的顺序追加默认模型，并通过显式 `datasourceMode: "block"` 提供任意块请求、并发上限、优先队列、请求去重、AbortSignal、带抖动退避、滚动方向预取、LRU 淘汰、占位骨架与缓存诊断。`useMachTableQuery` 继续覆盖普通 B 端分页。它已解决 Infinite Model 的高频随机跳转与请求风暴问题，但仍不宣称等同 AG SSRM：服务端分组/聚合/事务更新和分层 Store 协议尚未实现。
 
 ### 5. SSRM 的难点是层级 Store，不是一个 getRows
 
@@ -101,7 +101,7 @@ MachTable 0.18 将 `GridState` 升级为 v2，自动迁移 v1，并对列、排�
 | 普通 Vue 列表接入 | 仍需模块/主题/GridOptions 组合 | 单包、单配置文件、`app.use(MachTablePlugin, config)`、原生 slots | MachTable 更轻、更符合现有项目约定 |
 | 配置可控性 | 全局选项、模块、丰富校验 | app → route → preset → table 分层，`explainOption()` 可追溯，Option/Feature 运行时治理 | MachTable 来源解释更直观；AG 的废弃/模块兼容规则仍更深 |
 | 编辑事务 | 成熟单元格/整行与批处理 API | 原子整行草稿、异步跨字段校验、dirty diff、部分成功、逐行失败/冲突、回滚 | MachTable 更贴近当前 B 端保存流程；通用审阅 UI 可继续按需补 |
-| 平面远程列表 | 成熟分页与 Infinite Cache | 受控分页很顺滑；顺序无限加载，不是随机块缓存 | 常规页面 MachTable 更简单；任意跳转/滚动 AG 更强 |
+| 平面远程列表 | 成熟分页与 Infinite Cache | 受控分页 + 顺序无限 + 有界随机块调度 | 常规页面 MachTable 更简单；AG 的长期生态与配置深度更强 |
 | SSRM / Pivot / 分析 | 非常成熟，多项为商业能力 | 尚无 | AG 显著领先；按真实需求独立立项 |
 | 百万行选择 | 规则状态，含层级 | 平面 query 全选 + 排除规则已完成 | 平面场景已对齐；层级规则未做 |
 | 组件生态 | 契约完整、框架覆盖广 | Vue 优先、React 官方支持、组件契约更小 | AG 生态领先；MachTable 学习和包体成本更低 |
@@ -145,6 +145,7 @@ MachTable 0.18 将 `GridState` 升级为 v2，自动迁移 v1，并对列、排�
 - 0.16—0.17 能力并入 0.18 统一发布：高级过滤 AST、命名视图、详细批量保存与冲突协议；
 - 0.18：Option/Feature 治理、GridState v2 迁移、renderer 原地刷新和可复现性能诊断。
 - 0.19：随机块远程模型、Worker 处理边界、增量行高/二分列索引、更新调度器、领域 API 与 API 快照门禁。
+- 0.20—0.23：API 生命周期策略、惰性领域 facade、update-only 管线失效、远程并发/优先级、共享 Observer、发布产物与 500 列/生命周期门禁。
 
 ### 1.0：暂不上
 

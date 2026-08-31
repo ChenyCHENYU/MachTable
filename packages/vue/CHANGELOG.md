@@ -1,5 +1,16 @@
 # @agile-team/mach-table-vue
 
+## 0.23.0
+
+### Minor Changes
+
+- Surface the Core 0.23 governed API, incremental row update path and bounded remote datasource behavior through the existing single-package Vue installation; no adapter migration is required.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @agile-team/mach-table@0.23.0
+
 ## 0.19.1
 
 ### Patch Changes

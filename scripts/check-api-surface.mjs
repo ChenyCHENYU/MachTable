@@ -4,6 +4,7 @@ import ts from "typescript";
 
 const root = process.cwd();
 const snapshotPath = path.join(root, "api", "public-api.snapshot.json");
+const policyPath = path.join(root, "api", "public-api-policy.json");
 
 function source(relative) {
   const file = path.join(root, relative);
@@ -55,13 +56,23 @@ const apiSource = source("packages/core/src/types/api.ts");
 const optionSource = source("packages/core/src/types/options.ts");
 const eventSource = source("packages/core/src/types/events.ts");
 const current = {
-  schemaVersion: 2,
+  schemaVersion: 3,
+  policy: JSON.parse(fs.readFileSync(policyPath, "utf8")),
   coreExports: indexExports(source("packages/core/src/index.ts")),
   workerExports: indexExports(source("packages/core/src/worker.ts")),
+  adapterExports: {
+    vue: indexExports(source("packages/vue/src/index.ts")),
+    vueAsync: indexExports(source("packages/vue/src/async.ts")),
+    vueWorkflows: indexExports(source("packages/vue/src/workflows.ts")),
+    react: indexExports(source("packages/react/src/index.ts")),
+    reactWorkflows: indexExports(source("packages/react/src/workflows.ts")),
+    xlsx: indexExports(source("packages/xlsx/src/index.ts"))
+  },
   interfaces: {
     ...interfaceMembers(apiSource, [
       "GridApi", "GridRowsApi", "GridColumnsApi", "GridSelectionApi",
       "GridEditingApi", "GridStateApi", "GridDiagnosticsApi"
+      , "GridFilteringApi", "GridPaginationApi"
     ]),
     ...interfaceMembers(optionSource, ["GridOptions", "GridFeature", "GridDataProcessor"]),
     ...interfaceMembers(eventSource, ["GridEventMap"])

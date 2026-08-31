@@ -1,6 +1,6 @@
 {
   "name": "mach-table",
-  "version": "0.19.1",
+  "version": "0.23.0",
   "private": true,
   "type": "module",
   "description": "MachTable - high performance, framework-agnostic data grid (monorepo)",
@@ -20,6 +20,8 @@
   },
   "scripts": {
     "build": "pnpm --filter \"./packages/*\" run build",
+    "build:runtime": "node scripts/build-workspace.mjs runtime",
+    "build:release": "node scripts/build-workspace.mjs release",
     "build:examples": "pnpm --filter \"./examples/*\" run build",
     "typecheck": "pnpm --filter \"./packages/*\" run typecheck",
     "lint": "eslint \"packages/**/*.{ts,tsx}\" \"tests/**/*.ts\" --max-warnings=0",
@@ -39,9 +41,11 @@
     "check:license": "node scripts/check-license.mjs",
     "check:package-readmes": "node scripts/check-package-readmes.mjs",
     "check:size": "node scripts/check-size.mjs",
+    "check:release-artifacts": "node scripts/check-release-artifacts.mjs",
     "check:exports": "tsc -p tests/consumer/tsconfig.json && pnpm check:vue-sfc && node scripts/check-package-exports.mjs",
     "check:vue-sfc": "vue-tsc --noEmit -p tests/consumer/vue-sfc/tsconfig.json",
     "check:complexity": "node scripts/check-complexity.mjs",
+    "check:complexity:update": "node scripts/check-complexity.mjs --update",
     "check:api": "node scripts/check-api-surface.mjs",
     "check:api:update": "node scripts/check-api-surface.mjs --update",
     "check:deps": "knip --production --dependencies --cycles --cache",
@@ -49,7 +53,7 @@
     "prepare": "husky",
     "quality:quick": "pnpm lint && pnpm typecheck && pnpm test",
     "quality:static": "pnpm lint && pnpm typecheck && pnpm check:complexity && pnpm check:api && pnpm check:deps",
-    "quality:package": "pnpm check:license && pnpm check:package-readmes && pnpm build && pnpm lint:package && pnpm check:exports && pnpm check:size",
+    "quality:package": "pnpm check:license && pnpm check:package-readmes && pnpm build:release && pnpm lint:package && pnpm check:exports && pnpm check:size && pnpm check:release-artifacts",
     "quality:docs": "pnpm check:docs && pnpm build:examples && pnpm docs:build",
     "verify": "pnpm quality:static && pnpm test:coverage && pnpm quality:package && pnpm quality:docs"
   },

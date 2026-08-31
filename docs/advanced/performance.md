@@ -5,21 +5,21 @@
 | 机制 | 说明 |
 | --- | --- |
 | 行虚拟化 | 行池复用（`index % poolSize` 槽位 + `index+nodeId` 双校验），滚动只更新 diff |
-| 列虚拟化 | 20+ 列自动启用；前缀宽度索引 + 二分窗口定位（±2 列缓冲），不随总列数线性扫描 |
+| 列虚拟化 | 20+ 列自动启用；表头与正文共享前缀宽度索引 + 二分窗口定位（±2 列缓冲），不保留离窗表头 DOM |
 | 变高行索引 | Fenwick 树维护高度与偏移；单行变化 O(log n) 更新、O(log n) 定位，无需重建完整前缀数组 |
 | 预取值排序 | Schwartzian 变换预提取排序键，避免 O(n log n) 次 valueGetter |
 | 合帧与去重 | rAF 滚动合帧、className/title/style 写入前比较、`contain: layout style` |
 | 范围缓存 | 框选坐标帧内缓存（8 个变更点失效），高亮零额外分配 |
 | Renderer 原地刷新 | 同一行/列/renderer 优先调用 `refresh(params)`；Vue/React 更新现有组件 root，失败才安全重建 |
 | 原子更新调度 | `api.batch()` 合并列/行池/布局/数据/脏单元格/固定行/合计/overlay；诊断公开请求与合并次数 |
-| 有界性能诊断 | 最近 120 次渲染/布局/模型窗口，公开 P95、长帧、Long Task、DOM 范围和可用 JS 堆指标 |
+| 有界性能诊断 | 最近 120 次渲染/布局/模型窗口，公开 P95、长帧、DOM 范围和可用 JS 堆指标；所有表格共享一个 Long Tasks Observer |
 | 布局隔离与释放 | Root/Row 使用 `contain: layout style`，销毁时主动释放行池、几何缓存、Worker、Observer 和请求 |
 
 ## 数据侧最佳实践
 
 ### 远程大数据优先使用随机块模式
 
-需要滚动条任意跳转时使用 `datasourceMode: "block"`，并配置 `datasourceRowCount`、稳定 `rowKey`、有界 `maxBlocksInCache`。它按可见块请求、相邻预取并以 LRU 释放远端行；普通“继续加载”列表保持默认 `sequential` 即可。详见[随机访问远程数据源](/recipes/random-access-datasource)。
+需要滚动条任意跳转时使用 `datasourceMode: "block"`，并配置 `datasourceRowCount`、稳定 `rowKey`、有界 `maxBlocksInCache`。0.23 默认最多并行 4 个块请求，显式 `ensureRowsLoaded` 优先于预取，预取先沿当前滚动方向执行，重试使用指数退避与抖动；普通“继续加载”列表保持默认 `sequential` 即可。详见[随机访问远程数据源](/recipes/random-access-datasource)。
 
 ### 大型本地计算按证据启用 Worker
 
@@ -86,7 +86,7 @@ api.batch((grid) => {
 
 可复现基准见 `examples/bench`（`pnpm --filter bench-demo dev`）：1k/10k/100k 行 × 8/30/60/100 列，含状态/进度/操作预设列，自动滚动统计帧耗时与可见 DOM 计数。
 
-Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列：初次构建、1000 次异步更新、滚动后的 DOM 上限和 P95 视口渲染预算均有保守 CI 阈值。可单独运行：
+Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列、60 帧连续纵向滚动、1 万行 × 500 列横向跳转和 30 次重复挂载/销毁：初次构建、1000 次异步更新、DOM 上限、P95 视口渲染和生命周期均有保守 CI 阈值。可单独运行：
 
 ```bash
 pnpm test:performance
@@ -108,15 +108,19 @@ const metrics = api.getPerformanceSnapshot();
 
 ## 发布体积预算
 
-`pnpm check:size` 在构建后检查 gzip 产物，CI/本地 `pnpm verify` 使用相同门槛：
+`pnpm check:size` 在构建后检查 gzip 消费体积；`pnpm check:release-artifacts` 检查解压产物并阻止 sourcemap 进入 npm 发布包。CI/本地 `pnpm verify` 使用相同门槛：
 
 | 产物 | gzip 上限 |
 | --- | ---: |
-| `@agile-team/mach-table` ESM | 84 KB |
-| 可选 `/worker` ESM | 8 KB |
-| Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10.5 KB / 6.75 KB / 5 KB / 3 KB |
-| React 全部 ESM / 默认入口 / 工作流入口 | 8 KB / 6.25 KB / 5 KB |
-| Core CSS | 7 KB |
+| `@agile-team/mach-table` 全公开 ESM / `createGrid` 真实消费 | 86 KiB / 79 KiB |
+| 可选 `/worker` ESM | 8 KiB |
+| Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10.5 KiB / 6.75 KiB / 5 KiB / 3 KiB |
+| React 全部 ESM / 默认入口 / 工作流入口 | 8 KiB / 6.25 KiB / 5 KiB |
+| Core CSS | 7 KiB |
+
+日常只验证运行时代码可执行 `pnpm build:runtime`，跳过耗时的声明汇总；正式包必须执行 `pnpm build:release`，保留 `.d.ts` 但不发布约占旧包 70% 解压空间的 `.map`。项目仍使用 tsup + esbuild：当前瓶颈是 TypeScript 声明汇总，不是 JS 打包，因此没有为了工具潮流迁移到 tsdown。
+
+0.23 没有增加名不副实的 `/lite`：当前可选 Worker、工作流、UI、编辑器和 XLSX 已是独立子入口，业务 bundler 会按 import tree-shake；再复制一个能力残缺但内核相同的 Lite 入口不会降低实际应用体积，只会制造第二套 API。只有拆分后能在真实 Vue/React 消费样本中稳定减少至少 20% gzip，才会增加该入口。
 
 框架包把 Vue、React、ReactDOM 和 Core 声明为 external/peer dependency，因此 Vue 应用不会打入 React 适配代码，反之亦然。
 

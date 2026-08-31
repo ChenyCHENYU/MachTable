@@ -28,6 +28,7 @@ type BodyContext = Pick<
   | "getApi"
   | "getCellValue"
   | "gridId"
+  | "headerRenderer"
   | "isDestroyed"
   | "options"
   | "performanceMonitor"
@@ -151,6 +152,7 @@ export class BodyRenderer {
     const sk = this.core.skeleton;
     const viewport = sk.bodyViewports.center;
     sk.headerRowContainers.center.style.transform = `translateX(${-viewport.scrollLeft}px)`;
+    this.core.headerRenderer.updateColumnWindow();
     sk.rowContainers.left.style.transform = `translateY(${-viewport.scrollTop}px)`;
     sk.rowContainers.right.style.transform = `translateY(${-viewport.scrollTop}px)`;
     this.core.pinnedRowsRenderer.onScrollLeft(viewport.scrollLeft);

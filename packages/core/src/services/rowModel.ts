@@ -43,6 +43,13 @@ function readChildren(data: unknown, key: string): unknown[] | undefined {
   return Array.isArray(value) ? value : undefined;
 }
 
+export interface RowTransactionImpact {
+  /** True when ordering, membership, grouping, spans or row geometry may have changed. */
+  pipelineChanged: boolean;
+  /** Stable IDs whose data references were replaced. */
+  updatedRowIds: readonly string[];
+}
+
 export class RowModel<TData = any> {
   private all: RowNode<TData>[] = [];
   private roots: RowNode<TData>[] = [];
@@ -76,6 +83,7 @@ export class RowModel<TData = any> {
   private dataProcessorSeq = 0;
   private dataProcessorAbort: AbortController | null = null;
   private skipDataProcessorOnce = false;
+  private lastRequestedBlock = 0;
 
   constructor(private core: RowModelContext) {
     this.advancedFilterModel = normalizeAdvancedFilterModel(core.options.advancedFilterModel);
@@ -135,7 +143,10 @@ export class RowModel<TData = any> {
     this.refreshPipeline();
     this.core.requestUpdate({ data: true });
     if (this.isBlockDatasource) {
-      this.blockCache.configure(this.core.options.maxBlocksInCache);
+      this.blockCache.configure(
+        this.core.options.maxBlocksInCache,
+        this.core.options.datasourceMaxConcurrentRequests
+      );
       return this.loadRandomBlock(0, signal);
     }
     return this.loadBlock(0, undefined, signal);
@@ -201,10 +212,7 @@ export class RowModel<TData = any> {
             return;
           }
           if (attempt <= this.core.options.datasourceRetryCount) {
-            const delay = Math.min(
-              this.core.options.datasourceRetryDelay * 2 ** Math.max(0, attempt - 1),
-              30_000
-            );
+            const delay = this.retryDelay(attempt);
             this.infiniteRetryTimer = setTimeout(() => {
               this.infiniteRetryTimer = null;
               runAttempt();
@@ -295,7 +303,7 @@ export class RowModel<TData = any> {
     }
   }
 
-  private loadRandomBlock(blockIndex: number, externalSignal?: AbortSignal): Promise<void> {
+  private loadRandomBlock(blockIndex: number, externalSignal?: AbortSignal, priority = 0): Promise<void> {
     if (!this.isBlockDatasource || blockIndex < 0) return Promise.resolve();
     if (externalSignal?.aborted) return Promise.reject(this.abortError(externalSignal.reason));
     const blockSize = this.core.options.blockSize;
@@ -307,7 +315,8 @@ export class RowModel<TData = any> {
     const request = this.blockCache.load(
       blockIndex,
       (signal) => this.requestDatasourceRange(start, stop, signal),
-      externalSignal
+      externalSignal,
+      priority
     );
     this.setInfiniteLoading(this.all.length === 0 && this.blockCache.snapshot().loadingBlockCount > 0);
     return request.then((result) => {
@@ -365,10 +374,7 @@ export class RowModel<TData = any> {
             return;
           }
           if (attempt <= this.core.options.datasourceRetryCount) {
-            const delay = Math.min(
-              this.core.options.datasourceRetryDelay * 2 ** Math.max(0, attempt - 1),
-              30_000
-            );
+            const delay = this.retryDelay(attempt);
             retryTimer = setTimeout(() => {
               retryTimer = null;
               runAttempt();
@@ -496,19 +502,18 @@ export class RowModel<TData = any> {
     return error;
   }
 
+  private retryDelay(attempt: number): number {
+    const base = Math.min(
+      this.core.options.datasourceRetryDelay * 2 ** Math.max(0, attempt - 1),
+      30_000
+    );
+    const jitter = this.core.options.datasourceRetryJitter;
+    return Math.max(0, Math.round(base * (1 + (Math.random() * 2 - 1) * jitter)));
+  }
+
   checkInfiniteScroll(lastVisibleIndex: number): void {
     if (this.isBlockDatasource) {
-      if (lastVisibleIndex < 0) return;
-      const blockSize = this.core.options.blockSize;
-      const target = Math.floor(lastVisibleIndex / blockSize);
-      const radius = this.core.options.blockPrefetch;
-      for (let distance = 0; distance <= radius; distance++) {
-        const candidates = distance === 0 ? [target] : [target + distance, target - distance];
-        for (const blockIndex of candidates) {
-          if (blockIndex < 0 || blockIndex * blockSize >= this.resolveBlockRowCount()) continue;
-          void this.loadRandomBlock(blockIndex).catch(() => undefined);
-        }
-      }
+      this.prefetchVisibleBlocks(lastVisibleIndex);
       return;
     }
     if (!this.isInfinite || this.infiniteRequested) return;
@@ -521,6 +526,24 @@ export class RowModel<TData = any> {
       ? loaded + blockSize
       : Math.min(this.infiniteLastRow, loaded + blockSize);
     void this.loadBlock(loaded, stop);
+  }
+
+  private prefetchVisibleBlocks(lastVisibleIndex: number): void {
+    if (lastVisibleIndex < 0) return;
+    const blockSize = this.core.options.blockSize;
+    const target = Math.floor(lastVisibleIndex / blockSize);
+    const radius = this.core.options.blockPrefetch;
+    const direction = target < this.lastRequestedBlock ? -1 : 1;
+    this.lastRequestedBlock = target;
+    for (let distance = 0; distance <= radius; distance++) {
+      const candidates = distance === 0
+        ? [target]
+        : [target + direction * distance, target - direction * distance];
+      for (const blockIndex of candidates) {
+        if (blockIndex < 0 || blockIndex * blockSize >= this.resolveBlockRowCount()) continue;
+        void this.loadRandomBlock(blockIndex, undefined, radius - distance + 1).catch(() => undefined);
+      }
+    }
   }
 
   onServerParamsChanged(): Promise<void> {
@@ -552,7 +575,7 @@ export class RowModel<TData = any> {
     const lastBlock = Math.max(firstBlock, Math.floor(Math.max(start, end - 1) / blockSize));
     const requests: Promise<void>[] = [];
     for (let block = firstBlock; block <= lastBlock; block++) {
-      requests.push(this.loadRandomBlock(block, signal));
+      requests.push(this.loadRandomBlock(block, signal, 100));
     }
     return Promise.all(requests).then(() => undefined);
   }
@@ -772,7 +795,7 @@ export class RowModel<TData = any> {
     }
   }
 
-  applyTransaction(transaction: RowTransaction<TData>, refresh = true): void {
+  applyTransaction(transaction: RowTransaction<TData>, refresh = true): RowTransactionImpact {
     const getRowId = this.core.options.getRowId;
     const touched: RowNode<TData>[] = [];
     const externallyReplacedIds: string[] = [];
@@ -857,19 +880,44 @@ export class RowModel<TData = any> {
       this.reindexAll();
     }
 
+    const pipelineChanged = this.transactionNeedsPipeline(transaction);
     if (refresh) {
-      this.refreshPipeline();
-      for (const node of touched) {
-        if (node.rowIndex >= 0) this.core.bodyRenderer.refreshRows([node.rowIndex]);
-      }
+      if (pipelineChanged) this.refreshPipeline();
+      else if (touched.length > 0) this.emitIncrementalModelUpdate();
     }
     this.core.changeTracker.clearRows(externallyReplacedIds);
+    return { pipelineChanged, updatedRowIds: touched.map((node) => node.id) };
   }
 
-  applyTransactions(transactions: readonly RowTransaction<TData>[]): void {
-    if (transactions.length === 0) return;
-    for (const transaction of transactions) this.applyTransaction(transaction, false);
-    this.refreshPipeline();
+  applyTransactions(transactions: readonly RowTransaction<TData>[]): RowTransactionImpact {
+    if (transactions.length === 0) return { pipelineChanged: false, updatedRowIds: [] };
+    let pipelineChanged = false;
+    const updatedRowIds = new Set<string>();
+    for (const transaction of transactions) {
+      const impact = this.applyTransaction(transaction, false);
+      pipelineChanged ||= impact.pipelineChanged;
+      for (const id of impact.updatedRowIds) updatedRowIds.add(id);
+    }
+    if (pipelineChanged) this.refreshPipeline();
+    else if (updatedRowIds.size > 0) this.emitIncrementalModelUpdate();
+    return { pipelineChanged, updatedRowIds: [...updatedRowIds] };
+  }
+
+  private transactionNeedsPipeline(transaction: RowTransaction<TData>): boolean {
+    if (transaction.add?.length || transaction.remove?.length) return true;
+    if (!transaction.update?.length) return false;
+    if (this.isTree || this.core.options.masterDetail) return true;
+    if (this.core.columnModel.getRowGroupColumns().length > 0) return true;
+    if (!this.core.options.manualFiltering && this.isFilterPresent()) return true;
+    if (!this.core.options.manualSorting && this.core.columnModel.getSortModel().length > 0) return true;
+    if (this.core.options.getRowHeight) return true;
+    return this.core.columnModel.getOrderedVisible().some((column) =>
+      column.colDef.autoHeight === true || column.colDef.autoRowSpan === true || column.colDef.rowSpan != null
+    );
+  }
+
+  private emitIncrementalModelUpdate(): void {
+    this.core.emit("modelUpdated", { rowCount: this.pipelineRows.length });
   }
 
   private buildChildNodes(parent: RowNode<TData>, data: TData, depth: number): void {

@@ -13,6 +13,50 @@ type PerformanceMemory = Performance & {
 const MAX_SAMPLES = 120;
 const LONG_FRAME_MS = 16.7;
 
+interface LongTaskSnapshot { count: number; totalMs: number }
+
+/** One browser observer is shared by every mounted grid to avoid N observers for N tables. */
+class LongTaskHub {
+  private observer: PerformanceObserver | null = null;
+  private subscribers = 0;
+  private count = 0;
+  private totalMs = 0;
+
+  acquire(): () => void {
+    this.subscribers++;
+    this.ensureObserver();
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.subscribers = Math.max(0, this.subscribers - 1);
+      if (this.subscribers === 0) {
+        this.observer?.disconnect();
+        this.observer = null;
+      }
+    };
+  }
+
+  snapshot(): LongTaskSnapshot { return { count: this.count, totalMs: this.totalMs }; }
+
+  private ensureObserver(): void {
+    if (this.observer || typeof PerformanceObserver === "undefined") return;
+    try {
+      this.observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          this.count++;
+          this.totalMs += entry.duration;
+        }
+      });
+      this.observer.observe({ entryTypes: ["longtask"] });
+    } catch {
+      this.observer = null;
+    }
+  }
+}
+
+const longTaskHub = new LongTaskHub();
+
 function now(): number {
   return typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
@@ -23,24 +67,12 @@ export class PerformanceMonitor {
   private samples: RenderSample[] = [];
   private layoutSamples: number[] = [];
   private modelSamples: number[] = [];
-  private longTaskCount = 0;
-  private longTaskTotalMs = 0;
-  private longTaskObserver: PerformanceObserver | null = null;
+  private longTaskBaseline: LongTaskSnapshot;
+  private releaseLongTaskHub: (() => void) | null;
 
   constructor() {
-    if (typeof PerformanceObserver === "undefined") return;
-    try {
-      this.longTaskObserver = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          this.longTaskCount++;
-          this.longTaskTotalMs += entry.duration;
-        }
-      });
-      this.longTaskObserver.observe({ entryTypes: ["longtask"] });
-    } catch {
-      // Long Tasks API is intentionally optional (Safari, SSR and test DOMs).
-      this.longTaskObserver = null;
-    }
+    this.releaseLongTaskHub = longTaskHub.acquire();
+    this.longTaskBaseline = longTaskHub.snapshot();
   }
 
   start(): number { return now(); }
@@ -62,6 +94,7 @@ export class PerformanceMonitor {
     const durations = this.samples.map((sample) => sample.duration);
     const last = this.samples[this.samples.length - 1];
     const sorted = [...durations].sort((left, right) => left - right);
+    const longTasks = longTaskHub.snapshot();
     return {
       sampleCount: durations.length,
       lastRenderMs: last?.duration ?? 0,
@@ -76,8 +109,8 @@ export class PerformanceMonitor {
       p95LayoutMs: this.percentile(this.layoutSamples),
       modelSampleCount: this.modelSamples.length,
       p95ModelMs: this.percentile(this.modelSamples),
-      longTaskCount: this.longTaskCount,
-      longTaskTotalMs: this.longTaskTotalMs,
+      longTaskCount: Math.max(0, longTasks.count - this.longTaskBaseline.count),
+      longTaskTotalMs: Math.max(0, longTasks.totalMs - this.longTaskBaseline.totalMs),
       usedHeapBytes: this.usedHeapBytes()
     };
   }
@@ -86,13 +119,12 @@ export class PerformanceMonitor {
     this.samples = [];
     this.layoutSamples = [];
     this.modelSamples = [];
-    this.longTaskCount = 0;
-    this.longTaskTotalMs = 0;
+    this.longTaskBaseline = longTaskHub.snapshot();
   }
 
   destroy(): void {
-    this.longTaskObserver?.disconnect();
-    this.longTaskObserver = null;
+    this.releaseLongTaskHub?.();
+    this.releaseLongTaskHub = null;
   }
 
   private pushDuration(target: number[], startedAt: number): void {

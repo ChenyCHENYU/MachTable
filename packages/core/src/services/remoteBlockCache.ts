@@ -15,6 +15,11 @@ interface InflightBlock<TData> {
   controller: AbortController;
   promise: Promise<RemoteBlockResult<TData>>;
   consumers: number;
+  loader: BlockLoader<TData>;
+  priority: number;
+  state: "queued" | "active";
+  resolve: (result: RemoteBlockResult<TData>) => void;
+  reject: (reason: unknown) => void;
 }
 
 function abortError(signal: AbortSignal): Error {
@@ -37,17 +42,22 @@ export class RemoteBlockCache<TData> {
   private hitCount = 0;
   private missCount = 0;
   private evictionCount = 0;
+  private activeRequests = 0;
 
   constructor(
     private maxBlocks: number,
-    private readonly onEvict?: (blockIndex: number, block: RemoteBlockResult<TData>) => void
+    private readonly onEvict?: (blockIndex: number, block: RemoteBlockResult<TData>) => void,
+    private maxConcurrentRequests = 4
   ) {
     this.maxBlocks = normalizeBlockLimit(maxBlocks);
+    this.maxConcurrentRequests = normalizeBlockLimit(maxConcurrentRequests);
   }
 
-  configure(maxBlocks: number): void {
+  configure(maxBlocks: number, maxConcurrentRequests = this.maxConcurrentRequests): void {
     this.maxBlocks = normalizeBlockLimit(maxBlocks);
+    this.maxConcurrentRequests = normalizeBlockLimit(maxConcurrentRequests);
     this.evictOverflow();
+    this.drainQueue();
   }
 
   peek(blockIndex: number): RemoteBlockResult<TData> | undefined {
@@ -64,7 +74,8 @@ export class RemoteBlockCache<TData> {
   load(
     blockIndex: number,
     loader: BlockLoader<TData>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    priority = 0
   ): Promise<RemoteBlockResult<TData>> {
     if (signal?.aborted) return Promise.reject(abortError(signal));
     const existing = this.peek(blockIndex);
@@ -75,31 +86,40 @@ export class RemoteBlockCache<TData> {
     const pending = this.inflight.get(blockIndex);
     if (pending) {
       this.hitCount++;
+      pending.priority = Math.max(pending.priority, priority);
+      this.drainQueue();
       return this.attachConsumer(blockIndex, pending, signal);
     }
     this.missCount++;
-    const generation = this.generation;
     const controller = new AbortController();
-    const promise = Promise.resolve().then(() => loader(controller.signal)).then((result) => {
-      if (generation !== this.generation || controller.signal.aborted) return result;
-      this.blocks.set(blockIndex, {
-        rows: result.rows,
-        ...(result.lastRow == null ? {} : { lastRow: result.lastRow }),
-        touchedAt: ++this.clock
-      });
-      this.evictOverflow();
-      return result;
-    }).finally(() => {
-      if (this.inflight.get(blockIndex)?.promise === promise) this.inflight.delete(blockIndex);
+    let resolveRequest!: (result: RemoteBlockResult<TData>) => void;
+    let rejectRequest!: (reason: unknown) => void;
+    const promise = new Promise<RemoteBlockResult<TData>>((resolve, reject) => {
+      resolveRequest = resolve;
+      rejectRequest = reject;
     });
-    const entry = { controller, promise, consumers: 0 };
+    const entry: InflightBlock<TData> = {
+      controller,
+      promise,
+      consumers: 0,
+      loader,
+      priority,
+      state: "queued",
+      resolve: resolveRequest,
+      reject: rejectRequest
+    };
     this.inflight.set(blockIndex, entry);
-    return this.attachConsumer(blockIndex, entry, signal);
+    const consumer = this.attachConsumer(blockIndex, entry, signal);
+    this.drainQueue();
+    return consumer;
   }
 
   purge(): void {
     this.generation++;
-    for (const request of this.inflight.values()) request.controller.abort();
+    for (const request of this.inflight.values()) {
+      request.controller.abort();
+      if (request.state === "queued") request.reject(abortError(request.controller.signal));
+    }
     this.inflight.clear();
     for (const [index, block] of this.blocks) this.onEvict?.(index, block);
     this.blocks.clear();
@@ -107,15 +127,70 @@ export class RemoteBlockCache<TData> {
 
   snapshot(): RemoteBlockCacheSnapshot {
     let cachedRowCount = 0;
+    let activeRequestCount = 0;
     for (const block of this.blocks.values()) cachedRowCount += block.rows.length;
+    for (const request of this.inflight.values()) {
+      if (request.state === "active") activeRequestCount++;
+    }
     return {
       cachedBlockCount: this.blocks.size,
       loadingBlockCount: this.inflight.size,
+      activeRequestCount,
+      queuedRequestCount: Math.max(0, this.inflight.size - activeRequestCount),
       cachedRowCount,
       hitCount: this.hitCount,
       missCount: this.missCount,
       evictionCount: this.evictionCount
     };
+  }
+
+  private drainQueue(): void {
+    while (this.activeRequests < this.maxConcurrentRequests) {
+      let selectedIndex: number | undefined;
+      let selected: InflightBlock<TData> | undefined;
+      for (const [blockIndex, entry] of this.inflight) {
+        if (entry.state !== "queued" || entry.controller.signal.aborted) continue;
+        if (!selected || entry.priority > selected.priority) {
+          selectedIndex = blockIndex;
+          selected = entry;
+        }
+      }
+      if (selectedIndex == null || !selected) return;
+      this.startEntry(selectedIndex, selected);
+    }
+  }
+
+  private startEntry(blockIndex: number, entry: InflightBlock<TData>): void {
+    entry.state = "active";
+    this.activeRequests++;
+    const generation = this.generation;
+    void this.runLoader(entry).then((result) => {
+      if (generation === this.generation && !entry.controller.signal.aborted) {
+        this.blocks.set(blockIndex, {
+          rows: result.rows,
+          ...(result.lastRow == null ? {} : { lastRow: result.lastRow }),
+          touchedAt: ++this.clock
+        });
+        this.evictOverflow();
+      }
+      entry.resolve(result);
+    }, entry.reject).finally(() => {
+      this.activeRequests = Math.max(0, this.activeRequests - 1);
+      if (this.inflight.get(blockIndex) === entry) this.inflight.delete(blockIndex);
+      this.drainQueue();
+    });
+  }
+
+  private runLoader(entry: InflightBlock<TData>): Promise<RemoteBlockResult<TData>> {
+    const { signal } = entry.controller;
+    if (signal.aborted) return Promise.reject(abortError(signal));
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(abortError(signal));
+      signal.addEventListener("abort", onAbort, { once: true });
+      void Promise.resolve().then(() => entry.loader(signal)).then(resolve, reject).finally(() => {
+        signal.removeEventListener("abort", onAbort);
+      });
+    });
   }
 
   private attachConsumer(
@@ -137,6 +212,7 @@ export class RemoteBlockCache<TData> {
         if (entry.consumers === 0 && this.inflight.get(blockIndex) === entry) {
           this.inflight.delete(blockIndex);
           entry.controller.abort(signal?.reason);
+          if (entry.state === "queued") entry.reject(abortError(entry.controller.signal));
         }
         reject(abortError(signal!));
       });

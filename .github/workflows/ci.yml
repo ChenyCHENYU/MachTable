@@ -137,7 +137,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           CI: true
-      - run: pnpm build
+      - run: pnpm build:release
       - uses: changesets/action@v1
         with:
           publish: pnpm changeset publish

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "releaseLine": "0.x",
+  "preferredDomains": [
+    "rows",
+    "columns",
+    "selection",
+    "editing",
+    "filtering",
+    "pagination",
+    "state",
+    "diagnostics"
+  ],
+  "flatApi": {
+    "status": "compatibility",
+    "removalBefore": "1.0.0",
+    "rule": "Do not add a flat alias when an existing domain operation or option expresses the same capability."
+  },
+  "deprecated": {
+    "GridApi.openColumnPanel": "GridApi.openColumnWorkbench"
+  },
+  "stability": {
+    "stable": "Documented API covered by signature and semantic contract gates.",
+    "experimental": "Must live behind an explicit subpath or GridFeature until promoted.",
+    "internal": "Must not be exported from a package entry point."
+  }
+}

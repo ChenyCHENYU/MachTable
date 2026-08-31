@@ -7,7 +7,7 @@
 │ 框架适配层   @agile-team/mach-table-vue（优先）· react（官方）│
 │             props ↔ options 桥接 · 组件适配器     │
 ├──────────────────────────────────────────────────┤
-│ 命令层       GridApi（60+ 方法，类型完备）        │
+│ 命令层       8 个领域 API · 0.x 平面兼容层       │
 ├──────────────────────────────────────────────────┤
 │ 服务层       columnModel · rowModel（数据管道）   │
 │             selection · editing · undoRedo       │
@@ -80,8 +80,8 @@ GridCore.emit ——→ EventBus + options.onXxx（双通道广播）
 
 - 左右固定列物理隔离（非 sticky），中心滚动时 header/pinned 行仅做 `transform` 同步
 - 行池：`slot = pool[index % poolSize]`，`index+nodeId` 双校验跳过未变行
-- 变高行前缀和（Float64Array 仅按已加载行扩容）+ 二分查找可视窗口；服务端已知总量不会按总行数分配数组
-- 列虚拟化：中窗格 20+ 列时只激活可视列；同 renderer/行/列优先调用 `refresh(params)`，离窗富组件才调用 `destroy` 卸载框架 root
+- 变高行使用 Fenwick 树维护高度与偏移，单行更新/定位均为 `O(log n)`；服务端已知总量不会按总行数分配高度数组
+- 列虚拟化：中窗格 20+ 列时表头与正文都只挂载可视列；表头组件和单元格 renderer 离窗时执行 `destroy`，重入窗口时按同一列契约重建
 
 ## 扩展新特性
 
@@ -99,4 +99,4 @@ GridCore.emit ——→ EventBus + options.onXxx（双通道广播）
 
 ## 发布流
 
-changesets（Core、Vue、React、可选 XLSX 四包 fixed 版本联动）→ CI（lint + typecheck + coverage + size budget + packages/examples/docs build + Playwright）→ Changesets 版本 PR → 合并后 publish。详见根 README「开发与贡献」。
+changesets（Core、Vue、React、可选 XLSX 四包 fixed 版本联动）→ CI（lint + typecheck + coverage + API/复杂度/体积 + packages/examples/docs + Playwright）→ `build:release` 生成不携带 sourcemap 的发布产物 → publish。详见根 README「开发与贡献」。
