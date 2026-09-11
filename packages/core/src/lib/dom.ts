@@ -13,13 +13,42 @@ export function setStyles(e: HTMLElement, styles: Partial<CSSStyleDeclaration>):
   Object.assign(e.style, styles);
 }
 
+const PORTAL_THEME_PROPERTIES = [
+  "--mach-font-family",
+  "--mach-font-size",
+  "--mach-font-size-sm",
+  "--mach-header-font-weight",
+  "--mach-cell-padding",
+  "--mach-header-h",
+  "--mach-primary",
+  "--mach-primary-weak",
+  "--mach-success",
+  "--mach-warning",
+  "--mach-danger",
+  "--mach-info",
+  "--mach-border-color",
+  "--mach-header-fg",
+  "--mach-body-bg",
+  "--mach-body-fg",
+  "--mach-row-hover-bg",
+  "--mach-radius-sm",
+  "--mach-radius",
+  "--mach-radius-lg",
+  "--mach-shadow-sm",
+  "--mach-shadow",
+  "--mach-transition",
+  "--mach-z-popup",
+  "--mach-z-menu"
+] as const;
+
 /** Keeps body-mounted overlays visually scoped to their owning grid instance. */
 export function applyPortalTheme(portal: HTMLElement, source: HTMLElement | null): void {
   portal.classList.add("mach-portal");
   if (!source) return;
   const styles = window.getComputedStyle(source);
-  for (const property of styles) {
-    if (property.startsWith("--mach-")) portal.style.setProperty(property, styles.getPropertyValue(property));
+  for (const property of PORTAL_THEME_PROPERTIES) {
+    const value = styles.getPropertyValue(property).trim();
+    if (value) portal.style.setProperty(property, value);
   }
   portal.style.colorScheme = styles.colorScheme;
 }

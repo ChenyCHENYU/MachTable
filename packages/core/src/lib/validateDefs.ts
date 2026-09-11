@@ -9,7 +9,16 @@ interface ColumnValidationContext {
 }
 
 function hasColumnValue(def: ColDef<any>): boolean {
-  return Boolean(def.field || def.valueGetter || def.checkboxSelection || def.autoRowSpan || def.rowSpan);
+  return Boolean(
+    def.field ||
+    def.valueGetter ||
+    def.cellRenderer ||
+    def.checkboxSelection ||
+    def.rowDrag ||
+    def.type ||
+    def.autoRowSpan ||
+    def.rowSpan
+  );
 }
 
 function validateColumnWidths(def: ColDef<any>, id: string, issues: string[]): void {

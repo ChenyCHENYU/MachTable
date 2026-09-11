@@ -1,6 +1,15 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { createColumnHelper, createEnterprisePreset, createGrid, createMachTablePreset } from "../index";
+import {
+  createColumnHelper,
+  createEnterprisePreset,
+  createGrid,
+  createMachTablePreset,
+  dragColumn,
+  indexColumn,
+  rowActionsColumn,
+  selectionColumn
+} from "../index";
 import type { GridApi, ColDef } from "../index";
 
 interface Row {
@@ -558,6 +567,26 @@ describe("diagnostics and lifecycle hygiene", () => {
 });
 
 describe("dev validation warnings", () => {
+  it("does not warn for official utility or renderer-only columns", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const host = createHost();
+    const api = createGrid<Row>(host, {
+      columnDefs: [
+        selectionColumn<Row>(),
+        indexColumn<Row>(),
+        dragColumn<Row>(),
+        rowActionsColumn<Row>()
+      ],
+      rowData: rows,
+      pagination: false,
+      rowKey: (row) => row.id
+    });
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+    api.destroy();
+  });
+
   it("warns duplicate ids and missing field/getter", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const host = createHost();

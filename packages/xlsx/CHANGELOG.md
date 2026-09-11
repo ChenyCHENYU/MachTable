@@ -9,6 +9,8 @@
   Keep cell editors mounted across pointer and focus changes, prevent IME composition Enter events from committing, and require the inline confirm/cancel controls or an explicit keyboard command to finish the edit transaction.
 
   Tree-shake package metadata so the browser runtime embeds only the public version string rather than the complete package manifest.
+
+  Treat official utility and renderer-only columns as intentional display columns so row actions do not emit misleading development warnings.
 - Updated dependencies
   - @agile-team/mach-table@0.28.1
 

@@ -10,6 +10,8 @@
 
   Tree-shake package metadata so the browser runtime embeds only the public version string rather than the complete package manifest.
 
+  Treat official utility and renderer-only columns as intentional display columns so row actions do not emit misleading development warnings.
+
 ## 0.28.0
 
 ### Minor Changes
