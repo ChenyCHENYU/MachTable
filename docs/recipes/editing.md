@@ -9,7 +9,7 @@
 | 单击 | `singleClickEdit: true`（全局）或列级 `singleClickEdit: true` |
 | 编程式 | `api.editing.startCell({ rowIndex: 0, colId: "name" })` |
 
-结束：Enter/Tab/点击他处（保存）；Escape（取消）；命令式流程使用 `await api.editing.stop({ cancel })`。
+结束：就地对勾、Enter 或 Tab（保存）；就地取消按钮或 Escape（取消）；命令式流程使用 `await api.editing.stop({ cancel })`。鼠标移动、重新定位光标、焦点移出或点击表格其他区域都不会隐式结束当前事务。
 
 可编辑格默认在 hover / 键盘聚焦时显示轻量铅笔入口。进入编辑后，当前格呈现输入框和就地的对勾/取消按钮；对勾与 Enter 走同一条校验提交链路，取消与 Escape 都不会写值：
 
