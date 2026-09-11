@@ -1878,10 +1878,11 @@ export class BodyRenderer {
 
   private onBodyClick = (e: MouseEvent): void => {
     if (this.core.isDestroyed()) return;
+    if (this.core.editingService.isCellEditing()) return;
+    const target = e.target as HTMLElement;
     const resolved = this.resolveEventTarget(e);
     if (!resolved) return;
     const { node, index, cellEl } = resolved;
-    const target = e.target as HTMLElement;
     if (this.handleGroupRowClick(target, node, cellEl)) return;
     if (this.handleTreeToggleClick(target, node, cellEl)) return;
     const colId = cellEl?.dataset.colId ?? "";
@@ -2024,9 +2025,7 @@ export class BodyRenderer {
   };
 
   private onMouseDown = (e: MouseEvent): void => {
-    if (this.core.editingService.isCellEditing()) {
-      this.core.editingService.stop(false);
-    }
+    if (this.core.editingService.isCellEditing()) return;
     if (this.core.options.enableRangeSelection && e.button === 0) {
       const resolved = this.resolveEventTarget(e);
       if (

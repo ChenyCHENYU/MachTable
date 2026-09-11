@@ -152,7 +152,6 @@ export class EditingService {
 
     const keydown = this.onCellEditorKeyDown;
     editor.el.addEventListener("keydown", keydown);
-    editor.el.addEventListener("focusout", this.onCellEditorBlur);
     confirmButton.addEventListener("click", (event) => {
       event.stopPropagation();
       void this.stopAsync(false);
@@ -661,7 +660,6 @@ export class EditingService {
   private destroyMountedEditor(mounted: MountedEditor, removeCellState: boolean): void {
     mounted.editor.el.removeEventListener("keydown", mounted.keydown);
     if (mounted.input) mounted.editor.el.removeEventListener("input", mounted.input);
-    mounted.editor.el.removeEventListener("focusout", this.onCellEditorBlur);
     mounted.editor.el.classList.remove("mach-editor-validating");
     mounted.editor.el.removeAttribute("aria-busy");
     mounted.editor.el.inert = false;
@@ -679,6 +677,7 @@ export class EditingService {
 
   private onCellEditorKeyDown = (event: KeyboardEvent): void => {
     if (!this.cellEditing) return;
+    if (event.isComposing || event.keyCode === 229) return;
     if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
@@ -730,12 +729,6 @@ export class EditingService {
       break;
     }
   }
-
-  private onCellEditorBlur = (): void => {
-    window.setTimeout(() => {
-      if (this.cellEditing) void this.stopAsync(false);
-    }, 0);
-  };
 
   destroy(): void {
     if (this.cellEditing || this.rowEditing) void this.stopAsync(true);

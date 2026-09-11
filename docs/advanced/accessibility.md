@@ -33,6 +33,8 @@ MachTable 0.28 按 WAI-ARIA Grid / Treegrid 交互模型实现语义和键盘基
 | 表头 | Alt+左右方向 | 调整列宽（需 `enableColumnResize: true`） |
 | 表头 | Ctrl+左右方向 | 移动列 |
 
+单元格编辑不会因焦点移出或指针操作自动提交。鼠标用户通过就地对勾/取消控件结束事务；键盘用户继续使用 Enter、Escape、Tab。输入法处于组合输入阶段时，Enter 不会被误识别为提交命令。
+
 设置 `suppressCellFocus` 或 `suppressHeaderFocus` 会关闭对应键盘入口，只应用在确有替代交互的只读展示场景。
 
 ## 自定义内容责任

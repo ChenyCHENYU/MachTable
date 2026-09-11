@@ -41,6 +41,8 @@ api.destroy();
 
 `persistence.sections` 同时约束进入 store 的数据与恢复范围；异步 store 写入有序，晚到加载不会覆盖加载期间的用户操作。
 
+单元格编辑通过内置对勾/取消控件显式结束，普通鼠标和焦点变化不会误提交；Enter、Escape、Tab 仍提供完整键盘路径。筛选、列设置、上下文菜单和操作菜单会继承所属表格实例的主题变量，不受宿主页面全局样式影响。
+
 公共命令按 `rows`、`columns`、`selection`、`editing`、`filtering`、`sorting`、`pagination`、`hierarchy`、`view`、`state`、`io`、`diagnostics` 划分。完整签名见 [GridApi](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/api/grid-api.md)。
 
 大型本地数据 Worker 使用独立入口：

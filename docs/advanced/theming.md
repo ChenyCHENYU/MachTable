@@ -152,6 +152,8 @@ createGrid(host, { className: "brand-grid" });
 | `.mach-filter-panel` / `.mach-context-menu` / `.mach-column-panel` | 弹层 |
 | `.mach-fill-handle` / `.mach-row-drag-handle` / `.mach-detail-toggle` / `.mach-editor-input` | 手柄 / 编辑器 |
 
+筛选、列设置、上下文菜单、操作菜单、抽屉、提示和列拖动预览虽然挂载在 `document.body`，仍会从所属 `.mach-root` 复制已解析的主题变量与 `color-scheme`。因此同页多个不同主题实例互不污染，宿主也不需要为弹层重复声明变量。
+
 ## 数字对齐
 
 数值列自动右对齐 + `font-variant-numeric: tabular-nums`；列 `type: "rightAligned"` 可强制。

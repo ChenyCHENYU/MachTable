@@ -1,6 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, clamp } from "../lib/dom";
 
 type ColumnMenuContext = Pick<
   GridCore<any>,
@@ -179,6 +179,7 @@ export class ColumnMenuService {
     footer.append(resetBtn, allFitBtn);
     panel.appendChild(footer);
 
+    applyPortalTheme(panel, this.core.skeleton.root);
     document.body.appendChild(panel);
     this.panel = panel;
     this.openColId = column ? column.id : "__standalone__";

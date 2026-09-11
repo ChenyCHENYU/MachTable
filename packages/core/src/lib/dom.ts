@@ -13,6 +13,17 @@ export function setStyles(e: HTMLElement, styles: Partial<CSSStyleDeclaration>):
   Object.assign(e.style, styles);
 }
 
+/** Keeps body-mounted overlays visually scoped to their owning grid instance. */
+export function applyPortalTheme(portal: HTMLElement, source: HTMLElement | null): void {
+  portal.classList.add("mach-portal");
+  if (!source) return;
+  const styles = window.getComputedStyle(source);
+  for (const property of styles) {
+    if (property.startsWith("--mach-")) portal.style.setProperty(property, styles.getPropertyValue(property));
+  }
+  portal.style.colorScheme = styles.colorScheme;
+}
+
 export function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
 }

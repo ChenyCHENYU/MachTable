@@ -18,12 +18,39 @@ test("React cell editing exposes a pencil and local confirm/cancel controls", as
   await expect(nameCell.getByRole("button", { name: "Confirm edit" })).toBeVisible();
   await expect(nameCell.getByRole("button", { name: "Cancel edit" })).toBeVisible();
   await nameCell.locator("input").fill("单元格就地编辑");
+  await page.mouse.move(24, 24);
+  await page.locator("h1").click();
+  await expect(nameCell.locator(".mach-cell-editor-controls")).toBeVisible();
+  await expect(nameCell.locator("input")).toHaveValue("单元格就地编辑");
   if (process.env.MACH_VISUAL_REVIEW) {
     await page.screenshot({ path: testInfo.outputPath("cell-editing-visual.png"), fullPage: false });
   }
   await nameCell.getByRole("button", { name: "Confirm edit" }).click();
   await expect(nameCell).toContainText("单元格就地编辑");
   expect(errors).toEqual([]);
+});
+
+test("Vue column workbench and drag preview retain grid-scoped visual tokens", async ({ page }) => {
+  await page.goto("http://127.0.0.1:4175");
+  await page.locator(".mach-toolbar__button").nth(1).click();
+  const workbench = page.locator(".mach-column-panel");
+  await expect(workbench).toBeVisible();
+  await expect(workbench).toHaveClass(/mach-portal/);
+  expect(await workbench.evaluate((element) => getComputedStyle(element).position)).toBe("fixed");
+  expect(await workbench.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .not.toBe("rgba(0, 0, 0, 0)");
+  await page.keyboard.press("Escape");
+
+  const header = page.locator('.mach-header-cell[data-col-id="product"]');
+  const box = await header.boundingBox();
+  if (!box) throw new Error("product header geometry is unavailable");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 60, box.y + box.height / 2, { steps: 4 });
+  await expect(page.locator(".mach-column-drag-ghost")).toBeVisible();
+  await expect(page.locator(".mach-column-drag-ghost")).toContainText("产品");
+  await page.mouse.up();
+  await expect(page.locator(".mach-column-drag-ghost")).toHaveCount(0);
 });
 
 test("Vue full-row editing presents staged inputs and save/cancel actions", async ({ page }, testInfo) => {

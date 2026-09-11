@@ -43,6 +43,8 @@ const columns: ColDef<Row>[] = [{ field: "name", flex: 1, editable: true }];
 </template>
 ```
 
+单元格编辑在用户点击对勾/取消或执行 Enter、Escape、Tab 键盘命令前保持挂载，焦点变化和中文输入法组合输入不会提前提交。整行事务请设置 `edit-type="fullRow"` 并增加 `rowActionsColumn()`，该操作列会自动切换编辑、保存和取消状态。
+
 ## 全局接入
 
 表格页面较多时，全局注册一次，页面模板直接使用 `<MachTable>`：

@@ -227,6 +227,13 @@
   box-sizing: border-box;
 }
 
+.mach-portal,
+.mach-portal *,
+.mach-portal *::before,
+.mach-portal *::after {
+  box-sizing: border-box;
+}
+
 .mach-root:focus-visible {
   outline: 2px solid var(--mach-primary);
   outline-offset: -2px;
@@ -336,6 +343,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+}
+
+.mach-header-cell--selection {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.mach-header-cell--selection .mach-header-label:empty {
+  display: none;
 }
 
 .mach-sort-indicator {
@@ -449,7 +466,28 @@
 }
 
 .mach-header-cell--dragging {
-  opacity: 0.4;
+  opacity: 0.22;
+}
+
+.mach-column-drag-ghost {
+  position: fixed;
+  z-index: calc(var(--mach-z-menu) + 1);
+  display: flex;
+  align-items: center;
+  height: var(--mach-header-h);
+  max-width: calc(100vw - 16px);
+  padding: 0 var(--mach-cell-padding);
+  overflow: hidden;
+  color: var(--mach-body-fg);
+  font: var(--mach-header-font-weight) var(--mach-font-size)/1.3 var(--mach-font-family);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--mach-body-bg);
+  border: 1px solid var(--mach-primary);
+  border-radius: var(--mach-radius);
+  box-shadow: var(--mach-shadow);
+  opacity: 0.96;
 }
 
 .mach-drop-indicator {

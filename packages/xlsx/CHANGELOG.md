@@ -1,5 +1,17 @@
 # @agile-team/mach-table-xlsx
 
+## 0.28.1
+
+### Patch Changes
+
+- Keep body-mounted filters, column workbenches, menus, drawers, tooltips and column-drag previews scoped to the owning grid theme; align selection-column header and row checkboxes; and add a bounded visual column-drag preview.
+
+  Keep cell editors mounted across pointer and focus changes, prevent IME composition Enter events from committing, and require the inline confirm/cancel controls or an explicit keyboard command to finish the edit transaction.
+
+  Tree-shake package metadata so the browser runtime embeds only the public version string rather than the complete package manifest.
+- Updated dependencies
+  - @agile-team/mach-table@0.28.1
+
 ## 0.28.0
 
 ### Patch Changes

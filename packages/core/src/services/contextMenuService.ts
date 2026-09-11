@@ -2,7 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type { ContextMenuItem } from "../types/params";
 import type { RowNode } from "../types/row";
-import { el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, clamp } from "../lib/dom";
 
 type ContextMenuContext = Pick<
   GridCore<any>,
@@ -17,6 +17,7 @@ type ContextMenuContext = Pick<
   | "pasteFromSystemClipboard"
   | "reportError"
   | "rowModel"
+  | "skeleton"
 >;
 
 export class ContextMenuService {
@@ -129,6 +130,7 @@ export class ContextMenuService {
   }
 
   private attach(panel: HTMLElement, x: number, y: number): void {
+    applyPortalTheme(panel, this.core.skeleton.root);
     document.body.appendChild(panel);
     this.panel = panel;
     const rect = panel.getBoundingClientRect();

@@ -6,12 +6,12 @@ import type {
   NumberFilterMatch,
   TextFilterMatch
 } from "../types/colDef";
-import { el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, clamp } from "../lib/dom";
 import { matchLocaleKey } from "../lib/locale";
 
 type FilterPopupContext = Pick<
   GridCore<any>,
-  "applyColumnFilter" | "getCellValue" | "getLocaleText" | "rowModel"
+  "applyColumnFilter" | "getCellValue" | "getLocaleText" | "rowModel" | "skeleton"
 >;
 
 const TEXT_MATCHES: TextFilterMatch[] = [
@@ -107,6 +107,7 @@ export class FilterPopupService {
     footer.append(resetBtn, applyBtn);
     panel.appendChild(footer);
 
+    applyPortalTheme(panel, this.core.skeleton.root);
     document.body.appendChild(panel);
     this.panel = panel;
     this.openColId = column.id;

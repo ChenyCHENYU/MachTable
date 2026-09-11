@@ -2,6 +2,7 @@ import type { CellRendererParams } from "../types/params";
 import type { CellRendererFn } from "../types/colDef";
 import type { ActionPolicyContext } from "../types/options";
 import type { GridChange } from "../types/api";
+import { applyPortalTheme } from "./dom";
 import { DEFAULT_LOCALE } from "./locale";
 
 export type TagVariant = "success" | "warning" | "danger" | "info" | "neutral";
@@ -227,6 +228,7 @@ function showActionMenu(anchor: HTMLElement, items: SurfaceItem[]): void {
     button.setAttribute("role", "menuitem");
     menu.appendChild(button);
   }
+  applyPortalTheme(menu, anchor.closest<HTMLElement>(".mach-root"));
   document.body.appendChild(menu);
   const rect = anchor.getBoundingClientRect();
   const menuRect = menu.getBoundingClientRect();
@@ -269,6 +271,7 @@ function showActionDrawer(anchor: HTMLElement, title: string, items: SurfaceItem
   backdrop.addEventListener("mousedown", (event) => {
     if (event.target === backdrop) closeActionSurface(true);
   });
+  applyPortalTheme(backdrop, anchor.closest<HTMLElement>(".mach-root"));
   document.body.appendChild(backdrop);
   openActionSurface = backdrop;
   openActionAnchor = anchor;

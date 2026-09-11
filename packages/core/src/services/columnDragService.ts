@@ -1,6 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { el } from "../lib/dom";
+import { applyPortalTheme, clamp, el } from "../lib/dom";
 
 const DRAG_THRESHOLD = 6;
 type ColumnDragContext = Pick<
@@ -8,9 +8,17 @@ type ColumnDragContext = Pick<
   "bodyRenderer" | "columnModel" | "moveColumn" | "skeleton"
 >;
 
+interface ColumnDragState {
+  column: Column;
+  cellEl: HTMLElement;
+  ghost: HTMLElement;
+  indicator: HTMLElement;
+  targetIndex: number;
+}
+
 export class ColumnDragService {
   private pending: { column: Column; startX: number; startY: number } | null = null;
-  private dragging: { column: Column; cellEl: HTMLElement; indicator: HTMLElement; targetIndex: number } | null = null;
+  private dragging: ColumnDragState | null = null;
   private suppressClick = false;
 
   constructor(private core: ColumnDragContext) {}
@@ -53,10 +61,15 @@ export class ColumnDragService {
     }
     this.suppressClick = true;
     const indicator = el("div", "mach-drop-indicator");
+    const ghost = el("div", "mach-column-drag-ghost");
+    ghost.textContent = pending.column.colDef.headerName ?? pending.column.colDef.field ?? pending.column.id;
+    ghost.ariaHidden = "true";
+    applyPortalTheme(ghost, this.core.skeleton.root);
+    document.body.appendChild(ghost);
     cellEl.parentElement.appendChild(indicator);
     cellEl.classList.add("mach-header-cell--dragging");
     this.core.skeleton.root.classList.add("mach-root--dragging");
-    this.dragging = { column: pending.column, cellEl, indicator, targetIndex: -1 };
+    this.dragging = { column: pending.column, cellEl, ghost, indicator, targetIndex: -1 };
     this.updateIndicator(e);
   }
 
@@ -69,6 +82,8 @@ export class ColumnDragService {
   private updateIndicator(e: PointerEvent): void {
     const dragging = this.dragging;
     if (!dragging) return;
+    dragging.ghost.style.left = `${clamp(e.clientX + 12, 8, window.innerWidth - dragging.ghost.offsetWidth - 8)}px`;
+    dragging.ghost.style.top = `${clamp(e.clientY + 12, 8, window.innerHeight - dragging.ghost.offsetHeight - 8)}px`;
     const pane = this.core.bodyRenderer.paneForColumn(dragging.column);
     const container = this.core.skeleton.headerRowContainers[pane];
     const rowRect = container.getBoundingClientRect();
@@ -97,19 +112,26 @@ export class ColumnDragService {
     dragging.indicator.style.left = `${indicatorX}px`;
   }
 
-  private onUp = (): void => {
-    const dragging = this.dragging;
+  private onUp = (event: PointerEvent): void => {
     this.pending = null;
     this.cleanup();
+    const dragging = this.clearDrag();
     if (!dragging) return;
-    this.dragging = null;
-    dragging.cellEl.classList.remove("mach-header-cell--dragging");
-    dragging.indicator.remove();
-    this.core.skeleton.root.classList.remove("mach-root--dragging");
-    if (dragging.targetIndex >= 0) {
+    if (event.type !== "pointercancel" && dragging.targetIndex >= 0) {
       this.core.moveColumn(dragging.column.id, dragging.targetIndex);
     }
   };
+
+  private clearDrag(): ColumnDragState | null {
+    const dragging = this.dragging;
+    if (!dragging) return null;
+    this.dragging = null;
+    dragging.cellEl.classList.remove("mach-header-cell--dragging");
+    dragging.ghost.remove();
+    dragging.indicator.remove();
+    this.core.skeleton.root.classList.remove("mach-root--dragging");
+    return dragging;
+  }
 
   private cleanup(): void {
     window.removeEventListener("pointermove", this.onMove);
@@ -119,12 +141,7 @@ export class ColumnDragService {
 
   destroy(): void {
     this.cleanup();
-    if (this.dragging) {
-      this.dragging.cellEl.classList.remove("mach-header-cell--dragging");
-      this.dragging.indicator.remove();
-      this.core.skeleton.root.classList.remove("mach-root--dragging");
-      this.dragging = null;
-    }
+    this.clearDrag();
     this.pending = null;
   }
 }

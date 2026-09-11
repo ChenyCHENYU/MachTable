@@ -1,7 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type { TooltipParams } from "../types/params";
-import { el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, clamp } from "../lib/dom";
 import { formatCellValue } from "../render/cellContent";
 
 type TooltipContext = Pick<
@@ -141,6 +141,7 @@ export class TooltipService {
       panel.appendChild(content);
     }
 
+    applyPortalTheme(panel, this.core.skeleton.root);
     document.body.appendChild(panel);
     this.panel = panel;
     const rect = cell.getBoundingClientRect();

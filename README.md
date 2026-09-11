@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.28.0-2563eb" alt="Source version 0.28.0" />
+  <img src="https://img.shields.io/badge/source-0.28.1-2563eb" alt="Source version 0.28.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -249,7 +249,7 @@ const options = {
 
 ## 编辑与复杂业务工作流
 
-单元格编辑默认提供轻量编辑提示与就地对勾/取消；`editType: "fullRow"` 将可编辑单元格作为一个原子事务提交。操作列支持内置查看/编辑/删除图标，也支持纯自定义动作，以及 `menu`、`drawer`、`inline` 三种溢出模式。
+单元格编辑默认提供轻量编辑提示与就地对勾/取消；鼠标移动、重新定位光标、焦点移出或中文输入法组合过程都不会提前结束编辑，只有对勾/取消控件或 Enter、Escape、Tab 键盘命令会完成事务。`editType: "fullRow"` 将可编辑单元格作为一个原子事务提交。操作列支持内置查看/编辑/删除图标，也支持纯自定义动作，以及 `menu`、`drawer`、`inline` 三种溢出模式。
 
 ```ts
 import { rowActionsColumn } from "@agile-team/mach-table-vue";
@@ -297,7 +297,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.28.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。0.28 不新增公共能力：沿用已通过快照锁定的接入契约，清零 31 项历史复杂度豁免，并对配置、渲染、筛选、选择、布局与交互内部边界做稳定性治理。若真实项目没有暴露新的契约问题，下一阶段进入 `1.0.0-rc`，不再以堆叠 API 推动版本。
+当前源码版本为 `0.28.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。0.28.1 不新增公共能力：沿用已通过快照锁定的接入契约，修复真实项目暴露的浮层主题、选择列对齐、拖列反馈和编辑事务稳定性问题。若真实项目没有暴露新的契约问题，下一阶段进入 `1.0.0-rc`，不再以堆叠 API 推动版本。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

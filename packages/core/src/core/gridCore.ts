@@ -34,7 +34,7 @@ import { normalizeFeatureRequirements, resolveGridFeatures } from "../lib/featur
 import { toTsv, parseTsv, writeClipboard } from "../lib/clipboard";
 import { formatCellValueWith } from "../render/cellContent";
 import { DEFAULT_LOCALE, type MachTableLocale, type MachTableLocaleKey } from "../lib/locale";
-import packageJson from "../../package.json";
+import { version as packageVersion } from "../../package.json";
 import type { ResolvedGridOptions } from "../types/options";
 import type { GridApi, GridDiagnosticError, GridDiagnostics } from "../types/api";
 import type { GridFeature, GridFeatureContext, GridOptions, GridStateStore } from "../types/options";
@@ -597,7 +597,7 @@ export class GridCore<TData = any> {
   getDiagnostics(): GridDiagnostics {
     return {
       gridId: this.gridId,
-      version: packageJson.version,
+      version: packageVersion,
       destroyed: this.destroyed,
       infinite: this.rowModel.isInfinite,
       loading: this.rowModel.isLoadingInfinite() || this.options.loading,

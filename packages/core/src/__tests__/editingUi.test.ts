@@ -53,6 +53,52 @@ describe("polished editing UI", () => {
     api.destroy();
   });
 
+  it("keeps cell editing active until an explicit control or keyboard command finishes it", async () => {
+    const host = createHost();
+    const api = createGrid<Person>(host, {
+      columnDefs: [
+        { field: "name", editable: true },
+        { field: "age" }
+      ],
+      rowData: [
+        { id: "1", name: "Before", age: 20, status: "active" },
+        { id: "2", name: "Other", age: 21, status: "active" }
+      ],
+      rowKey: (row) => row.id
+    });
+
+    const cell = host.querySelector<HTMLElement>('.mach-row[data-index="0"] .mach-cell[data-col-id="name"]')!;
+    cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const input = cell.querySelector<HTMLInputElement>(".mach-editor-input")!;
+    input.value = "Typing stays active";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    host.querySelector<HTMLElement>('.mach-row[data-index="1"] .mach-cell[data-col-id="age"]')!
+      .dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    const outsideCell = host.querySelector<HTMLElement>(
+      '.mach-row[data-index="1"] .mach-cell[data-col-id="age"]'
+    )!;
+    outsideCell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    outsideCell.click();
+    input.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Enter",
+      isComposing: true,
+      bubbles: true,
+      cancelable: true
+    }));
+    await flush();
+
+    expect(cell.querySelector(".mach-editor-input")).toBe(input);
+    expect(input.value).toBe("Typing stays active");
+    expect(api.rows.getById("1")?.data?.name).toBe("Before");
+
+    cell.querySelector<HTMLButtonElement>(".mach-edit-control--confirm")!.click();
+    await flush();
+    expect(cell.querySelector(".mach-editor-input")).toBeNull();
+    expect(api.rows.getById("1")?.data?.name).toBe("Typing stays active");
+    api.destroy();
+  });
+
   it("stages a full row and switches the action column to save/cancel", async () => {
     const host = createHost();
     const started = vi.fn();

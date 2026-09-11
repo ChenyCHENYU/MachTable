@@ -130,6 +130,53 @@ describe("header keyboard accessibility", () => {
     api.destroy();
   });
 
+  it("renders themed body portals and a bounded drag preview", () => {
+    const host = createHost();
+    const api = createGrid<Row>(host, {
+      columnDefs: [
+        { colId: "select", headerName: "", checkboxSelection: true, width: 46 },
+        { field: "name", headerName: "Name", width: 120, filter: "text" },
+        { field: "qty", headerName: "Quantity", width: 100 }
+      ],
+      rowData: rows,
+      columnMenu: true,
+      pagination: false,
+      rowSelection: "multiple",
+      rowKey: (row) => row.id
+    });
+    const root = host.querySelector<HTMLElement>(".mach-root")!;
+    root.style.setProperty("--mach-primary", "rgb(12, 34, 56)");
+
+    const selectionHeader = host.querySelector<HTMLElement>(
+      '.mach-header-cell[data-col-id="select"]'
+    )!;
+    expect(selectionHeader.classList.contains("mach-header-cell--selection")).toBe(true);
+    expect(selectionHeader.querySelector(".mach-menu-btn")).toBeNull();
+
+    host.querySelector<HTMLButtonElement>('.mach-header-cell[data-col-id="name"] .mach-filter-btn')!.click();
+    const filter = document.body.querySelector<HTMLElement>(".mach-filter-panel")!;
+    expect(filter.classList.contains("mach-portal")).toBe(true);
+    expect(filter.style.getPropertyValue("--mach-primary")).toBe("rgb(12, 34, 56)");
+    document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+
+    const header = host.querySelector<HTMLElement>('.mach-header-cell[data-col-id="name"]')!;
+    header.dispatchEvent(new MouseEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      clientX: 60,
+      clientY: 20
+    }));
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 180, clientY: 30 }));
+    const ghost = document.body.querySelector<HTMLElement>(".mach-column-drag-ghost")!;
+    expect(ghost.classList.contains("mach-portal")).toBe(true);
+    expect(ghost.textContent).toBe("Name");
+    expect(root.classList.contains("mach-root--dragging")).toBe(true);
+    window.dispatchEvent(new MouseEvent("pointerup", { clientX: 180, clientY: 30 }));
+    expect(document.body.querySelector(".mach-column-drag-ghost")).toBeNull();
+    expect(root.classList.contains("mach-root--dragging")).toBe(false);
+    api.destroy();
+  });
+
   it("suppressHeaderFocus removes tabindex", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

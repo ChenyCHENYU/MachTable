@@ -186,6 +186,7 @@ export class HeaderRenderer {
 
   private createLeafCell(column: Column, rowSpan: number, perRowHeight: number): HeaderCell {
     const cellEl = el("div", "mach-header-cell mach-header-cell--leaf");
+    if (column.hasCheckbox) cellEl.classList.add("mach-header-cell--selection");
     cellEl.dataset.colId = column.id;
     cellEl.setAttribute("role", "columnheader");
     cellEl.style.height = `${rowSpan * perRowHeight}px`;
@@ -307,7 +308,7 @@ export class HeaderRenderer {
   }
 
   private appendColumnMenu(cellEl: HTMLElement, column: Column): void {
-    if (!this.core.options.columnMenu) return;
+    if (!this.core.options.columnMenu || column.hasCheckbox) return;
     const menuBtn = document.createElement("button");
     menuBtn.type = "button";
     menuBtn.className = "mach-menu-btn";

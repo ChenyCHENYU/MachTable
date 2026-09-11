@@ -1,4 +1,4 @@
-import packageJson from "../package.json";
+import { version as packageVersion } from "../package.json";
 
 export { createGrid } from "./core/createGrid";
 export { getByPath, setByPath, isSafePath } from "./lib/path";
@@ -265,4 +265,4 @@ export type {
   DirtyStateChangedEvent
 } from "./types/events";
 export { EVENT_TYPES } from "./types/events";
-export const version: string = packageJson.version;
+export const version: string = packageVersion;
