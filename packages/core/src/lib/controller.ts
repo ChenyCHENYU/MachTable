@@ -15,7 +15,11 @@ export interface MachTableCommands {
   refresh(): Promise<void>;
   openColumns(anchor?: HTMLElement): void;
   setDensity(size: GridSize): void;
+  selectAll(filteredOnly?: boolean): void;
+  clearSelection(): void;
   resetColumns(): void;
+  /** Restores selection, filters, sort, pagination and columns in one batched update. */
+  resetView(): void;
   undo(): boolean;
   redo(): boolean;
   canUndo(): boolean;
@@ -24,13 +28,17 @@ export interface MachTableCommands {
   toggleFullscreen(): Promise<boolean>;
 }
 
-function available<TData>(getApi: () => GridApi<TData> | null): GridApi<TData> | null {
+function available<TData>(
+  getApi: () => GridApi<TData> | null,
+): GridApi<TData> | null {
   const api = getApi();
   return api && !api.isDestroyed() ? api : null;
 }
 
 /** Framework-neutral command surface used by Vue/React controllers and toolbars. */
-export function createMachTableCommands<TData = any>(options: MachTableCommandOptions<TData>): MachTableCommands {
+export function createMachTableCommands<TData = any>(
+  options: MachTableCommandOptions<TData>,
+): MachTableCommands {
   const getApi = (): GridApi<TData> | null => options.getApi();
   return {
     search(text) {
@@ -52,8 +60,27 @@ export function createMachTableCommands<TData = any>(options: MachTableCommandOp
     setDensity(size) {
       available(getApi)?.updateOptions({ size });
     },
+    selectAll(filteredOnly = true) {
+      available(getApi)?.selection.selectAll(filteredOnly);
+    },
+    clearSelection() {
+      const api = available(getApi);
+      api?.selection.clear();
+      api?.selection.clearRange();
+    },
     resetColumns() {
       available(getApi)?.columns.resetState();
+    },
+    resetView() {
+      available(getApi)?.batch((api) => {
+        api.selection.clear();
+        api.selection.clearRange();
+        api.filtering.setModel(null);
+        api.filtering.setAdvancedModel(null);
+        api.sorting.setModel(null);
+        api.pagination.setPage(1);
+        api.columns.resetState();
+      });
     },
     undo() {
       return available(getApi)?.editing.undo() ?? false;
@@ -69,7 +96,13 @@ export function createMachTableCommands<TData = any>(options: MachTableCommandOp
     },
     exportCsv(filename = "mach-table.csv") {
       const api = available(getApi);
-      return api ? downloadFile(filename, api.io.exportCsv({ prependBOM: true }), "text/csv;charset=utf-8") : false;
+      return api
+        ? downloadFile(
+            filename,
+            api.io.exportCsv({ prependBOM: true }),
+            "text/csv;charset=utf-8",
+          )
+        : false;
     },
     async toggleFullscreen() {
       if (typeof document === "undefined") return false;
@@ -79,10 +112,11 @@ export function createMachTableCommands<TData = any>(options: MachTableCommandOp
       }
       const api = available(getApi);
       const root = api?.view.getRoot();
-      const target = options.getFullscreenElement?.() ?? root?.parentElement ?? root;
+      const target =
+        options.getFullscreenElement?.() ?? root?.parentElement ?? root;
       if (!target?.requestFullscreen) return false;
       await target.requestFullscreen();
       return true;
-    }
+    },
   };
 }

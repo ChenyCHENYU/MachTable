@@ -686,7 +686,7 @@ export class GridApiImpl<TData = any> {
   refreshLayout(): void {
     if (this.core.isDestroyed()) return;
     this.core.relayout();
-    this.core.bodyRenderer.syncScroll();
+    this.core.bodyRenderer.syncScroll(true);
   }
 
   isInfinite(): boolean {
@@ -1624,9 +1624,10 @@ export class GridApiImpl<TData = any> {
 
   setOverlay(type: "loading" | "noRows" | "error" | null): void {
     if (type === "loading") {
+      const content = this.core.options.overlayLoadingTemplate || this.core.buildDefaultLoadingState();
       this.core.skeleton.showOverlay(
         "loading",
-        this.core.options.overlayLoadingTemplate,
+        content,
         this.core.options.allowUnsafeOverlayHtml
       );
     } else if (type === "noRows") {

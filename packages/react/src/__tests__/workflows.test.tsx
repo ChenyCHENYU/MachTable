@@ -175,7 +175,7 @@ describe("React B-side workflows", () => {
       search: vi.fn(), refresh: vi.fn(async () => undefined), openColumns: vi.fn(), setDensity: vi.fn(),
       resetColumns: vi.fn(), undo: vi.fn(() => true), redo: vi.fn(() => true),
       canUndo: vi.fn(() => true), canRedo: vi.fn(() => true), exportCsv: vi.fn(() => true),
-      toggleFullscreen: vi.fn(async () => true)
+      toggleFullscreen: vi.fn(async () => true), selectAll: vi.fn(), clearSelection: vi.fn(), resetView: vi.fn()
     } satisfies MachTableCommands;
     const clear = vi.fn();
     const host = document.createElement("div");

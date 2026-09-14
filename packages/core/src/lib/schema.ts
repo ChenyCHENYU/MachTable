@@ -84,7 +84,7 @@ function applyFieldType(colDef: ColDef<any>, field: GridSchemaField, type: GridS
   colDef.valueFormatter = selectFormatter(options);
   if (!field.editable) return;
   colDef.cellEditor = "select";
-  colDef.cellEditorParams = { values: options.map((option) => option.value) };
+  colDef.cellEditorParams = { options };
 }
 
 function fieldToColDef(field: GridSchemaField): ColDef<any> {

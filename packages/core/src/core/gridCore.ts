@@ -788,6 +788,33 @@ export class GridCore<TData = any> {
     return error;
   }
 
+  buildDefaultLoadingState(): HTMLElement {
+    const loading = document.createElement("div");
+    loading.className = "mach-loading";
+
+    const visual = document.createElement("div");
+    visual.className = "mach-loading__visual";
+    visual.setAttribute("aria-hidden", "true");
+    for (let index = 0; index < 4; index += 1) {
+      const row = document.createElement("span");
+      row.className = "mach-loading__row";
+      visual.appendChild(row);
+    }
+
+    const status = document.createElement("div");
+    status.className = "mach-loading__status";
+    const spinner = document.createElement("span");
+    spinner.className = "mach-spinner mach-loading__spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.className = "mach-loading__label";
+    label.textContent = this.getLocaleText("loading");
+    status.append(spinner, label);
+
+    loading.append(visual, status);
+    return loading;
+  }
+
   buildDefaultEmptyState(): HTMLElement {
     const locale = this.options.locale ?? {};
     const title = locale.emptyRows ?? DEFAULT_LOCALE.emptyRows;

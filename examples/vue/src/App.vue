@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { rowActionsColumn, type ColDef } from "@agile-team/mach-table-vue";
+import { h, ref } from "vue";
+import { defineVueColumns, indexColumn, rowActionsColumn } from "@agile-team/mach-table-vue";
 import { useMachTableController } from "@agile-team/mach-table-vue/workflows";
 
 interface Order {
@@ -27,7 +27,8 @@ const rows = ref(makeRows(8_000));
 const controller = useMachTableController<Order>();
 const persistence = { key: "vue-orders" } as const;
 
-const columns: ColDef<Order>[] = [
+const columns = defineVueColumns<Order>([
+  indexColumn({ headerName: "序号" }),
   { field: "id", headerName: "订单号", width: 140, pinned: "left" },
   { field: "product", headerName: "产品", flex: 1, editable: true, filter: "text" },
   { field: "qty", headerName: "数量", width: 100, filter: "number", editable: true },
@@ -39,7 +40,13 @@ const columns: ColDef<Order>[] = [
     type: "rightAligned",
     valueFormatter: ({ value }) => `¥${Number(value).toLocaleString()}`
   },
-  { field: "region", headerName: "区域", width: 110, filter: "set" },
+  {
+    field: "region",
+    headerName: "区域",
+    width: 110,
+    filter: "set",
+    render: (row) => h("span", { class: "vue-region-cell" }, row.region)
+  },
   rowActionsColumn<Order>({
     max: 3,
     overflow: "drawer",
@@ -56,7 +63,7 @@ const columns: ColDef<Order>[] = [
       { icon: "download", label: "导出订单", onClick: ({ data }) => console.info("export", data.id) }
     ]
   })
-];
+]);
 </script>
 
 <template>

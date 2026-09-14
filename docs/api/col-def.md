@@ -9,7 +9,7 @@
 | `colId` | `string` | `field` 或 `col_{i}` | 列唯一标识（排序模型/过滤模型/列状态都以它为键）。同名自动去重加后缀 |
 | `field` | `string` | — | 数据取值字段，支持点路径 `a.b.c` |
 | `headerName` | `string` | `field` | 表头文本 |
-| `align` | `"left" \| "center" \| "right"` | 数值列自动右对齐 | 单元格内容对齐（显式设置后覆盖数值自动右对齐） |
+| `align` | `"left" \| "center" \| "right"` | `"center"` | 单元格内容默认居中；可按列显式覆盖为左对齐或右对齐 |
 | `headerAlign` | `"left" \| "center" \| "right"` | 跟随 `align` | 表头文本对齐（独立于单元格） |
 | `headerTooltip` | `string` | — | 表头 title 提示 |
 | `headerClass` | `string \| string[]` | — | 表头附加类名 |
@@ -23,6 +23,7 @@
 | `minWidth` / `maxWidth` | `number` | `80` / — | 拖拽与自适应的边界 |
 | `flex` | `number` | `0` | 弹性权重：容器有多余空间时按权重分配 |
 | `suppressSizeToFit` | `boolean` | `false` | 在 `columnLayout: "fit"` 下保持本列宽度；选择、序号、拖拽和操作列模板默认开启 |
+| `suppressColumnMenu` | `boolean` | `false` | 隐藏本列表头的列工具入口；全局列工作台仍可管理该列，辅助列模板默认开启 |
 | `pinned` | `"left" \| "right" \| boolean` | — | 固定列；`true` 等价 `"left"` |
 | `hide` | `boolean` | `false` | 初始隐藏 |
 
@@ -98,11 +99,11 @@
 
 ```ts
 // 复选框列
-{ colId: "sel", headerName: "", width: 46, checkboxSelection: true, pinned: "left",
+{ colId: "sel", headerName: "", width: 40, checkboxSelection: true, pinned: "left",
   sortable: false, resizable: false, movable: false }
 
 // 序号列（分组/明细/树形下行号只计数据行）
-{ colId: "idx", headerName: "#", type: "index", width: 60 }
+{ colId: "idx", headerName: "#", type: "index", width: 52 }
 
 // 行拖拽列
 { colId: "drag", headerName: "", rowDrag: true, width: 40,

@@ -278,7 +278,7 @@ export class ColumnModel {
 
   setColumnPinned(colId: string, pinned: PinnedDirection | null): void {
     const column = this.getColumn(colId);
-    if (!column) return;
+    if (!column || !column.movable) return;
     column.pinned = pinned;
     this.regroup();
   }
@@ -318,7 +318,7 @@ export class ColumnModel {
       column.manualWidth = clampWidth(state.width, this.widthInputOf(column));
       column.flex = null;
     }
-    if (state.pinned === "left" || state.pinned === "right" || state.pinned === null) {
+    if (column.movable && (state.pinned === "left" || state.pinned === "right" || state.pinned === null)) {
       column.pinned = state.pinned;
     }
   }
@@ -334,14 +334,21 @@ export class ColumnModel {
           child instanceof Column && !child.hide && child.parentGroup === null && paneOfCol(child) === pane
       );
       if (current.length < 2) continue;
-      const sorted = current
+      const movable = current.filter((column) => column.movable);
+      const sorted = movable
         .slice()
         .sort((a, b) => (orderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderById.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-      if (sorted.every((c, i) => c === current[i])) continue;
+      if (sorted.every((c, i) => c === movable[i])) continue;
 
       const slots: number[] = [];
       this.rootChildren.forEach((child, idx) => {
-        if (child instanceof Column && !child.hide && child.parentGroup === null && paneOfCol(child) === pane) {
+        if (
+          child instanceof Column &&
+          !child.hide &&
+          child.parentGroup === null &&
+          paneOfCol(child) === pane &&
+          child.movable
+        ) {
           slots.push(idx);
         }
       });

@@ -4,6 +4,7 @@ import { getByPath } from "../lib/path";
 import { normalizeAdvancedFilterModel } from "../lib/advancedFilter";
 
 export const DEFAULT_COL_DEF: Partial<ColDef> = {
+  align: "center",
   sortable: true,
   resizable: true,
   movable: true,

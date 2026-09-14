@@ -1,5 +1,14 @@
 # @agile-team/mach-table
 
+## 0.29.0
+
+### Minor Changes
+
+- Polish the framework-neutral grid for production data workspaces: unify native selects behind an accessible themed listbox, stabilize cell and row editing, localize editor labels, restore utility-column ordering and alignment, add compact skeleton loading and illustrated empty states, refine header and selection visuals, and coalesce drag, scroll and resize work without changing existing configuration contracts.
+
+> `0.28.1` below records an internal implementation milestone folded into
+> `0.29.0`; it was not published as a separate npm version.
+
 ## 0.28.1
 
 ### Patch Changes
@@ -11,6 +20,16 @@
   Tree-shake package metadata so the browser runtime embeds only the public version string rather than the complete package manifest.
 
   Treat official utility and renderer-only columns as intentional display columns so row actions do not emit misleading development warnings.
+
+  Make checkbox selection cells fill and center within the complete row, keep utility selection cells outside data-range focus, synchronize selected-row visuals and ARIA state immediately, render complete range borders, allow one-click switching between editable cells with validation protection, preserve full-row input focus, style confirm/cancel actions with semantic success/danger feedback, and support select editors with separate localized labels and stored values.
+
+  Let `rowActionsColumn.onEdit` delegate the default edit action to a host modal or drawer, while retaining opt-in full-row editing when the callback is omitted. Overflow actions now default to the desktop-friendly `…` menu.
+
+  Replace the operating-system-native filter operator popup with an accessible, keyboard-friendly listbox to avoid compositor flashes and platform-dependent styling. Refine header contrast, sorted-column feedback and filter/menu affordances without changing filtering APIs or stored filter models.
+
+  Unify filter, cell-editor, pagination, column-workbench and framework-toolbar selects behind one themed, keyboard-accessible listbox so every dropdown avoids native-popup flashes while retaining the hidden native change contract. Replace ambiguous header ellipses with a dedicated column-tools glyph, and let utility presets suppress that trigger through `suppressColumnMenu`.
+
+  Center headers and cell content by default while preserving explicit per-column alignment. Keep non-movable selection, index and action columns in their declared panes and order when restoring persisted state, and center the index renderer consistently.
 
 ## 0.28.0
 

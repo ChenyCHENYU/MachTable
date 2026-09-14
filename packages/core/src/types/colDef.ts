@@ -101,8 +101,17 @@ export interface SortModelItem {
 }
 export type SortModel = SortModelItem[];
 
+export interface SelectEditorOption {
+  label: string;
+  value: string | number;
+  disabled?: boolean;
+}
+
 export interface SelectEditorParams {
-  values: (string | number)[];
+  /** Primitive options kept for concise same-label/same-value selects. */
+  values?: readonly (string | number)[];
+  /** Label/value options for dictionary fields whose stored value differs from its display text. */
+  options?: readonly SelectEditorOption[];
 }
 
 export interface SetFilterParams {
@@ -133,6 +142,8 @@ export interface ColDef<TData = any, TValue = any> {
   flex?: number;
   /** Excludes the column from `columnLayout: "fit"` scaling. */
   suppressSizeToFit?: boolean;
+  /** Hides the per-column tools trigger while keeping the global column workbench available. */
+  suppressColumnMenu?: boolean;
   hide?: boolean;
   pinned?: PinnedDirection | boolean;
   sortable?: boolean;

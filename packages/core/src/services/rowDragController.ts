@@ -10,11 +10,14 @@ interface RowDragState {
   indicator: HTMLElement;
   targetIndex: number;
   active: boolean;
+  viewportTop: number;
 }
 
 /** Owns row-drag global listeners, indicator DOM and completion semantics. */
 export class RowDragController {
   private state: RowDragState | null = null;
+  private moveRaf = 0;
+  private pendingClientY: number | null = null;
 
   constructor(
     private core: RowDragContext,
@@ -31,7 +34,8 @@ export class RowDragController {
       startY: event.clientY,
       indicator,
       targetIndex: -1,
-      active: false
+      active: false,
+      viewportTop: this.core.skeleton.bodyViewports.center.getBoundingClientRect().top
     };
     window.addEventListener("pointermove", this.onMove);
     window.addEventListener("pointerup", this.onUp);
@@ -47,8 +51,21 @@ export class RowDragController {
       this.core.skeleton.root.classList.add("mach-root--row-dragging");
     }
 
-    const container = this.core.skeleton.rowContainers.center;
-    const y = event.clientY - container.getBoundingClientRect().top;
+    this.pendingClientY = event.clientY;
+    if (this.moveRaf) return;
+    this.moveRaf = requestAnimationFrame(() => {
+      this.moveRaf = 0;
+      const clientY = this.pendingClientY;
+      this.pendingClientY = null;
+      if (clientY !== null) this.updateIndicator(clientY);
+    });
+  };
+
+  private updateIndicator(clientY: number): void {
+    const drag = this.state;
+    if (!drag?.active) return;
+    const viewport = this.core.skeleton.bodyViewports.center;
+    const y = clientY - drag.viewportTop + viewport.scrollTop;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     let targetIndex = Math.max(0, Math.min(this.findRowAt(y), rowCount));
     while (targetIndex < rowCount) {
@@ -61,12 +78,15 @@ export class RowDragController {
     if (targetIndex < rowCount && y >= top + (bottom - top) / 2) targetIndex++;
     const indicatorY = this.getRowTop(targetIndex);
     drag.targetIndex = targetIndex;
-    drag.indicator.style.top = `${indicatorY}px`;
-  };
+    drag.indicator.style.transform = `translate3d(0, ${indicatorY}px, 0)`;
+  }
 
-  private onUp = (): void => {
+  private onUp = (event: PointerEvent): void => {
+    if (event.type !== "pointercancel" && this.state?.active) {
+      this.updateIndicator(event.clientY);
+    }
     const drag = this.takeState();
-    if (!drag || !drag.active || drag.targetIndex < 0) return;
+    if (event.type === "pointercancel" || !drag || !drag.active || drag.targetIndex < 0) return;
     const from = drag.node.rowIndex;
     const to = Math.max(0, Math.min(drag.targetIndex, this.core.rowModel.getDisplayedRowCount()));
     if (from === to || from === to - 1) return;
@@ -88,6 +108,9 @@ export class RowDragController {
     window.removeEventListener("pointermove", this.onMove);
     window.removeEventListener("pointerup", this.onUp);
     window.removeEventListener("pointercancel", this.onUp);
+    if (this.moveRaf) cancelAnimationFrame(this.moveRaf);
+    this.moveRaf = 0;
+    this.pendingClientY = null;
     this.core.skeleton.root.classList.remove("mach-root--row-dragging");
   }
 

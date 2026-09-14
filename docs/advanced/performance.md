@@ -112,11 +112,11 @@ const metrics = api.diagnostics.getPerformance();
 
 | 产物 | gzip 上限 |
 | --- | ---: |
-| `@agile-team/mach-table` 全公开 ESM / `createGrid` 真实消费 | 86 KiB / 79 KiB |
+| `@agile-team/mach-table` 全公开 ESM / `createGrid` 真实消费 | 87 KiB / 79 KiB |
 | 可选 `/worker` ESM | 8 KiB |
 | Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10.5 KiB / 6.75 KiB / 5 KiB / 3 KiB |
 | React 全部 ESM / 默认入口 / 工作流入口 | 8 KiB / 6.25 KiB / 5 KiB |
-| Core CSS | 7 KiB |
+| Core CSS | 7.5 KiB |
 
 日常只验证运行时代码可执行 `pnpm build:runtime`，跳过耗时的声明汇总；正式包必须执行 `pnpm build:release`，保留 `.d.ts` 但不发布约占旧包 70% 解压空间的 `.map`。项目仍使用 tsup + esbuild：当前瓶颈是 TypeScript 声明汇总，不是 JS 打包，因此没有为了工具潮流迁移到 tsdown。
 

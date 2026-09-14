@@ -35,6 +35,8 @@ MachTable 0.28 按 WAI-ARIA Grid / Treegrid 交互模型实现语义和键盘基
 
 单元格编辑不会因焦点移出或指针操作自动提交。鼠标用户通过就地对勾/取消控件结束事务；键盘用户继续使用 Enter、Escape、Tab。输入法处于组合输入阶段时，Enter 不会被误识别为提交命令。
 
+列筛选条件使用内置 `combobox` / `listbox` 交互，不依赖操作系统原生下拉弹窗；方向键、Home、End、Enter 和 Space 用于选择条件。第一次按 Escape 只收起条件列表并保留筛选面板，第二次按 Escape 才关闭面板。
+
 设置 `suppressCellFocus` 或 `suppressHeaderFocus` 会关闭对应键盘入口，只应用在确有替代交互的只读展示场景。
 
 ## 自定义内容责任

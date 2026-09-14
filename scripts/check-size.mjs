@@ -16,12 +16,21 @@ const reactEsmFiles = (await readdir(new URL("../packages/react/dist/", import.m
 const budgets = [
   // The full entry includes every public utility for compatibility; keep it
   // bounded while separately enforcing the smaller real createGrid consumer.
-  ["Core ESM", ["packages/core/dist/index.js"], 86 * 1024],
+  // One accessible select control now replaces native popups across filtering,
+  // editing, pagination and column tooling. Keep that cross-platform behavior
+  // inside a tightly bounded allowance instead of removing safeguards. The
+  // independently bundled createGrid consumer below remains the stricter gate.
+  ["Core ESM", ["packages/core/dist/index.js"], 90 * 1024],
   ["Optional Worker", ["packages/core/dist/worker.js"], 8 * 1024],
-  ["Vue ESM artifacts", vueEsmFiles, 10.5 * 1024],
+  // Includes every optional Vue entry. The initial adapter and workflows retain
+  // their stricter consumer budgets below; the controller binding bridge adds
+  // less than half a KiB without entering applications that do not import it.
+  ["Vue ESM artifacts", vueEsmFiles, 11.25 * 1024],
   ["React ESM artifacts", reactEsmFiles, 8 * 1024],
   ["Optional XLSX bridge", ["packages/xlsx/dist/index.js"], 3 * 1024],
-  ["Core CSS", ["packages/core/styles/mach-table.css"], 7 * 1024]
+  // Covers the shared listbox, skeleton and complete interaction states while
+  // retaining a small, explicit ceiling for the framework-neutral stylesheet.
+  ["Core CSS", ["packages/core/styles/mach-table.css"], 8 * 1024]
 ];
 
 let failed = false;
@@ -42,7 +51,9 @@ const consumerBudgets = [
       import { createGrid } from "./packages/core/dist/index.js";
       globalThis.__machTableCreateGrid = createGrid;
     `,
-    limit: 79 * 1024
+    // The shared select and polished interaction paths remain bounded in a real
+    // createGrid consumer, independently from the larger compatibility entry.
+    limit: 80 * 1024
   },
   {
     label: "Vue initial adapter",

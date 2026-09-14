@@ -1,5 +1,6 @@
-import { defineComponent, h, type PropType, type VNodeChild } from "vue";
+import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType, type VNodeChild } from "vue";
 import type { GridApi, GridSize, MachTableCommands } from "@agile-team/mach-table";
+import { createSelectControl, type SelectControl } from "@agile-team/mach-table/adapter";
 
 export interface MachTableToolbarFeatures {
   search?: boolean;
@@ -20,6 +21,38 @@ const DEFAULT_FEATURES: Required<MachTableToolbarFeatures> = {
   undoRedo: false,
   fullscreen: false
 };
+
+const MachTableDensitySelect = defineComponent({
+  name: "MachTableDensitySelect",
+  props: {
+    value: { type: String as PropType<GridSize>, required: true },
+    onSelectDensity: { type: Function as PropType<(value: GridSize) => void>, required: true }
+  },
+  setup(props) {
+    const host = ref<HTMLElement | null>(null);
+    let control: SelectControl | null = null;
+    onMounted(() => {
+      control = createSelectControl({
+        ariaLabel: "表格密度",
+        options: [
+          { value: "compact", label: "紧凑" },
+          { value: "normal", label: "标准" },
+          { value: "large", label: "宽松" }
+        ],
+        value: props.value,
+        classNames: {
+          root: "mach-toolbar__select-control",
+          native: "mach-toolbar__select"
+        },
+        onChange: (value) => props.onSelectDensity(value as GridSize)
+      });
+      host.value?.appendChild(control.el);
+    });
+    watch(() => props.value, (value) => control?.setValue(value));
+    onBeforeUnmount(() => control?.destroy());
+    return () => h("div", { ref: host, class: "mach-toolbar__select-host" });
+  }
+});
 
 export const MachTableToolbar = defineComponent({
   name: "MachTableToolbar",
@@ -93,20 +126,13 @@ export const MachTableToolbar = defineComponent({
         }));
       }
       if (enabled("density")) {
-        children.push(h("select", {
-          class: "mach-toolbar__select",
+        children.push(h(MachTableDensitySelect, {
           value: props.api?.getOption("size") ?? "normal",
-          "aria-label": "表格密度",
-          onChange: (event: Event) => {
-            const size = (event.target as HTMLSelectElement).value as GridSize;
+          onSelectDensity: (size: GridSize) => {
             if (props.commands) command("setDensity", size);
             else props.api?.updateOptions({ size });
           }
-        }, [
-          h("option", { value: "compact" }, "紧凑"),
-          h("option", { value: "normal" }, "标准"),
-          h("option", { value: "large" }, "宽松")
-        ]));
+        }));
       }
       children.push(...(slots.default?.() ?? []));
       return h("div", { class: "mach-toolbar__main" }, children);

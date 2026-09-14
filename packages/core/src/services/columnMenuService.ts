@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import { applyPortalTheme, el, clamp } from "../lib/dom";
+import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type ColumnMenuContext = Pick<
   GridCore<any>,
@@ -12,6 +13,7 @@ export class ColumnMenuService {
   private openColId: string | null = null;
   private standaloneAnchor: HTMLElement | null = null;
   private searchText = "";
+  private selectControls = new Set<SelectControl>();
 
   constructor(private core: ColumnMenuContext) {}
 
@@ -45,6 +47,7 @@ export class ColumnMenuService {
   }
 
   close(): void {
+    this.destroySelectControls();
     if (this.standaloneAnchor) {
       this.standaloneAnchor.remove();
       this.standaloneAnchor = null;
@@ -61,11 +64,19 @@ export class ColumnMenuService {
   }
 
   private docMouseDown = (e: MouseEvent): void => {
-    if (this.panel && !this.panel.contains(e.target as Node)) this.close();
+    const target = e.target as Node;
+    if (this.panel && !this.panel.contains(target) && !this.containsSelectTarget(target)) this.close();
   };
 
   private docKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") this.close();
+    if (e.key !== "Escape") return;
+    const openSelect = [...this.selectControls].find((control) => control.isOpen());
+    if (openSelect?.close(true)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    this.close();
   };
 
   private open(column: Column | null, anchor: HTMLElement): void {
@@ -206,6 +217,7 @@ export class ColumnMenuService {
 
   private renderColumnList(list: HTMLElement, workbench: boolean): void {
     const api = this.core.getApi();
+    this.destroySelectControls(list);
     list.replaceChildren();
     const columns = this.core.columnModel.getColumns().filter((candidate) => {
       if (candidate.isDetailToggle) return false;
@@ -231,25 +243,28 @@ export class ColumnMenuService {
       row.appendChild(label);
 
       if (workbench) {
-        const pin = document.createElement("select");
-        pin.className = "mach-column-workbench-pin";
-        pin.setAttribute("aria-label", `${text.textContent} ${this.core.getLocaleText("clearPin")}`);
-        for (const [value, caption] of [
-          ["", this.core.getLocaleText("clearPin")],
-          ["left", this.core.getLocaleText("pinLeft")],
-          ["right", this.core.getLocaleText("pinRight")]
-        ] as const) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = caption;
-          pin.appendChild(option);
-        }
-        pin.value = col.pinned ?? "";
-        pin.addEventListener("change", () => {
-          api.columns.setPinned(col.id, pin.value === "left" || pin.value === "right" ? pin.value : null);
-          this.rebuildListStates();
+        const pin = createSelectControl({
+          ariaLabel: `${text.textContent} ${this.core.getLocaleText("clearPin")}`,
+          options: [
+            { value: "", label: this.core.getLocaleText("clearPin") },
+            { value: "left", label: this.core.getLocaleText("pinLeft") },
+            { value: "right", label: this.core.getLocaleText("pinRight") }
+          ],
+          value: col.pinned ?? "",
+          classNames: {
+            root: "mach-column-workbench-pin-control",
+            native: "mach-column-workbench-pin"
+          },
+          themeSource: this.core.skeleton.root,
+          onChange: (value) => {
+            api.columns.setPinned(col.id, value === "left" || value === "right" ? value : null);
+            this.rebuildListStates();
+          }
         });
-        row.appendChild(pin);
+        pin.trigger.disabled = !col.movable;
+        pin.native.disabled = !col.movable;
+        this.selectControls.add(pin);
+        row.appendChild(pin.el);
 
         const siblings = this.core.columnModel.getColumns().filter((candidate) =>
           !candidate.hide &&
@@ -271,6 +286,18 @@ export class ColumnMenuService {
         row.append(move("↑", position - 1, position <= 0), move("↓", position + 1, position < 0 || position >= siblings.length - 1));
       }
       list.appendChild(row);
+    }
+  }
+
+  private containsSelectTarget(target: Node): boolean {
+    return [...this.selectControls].some((control) => control.contains(target));
+  }
+
+  private destroySelectControls(container?: HTMLElement): void {
+    for (const control of [...this.selectControls]) {
+      if (container && !container.contains(control.el)) continue;
+      control.destroy();
+      this.selectControls.delete(control);
     }
   }
 }

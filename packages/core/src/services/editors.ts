@@ -1,4 +1,6 @@
+import type { SelectEditorOption, SelectEditorParams } from "../types/colDef";
 import type { ICellEditor } from "../types/params";
+import { createSelectControl } from "../lib/selectControl";
 import type { Column } from "./column";
 
 function baseInput(type: string, value: any): HTMLInputElement {
@@ -11,8 +13,13 @@ function baseInput(type: string, value: any): HTMLInputElement {
   return input;
 }
 
-function inferEditorType(value: any, selectValues?: (string | number)[]): string {
-  if (selectValues && selectValues.length > 0) return "select";
+function selectOptions(params?: SelectEditorParams): readonly SelectEditorOption[] {
+  if (params?.options?.length) return params.options;
+  return (params?.values ?? []).map((value) => ({ label: String(value), value }));
+}
+
+function inferEditorType(value: any, selectParams?: SelectEditorParams): string {
+  if (selectParams?.options?.length || selectParams?.values?.length) return "select";
   if (typeof value === "number") return "number";
   if (value instanceof Date) return "date";
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return "date";
@@ -21,7 +28,7 @@ function inferEditorType(value: any, selectValues?: (string | number)[]): string
 
 export function createEditor(column: Column, value: any, keyPress?: string | null): ICellEditor {
   const def = column.colDef;
-  const name = typeof def.cellEditor === "string" ? def.cellEditor : inferEditorType(value, def.cellEditorParams?.values);
+  const name = typeof def.cellEditor === "string" ? def.cellEditor : inferEditorType(value, def.cellEditorParams);
 
   if (name === "number") {
     const input = baseInput("number", value);
@@ -29,7 +36,7 @@ export function createEditor(column: Column, value: any, keyPress?: string | nul
       el: input,
       getValue: () => (input.value === "" ? null : Number(input.value)),
       focus: () => {
-        input.focus();
+        input.focus({ preventScroll: true });
         input.select();
       }
     };
@@ -46,28 +53,34 @@ export function createEditor(column: Column, value: any, keyPress?: string | nul
         if (timeMatch) return `${input.value}T${timeMatch[1]}`;
         return input.value;
       },
-      focus: () => input.focus()
+      focus: () => input.focus({ preventScroll: true })
     };
   }
 
   if (name === "select") {
-    const values = def.cellEditorParams?.values ?? [];
-    const select = document.createElement("select");
-    select.className = "mach-editor-select";
-    for (const v of values) {
-      const option = document.createElement("option");
-      option.value = String(v);
-      option.textContent = String(v);
-      if (String(value) === String(v)) option.selected = true;
-      select.appendChild(option);
-    }
+    const options = selectOptions(def.cellEditorParams);
+    const control = createSelectControl({
+      ariaLabel: def.headerName ?? def.field ?? column.id,
+      options: options.map((item) => ({
+        value: String(item.value),
+        label: item.label,
+        disabled: item.disabled
+      })),
+      value: String(value ?? ""),
+      classNames: {
+        root: "mach-editor-select-control",
+        native: "mach-editor-select"
+      }
+    });
     return {
-      el: select,
+      el: control.el,
       getValue: () => {
-        const match = values.find((v) => String(v) === select.value);
-        return match !== undefined ? match : select.value;
+        const selected = control.getValue();
+        const match = options.find((item) => String(item.value) === selected);
+        return match?.value ?? selected;
       },
-      focus: () => select.focus()
+      focus: () => control.focus(),
+      destroy: () => control.destroy()
     };
   }
 
@@ -77,7 +90,7 @@ export function createEditor(column: Column, value: any, keyPress?: string | nul
     el: input,
     getValue: () => input.value,
     focus: () => {
-      input.focus();
+      input.focus({ preventScroll: true });
       input.select();
     }
   };

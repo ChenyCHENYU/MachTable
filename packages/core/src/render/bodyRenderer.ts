@@ -19,6 +19,7 @@ import {
 const PANES: PaneType[] = ["left", "center", "right"];
 type BodyContext = Pick<
   GridCore<any>,
+  | "buildDefaultLoadingState"
   | "buildDefaultEmptyState"
   | "buildDefaultErrorState"
   | "columnModel"
@@ -113,6 +114,8 @@ export class BodyRenderer {
   private first = 0;
   private lastExcl = -1;
   private rafId = 0;
+  private lastScrollLeft = 0;
+  private lastScrollTop = 0;
   private hoverIndex = -1;
   private rowSizes = new VariableSizeIndex<RowNode<any>>();
   private columnViewport = new ColumnViewportIndex();
@@ -133,6 +136,8 @@ export class BodyRenderer {
 
   init(): void {
     const viewport = this.core.skeleton.bodyViewports.center;
+    this.lastScrollLeft = viewport.scrollLeft;
+    this.lastScrollTop = viewport.scrollTop;
     viewport.addEventListener("scroll", this.onScroll, { passive: true });
     const body = this.core.skeleton.bodyEl;
     body.addEventListener("click", this.onBodyClick);
@@ -192,18 +197,30 @@ export class BodyRenderer {
     });
   };
 
-  syncScroll(): void {
+  syncScroll(force = false): void {
     if (this.core.isDestroyed()) return;
     const sk = this.core.skeleton;
     const viewport = sk.bodyViewports.center;
-    sk.headerRowContainers.center.style.transform = `translateX(${-viewport.scrollLeft}px)`;
-    this.core.headerRenderer.updateColumnWindow();
-    sk.rowContainers.left.style.transform = `translateY(${-viewport.scrollTop}px)`;
-    sk.rowContainers.right.style.transform = `translateY(${-viewport.scrollTop}px)`;
-    this.core.pinnedRowsRenderer.onScrollLeft(viewport.scrollLeft);
+    const scrollLeft = viewport.scrollLeft;
+    const scrollTop = viewport.scrollTop;
+    const horizontalChanged = force || scrollLeft !== this.lastScrollLeft;
+    const verticalChanged = force || scrollTop !== this.lastScrollTop;
+    if (!horizontalChanged && !verticalChanged) return;
+
+    this.lastScrollLeft = scrollLeft;
+    this.lastScrollTop = scrollTop;
+    if (horizontalChanged) {
+      sk.headerRowContainers.center.style.transform = `translate3d(${-scrollLeft}px, 0, 0)`;
+      this.core.headerRenderer.updateColumnWindow();
+      this.core.pinnedRowsRenderer.onScrollLeft(scrollLeft);
+    }
+    if (verticalChanged) {
+      sk.rowContainers.left.style.transform = `translate3d(0, ${-scrollTop}px, 0)`;
+      sk.rowContainers.right.style.transform = `translate3d(0, ${-scrollTop}px, 0)`;
+    }
     this.core.tooltipService.hide();
-    this.updateRange();
-    this.core.rowModel.checkInfiniteScroll(this.lastExcl - 1);
+    this.updateRange(false, horizontalChanged);
+    if (verticalChanged) this.core.rowModel.checkInfiniteScroll(this.lastExcl - 1);
   }
 
   private paneWidths(): Record<PaneType, number> {
@@ -424,7 +441,7 @@ export class BodyRenderer {
       const runtime = getCellRuntimeState(cell);
       const timer = runtime.flashTimer;
       if (timer) clearTimeout(timer);
-      runtime.flashTimer = setTimeout(() => {
+      runtime.flashTimer = window.setTimeout(() => {
         cell.classList.remove("mach-cell--flash");
         runtime.flashTimer = undefined;
       }, 800);
@@ -443,16 +460,18 @@ export class BodyRenderer {
       minRowHeight = Math.min(minRowHeight, this.lastMinRowHeight);
     }
     const visible = Math.ceil(viewport.clientHeight / Math.max(1, minRowHeight));
-    const needed = this.core.options.domLayout === "autoHeight"
+    const rawNeeded = this.core.options.domLayout === "autoHeight"
       ? this.core.rowModel.getDisplayedRowCount()
       : visible + this.core.options.rowBuffer * 2 + 1;
+    // An even pool preserves striped-row parity when slots are recycled.
+    const needed = rawNeeded % 2 === 0 ? rawNeeded : rawNeeded + 1;
     const colWindowChanged = this.computeColWindow();
     if (colWindowChanged) {
       for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
     }
     if (needed > this.poolSize) this.growPool(needed);
     this.applyCellLayout();
-    this.updateRange(true);
+    this.updateRange(true, false);
     this.refreshOverlays();
   }
 
@@ -624,9 +643,9 @@ export class BodyRenderer {
     return range.first !== prevFirst || range.lastExcl !== prevLast;
   }
 
-  updateRange(force = false): void {
+  updateRange(force = false, checkColumnWindow = true): void {
     const startedAt = this.core.performanceMonitor.start();
-    if (!this.updateRangeInner(force)) return;
+    if (!this.updateRangeInner(force, checkColumnWindow)) return;
     const rows = Math.max(0, this.lastExcl - this.first);
     const columns = this.core.columnModel.getPaneColumns("left").length +
       this.activePaneColumns("center").length +
@@ -634,11 +653,11 @@ export class BodyRenderer {
     this.core.performanceMonitor.recordRender(startedAt, rows, columns);
   }
 
-  private updateRangeInner(force: boolean): boolean {
+  private updateRangeInner(force: boolean, checkColumnWindow: boolean): boolean {
     const viewport = this.core.skeleton.bodyViewports.center;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     const buffer = this.core.options.rowBuffer;
-    const colWindowChanged = this.computeColWindow();
+    const colWindowChanged = checkColumnWindow ? this.computeColWindow() : false;
     this.reconcileColumnWindow(colWindowChanged);
 
     if (rowCount === 0) {
@@ -810,12 +829,16 @@ export class BodyRenderer {
     row.dataset.index = String(index);
     row.dataset.id = node.id;
     row.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
-    row.classList.toggle("mach-row--selected", node.selected);
+    this.applyRowSelectionState(row, node);
     const hovered = this.hoverIndex === index && !this.core.options.suppressRowHoverHighlight;
     row.classList.toggle("mach-row--hover", hovered);
     row.classList.toggle("mach-row--odd", index % 2 === 1);
-    row.setAttribute("aria-selected", node.selected ? "true" : "false");
     this.applyExpandableRowState(row, state);
+  }
+
+  private applyRowSelectionState(row: HTMLElement, node: RowNode<any>): void {
+    row.classList.toggle("mach-row--selected", node.selected);
+    row.setAttribute("aria-selected", node.selected ? "true" : "false");
   }
 
   private applyExpandableRowState(row: HTMLElement, state: MasterRowState): void {
@@ -1005,7 +1028,13 @@ export class BodyRenderer {
       this.resetSpanStyle(cell);
     } else if (kind === "index") {
       cell.textContent = String(this.core.rowModel.getRowSeq(node) + this.core.options.indexOffset);
-      if (cell.className !== "mach-cell mach-cell--index") cell.className = "mach-cell mach-cell--index";
+      const alignment = column.colDef.align === "right"
+        ? " mach-cell--right"
+        : column.colDef.align === "center"
+          ? " mach-cell--center"
+          : "";
+      const className = `mach-cell mach-cell--index${alignment}`;
+      if (cell.className !== className) cell.className = className;
       this.applyCellSpanStyle(cell, node, column);
     } else {
       this.renderTreeCell(cell, node, column);
@@ -1211,6 +1240,8 @@ export class BodyRenderer {
         continue;
       }
       for (const pane of PANES) {
+        const row = slot.rows[pane];
+        if (row) this.applyRowSelectionState(row, node);
         const cells = slot.cells[pane];
         if (!cells) continue;
         this.renderPaneCells(slot, node, pane);
@@ -1304,7 +1335,8 @@ export class BodyRenderer {
   refreshOverlays(): void {
     const options = this.core.options;
     if (options.loading) {
-      this.core.skeleton.showOverlay("loading", options.overlayLoadingTemplate, options.allowUnsafeOverlayHtml);
+      const template = options.overlayLoadingTemplate || this.core.buildDefaultLoadingState();
+      this.core.skeleton.showOverlay("loading", template, options.allowUnsafeOverlayHtml);
       return;
     }
     if (options.error != null) {
@@ -1878,10 +1910,36 @@ export class BodyRenderer {
 
   private onBodyClick = (e: MouseEvent): void => {
     if (this.core.isDestroyed()) return;
-    if (this.core.editingService.isCellEditing()) return;
     const target = e.target as HTMLElement;
     const resolved = this.resolveEventTarget(e);
     if (!resolved) return;
+    if (target.closest(".mach-cell-editor-shell, .mach-row-editor-shell")) return;
+    if (e.detail > 1 && this.core.editingService.isCellEditing()) return;
+    if (this.core.editingService.isCellEditing()) {
+      const colId = resolved.cellEl?.dataset.colId ?? "";
+      if (this.core.editingService.isEditing(resolved.index, colId)) return;
+      void this.core.editingService.stopAsync(false).then((stopped) => {
+        if (!stopped || this.core.isDestroyed()) return;
+        this.handleBodyClick(e, target, resolved);
+        const column = colId ? this.core.columnModel.getColumn(colId) : undefined;
+        if (
+          column &&
+          !this.core.editingService.isCellEditing() &&
+          this.core.editingService.isEditable(resolved.node, column)
+        ) {
+          this.core.editingService.start(resolved.index, column);
+        }
+      });
+      return;
+    }
+    this.handleBodyClick(e, target, resolved);
+  };
+
+  private handleBodyClick(
+    e: MouseEvent,
+    target: HTMLElement,
+    resolved: { node: RowNode<any>; index: number; cellEl: HTMLElement | null }
+  ): void {
     const { node, index, cellEl } = resolved;
     if (this.handleGroupRowClick(target, node, cellEl)) return;
     if (this.handleTreeToggleClick(target, node, cellEl)) return;
@@ -1896,7 +1954,7 @@ export class BodyRenderer {
     this.core.selectionService.onRowClick(node, e, false);
     this.emitCellClick(e, node, index, column);
     this.maybeStartSingleClickEdit(node, index, column);
-  };
+  }
 
   private handleGroupRowClick(target: HTMLElement, node: RowNode<any>, cell: HTMLElement | null): boolean {
     if (!node.isGroup) return false;
@@ -1926,9 +1984,13 @@ export class BodyRenderer {
     index: number,
     event: MouseEvent
   ): boolean {
-    if (!target.closest(".mach-row-checkbox")) return false;
+    const selectionCell = target.closest<HTMLElement>(".mach-cell--selection");
+    if (!selectionCell) return false;
     this.focusGridRoot();
-    if (!this.core.options.suppressCellFocus) this.setFocusedCell(index, this.firstCheckboxColId());
+    if (!this.core.options.suppressCellFocus) {
+      this.setFocusedCell(index, selectionCell.dataset.colId ?? "");
+    }
+    this.clearRangeSelection();
     this.core.selectionService.onRowClick(node, event, true);
     return true;
   }
@@ -1964,15 +2026,9 @@ export class BodyRenderer {
     return true;
   }
 
-  private firstCheckboxColId(): string {
-    for (const col of this.core.columnModel.getOrderedVisible()) {
-      if (col.hasCheckbox) return col.id;
-    }
-    return this.core.columnModel.getOrderedVisible()[0]?.id ?? "";
-  }
-
   private onBodyDblClick = (e: MouseEvent): void => {
     if (this.core.isDestroyed()) return;
+    if ((e.target as HTMLElement).closest(".mach-cell-editor-shell, .mach-row-editor-shell")) return;
     const resolved = this.resolveEventTarget(e);
     if (!resolved) return;
     const { node, index, cellEl } = resolved;
@@ -2025,7 +2081,7 @@ export class BodyRenderer {
   };
 
   private onMouseDown = (e: MouseEvent): void => {
-    if (this.core.editingService.isCellEditing()) return;
+    if (this.shouldIgnoreRangeMouseDown(e)) return;
     if (this.core.options.enableRangeSelection && e.button === 0) {
       const resolved = this.resolveEventTarget(e);
       if (
@@ -2033,7 +2089,7 @@ export class BodyRenderer {
         !resolved.node.isDetail &&
         !resolved.node.isGroup &&
         resolved.cellEl &&
-        !(e.target as HTMLElement).closest?.(".mach-row-checkbox")
+        !resolved.cellEl.classList.contains("mach-cell--selection")
       ) {
         const colIdx = this.core.columnModel.getFlatIndex(resolved.cellEl.dataset.colId ?? "");
         if (colIdx >= 0) {
@@ -2046,6 +2102,13 @@ export class BodyRenderer {
       }
     }
   };
+
+  private shouldIgnoreRangeMouseDown(e: MouseEvent): boolean {
+    return Boolean(
+      (e.target as HTMLElement).closest(".mach-cell-editor-shell, .mach-row-editor-shell") ||
+      this.core.editingService.isCellEditing()
+    );
+  }
 
   private onWindowMouseUp = (): void => {
     this.rangeDragging = false;

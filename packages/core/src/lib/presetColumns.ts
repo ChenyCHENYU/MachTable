@@ -7,14 +7,18 @@ const NO_INTERACT = {
   resizable: false,
   movable: false,
   filter: false,
-  suppressSizeToFit: true
+  suppressSizeToFit: true,
+  suppressColumnMenu: true
 } as const;
 
 export function selectionColumn<TData = any>(overrides: Partial<ColDef<TData>> = {}): ColDef<TData> {
+  const width = overrides.width ?? 40;
   return {
     colId: "sel",
     headerName: "",
-    width: 46,
+    width,
+    minWidth: overrides.minWidth ?? width,
+    maxWidth: overrides.maxWidth ?? width,
     pinned: "left",
     checkboxSelection: true,
     ...NO_INTERACT,
@@ -23,12 +27,17 @@ export function selectionColumn<TData = any>(overrides: Partial<ColDef<TData>> =
 }
 
 export function indexColumn<TData = any>(overrides: Partial<ColDef<TData>> = {}): ColDef<TData> {
+  const width = overrides.width ?? 52;
   return {
     colId: "idx",
     headerName: "#",
     type: "index",
-    width: 60,
+    width,
+    minWidth: overrides.minWidth ?? width,
+    maxWidth: overrides.maxWidth ?? width,
     pinned: "left",
+    align: "center",
+    headerAlign: "center",
     ...NO_INTERACT,
     ...overrides
   };

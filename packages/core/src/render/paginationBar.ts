@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import { el } from "../lib/dom";
 import { DEFAULT_LOCALE, formatText, formatTwo } from "../lib/locale";
+import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type PaginationContext = Pick<
   GridCore<any>,
@@ -12,6 +13,7 @@ export class PaginationBar {
   private totalEl: HTMLElement | null = null;
   private pageEl: HTMLElement | null = null;
   private sizeSelect: HTMLSelectElement | null = null;
+  private sizeControl: SelectControl | null = null;
   private firstBtn: HTMLButtonElement | null = null;
   private prevBtn: HTMLButtonElement | null = null;
   private nextBtn: HTMLButtonElement | null = null;
@@ -49,15 +51,22 @@ export class PaginationBar {
     this.barEl.append(this.totalEl, this.firstBtn, this.prevBtn, this.pageEl, this.nextBtn, this.lastBtn);
 
     if (this.core.options.paginationShowSizeSelector) {
-      this.sizeSelect = document.createElement("select");
-      this.sizeSelect.className = "mach-pagination-size";
-      this.sizeSelect.setAttribute("aria-label", "page size");
-      this.buildSizeOptions();
-      this.sizeSelect.addEventListener("change", () => {
-        const size = Number(this.sizeSelect!.value);
-        if (!Number.isNaN(size)) this.core.rowModel.setPageSize(size);
+      this.sizeControl = createSelectControl({
+        ariaLabel: "page size",
+        options: [],
+        classNames: {
+          root: "mach-pagination-size-control",
+          native: "mach-pagination-size"
+        },
+        themeSource: this.core.skeleton.root,
+        onChange: (value) => {
+          const size = Number(value);
+          if (!Number.isNaN(size)) this.core.rowModel.setPageSize(size);
+        }
       });
-      this.barEl.appendChild(this.sizeSelect);
+      this.sizeSelect = this.sizeControl.native;
+      this.buildSizeOptions();
+      this.barEl.appendChild(this.sizeControl.el);
     }
 
     this.core.skeleton.root.appendChild(this.barEl);
@@ -77,14 +86,10 @@ export class PaginationBar {
       options.push(current);
       options.sort((a, b) => a - b);
     }
-    this.sizeSelect.textContent = "";
-    for (const size of options) {
-      const option = document.createElement("option");
-      option.value = String(size);
-      option.textContent = formatText(this.t("perPage"), size);
-      if (size === current) option.selected = true;
-      this.sizeSelect.appendChild(option);
-    }
+    this.sizeControl?.setOptions(
+      options.map((size) => ({ value: String(size), label: formatText(this.t("perPage"), size) })),
+      String(current)
+    );
   }
 
   private t(key: Parameters<GridCore<any>["getLocaleText"]>[0]): string {
@@ -130,13 +135,16 @@ export class PaginationBar {
     this.setText(this.pageEl, formatTwo(this.t("paginationPage"), page, pageCount));
     this.refreshNavigation(page, pageCount);
     if (this.sizeSelect && Number(this.sizeSelect.value) !== this.core.options.paginationPageSize) {
-      this.sizeSelect.value = String(this.core.options.paginationPageSize);
+      this.sizeControl?.setValue(String(this.core.options.paginationPageSize));
     }
   }
 
   destroy(): void {
     for (const off of this.offs) off();
     this.offs = [];
+    this.sizeControl?.destroy();
+    this.sizeControl = null;
+    this.sizeSelect = null;
     this.barEl?.remove();
     this.barEl = null;
   }

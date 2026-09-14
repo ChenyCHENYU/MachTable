@@ -20,28 +20,50 @@ import "@agile-team/mach-table-vue/styles.css";
 
 ```vue
 <script setup lang="ts">
-import { ref } from "vue";
-import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
+import { h, ref } from "vue";
+import {
+  MachTable,
+  defineVueColumns,
+  defineVueTableConfig,
+  indexColumn,
+  useMachTable,
+} from "@agile-team/mach-table-vue";
 
-interface Row { id: string; name: string }
+interface Row { id: string; name: string; status: "enabled" | "disabled" }
 const table = useMachTable<Row>();
-const rows = ref<Row[]>([{ id: "1", name: "MachTable" }]);
-const columns: ColDef<Row>[] = [{ field: "name", flex: 1, editable: true }];
+const rows = ref<Row[]>([{ id: "1", name: "MachTable", status: "enabled" }]);
+const columns = defineVueColumns<Row>([
+  indexColumn({ headerName: "序号" }),
+  { field: "name", flex: 1, editable: true },
+  {
+    field: "status",
+    headerName: "状态",
+    render: (row) => h("span", { class: `status-${row.status}` }, row.status === "enabled" ? "启用" : "停用")
+  }
+]);
+const tableConfig = defineVueTableConfig<Row>({
+  rowKey: "id",
+  enableColumnResize: true,
+  stripedRows: true,
+  persistence: { key: "customers:list", sections: ["columns"] }
+});
 </script>
 
 <template>
   <div style="height: 520px">
     <MachTable
+      v-bind="tableConfig"
       :ref="table.ref"
       :row-data="rows"
       :column-defs="columns"
-      row-key="id"
-      enable-column-resize
-      :persistence="{ key: 'customers:list', sections: ['columns'] }"
     />
   </div>
 </template>
 ```
+
+业务列优先用 `defineVueColumns()` 的 `render(row, index, params)` 返回 VNode；它保留 Vue 应用上下文、支持原位刷新，并遵循全局、表格和单列对齐配置。复杂页面编排仍可使用 `#cell-*` 具名插槽，具名插槽会显式覆盖同列 `render`。多个稳定表格参数推荐放进页面 `data.ts` 或共享配置模块，模板通过一次 `v-bind="tableConfig"` 注入；`rowData`、`columnDefs` 和实例 `ref` 保持显式，便于看清数据来源。
+
+未声明 `#loading` / `#empty` 时会直接使用 Core 的紧凑骨架加载态与插画空态；只有产品确实需要品牌化呈现时才提供 slot，避免每个页面重复维护同类状态组件。
 
 单元格编辑在用户点击对勾/取消或执行 Enter、Escape、Tab 键盘命令前保持挂载，焦点变化和中文输入法组合输入不会提前提交。整行事务请设置 `edit-type="fullRow"` 并增加 `rowActionsColumn()`，该操作列会自动切换编辑、保存和取消状态。
 

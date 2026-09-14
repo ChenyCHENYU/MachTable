@@ -20,4 +20,9 @@ export type {
   UseMachTableQueryReturn
 } from "./useMachTableQuery";
 export { useMachTableController } from "./useMachTableController";
-export type { UseMachTableControllerOptions, UseMachTableControllerReturn } from "./useMachTableController";
+export type {
+  MachTableBindingSource,
+  MachTableEditMode,
+  UseMachTableControllerOptions,
+  UseMachTableControllerReturn
+} from "./useMachTableController";

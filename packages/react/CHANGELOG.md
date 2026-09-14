@@ -1,5 +1,16 @@
 # @agile-team/mach-table-react
 
+## 0.29.0
+
+### Patch Changes
+
+- Keep active editors stable across equivalent React renders, inherit resolved column alignment in renderer hosts, and use the shared themed listbox and host-controlled modal editing contracts.
+- Updated dependencies
+  - @agile-team/mach-table@0.29.0
+
+> `0.28.1` below records an internal implementation milestone folded into
+> `0.29.0`; it was not published as a separate npm version.
+
 ## 0.28.1
 
 ### Patch Changes
@@ -11,6 +22,10 @@
   Tree-shake package metadata so the browser runtime embeds only the public version string rather than the complete package manifest.
 
   Treat official utility and renderer-only columns as intentional display columns so row actions do not emit misleading development warnings.
+
+  Keep active editors mounted when inline event callbacks or semantically unchanged inline option objects trigger a React host render, and adopt localized select labels, reliable edit switching and host-controlled modal/drawer editing.
+
+  Use the shared themed listbox for toolbar density and Core-owned selects, eliminating platform-native popup flashes without changing React props or command wiring.
 - Updated dependencies
   - @agile-team/mach-table@0.28.1
 

@@ -8,6 +8,7 @@ import type {
 } from "../types/colDef";
 import { applyPortalTheme, el, clamp } from "../lib/dom";
 import { matchLocaleKey } from "../lib/locale";
+import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type FilterPopupContext = Pick<
   GridCore<any>,
@@ -39,6 +40,10 @@ const DATE_MATCHES: DateFilterMatch[] = ["equals", "notEquals", "lessThan", "gre
 
 type ConditionFilterType = "text" | "number" | "date";
 type ConditionMatch = TextFilterMatch | NumberFilterMatch | DateFilterMatch;
+interface ConditionSelectElements {
+  root: HTMLElement;
+  select: HTMLSelectElement;
+}
 
 function isBlankMatch(match: string): boolean {
   return match === "blank" || match === "notBlank";
@@ -58,6 +63,7 @@ function setValueKey(value: string | number | null): string {
 export class FilterPopupService {
   private panel: HTMLElement | null = null;
   private openColId: string | null = null;
+  private conditionSelect: SelectControl | null = null;
 
   constructor(private core: FilterPopupContext) {}
 
@@ -71,11 +77,26 @@ export class FilterPopupService {
   }
 
   private docMouseDown = (e: MouseEvent): void => {
-    if (this.panel && !this.panel.contains(e.target as Node)) this.close();
+    if (!this.panel) return;
+    const target = e.target as Node;
+    if (!this.panel.contains(target) && !this.conditionSelect?.contains(target)) {
+      this.close();
+      return;
+    }
+    if (this.conditionSelect?.contains(target)) return;
+    if (!(target instanceof Element) || !target.closest(".mach-filter-select-control")) {
+      this.closeConditionListbox();
+    }
   };
 
   private docKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") this.close();
+    if (e.key !== "Escape") return;
+    if (this.closeConditionListbox(true)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    this.close();
   };
 
   private open(column: Column, anchor: HTMLElement): void {
@@ -124,12 +145,14 @@ export class FilterPopupService {
 
     document.addEventListener("mousedown", this.docMouseDown, true);
     document.addEventListener("keydown", this.docKeyDown, true);
-    const firstInput = panel.querySelector<HTMLInputElement>("input, select");
+    const firstInput = panel.querySelector<HTMLElement>(".mach-filter-select-trigger, input");
     firstInput?.focus();
   }
 
   close(): void {
     if (!this.panel) return;
+    this.conditionSelect?.destroy();
+    this.conditionSelect = null;
     this.panel.remove();
     this.panel = null;
     this.openColId = null;
@@ -151,7 +174,7 @@ export class FilterPopupService {
       filter && filter.type !== "set" && filter.conditions.length > 0 ? filter.conditions[0] : null;
     const currentMatch: ConditionMatch =
       existing?.match ?? (type === "text" ? "contains" : "equals");
-    const select = this.createConditionSelect(type, currentMatch);
+    const { root: selectControl, select } = this.createConditionSelect(type, currentMatch);
     const valueInput = this.createConditionInput(type);
     const value2Input = this.createConditionInput(type, true);
     this.populateConditionInputs(type, currentMatch, existing, valueInput, value2Input);
@@ -162,21 +185,36 @@ export class FilterPopupService {
     this.attachEnterApply(column, panel, valueInput, value2Input);
 
     const body = el("div", "mach-filter-body");
-    body.append(select, valueInput, value2Input);
+    body.append(selectControl, valueInput, value2Input);
     panel.appendChild(body);
     panel.dataset.filterType = type;
   }
 
-  private createConditionSelect(type: ConditionFilterType, current: ConditionMatch): HTMLSelectElement {
-    const select = el("select", "mach-filter-select") as HTMLSelectElement;
-    for (const match of conditionMatches(type)) {
-      const option = document.createElement("option");
-      option.value = match;
-      option.textContent = this.core.getLocaleText(matchLocaleKey(match));
-      select.appendChild(option);
-    }
-    select.value = current;
-    return select;
+  private createConditionSelect(type: ConditionFilterType, current: ConditionMatch): ConditionSelectElements {
+    const control = createSelectControl({
+      ariaLabel: "Filter condition",
+      options: conditionMatches(type).map((match) => ({
+        value: match,
+        label: this.core.getLocaleText(matchLocaleKey(match))
+      })),
+      value: current,
+      classNames: {
+        root: "mach-filter-select-control",
+        native: "mach-filter-select",
+        trigger: "mach-filter-select-trigger",
+        value: "mach-filter-select-value",
+        caret: "mach-filter-select-caret",
+        listbox: "mach-filter-listbox",
+        option: "mach-filter-listbox-option"
+      },
+      themeSource: this.core.skeleton.root
+    });
+    this.conditionSelect = control;
+    return { root: control.el, select: control.native };
+  }
+
+  private closeConditionListbox(restoreFocus = false): boolean {
+    return this.conditionSelect?.close(restoreFocus) ?? false;
   }
 
   private createConditionInput(type: ConditionFilterType, second = false): HTMLInputElement {

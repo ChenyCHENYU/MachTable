@@ -240,11 +240,33 @@ describe("preset columns", () => {
       columnDefs,
       rowData: rows,
       rowSelection: "multiple",
+      enableRangeSelection: true,
+      columnMenu: true,
       rowKey: (row) => row.id
     });
 
     expect(host.querySelectorAll(".mach-row-checkbox").length).toBeGreaterThan(0);
+    const selectionCell = cellAt(host, 0, "sel");
+    selectionCell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    selectionCell.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 }));
+    expect(selectionCell.querySelector<HTMLInputElement>(".mach-row-checkbox")?.checked).toBe(true);
+    const selectedRow = host.querySelector<HTMLElement>('.mach-row[data-index="0"]');
+    expect(selectedRow?.classList.contains("mach-row--selected")).toBe(true);
+    expect(selectedRow?.getAttribute("aria-selected")).toBe("true");
+    expect(api.selection.getRange()).toBeNull();
+    expect(selectionCell.classList.contains("mach-cell--focus")).toBe(true);
+    expect(selectionCell.classList.contains("mach-cell--range")).toBe(false);
     expect(cellAt(host, 0, "idx").textContent).toBe("1");
+    expect(cellAt(host, 0, "idx").classList.contains("mach-cell--center")).toBe(true);
+    expect(host.querySelector<HTMLElement>('.mach-header-cell[data-col-id="sel"]')?.style.width).toBe("40px");
+    expect(host.querySelector<HTMLElement>('.mach-header-cell[data-col-id="idx"]')?.style.width).toBe("52px");
+    expect(host.querySelector('.mach-header-cell[data-col-id="idx"]')?.classList.contains("mach-header-cell--center")).toBe(true);
+    expect(host.querySelector('.mach-header-cell[data-col-id="sel"] .mach-menu-btn')).toBeNull();
+    expect(host.querySelector('.mach-header-cell[data-col-id="idx"] .mach-menu-btn')).toBeNull();
+    expect(host.querySelector('.mach-header-cell[data-col-id="op"] .mach-menu-btn')).toBeNull();
+    const dataTools = host.querySelector<HTMLButtonElement>('.mach-header-cell[data-col-id="name"] .mach-menu-btn')!;
+    expect(dataTools.querySelector("svg")).toBeTruthy();
+    expect(dataTools.textContent).not.toContain("⋯");
     const opCell = cellAt(host, 0, "op");
     const btns = opCell.querySelectorAll(".mach-action-btn");
     expect(btns.length).toBe(2);

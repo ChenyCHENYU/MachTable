@@ -136,6 +136,8 @@ export interface ActionButtonsConfig<TData = any> {
 
 export interface RowActionsConfig<TData = any> extends Omit<ActionButtonsConfig<TData>, "actions"> {
   onView?: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
+  /** Opens the host's preferred edit surface, such as a modal or drawer. Without it, edit starts full-row editing. */
+  onEdit?: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
   onDelete?: (params: CellRendererParams<TData>) => unknown | Promise<unknown>;
   /** Persists the just-validated row. Failures reopen row editing and keep the change dirty. */
   onSave?: (
@@ -576,8 +578,8 @@ function renderRowEditingActions<TData>(
     : (config.labels?.confirm ?? config.labels?.save ?? labels.confirm);
   return createActionButtonsRenderer<TData>({
     actions: [
-      { icon: "check", title: confirmTitle, variant: "primary", onClick: confirm },
-      { icon: "close", title: labels.cancel, onClick: () => params.api.editing.stop({ cancel: true }).then(() => undefined) }
+      { icon: "check", title: confirmTitle, variant: "success", onClick: confirm },
+      { icon: "close", title: labels.cancel, variant: "danger", onClick: () => params.api.editing.stop({ cancel: true }).then(() => undefined) }
     ],
     overflow: "inline"
   })(params);
@@ -597,7 +599,7 @@ function buildRowActions<TData>(
   if (config.edit !== false) actions.push({
     id: "edit", icon: "edit", title: labels.edit, variant: "warning",
     ...(config.permissions?.edit ? { permission: config.permissions.edit } : {}),
-    onClick: () => { params.api.editing.startRow(params.rowIndex); }
+    onClick: config.onEdit ?? (() => { params.api.editing.startRow(params.rowIndex); })
   });
   if (config.onDelete) actions.push({
     id: "delete", icon: "delete", title: labels.delete, variant: "danger",
@@ -617,7 +619,7 @@ export function createRowActionsRenderer<TData = any>(config: RowActionsConfig<T
     return createActionButtonsRenderer<TData>({
       actions,
       max: config.max,
-      overflow: config.overflow ?? "drawer",
+      overflow: config.overflow ?? "menu",
       moreLabel: config.moreLabel,
       drawerTitle: config.drawerTitle
     })(params);

@@ -16,6 +16,42 @@ function handlerNameOf(eventType: string): string {
   return `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
 }
 
+const EVENT_HANDLER_KEYS = new Set(EVENT_TYPES.map(handlerNameOf));
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function equivalentConfigValue(left: unknown, right: unknown, depth = 2): boolean {
+  if (Object.is(left, right)) return true;
+  if (depth <= 0) return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length || left.length > 100) return false;
+    return left.every((value, index) => equivalentConfigValue(value, right[index], depth - 1));
+  }
+  if (!isPlainObject(left) || !isPlainObject(right)) return false;
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length || keys.length > 50) return false;
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(right, key) &&
+    equivalentConfigValue(left[key], right[key], depth - 1));
+}
+
+function effectiveInputsEqual(
+  current: readonly unknown[],
+  previous: readonly unknown[]
+): boolean {
+  if (current.length !== previous.length) return false;
+  return current.every((value, index) => {
+    if (index < 2) return Object.is(value, previous[index]);
+    const key = GRID_OPTION_KEYS[index - 2];
+    if (EVENT_HANDLER_KEYS.has(key)) return true;
+    if (key === "rowData" || key === "columnDefs") return Object.is(value, previous[index]);
+    return equivalentConfigValue(value, previous[index]);
+  });
+}
+
 export type MachTableReactProps<TData = any> = Omit<GridOptions<TData>, AdapterOnlyGridOption> & {
   /** Named application preset(s). Explicit component props still win. */
   preset?: MachTablePresetSelection;
@@ -63,21 +99,26 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
   const effectiveInputs = [
     config,
     props.preset,
-    ...GRID_OPTION_KEYS.map((key) => key === "className"
-      ? props.gridClassName
-      : key === "ariaLabel"
-        ? props.gridAriaLabel
-        : key === "ariaLabelledBy"
-          ? props.gridAriaLabelledBy
-          : key === "ariaDescribedBy"
-            ? props.gridAriaDescribedBy
-            : props[key])
+    ...GRID_OPTION_KEYS.map((key) => {
+      // Event bridges read propsRef/effectiveRef at dispatch time. Treating an
+      // inline React callback as a grid-option change would rebuild merged
+      // object options and can tear down an active editor during a host render.
+      if (EVENT_HANDLER_KEYS.has(key)) return undefined;
+      return key === "className"
+        ? props.gridClassName
+        : key === "ariaLabel"
+          ? props.gridAriaLabel
+          : key === "ariaLabelledBy"
+            ? props.gridAriaLabelledBy
+            : key === "ariaDescribedBy"
+              ? props.gridAriaDescribedBy
+              : props[key];
+    })
   ];
   const effectiveCache = useRef<{ inputs: readonly unknown[]; options: GridOptions<TData> } | null>(null);
   if (
     !effectiveCache.current ||
-    effectiveCache.current.inputs.length !== effectiveInputs.length ||
-    effectiveInputs.some((value, index) => !Object.is(value, effectiveCache.current?.inputs[index]))
+    !effectiveInputsEqual(effectiveInputs, effectiveCache.current.inputs)
   ) {
     effectiveCache.current = { inputs: effectiveInputs, options: collectGridOptions(props, config) };
   }

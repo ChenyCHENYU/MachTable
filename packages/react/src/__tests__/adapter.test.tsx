@@ -102,6 +102,39 @@ describe("React adapter", () => {
     await act(async () => root.unmount());
   });
 
+  it("keeps an active editor mounted when only an inline event callback changes", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const apiRef = { current: null as GridApi | null };
+    const columns = [{ field: "name", editable: true }] as ColDef[];
+    const rows = [{ name: "Ada" }];
+
+    await act(async () => root.render(createElement(MachTable, {
+      apiRef,
+      columnDefs: columns,
+      rowData: rows,
+      pagination: false,
+      persistence: { key: "active-editor-regression" },
+      onCellClicked: () => undefined
+    })));
+    apiRef.current?.editing.startCell({ rowIndex: 0, colId: "name" });
+    const editor = host.querySelector(".mach-cell-editor-shell");
+    expect(editor).toBeTruthy();
+
+    await act(async () => root.render(createElement(MachTable, {
+      apiRef,
+      columnDefs: columns,
+      rowData: rows,
+      pagination: false,
+      persistence: { key: "active-editor-regression" },
+      onCellClicked: () => undefined
+    })));
+    expect(host.querySelector(".mach-cell-editor-shell")).toBe(editor);
+
+    await act(async () => root.unmount());
+  });
+
   it("runs provider event observers and component callbacks exactly once", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -312,6 +345,12 @@ describe("React adapter", () => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     expect(host.querySelector('[role="toolbar"]')).toBeTruthy();
     expect(host.textContent).toContain("已选 2 项");
+    const density = host.querySelector<HTMLSelectElement>(".mach-toolbar__select")!;
+    const densityTrigger = host.querySelector<HTMLButtonElement>('.mach-toolbar__select-control [role="combobox"]')!;
+    expect(density.hidden).toBe(true);
+    densityTrigger.click();
+    expect(document.body.querySelector('.mach-select-listbox[role="listbox"]')).toBeTruthy();
     await act(async () => root.unmount());
+    expect(document.body.querySelector('.mach-select-listbox[role="listbox"]')).toBeNull();
   });
 });

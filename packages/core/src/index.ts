@@ -22,6 +22,7 @@ export type {
   NumberFilterCondition,
   DateFilterCondition,
   SetFilterCondition,
+  SelectEditorOption,
   SelectEditorParams,
   SetFilterParams,
   CellRendererFn,

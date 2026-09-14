@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.28.1-2563eb" alt="Source version 0.28.1" />
+  <img src="https://img.shields.io/badge/source-0.29.0-2563eb" alt="Source version 0.29.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -37,7 +37,7 @@ MachTable 为后台管理、工业台账、订单/工单、财务报表和低代
 | 大数据 | 行列双虚拟化、行池复用、可变行高索引、随机访问远程块、LRU 与并发控制、可选 Worker |
 | 数据模型 | 本地/服务端排序过滤、分页、无限滚动、树与懒加载、分组聚合、主从详情、固定行 |
 | 编辑 | 单元格与原子整行编辑、对勾/取消、同步/异步校验、脏数据、撤销重做、部分保存与冲突处理 |
-| 交互 | 多选/范围选择、复制粘贴、填充柄、拖拽、列宽调整、列工作台、上下文菜单、操作列 |
+| 交互 | 多选/范围选择、复制粘贴、填充柄、拖拽、列宽调整、列工作台、统一无闪烁下拉、上下文菜单、操作列 |
 | 框架体验 | Vue 原生 slots、React renderer、全局/局部/异步接入、远程查询与编辑工作流 |
 | 治理 | 分层配置、命名预设、配置来源解释、领域化 API、版本化状态、稳定错误码、诊断快照 |
 | 安全 | CSV 公式注入防护、安全字段路径、Overlay 默认文本渲染、资源销毁与请求取消 |
@@ -65,32 +65,37 @@ pnpm add @agile-team/mach-table
 
 ```vue
 <script setup lang="ts">
-import { ref } from "vue";
-import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
+import { h, ref } from "vue";
+import { MachTable, defineVueColumns, indexColumn, selectionColumn, useMachTable, type MachTableVueProps } from "@agile-team/mach-table-vue";
 import "@agile-team/mach-table-vue/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
 
 const table = useMachTable<Order>();
 const rows = ref<Order[]>([{ id: "SO-001", customer: "Acme", amount: 12800 }]);
-const columns: ColDef<Order>[] = [
+const columns = defineVueColumns<Order>([
+  selectionColumn(),
+  indexColumn({ headerName: "序号" }),
   { field: "id", headerName: "订单号", width: 130, pinned: "left" },
   { field: "customer", headerName: "客户", flex: 1, editable: true, filter: "text" },
-  { field: "amount", headerName: "金额", width: 140, filter: "number" }
-];
+  { field: "amount", headerName: "金额", width: 140, filter: "number", render: (row) => h("strong", `¥${row.amount}`) }
+]);
+const tableConfig = {
+  rowKey: "id",
+  rowSelection: "multiple",
+  enableColumnResize: true,
+  persistence: { key: "orders:list" },
+  stripedRows: true
+} satisfies MachTableVueProps<Order>;
 </script>
 
 <template>
   <div style="height: 560px">
     <MachTable
+      v-bind="tableConfig"
       :ref="table.ref"
       :column-defs="columns"
       :row-data="rows"
-      row-key="id"
-      row-selection="multiple"
-      enable-column-resize
-      :persistence="{ key: 'orders:list' }"
-      striped-rows
     />
   </div>
 </template>
@@ -100,7 +105,7 @@ const columns: ColDef<Order>[] = [
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, indexColumn, useMachTable, type ColDef } from "@agile-team/mach-table-react";
 import "@agile-team/mach-table-react/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
@@ -108,6 +113,7 @@ interface Order { id: string; customer: string; amount: number }
 export function OrdersPage({ rows }: { rows: Order[] }) {
   const table = useMachTable<Order>();
   const columns = useMemo<ColDef<Order>[]>(() => [
+    indexColumn({ headerName: "序号" }),
     { field: "id", headerName: "订单号", width: 130, pinned: "left" },
     { field: "customer", headerName: "客户", flex: 1, editable: true },
     { field: "amount", headerName: "金额", width: 140, filter: "number" }
@@ -131,11 +137,11 @@ export function OrdersPage({ rows }: { rows: Order[] }) {
 ### 原生 TypeScript
 
 ```ts
-import { createGrid } from "@agile-team/mach-table";
+import { createGrid, indexColumn } from "@agile-team/mach-table";
 import "@agile-team/mach-table/styles/mach-table.css";
 
 const api = createGrid(document.querySelector("#grid")!, {
-  columnDefs: [{ field: "name", headerName: "名称", flex: 1 }],
+  columnDefs: [indexColumn({ headerName: "序号" }), { field: "name", headerName: "名称", flex: 1 }],
   rowData: [{ id: "1", name: "MachTable" }],
   rowKey: "id"
 });
@@ -145,6 +151,8 @@ api.destroy();
 ```
 
 > 默认虚拟布局要求容器具有明确高度。小型详情表可使用 `domLayout: "autoHeight"`，大表或远程无限数据源不要使用自动高度。
+
+标准列表默认把 `indexColumn()` 放在第一列；存在 `selectionColumn()` 时序号紧随其后。表头和单元格内容默认居中，业务列可用 `align: "left" | "right"`、`headerAlign` 单独覆盖。
 
 ## 一份清爽的应用配置
 
@@ -249,7 +257,7 @@ const options = {
 
 ## 编辑与复杂业务工作流
 
-单元格编辑默认提供轻量编辑提示与就地对勾/取消；鼠标移动、重新定位光标、焦点移出或中文输入法组合过程都不会提前结束编辑，只有对勾/取消控件或 Enter、Escape、Tab 键盘命令会完成事务。`editType: "fullRow"` 将可编辑单元格作为一个原子事务提交。操作列支持内置查看/编辑/删除图标，也支持纯自定义动作，以及 `menu`、`drawer`、`inline` 三种溢出模式。
+单元格编辑默认提供轻量编辑提示与就地对勾/取消；鼠标移动、普通焦点移出和中文输入法组合过程不会提前结束编辑。点击另一可编辑格会先校验提交当前值再无缝切换，校验失败则保留原编辑器；对勾/取消控件及 Enter、Escape、Tab 提供显式键盘流程。`editType: "fullRow"` 将可编辑单元格作为一个原子事务提交。操作列默认直接显示查看/编辑/删除图标，低频动作收入 `…` 菜单，也支持 `drawer`、`inline` 两种溢出形态。
 
 ```ts
 import { rowActionsColumn } from "@agile-team/mach-table-vue";
@@ -257,7 +265,12 @@ import { rowActionsColumn } from "@agile-team/mach-table-vue";
 const columns = [
   { field: "name", editable: true },
   { field: "amount", editable: true, cellEditor: "number" },
-  rowActionsColumn({ onView, onDelete, overflow: "drawer", actions: customActions })
+  rowActionsColumn({
+    onView,
+    onEdit: ({ data }) => openEditModal(data),
+    onDelete,
+    extraActions: customActions
+  })
 ];
 ```
 
@@ -297,7 +310,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.28.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。0.28.1 不新增公共能力：沿用已通过快照锁定的接入契约，修复真实项目暴露的浮层主题、选择列对齐、拖列反馈和编辑事务稳定性问题。若真实项目没有暴露新的契约问题，下一阶段进入 `1.0.0-rc`，不再以堆叠 API 推动版本。
+当前源码版本为 `0.29.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版在保持既有配置契约的基础上，补齐数据驱动 Vue 列、扁平配置、统一下拉、加载与空状态、编辑事务和滚动拖动性能治理。后续继续以真实项目反馈收口，不以堆叠 API 推动版本。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

@@ -27,6 +27,8 @@ const PORTAL_THEME_PROPERTIES = [
   "--mach-danger",
   "--mach-info",
   "--mach-border-color",
+  "--mach-border-width",
+  "--mach-header-bg",
   "--mach-header-fg",
   "--mach-body-bg",
   "--mach-body-fg",
@@ -69,10 +71,13 @@ export function toPx(n: number): string {
 }
 
 export const FILTER_ICON =
-  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3.5h12L9.5 8v4.5L6.5 14V8L2 3.5z"/></svg>';
+  '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3.5h12L9.5 8v4.5L6.5 14V8L2 3.5z"/></svg>';
 
 export const SORT_ASC_ICON =
-  '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 3l4 5H4l4-5z"/></svg>';
+  '<svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor"><path d="M8 3l4 5H4l4-5z"/></svg>';
 
 export const SORT_DESC_ICON =
-  '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 13l4-5H4l4 5z"/></svg>';
+  '<svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor"><path d="M8 13l4-5H4l4 5z"/></svg>';
+
+export const COLUMN_TOOLS_ICON =
+  '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"><path d="M2 4h3m3 0h6M2 8h7m3 0h2M2 12h1m3 0h8"/><circle cx="6.5" cy="4" r="1.35"/><circle cx="10.5" cy="8" r="1.35"/><circle cx="4.5" cy="12" r="1.35"/></svg>';

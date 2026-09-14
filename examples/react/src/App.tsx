@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import {
+  indexColumn,
   MachTable,
+  selectionColumn,
   type CellClickEvent,
   type ColDef
 } from "@agile-team/mach-table-react";
@@ -39,7 +41,8 @@ export default function App() {
   const [clicked, setClicked] = useState("");
   const controller = useMachTableController<Employee>();
   const columns = useMemo<ColDef<Employee>[]>(() => [
-    { colId: "select", headerName: "", width: 46, checkboxSelection: true, sortable: false, resizable: false, movable: false },
+    selectionColumn({ colId: "select" }),
+    indexColumn({ headerName: "序号" }),
     { field: "id", headerName: "工号", width: 110 },
     { field: "name", headerName: "姓名", flex: 1, editable: true, filter: "text" },
     { field: "department", headerName: "部门", width: 130, filter: "set" },

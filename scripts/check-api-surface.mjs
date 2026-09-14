@@ -117,7 +117,9 @@ const current = {
       "GridOptions", "GridPersistenceOptions", "GridStateStore", "GridComponents",
       "GridDatasource", "PaginationConfig", "GridFeature", "GridDataProcessor"
     ], "core."),
-    ...declarationSignatures(colDefSource, ["ColDef", "ColDefGroup", "ColumnState", "SortModel"], "core."),
+    ...declarationSignatures(colDefSource, [
+      "ColDef", "ColDefGroup", "ColumnState", "SortModel", "SelectEditorOption", "SelectEditorParams"
+    ], "core."),
     ...declarationSignatures(stateSource, ["GridState", "GridStateSection", "ApplyGridStateOptions"], "core."),
     ...declarationSignatures(configurationSource, ["MachTableRuntimeConfig", "MachTableDefaults"], "core."),
     ...declarationSignatures(rendererSource, ["ActionItem", "ActionButtonsConfig", "RowActionsConfig"], "core."),

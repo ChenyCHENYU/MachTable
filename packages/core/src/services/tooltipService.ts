@@ -111,7 +111,7 @@ export class TooltipService {
     const params = this.createParams(resolved.node, resolved.column, resolved.index);
     if (!this.hasTooltipValue(params, resolved.column)) return;
 
-    this.showTimer = setTimeout(() => {
+    this.showTimer = window.setTimeout(() => {
       if (this.core.isDestroyed() || this.currentCell !== cell) return;
       this.showPanel(cell, params);
     }, Math.max(0, this.core.options.tooltipShowDelay));

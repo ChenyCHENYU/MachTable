@@ -19,27 +19,45 @@ import "@agile-team/mach-table-vue/styles.css";
 
 ```vue
 <script setup lang="ts">
-import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-vue";
+import { h } from "vue";
+import {
+  MachTable,
+  defineVueColumns,
+  defineVueTableConfig,
+  useMachTable,
+} from "@agile-team/mach-table-vue";
 
-interface Order { id: string; product: string; amount: number }
+interface Order { id: string; product: string; amount: number; status: "paid" | "pending" }
 const table = useMachTable<Order>();
-const columns: ColDef<Order>[] = [
+const columns = defineVueColumns<Order>([
   { field: "product", headerName: "产品", flex: 1, editable: true },
-  { field: "amount", headerName: "金额", width: 140, filter: "number" }
-];
+  { field: "amount", headerName: "金额", width: 140, filter: "number" },
+  {
+    field: "status",
+    headerName: "状态",
+    render: (row) => h("span", { class: `order-status--${row.status}` }, row.status === "paid" ? "已支付" : "待支付")
+  }
+]);
+const tableConfig = defineVueTableConfig<Order>({
+  rowKey: "id",
+  enableColumnResize: true,
+  stripedRows: true
+});
 </script>
 
 <template>
   <div style="height: 600px">
     <MachTable
+      v-bind="tableConfig"
       :ref="table.ref"
       :column-defs="columns"
       :row-data="rows"
-      row-key="id"
     />
   </div>
 </template>
 ```
+
+`render(row, index, params)` 是 Vue 业务列的推荐自定义方式：列、字典映射和展示规则保持在同一份数据配置中，并且可以直接返回 `h()` 创建的任意 Vue VNode。富内容会遵循内置默认值、应用配置、当前表格和单列的 `align` / `headerAlign` 覆盖链。`#cell-*`、`#header-*` 和 `#editor-*` 插槽继续保留，适合必须贴近页面模板的复杂交互；同列同时声明时，具名插槽优先。
 
 ### 同步全局插件
 
@@ -118,6 +136,19 @@ provideMachTableConfig(() => ({
 - Core 事件以 Vue kebab-case 监听，如 `@selection-changed`。
 - 组件暴露 `getApi()`、`getResolvedConfig()` 与 `explainOption()`。
 
+页面属性较多时，不要在模板逐项展开。把稳定行为放进页面的 `data.ts` 或共享配置模块，使用 Vue 原生对象绑定；高频数据仍保持显式：
+
+```vue
+<MachTable
+  v-bind="tableConfig"
+  :ref="table.ref"
+  :column-defs="columns"
+  :row-data="rows"
+/>
+```
+
+`tableConfig` 使用 `defineVueTableConfig<Row>()` 做完整类型检查，业务文件不需要额外的类型断言。对象 `v-bind` 与普通 props 使用同一套响应式更新路径，不增加第二套配置语义。
+
 ```vue
 <MachTable
   :ref="table.ref"
@@ -156,6 +187,8 @@ function undo() {
 
 列通过 `colId`（未配置时为 `field`）匹配 `#cell-*`、`#header-*` 与 `#editor-*`。还支持通用 `#cell/#header/#editor`、`#loading/#empty/#error/#detail/#actions`。
 
+加载态和空态已有可直接投产的默认呈现；只有需要品牌化时才声明 `#loading` / `#empty`，一旦声明，slot 始终拥有最高优先级。
+
 ```vue
 <MachTable :column-defs="columns" :row-data="rows" :loading="loading">
   <template #header-status>订单状态</template>
@@ -189,6 +222,20 @@ import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
 ```
 
 `useMachTableQuery` 管理请求取消、过期响应、分页、加载/空/错状态与跨页选择；`useMachTableEditing` 管理脏数据、部分成功和冲突；`useMachTableController` 将表格、查询、编辑、选择和工具栏命令组合为单个页面控制器。
+
+页面存在稳定配置和少量响应式状态时，直接交给 controller 组合：
+
+```ts
+const controller = useMachTableController({
+  config: tableConfig,
+  loading,
+  theme: () => dark.value ? "dark" : "light",
+  editMode,
+  onGridError: reportGridError,
+});
+```
+
+模板只需 `v-bind="controller.bindings.value"`。`loading`、`theme`、`editMode` 支持普通值、ref/computed 和 getter；`config` 仍是标准 Vue 表格 props，不引入第二套配置协议。
 
 工具栏需要全局注册时：
 

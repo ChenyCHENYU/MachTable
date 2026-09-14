@@ -37,29 +37,49 @@ for (const example of examples) {
     await expect(grid).toHaveAttribute("aria-activedescendant", await focused.getAttribute("id") ?? "__missing__");
 
     const editable = page.locator('.mach-row[data-index="0"] .mach-cell[aria-readonly="false"]:visible').first();
-    const editTrigger = editable.getByRole("button", { name: "Edit cell" });
-    // The dedicated editing suite verifies pointer actionability. Dispatch the
-    // control here so this cross-framework lifecycle test is not coupled to its
-    // hover-only transition under a resource-constrained WebKit worker.
-    if (await editTrigger.count()) {
-      await editTrigger.evaluate((button: HTMLButtonElement) => button.click());
-    } else {
-      await editable.dblclick();
-    }
+    await expect(editable).toBeVisible();
+    // F2 is the framework-neutral keyboard editing contract. Using it here
+    // avoids coupling this lifecycle test to the optional hover-only pencil.
+    await editable.click();
+    await expect(editable).toHaveClass(/mach-cell--focus/);
+    await page.keyboard.press("F2");
     const editor = page.locator(".mach-cell--editing input").first();
-    await expect(editor).toBeVisible();
+    await expect(editor).toBeVisible({ timeout: 15_000 });
     await editor.fill("E2E-EDITED");
     await editor.press("Enter");
     await expect(editable).toContainText("E2E-EDITED");
 
     const filterButton = page.locator(".mach-filter-btn").first();
     await filterButton.click();
-    await expect(page.locator(".mach-filter-panel")).toBeVisible();
+    const filterPanel = page.locator(".mach-filter-panel");
+    await expect(filterPanel).toBeVisible();
+    const nativeSelect = filterPanel.locator(".mach-filter-select");
+    const filterSelect = filterPanel.getByRole("combobox");
+    await expect(nativeSelect).toBeHidden();
+    await filterSelect.click();
+    await expect(filterSelect).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await filterSelect.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(nativeSelect).toHaveValue("notContains");
+    await expect(filterSelect).toHaveAttribute("aria-expanded", "false");
+    await filterSelect.click();
     await page.keyboard.press("Escape");
-    await expect(page.locator(".mach-filter-panel")).toHaveCount(0);
+    await expect(filterPanel).toBeVisible();
+    await expect(filterSelect).toHaveAttribute("aria-expanded", "false");
+    await page.keyboard.press("Escape");
+    await expect(filterPanel).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }
+
+test("Vue render cells inherit the resolved column alignment", async ({ page }) => {
+  await page.goto("http://127.0.0.1:4175", { waitUntil: "domcontentloaded" });
+  const renderHost = page.locator(".mach-cell-vue--render:has(.vue-region-cell)").first();
+  await expect(renderHost).toBeVisible();
+  await expect(renderHost.locator("xpath=..")).toHaveClass(/mach-cell--center/);
+  await expect.poll(() => renderHost.evaluate((element) => getComputedStyle(element).justifyContent)).toBe("center");
+});
 
 test("vanilla resizes a column and restores the completed width", async ({ page }) => {
   await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });

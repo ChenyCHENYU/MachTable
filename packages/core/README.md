@@ -11,11 +11,12 @@ pnpm add @agile-team/mach-table
 ```
 
 ```ts
-import { createGrid } from "@agile-team/mach-table";
+import { createGrid, indexColumn } from "@agile-team/mach-table";
 import "@agile-team/mach-table/styles/mach-table.css";
 
 const api = createGrid(document.querySelector("#grid")!, {
   columnDefs: [
+    indexColumn({ headerName: "序号" }),
     { field: "id", headerName: "ID", width: 120 },
     { field: "name", headerName: "名称", flex: 1, editable: true }
   ],
@@ -42,6 +43,8 @@ api.destroy();
 `persistence.sections` 同时约束进入 store 的数据与恢复范围；异步 store 写入有序，晚到加载不会覆盖加载期间的用户操作。
 
 单元格编辑通过内置对勾/取消控件显式结束，普通鼠标和焦点变化不会误提交；Enter、Escape、Tab 仍提供完整键盘路径。筛选、列设置、上下文菜单和操作菜单会继承所属表格实例的主题变量，不受宿主页面全局样式影响。
+
+`loading: true` 默认展示轻量表格骨架与本地化状态文案，空数据默认展示内置插画；需要品牌化时再通过 `overlayLoadingTemplate`、`overlayNoRowsTemplate` 覆盖，基础页面无需重复实现 loading/empty DOM。
 
 公共命令按 `rows`、`columns`、`selection`、`editing`、`filtering`、`sorting`、`pagination`、`hierarchy`、`view`、`state`、`io`、`diagnostics` 划分。完整签名见 [GridApi](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/api/grid-api.md)。
 

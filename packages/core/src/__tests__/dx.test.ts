@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe("align / headerAlign", () => {
-  it("applies explicit align classes and falls back to numeric auto-right", () => {
+  it("allows explicit align values to override the centered default", () => {
     const host = createHost();
     const columnDefs: ColDef<Row>[] = [
       { field: "name", headerName: "名称", align: "center" },
@@ -60,7 +60,7 @@ describe("align / headerAlign", () => {
     api.destroy();
   });
 
-  it("numeric columns still auto-right-align without explicit align", () => {
+  it("centers headers and cells by default", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "score", headerName: "分数" }],
@@ -68,7 +68,8 @@ describe("align / headerAlign", () => {
       pagination: false,
       rowKey: (row) => row.id
     });
-    expect(cellAt(host, 0, "score").classList.contains("mach-cell--num")).toBe(true);
+    expect(cellAt(host, 0, "score").classList.contains("mach-cell--center")).toBe(true);
+    expect(host.querySelector('.mach-header-cell[data-col-id="score"]')?.classList.contains("mach-header-cell--center")).toBe(true);
     api.destroy();
   });
 

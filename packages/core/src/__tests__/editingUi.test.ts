@@ -53,7 +53,7 @@ describe("polished editing UI", () => {
     api.destroy();
   });
 
-  it("keeps cell editing active until an explicit control or keyboard command finishes it", async () => {
+  it("keeps cell editing active through pointer movement, focusout and IME composition", async () => {
     const host = createHost();
     const api = createGrid<Person>(host, {
       columnDefs: [
@@ -75,11 +75,6 @@ describe("polished editing UI", () => {
     input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     host.querySelector<HTMLElement>('.mach-row[data-index="1"] .mach-cell[data-col-id="age"]')!
       .dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-    const outsideCell = host.querySelector<HTMLElement>(
-      '.mach-row[data-index="1"] .mach-cell[data-col-id="age"]'
-    )!;
-    outsideCell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-    outsideCell.click();
     input.dispatchEvent(new KeyboardEvent("keydown", {
       key: "Enter",
       isComposing: true,
@@ -96,6 +91,93 @@ describe("polished editing UI", () => {
     await flush();
     expect(cell.querySelector(".mach-editor-input")).toBeNull();
     expect(api.rows.getById("1")?.data?.name).toBe("Typing stays active");
+    api.destroy();
+  });
+
+  it("commits the active cell before moving to another editable cell", async () => {
+    const host = createHost();
+    const api = createGrid<Person>(host, {
+      columnDefs: [
+        { field: "name", editable: true },
+        { field: "status", editable: true }
+      ],
+      rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
+      rowKey: (row) => row.id
+    });
+
+    const nameCell = host.querySelector<HTMLElement>('.mach-cell[data-col-id="name"]')!;
+    const statusCell = host.querySelector<HTMLElement>('.mach-cell[data-col-id="status"]')!;
+    nameCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const nameInput = nameCell.querySelector<HTMLInputElement>(".mach-editor-input")!;
+    nameInput.value = "Committed on switch";
+    nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+    statusCell.click();
+    await flush();
+
+    expect(api.rows.getById("1")?.data?.name).toBe("Committed on switch");
+    expect(nameCell.querySelector(".mach-editor-input")).toBeNull();
+    expect(statusCell.querySelector(".mach-editor-input")).toBeTruthy();
+    api.destroy();
+  });
+
+  it("keeps the current editor when validation blocks a cell switch", async () => {
+    const host = createHost();
+    const api = createGrid<Person>(host, {
+      columnDefs: [
+        { field: "name", editable: true, validate: (value) => String(value).length > 2 || "Too short" },
+        { field: "status", editable: true }
+      ],
+      rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
+      rowKey: (row) => row.id
+    });
+
+    const nameCell = host.querySelector<HTMLElement>('.mach-cell[data-col-id="name"]')!;
+    const statusCell = host.querySelector<HTMLElement>('.mach-cell[data-col-id="status"]')!;
+    nameCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const input = nameCell.querySelector<HTMLInputElement>(".mach-editor-input")!;
+    input.value = "x";
+    statusCell.click();
+    await flush();
+
+    expect(api.rows.getById("1")?.data?.name).toBe("Before");
+    expect(nameCell.querySelector(".mach-editor-input")).toBe(input);
+    expect(input.classList.contains("mach-editor-invalid")).toBe(true);
+    expect(statusCell.querySelector(".mach-editor-input")).toBeNull();
+    api.destroy();
+  });
+
+  it("renders select option labels while preserving their stored values", async () => {
+    const host = createHost();
+    const api = createGrid<Person>(host, {
+      columnDefs: [{
+        field: "status",
+        editable: true,
+        cellEditor: "select",
+        cellEditorParams: {
+          options: [
+            { label: "处理中", value: "active" },
+            { label: "已完成", value: "done" }
+          ]
+        }
+      }],
+      rowData: [{ id: "1", name: "Before", age: 20, status: "active" }],
+      rowKey: (row) => row.id
+    });
+
+    api.editing.startCell({ rowIndex: 0, colId: "status" });
+    const select = host.querySelector<HTMLSelectElement>(".mach-editor-select")!;
+    const trigger = host.querySelector<HTMLButtonElement>(".mach-editor-select-control .mach-select-trigger")!;
+    expect(select.hidden).toBe(true);
+    expect(trigger.textContent).toContain("处理中");
+    expect([...select.options].map((option) => option.textContent)).toEqual(["处理中", "已完成"]);
+    trigger.click();
+    const done = [...document.querySelectorAll<HTMLButtonElement>(".mach-select-listbox [role=option]")]
+      .find((option) => option.textContent === "已完成")!;
+    done.click();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    host.querySelector<HTMLButtonElement>(".mach-edit-control--confirm")!.click();
+    await flush();
+    expect(api.rows.getById("1")?.data?.status).toBe("done");
     api.destroy();
   });
 
@@ -125,9 +207,13 @@ describe("polished editing UI", () => {
     expect(api.editing.isRowActive(0)).toBe(true);
     expect(host.querySelectorAll(".mach-row-editor-shell")).toHaveLength(2);
     expect(host.querySelector(".mach-cell-editor-controls")).toBeNull();
-    expect(host.querySelector('[aria-label="保存"]')).toBeTruthy();
-    expect(host.querySelector('[aria-label="取消"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="保存"]')?.classList.contains("mach-action-btn--success")).toBe(true);
+    expect(host.querySelector('[aria-label="取消"]')?.classList.contains("mach-action-btn--danger")).toBe(true);
     const inputs = host.querySelectorAll<HTMLInputElement>(".mach-row-editor-shell .mach-editor-input");
+    inputs[1].focus();
+    inputs[1].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    inputs[1].click();
+    expect(document.activeElement).toBe(inputs[1]);
     inputs[0].value = "Cancelled";
     inputs[1].value = "30";
     host.querySelector<HTMLButtonElement>('[aria-label="取消"]')!.click();
@@ -267,6 +353,39 @@ describe("polished editing UI", () => {
 });
 
 describe("action column modes", () => {
+  it("uses host modal editing and keeps extra actions in the default overflow menu", () => {
+    const host = createHost();
+    const onView = vi.fn();
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    const api = createGrid<Person>(host, {
+      columnDefs: [
+        { field: "name" },
+        rowActionsColumn<Person>({
+          max: 3,
+          onView,
+          onEdit,
+          onDelete,
+          extraActions: [
+            { icon: "copy", label: "复制", onClick: () => undefined }
+          ],
+          labels: { view: "查看", edit: "编辑", delete: "删除" }
+        })
+      ],
+      rowData: [{ id: "1", name: "A", age: 20, status: "active" }]
+    });
+
+    expect(host.querySelector('[aria-label="查看"]')).toBeTruthy();
+    host.querySelector<HTMLButtonElement>('[aria-label="编辑"]')!.click();
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(api.editing.isRowActive()).toBe(false);
+    expect(host.querySelector('[aria-label="删除"]')).toBeTruthy();
+    const more = host.querySelector<HTMLButtonElement>('[aria-label="更多操作"]')!;
+    more.click();
+    expect(document.querySelector('[role="menuitem"]')?.textContent).toBe("复制");
+    api.destroy();
+  });
+
   it("supports arbitrary actions inline without injecting view/edit/delete", () => {
     const host = createHost();
     const calls: string[] = [];

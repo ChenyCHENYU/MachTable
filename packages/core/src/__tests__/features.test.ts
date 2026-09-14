@@ -661,6 +661,24 @@ describe("locale", () => {
     expect(panel).toBeTruthy();
     const options = Array.from(panel.querySelectorAll("option")).map((o) => o.textContent);
     expect(options).toContain("Contains");
+    const nativeSelect = panel.querySelector<HTMLSelectElement>(".mach-filter-select")!;
+    const trigger = panel.querySelector<HTMLButtonElement>(".mach-filter-select-trigger")!;
+    expect(nativeSelect.hidden).toBe(true);
+    expect(trigger.getAttribute("role")).toBe("combobox");
+    expect(trigger.textContent).toContain("Contains");
+    trigger.click();
+    const listbox = document.querySelector<HTMLElement>(".mach-filter-listbox")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(listbox.classList.contains("mach-select-listbox--open")).toBe(true);
+    const notEquals = [...listbox.querySelectorAll<HTMLButtonElement>("[role=option]")]
+      .find((option) => option.textContent === "Not Equals")!;
+    notEquals.click();
+    expect(nativeSelect.value).toBe("notEquals");
+    expect(trigger.textContent).toContain("Not Equals");
+    trigger.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.body.contains(panel)).toBe(true);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(panel.querySelector(".mach-filter-btn-apply")?.textContent).toBe("Apply");
     api.destroy();
   });
@@ -741,11 +759,18 @@ describe("column workbench", () => {
     expect(panel.querySelectorAll(".mach-column-workbench-item")).toHaveLength(1);
 
     const pin = panel.querySelector<HTMLSelectElement>(".mach-column-workbench-pin")!;
+    const pinTrigger = panel.querySelector<HTMLButtonElement>(".mach-column-workbench-pin-control .mach-select-trigger")!;
+    expect(pin.hidden).toBe(true);
+    expect(pinTrigger.textContent).toContain("取消固定");
+    pinTrigger.click();
+    expect(document.querySelector(".mach-select-listbox--open")).toBeTruthy();
+    pinTrigger.click();
     pin.value = "right";
     pin.dispatchEvent(new Event("change"));
     expect(api.columns.getWorkbenchItems().find((item) => item.colId === "score")?.pinned).toBe("right");
     api.columns.closeWorkbench();
     expect(document.querySelector(".mach-column-panel")).toBeNull();
+    expect(document.querySelector(".mach-select-listbox--open")).toBeNull();
     api.destroy();
   });
 });

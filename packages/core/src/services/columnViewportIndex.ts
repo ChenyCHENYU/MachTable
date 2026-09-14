@@ -25,16 +25,21 @@ function lowerBound(values: Float64Array, target: number): number {
 /** Prefix-width index used by horizontal virtualization and layout. */
 export class ColumnViewportIndex {
   private offsets = new Float64Array(1);
-  private signature = "";
 
   update(columns: readonly Column[]): boolean {
-    const signature = columns.map((column) => `${column.id}:${column.currentWidth}`).join("|");
-    if (signature === this.signature) return false;
-    this.signature = signature;
-    this.offsets = new Float64Array(columns.length + 1);
+    let total = 0;
+    let changed = this.offsets.length !== columns.length + 1;
     for (let index = 0; index < columns.length; index++) {
-      this.offsets[index + 1] = this.offsets[index] + columns[index].currentWidth;
+      total += columns[index].currentWidth;
+      if (!changed && this.offsets[index + 1] !== total) changed = true;
     }
+    if (!changed) return false;
+
+    const offsets = new Float64Array(columns.length + 1);
+    for (let index = 0; index < columns.length; index++) {
+      offsets[index + 1] = offsets[index] + columns[index].currentWidth;
+    }
+    this.offsets = offsets;
     return true;
   }
 

@@ -127,7 +127,14 @@ export class EditingService {
 
   start(rowIndex: number, column: Column, keyPress?: string | null): boolean {
     if (this.core.options.editType === "fullRow") return this.startRow(rowIndex, column.id);
-    if (this.cellEditing || this.rowEditing) return false;
+    if (this.rowEditing) return false;
+    if (this.cellEditing) {
+      if (this.cellEditing.rowIndex === rowIndex && this.cellEditing.column.id === column.id) return true;
+      void this.stopAsync(false).then((stopped) => {
+        if (stopped && !this.cellEditing && !this.rowEditing) this.start(rowIndex, column, keyPress);
+      });
+      return true;
+    }
     const node = this.core.rowModel.getDisplayedRow(rowIndex);
     if (!node || node.data == null || !this.isEditable(node, column)) return false;
     const cell = this.core.bodyRenderer.getCellElement(rowIndex, column.id);
@@ -613,7 +620,9 @@ export class EditingService {
     editorEl.classList.remove("mach-editor-validating");
     editorEl.removeAttribute("aria-busy");
     editorEl.inert = false;
-    const input = editorEl.querySelector("input, select, textarea") ?? editorEl;
+    const input = editorEl.querySelector(
+      ".mach-select-trigger, input:not([type='hidden']), select:not([hidden]), textarea"
+    ) ?? editorEl;
     (input as HTMLElement).focus?.();
     const clear = () => {
       editorEl.classList.remove("mach-editor-invalid");

@@ -2,7 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { Column } from "../services/column";
 import { ColumnGroup } from "../services/columnGroup";
 import type { PaneType } from "../services/columnModel";
-import { el, FILTER_ICON, SORT_ASC_ICON, SORT_DESC_ICON } from "../lib/dom";
+import { COLUMN_TOOLS_ICON, el, FILTER_ICON, SORT_ASC_ICON, SORT_DESC_ICON } from "../lib/dom";
 import { describeFilter } from "../lib/filterSummary";
 import { setHeaderDestroyer, takeHeaderDestroyer } from "./runtimeState";
 import { ColumnViewportIndex } from "../services/columnViewportIndex";
@@ -17,6 +17,7 @@ type HeaderContext = Pick<
   | "emit"
   | "filterPopup"
   | "getApi"
+  | "getLocaleText"
   | "isDestroyed"
   | "moveColumn"
   | "options"
@@ -308,12 +309,15 @@ export class HeaderRenderer {
   }
 
   private appendColumnMenu(cellEl: HTMLElement, column: Column): void {
-    if (!this.core.options.columnMenu || column.hasCheckbox) return;
+    if (!this.core.options.columnMenu || column.hasCheckbox || column.colDef.suppressColumnMenu) return;
     const menuBtn = document.createElement("button");
     menuBtn.type = "button";
     menuBtn.className = "mach-menu-btn";
-    menuBtn.setAttribute("aria-label", "column menu");
-    menuBtn.textContent = "⋯";
+    const label = column.colDef.headerName ?? column.colDef.field ?? column.id;
+    const title = `${label} · ${this.core.getLocaleText("columnSettings")}`;
+    menuBtn.setAttribute("aria-label", title);
+    menuBtn.title = title;
+    menuBtn.innerHTML = COLUMN_TOOLS_ICON;
     menuBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       this.core.columnMenu.toggle(column, menuBtn);

@@ -1,5 +1,5 @@
 import "@agile-team/mach-table/styles/mach-table.css";
-import { createGrid, buildColDefsFromSchema } from "@agile-team/mach-table";
+import { createGrid, buildColDefsFromSchema, indexColumn, selectionColumn } from "@agile-team/mach-table";
 import type { GridApi, ColDef, CellRendererParams, DetailRowRendererParams } from "@agile-team/mach-table";
 
 interface MachineRow {
@@ -43,16 +43,8 @@ function statusRenderer(params: CellRendererParams<MachineRow>) {
 }
 
 const columnDefs: ColDef<MachineRow>[] = [
-  {
-    colId: "select",
-    headerName: "",
-    width: 46,
-    pinned: "left",
-    checkboxSelection: true,
-    resizable: false,
-    sortable: false,
-    movable: false
-  },
+  selectionColumn({ colId: "select" }),
+  indexColumn({ headerName: "序号" }),
   { field: "code", headerName: "设备编号", width: 120, pinned: "left", filter: "text", editable: true },
   { field: "name", headerName: "设备名称", flex: 1, filter: "text", editable: true },
   { field: "workshop", headerName: "车间", width: 130, filter: "set" },

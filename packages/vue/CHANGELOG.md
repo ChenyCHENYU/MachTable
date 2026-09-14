@@ -1,5 +1,19 @@
 # @agile-team/mach-table-vue
 
+## 0.29.0
+
+### Minor Changes
+
+- Add typed `defineVueColumns()` render columns, `defineVueTableConfig()`, and an inferred controller `bindings` object so Vue pages can keep table definitions data-driven and templates flat. Preserve named slots as explicit overrides and inherit Core alignment, loading, empty and editing behavior.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.29.0
+
+> `0.28.1` below records an internal implementation milestone folded into
+> `0.29.0`; it was not published as a separate npm version.
+
 ## 0.28.1
 
 ### Patch Changes
@@ -11,6 +25,10 @@
   Tree-shake package metadata so the browser runtime embeds only the public version string rather than the complete package manifest.
 
   Treat official utility and renderer-only columns as intentional display columns so row actions do not emit misleading development warnings.
+
+  Add localized select-editor labels, stable cell/row editing focus, complete range borders and host-controlled modal/drawer editing through `rowActionsColumn.onEdit`.
+
+  Use the shared themed listbox for toolbar density and Core-owned selects, eliminating platform-native popup flashes without changing Vue props, emits or command wiring.
 - Updated dependencies
   - @agile-team/mach-table@0.28.1
 

@@ -13,22 +13,37 @@ import MachTableUiPlugin from "@agile-team/mach-table-vue/ui";
 import "@agile-team/mach-table-vue/styles.css";
 import machTableConfig from "@/config/mach-table.config";
 
-app
-  .use(AsyncMachTablePlugin, machTableConfig)
-  .use(MachTableUiPlugin);
+app.use(AsyncMachTablePlugin, machTableConfig).use(MachTableUiPlugin);
 ```
 
 ```vue
 <script setup lang="ts">
+import { computed } from "vue";
+import { defineVueTableConfig } from "@agile-team/mach-table-vue";
 import { useMachTableController } from "@agile-team/mach-table-vue/workflows";
-import type { ColDef } from "@agile-team/mach-table-vue";
 
-interface Order { id: string; customer: string; amount: number }
-const controller = useMachTableController<Order>();
-const columns: ColDef<Order>[] = [
-  { field: "customer", flex: 1 },
-  { field: "amount", type: "money" }
-];
+interface Order {
+  id: string;
+  customer: string;
+  amount: number;
+}
+const tableConfig = defineVueTableConfig<Order>({
+  columnDefs: [
+    { field: "customer", flex: 1 },
+    { field: "amount", type: "money" },
+  ],
+  rowKey: "id",
+  rowSelection: "multiple",
+  pagination: false,
+});
+const editMode = computed(() => canInlineEdit.value ? "cell" : "none");
+const controller = useMachTableController({
+  config: tableConfig,
+  loading,
+  theme: () => dark.value ? "dark" : "light",
+  editMode,
+  onGridError: reportGridError,
+});
 </script>
 
 <template>
@@ -38,26 +53,28 @@ const columns: ColDef<Order>[] = [
     :commands="controller.commands"
     :loading="controller.busy.value"
     :selected-count="controller.selectedCount.value"
-    @clear-selection="controller.table.api.value?.selection.clear()"
+    @clear-selection="controller.commands.clearSelection()"
   >
     <button @click="createOrder">新建订单</button>
   </MachTableToolbar>
   <div class="orders-grid">
     <MachTable
+      v-bind="controller.bindings.value"
       :ref="controller.table.ref"
-      preset="crud"
-      :column-defs="columns"
       :row-data="rows"
-      row-key="id"
-      state-key="orders-list"
     />
   </div>
 </template>
 
 <style scoped>
-.orders-grid { height: calc(100vh - 180px); min-height: 360px; }
+.orders-grid {
+  height: calc(100vh - 180px);
+  min-height: 360px;
+}
 </style>
 ```
+
+`config` 只承载稳定实例配置；`loading`、`theme`、`editMode` 可以直接接收普通值、ref/computed 或 getter。控制器自动生成最终 `bindings`，业务页面不再手写 `computed(() => ({ ...config }))`，也不需要 `satisfies`。仍可直接使用 `<MachTable>` 的全部底层 props，原有接法保持兼容。
 
 只在一个路由使用工具栏时，可直接局部导入：
 
@@ -84,7 +101,7 @@ function OrdersPage({ rows }: { rows: Order[] }) {
       onSearchChange={controller.setSearch}
       loading={controller.busy}
       selectedCount={controller.selectedCount}
-      onClearSelection={() => controller.table.apiRef.current?.selection.clear()}
+      onClearSelection={() => controller.commands.clearSelection()}
       start={<button onClick={createOrder}>新建订单</button>}
     />
     <div style={{ height: 560 }}>
@@ -109,7 +126,7 @@ const query = useMachTableQuery<Order, OrderFilters>({
   queryKey: filters,
   rowKey: "id",
   request: orderApi.page,
-  mode: "manual"
+  mode: "manual",
 });
 const controller = useMachTableController<Order>({ query });
 
@@ -131,11 +148,13 @@ const features = {
   density: false,
   export: false,
   undoRedo: true,
-  fullscreen: true
+  fullscreen: true,
 };
 ```
 
 工具栏不会替代业务操作区：Vue 使用 `start/default/end` 插槽，React 使用 `start/children/end`。如果项目已有 Toolbar，只消费 `controller.commands` 即可，命令层没有 Vue/React 依赖。
+
+页面级工具栏可直接调用 `commands.selectAll()`、`commands.clearSelection()` 和 `commands.resetView()`；`resetView()` 会在一个批处理中清理选择、范围、普通/高级筛选和排序，回到第一页并恢复列状态，避免每个业务页面重复拼装 Grid API。
 
 ## 自动高度与持久化边界
 

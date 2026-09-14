@@ -135,6 +135,28 @@ root.render(
 />
 ```
 
+Vue 页面若仍有较多实例参数，推荐集中为一份类型安全的对象，而不是继续拉长模板：
+
+```ts
+const tableConfig = {
+  rowKey: "orderId",
+  rowSelection: "multiple",
+  pagination: { pageSize: 50 },
+  persistence: { key: `${tenantId}:${userId}:orders` }
+} satisfies MachTableVueProps<Order>;
+```
+
+```vue
+<MachTable
+  v-bind="tableConfig"
+  :ref="table.ref"
+  :column-defs="columns"
+  :row-data="rows"
+/>
+```
+
+`rowData`、`columnDefs` 和实例 `ref` 保持显式，其余实例行为集中维护。这里使用 Vue 原生 `v-bind`，不会引入另一个 `config` prop、额外合并优先级或响应式分支。
+
 配置中心的 `onGridError`、`onCellClicked` 等事件回调适合作为应用级观察器；Vue 当前页面监听器或 React 当前组件回调仍会各执行一次，不会被全局观察器覆盖。
 
 ## 覆盖优先级

@@ -1,5 +1,13 @@
-import { createElement, type ChangeEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import {
+  createElement,
+  useEffect,
+  useRef,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode
+} from "react";
 import type { GridApi, GridSize, MachTableCommands } from "@agile-team/mach-table";
+import { createSelectControl, type SelectControl } from "@agile-team/mach-table/adapter";
 
 export interface MachTableToolbarFeatures {
   search?: boolean;
@@ -59,6 +67,39 @@ function button(
   }, icon);
 }
 
+function MachTableDensitySelect(props: { value: GridSize; onChange: (value: GridSize) => void }) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const controlRef = useRef<SelectControl | null>(null);
+  const changeRef = useRef(props.onChange);
+  changeRef.current = props.onChange;
+
+  useEffect(() => {
+    const control = createSelectControl({
+      ariaLabel: "表格密度",
+      options: [
+        { value: "compact", label: "紧凑" },
+        { value: "normal", label: "标准" },
+        { value: "large", label: "宽松" }
+      ],
+      value: props.value,
+      classNames: {
+        root: "mach-toolbar__select-control",
+        native: "mach-toolbar__select"
+      },
+      onChange: (value) => changeRef.current(value as GridSize)
+    });
+    controlRef.current = control;
+    hostRef.current?.appendChild(control.el);
+    return () => {
+      control.destroy();
+      controlRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => controlRef.current?.setValue(props.value), [props.value]);
+  return createElement("div", { className: "mach-toolbar__select-host", ref: hostRef });
+}
+
 function renderMain<TData>(props: MachTableToolbarProps<TData>): ReactNode[] {
   const main: ReactNode[] = [props.start];
   const placeholder = props.searchPlaceholder ?? "搜索当前结果";
@@ -98,20 +139,14 @@ function renderMain<TData>(props: MachTableToolbarProps<TData>): ReactNode[] {
     }));
   }
   if (enabled(props.features, "density")) {
-    main.push(createElement("select", {
+    main.push(createElement(MachTableDensitySelect, {
       key: "density",
-      className: "mach-toolbar__select",
       value: props.api?.getOption("size") ?? "normal",
-      "aria-label": "表格密度",
-      onChange: (event: ChangeEvent<HTMLSelectElement>) => {
-        const size = event.currentTarget.value as GridSize;
+      onChange: (size: GridSize) => {
         if (props.commands) props.commands.setDensity(size);
         else props.api?.updateOptions({ size });
       }
-    },
-    createElement("option", { value: "compact" }, "紧凑"),
-    createElement("option", { value: "normal" }, "标准"),
-    createElement("option", { value: "large" }, "宽松")));
+    }));
   }
   main.push(props.children);
   return main;

@@ -24,11 +24,11 @@ columnDefs: [
 ]
 ```
 
-五行搭出一张标准后台列表。工厂返回普通 `ColDef`，可继续被列菜单与 `persistence.sections: ["columns"]` 管理。
+五行搭出一张标准后台列表。序号列是标准后台列表的默认组合项：存在选择列时紧随选择列，否则作为第一列。Core 不会在未知业务表格中无声注入列；使用 `indexColumn()` 可保持这一约定。选择、序号、拖拽和操作列默认隐藏逐列表头工具，且固定列位不会被历史持久化状态改乱；普通业务列使用独立的列工具图标，可通过 `suppressColumnMenu` 控制。
 
-## 整行编辑操作列（推荐）
+## 标准 CRUD 与整行编辑操作列（推荐）
 
-`rowActionsColumn` 把参考图中的状态切换封装好了：浏览态可显示查看、编辑、删除和更多；进入整行编辑后自动只显示对勾/取消。
+`rowActionsColumn` 默认把查看、编辑、删除作为图标动作直接展示，低频动作收入 `…` 菜单。传入 `onEdit` 时由宿主打开弹窗或抽屉；不传 `onEdit` 时，编辑动作进入整行编辑并自动切换为对勾/取消。
 
 ```ts
 import { rowActionsColumn } from "@agile-team/mach-table";
@@ -40,9 +40,10 @@ const options = {
     { field: "age", editable: true, cellEditor: "number" },
     rowActionsColumn({
       max: 3,
-      overflow: "drawer",           // "menu" | "drawer" | "inline"
+      overflow: "menu",             // 默认；也可为 "drawer" | "inline"
       drawerTitle: "更多操作",
       onView: ({ data }) => openDetail(data),
+      onEdit: ({ data }) => openEditModal(data), // 标准 CRUD：宿主决定编辑载体
       onDelete: ({ data }) => confirmDelete(data),
       extraActions: [
         { icon: "copy", label: "复制", onClick: ({ data }) => copyRow(data) },
@@ -54,9 +55,9 @@ const options = {
 };
 ```
 
-- `onView` / `onDelete` 只有传入才显示；`edit: false` 可关闭内置整行编辑入口。
+- `onView` / `onDelete` 只有传入才显示；`onEdit` 存在时打开宿主编辑界面，否则进入整行编辑；`edit: false` 可完全关闭编辑入口。
 - `extraActions` 可替换或补充任意业务动作，支持按行显示、禁用、加载态与异步回调。
-- `rowActionsColumn` 有溢出动作时默认使用抽屉；可显式改成 `menu` 或 `inline`。
+- `rowActionsColumn` 有溢出动作时默认使用轻量菜单；触屏或复杂说明场景可显式改成 `drawer`，动作极少时可用 `inline`。
 - 对勾会等待整行同步/异步校验；失败保持编辑态，取消在校验中仍可立即生效。
 
 ## 没有“查看/编辑/删除”的业务表
@@ -210,8 +211,8 @@ export default defineMachTableConfig({
 
 ```ts
 const columnDefs: ColDef<Row>[] = [
-  { colId: "sel",  headerName: "", width: 46, pinned: "left", checkboxSelection: true, sortable: false, resizable: false, movable: false },
-  { colId: "idx",  headerName: "#", type: "index", width: 60, pinned: "left", sortable: false, resizable: false, movable: false },
+  { colId: "sel",  headerName: "", width: 40, pinned: "left", checkboxSelection: true, sortable: false, resizable: false, movable: false },
+  { colId: "idx",  headerName: "#", type: "index", width: 52, pinned: "left", sortable: false, resizable: false, movable: false },
   { field: "orderNo", headerName: "订单号", width: 140, pinned: "left", cellRenderer: "link" },
   { field: "customer", headerName: "客户", flex: 1 },
   { field: "status", headerName: "状态", width: 110, cellRenderer: "statusTag" },

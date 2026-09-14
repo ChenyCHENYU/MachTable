@@ -14,8 +14,10 @@ import {
   vueDetailSlotRenderer,
   vueHeaderSlotRenderer,
   vueOverlaySlot,
+  vueRenderCell,
   type VueCellEditorSlotProps
 } from "./adapters";
+import type { VueColDef } from "./columns";
 
 export interface MachTableVueSlots<TData = any> {
   cell?: (props: CellRendererParams<TData>) => any;
@@ -44,14 +46,22 @@ function enhanceColumns<TData>(
       const group = definition as ColDefGroup<TData>;
       return { ...group, children: enhanceColumns(group.children, slots, appContext) };
     }
-    const column = definition as ColDef<TData>;
+    const column = definition as VueColDef<TData>;
     const id = column.colId ?? column.field ?? `col_${index}`;
-    const cell = namedSlot(slots, "cell", id) ?? (id === "op" ? slots.actions : undefined) ?? slots.cell;
+    const namedCell = namedSlot(slots, "cell", id) ?? (id === "op" ? slots.actions : undefined);
+    const fallbackCell = slots.cell;
     const header = namedSlot(slots, "header", id) ?? slots.header;
     const editor = namedSlot(slots, "editor", id) ?? slots.editor;
+    const { render, ...coreColumn } = column;
     return {
-      ...column,
-      ...(cell ? { cellRenderer: vueCellSlotRenderer(cell, { appContext }) } : {}),
+      ...coreColumn,
+      ...(namedCell
+        ? { cellRenderer: vueCellSlotRenderer(namedCell, { appContext }) }
+        : render
+          ? { cellRenderer: vueRenderCell(render, { appContext }) }
+          : fallbackCell
+            ? { cellRenderer: vueCellSlotRenderer(fallbackCell, { appContext }) }
+            : {}),
       ...(header ? { headerComponent: vueHeaderSlotRenderer(header, { appContext }) } : {}),
       ...(editor ? { cellEditor: vueCellEditorSlot(editor, { appContext }) } : {})
     };

@@ -18,6 +18,7 @@ import type {
   ICellRendererResult,
   OverlayTemplate
 } from "@agile-team/mach-table";
+import type { VueCellRender } from "./columns";
 
 export type VueCellRendererProps<TData = any, TValue = any> = CellRendererParams<TData, TValue>;
 
@@ -29,6 +30,16 @@ function resolveAppContext(explicit?: AppContext): AppContext | undefined {
   } catch {
     return undefined;
   }
+}
+
+function styleCellHost(host: HTMLElement): void {
+  Object.assign(host.style, {
+    width: "100%",
+    minWidth: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "inherit"
+  });
 }
 
 function mountComponent(
@@ -78,7 +89,7 @@ export function vueCellRenderer<TData = any, TValue = any>(
   return (params: CellRendererParams<TData, TValue>) => {
     const host = document.createElement("div");
     host.className = "mach-cell-vue";
-    host.style.width = "100%";
+    styleCellHost(host);
     const reactiveParams = shallowReactive({ ...params }) as CellRendererParams<TData, TValue>;
     const unmount = mountComponent(component, reactiveParams as Record<string, any>, host, appContext);
     let destroyed = false;
@@ -92,6 +103,42 @@ export function vueCellRenderer<TData = any, TValue = any>(
         if (destroyed) return;
         destroyed = true;
         window.setTimeout(unmount, 0);
+      }
+    };
+  };
+}
+
+/** Adapts a compact row-first Vue render function into a refreshable Core renderer. */
+export function vueRenderCell<TData = any, TValue = any>(
+  renderCell: VueCellRender<TData, TValue>,
+  options?: { appContext?: AppContext }
+): CellRendererFn {
+  const appContext = resolveAppContext(options?.appContext);
+  return (params: CellRendererParams<TData, TValue>) => {
+    const host = document.createElement("div");
+    host.className = "mach-cell-vue mach-cell-vue--render";
+    styleCellHost(host);
+    const reactiveParams = shallowReactive({ ...params }) as CellRendererParams<TData, TValue>;
+    const Root = {
+      name: "MachTableRenderCell",
+      setup: () => () => reactiveParams.data == null
+        ? reactiveParams.formatted
+        : renderCell(reactiveParams.data, reactiveParams.rowIndex, reactiveParams)
+    };
+    const vnode = h(Root);
+    if (appContext) vnode.appContext = appContext;
+    render(vnode, host);
+    let destroyed = false;
+    return {
+      el: host,
+      refresh: (next) => {
+        Object.assign(reactiveParams, next);
+        return true;
+      },
+      destroy: () => {
+        if (destroyed) return;
+        destroyed = true;
+        window.setTimeout(() => render(null, host), 0);
       }
     };
   };
@@ -127,7 +174,7 @@ export function vueCellSlotRenderer<TData = any, TValue = any>(
   return (params: CellRendererParams<TData, TValue>) => {
     const host = document.createElement("div");
     host.className = "mach-cell-vue mach-cell-vue--slot";
-    host.style.width = "100%";
+    styleCellHost(host);
     const reactiveParams = shallowReactive({ ...params }) as CellRendererParams<TData, TValue>;
     const unmount = mountSlot(slot, () => reactiveParams, host, appContext);
     return {

@@ -20,14 +20,14 @@ import "@agile-team/mach-table-react/styles.css";
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, indexColumn, useMachTable, type ColDef } from "@agile-team/mach-table-react";
 
 interface Row { id: string; name: string }
 
 export function Customers({ rows }: { rows: Row[] }) {
   const table = useMachTable<Row>();
   const columns = useMemo<ColDef<Row>[]>(
-    () => [{ field: "name", flex: 1, editable: true }],
+    () => [indexColumn({ headerName: "序号" }), { field: "name", flex: 1, editable: true }],
     []
   );
 

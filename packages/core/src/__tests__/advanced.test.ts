@@ -4,7 +4,9 @@ import {
   createGrid,
   buildColDefsFromSchema,
   describeFilter,
-  isColDefGroup
+  isColDefGroup,
+  indexColumn,
+  selectionColumn
 } from "../index";
 import type { GridApi, ColDef, ColDefGroup } from "../index";
 
@@ -53,6 +55,7 @@ describe("buildColDefsFromSchema", () => {
     expect(score.filter).toBe("number");
     const id = defs[2] as ColDef<Row>;
     expect(id.cellEditor).toBe("select");
+    expect(id.cellEditorParams?.options).toEqual([{ label: "一", value: "1" }]);
     expect(id.valueFormatter?.({ value: "1" } as any)).toBe("一");
   });
 
@@ -289,6 +292,58 @@ describe("column state persistence", () => {
     expect(headerTexts[0]).toBe("Score");
     api2.destroy();
     localStorage.clear();
+  });
+
+  it("keeps non-movable utility columns in their declared panes and order", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [
+        { colId: "selection", checkboxSelection: true, pinned: "left", movable: false },
+        { colId: "index", type: "index", pinned: "left", movable: false },
+        { field: "id", headerName: "ID" },
+        { field: "name", headerName: "Name" }
+      ],
+      rowData: makeRows(2)
+    });
+
+    api.columns.setState([
+      { colId: "id", pinned: "left" },
+      { colId: "index", pinned: null },
+      { colId: "selection", pinned: null },
+      { colId: "name", pinned: null }
+    ]);
+
+    const headers = Array.from(host.querySelectorAll<HTMLElement>(".mach-header-cell--leaf"));
+    expect(headers.map((header) => header.dataset.colId)).toEqual(["selection", "index", "id", "name"]);
+    expect(api.columns.getState().find((state) => state.colId === "selection")?.pinned).toBe("left");
+    expect(api.columns.getState().find((state) => state.colId === "index")?.pinned).toBe("left");
+    api.destroy();
+  });
+
+  it("restores legacy persisted state without moving business columns before selection and index", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [
+        selectionColumn<Row>(),
+        indexColumn<Row>({ headerName: "序号" }),
+        { field: "id", headerName: "订单编号", pinned: "left" },
+        { field: "name", headerName: "客户名称" }
+      ],
+      rowData: makeRows(2)
+    });
+
+    api.columns.setState([
+      { colId: "id", pinned: "left" },
+      { colId: "sel", pinned: "left" },
+      { colId: "idx", pinned: "left" },
+      { colId: "name", pinned: null }
+    ]);
+
+    const ids = Array.from(host.querySelectorAll<HTMLElement>(".mach-header-cell--leaf")).map(
+      (header) => header.dataset.colId
+    );
+    expect(ids).toEqual(["sel", "idx", "id", "name"]);
+    api.destroy();
   });
 
   it("single selection keeps only the latest row", () => {

@@ -29,6 +29,9 @@ export class GridSkeleton {
   private overlayCleanup: (() => void) | null = null;
   private customClassTokens: string[] = [];
   private resizeObserver: ResizeObserver | null = null;
+  private resizeRaf = 0;
+  private observedWidth = -1;
+  private observedHeight = -1;
   private headerDepth = 1;
 
   constructor(private core: SkeletonContext) {}
@@ -114,7 +117,20 @@ export class GridSkeleton {
     container.appendChild(this.root);
 
     if (typeof ResizeObserver !== "undefined") {
-      this.resizeObserver = new ResizeObserver(() => this.core.relayout());
+      this.resizeObserver = new ResizeObserver((entries) => {
+        const rect = entries[entries.length - 1]?.contentRect;
+        if (!rect) return;
+        const width = Math.round(rect.width);
+        const height = Math.round(rect.height);
+        if (width === this.observedWidth && height === this.observedHeight) return;
+        this.observedWidth = width;
+        this.observedHeight = height;
+        if (this.resizeRaf) return;
+        this.resizeRaf = requestAnimationFrame(() => {
+          this.resizeRaf = 0;
+          this.core.relayout();
+        });
+      });
       this.resizeObserver.observe(this.root);
     }
 
@@ -332,6 +348,8 @@ export class GridSkeleton {
     this.themeUnsub = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    if (this.resizeRaf) cancelAnimationFrame(this.resizeRaf);
+    this.resizeRaf = 0;
     this.cleanupOverlayContent();
     this.root.remove();
   }

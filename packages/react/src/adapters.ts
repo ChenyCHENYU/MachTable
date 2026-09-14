@@ -12,13 +12,23 @@ export interface ReactDetailProps<TData = any> {
   api: GridApi<TData>;
 }
 
+function styleCellHost(host: HTMLElement): void {
+  Object.assign(host.style, {
+    width: "100%",
+    minWidth: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "inherit"
+  });
+}
+
 export function reactCellRenderer<TData = any, TValue = any>(
   Component: ComponentType<ReactCellRendererProps<TData, TValue>>
 ): CellRendererFn {
   return (params) => {
     const host = document.createElement("div");
     host.className = "mach-cell-react";
-    host.style.width = "100%";
+    styleCellHost(host);
     const root = createRoot(host);
     root.render(createElement(Component, params as ReactCellRendererProps<TData, TValue>));
     let destroyed = false;

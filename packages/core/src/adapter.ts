@@ -10,3 +10,10 @@ export type {
   ResolvedMachTableConfig,
   ResolvedMachTableGridOptions
 } from "./lib/configuration";
+export { createSelectControl } from "./lib/selectControl";
+export type {
+  SelectControl,
+  SelectControlClassNames,
+  SelectControlOption,
+  SelectControlOptions
+} from "./lib/selectControl";

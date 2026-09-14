@@ -9,7 +9,7 @@
 | 单击 | `singleClickEdit: true`（全局）或列级 `singleClickEdit: true` |
 | 编程式 | `api.editing.startCell({ rowIndex: 0, colId: "name" })` |
 
-结束：就地对勾、Enter 或 Tab（保存）；就地取消按钮或 Escape（取消）；命令式流程使用 `await api.editing.stop({ cancel })`。鼠标移动、重新定位光标、焦点移出或点击表格其他区域都不会隐式结束当前事务。
+结束：就地对勾、Enter 或 Tab（保存）；就地取消按钮或 Escape（取消）；命令式流程使用 `await api.editing.stop({ cancel })`。鼠标移动、重新定位光标和普通焦点移出不会隐式结束当前事务。点击另一个可编辑单元格会先校验并提交当前值，再直接切换到目标编辑器；校验失败时仍停留在原单元格。
 
 可编辑格默认在 hover / 键盘聚焦时显示轻量铅笔入口。进入编辑后，当前格呈现输入框和就地的对勾/取消按钮；对勾与 Enter 走同一条校验提交链路，取消与 Escape 都不会写值：
 
@@ -34,7 +34,10 @@ const options = {
     { field: "name", editable: true },
     { field: "age", editable: true, cellEditor: "number" },
     { field: "department", editable: true, cellEditor: "select",
-      cellEditorParams: { values: ["技术部", "人事部"] } },
+      cellEditorParams: { options: [
+        { label: "技术部", value: "tech" },
+        { label: "人事部", value: "hr" }
+      ] } },
     rowActionsColumn({
       onView: ({ data }) => openDetail(data),
       onDelete: ({ data }) => confirmDelete(data),
@@ -75,11 +78,21 @@ rowEditValidator: async ({ values, data }) => {
 | `"text"`（默认） | — | `string` |
 | `"number"` | 原值是 number | `number \| null` |
 | `"date"` | 原值是 Date / ISO 字符串 | `string`（保留原值时间部分 `HH:mm`） |
-| `"select"` | 配了 `cellEditorParams.values` | 选项原始类型 |
+| `"select"` | 配了 `cellEditorParams.options` 或 `values` | 选项原始类型 |
 
 ```ts
 { field: "level", editable: true, cellEditor: "select",
   cellEditorParams: { values: ["P1", "P2", "P3"] } }
+```
+
+展示文案与存储值不同时使用 `options`；界面显示 `label`，提交时保持 `value` 的原始字符串或数字类型：
+
+```ts
+{ field: "status", editable: true, cellEditor: "select",
+  cellEditorParams: { options: [
+    { label: "待处理", value: "pending" },
+    { label: "已完成", value: "completed" }
+  ] } }
 ```
 
 编辑器按值类型自动推断，多数情况只需 `editable: true`。
@@ -108,6 +121,8 @@ rowEditValidator: async ({ values, data }) => {
   }
 }
 ```
+
+内置 select 编辑器、筛选条件、分页容量、列工作台固定位置和官方工具栏密度共用同一套主题化下拉：不触发操作系统原生弹层，支持方向键、Home / End、Enter、Escape 和 Tab，并保留隐藏原生 `select` 的 `change` 兼容契约。
 
 编辑 / 粘贴 / 填充 / 剪切 / 撤销全部走同一写值链路。
 

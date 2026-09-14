@@ -51,7 +51,17 @@ describe("pagination", () => {
     expect(bar.style.display).toBe("");
     expect(bar.textContent).toContain("共 55 条");
     expect(bar.textContent).toContain("1 / 3");
+    const nativeSize = bar.querySelector<HTMLSelectElement>(".mach-pagination-size")!;
+    const sizeTrigger = bar.querySelector<HTMLButtonElement>(".mach-pagination-size-control .mach-select-trigger")!;
+    expect(nativeSize.hidden).toBe(true);
+    expect(sizeTrigger.textContent).toContain("20 条/页");
+    sizeTrigger.click();
+    const sizeOption = [...document.querySelectorAll<HTMLButtonElement>(".mach-select-listbox [role=option]")]
+      .find((option) => option.textContent === "50 条/页")!;
+    sizeOption.click();
+    expect(api.pagination.getPageSize()).toBe(50);
     api.destroy();
+    expect(document.querySelector(".mach-select-listbox--open")).toBeNull();
   });
 
   it("navigates pages via api and ui buttons with disabled bounds", () => {
@@ -268,6 +278,40 @@ describe("empty state", () => {
     });
     expect(host.querySelector(".custom-empty")).toBeTruthy();
     expect(host.querySelector(".mach-empty")).toBeNull();
+    api.destroy();
+  });
+});
+
+describe("loading state", () => {
+  it("shows a polished accessible loading state by default", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [{ field: "id", headerName: "ID" }],
+      rowData: [],
+      loading: true
+    });
+    const loading = host.querySelector(".mach-loading") as HTMLElement;
+    expect(loading).toBeTruthy();
+    expect(loading.querySelectorAll(".mach-loading__row")).toHaveLength(4);
+    expect(loading.textContent).toContain("加载中");
+    expect(host.querySelector(".mach-root")?.getAttribute("aria-busy")).toBe("true");
+    api.destroy();
+  });
+
+  it("keeps custom loading overlays authoritative", () => {
+    const host = createHost();
+    const api: GridApi<Row> = createGrid<Row>(host, {
+      columnDefs: [{ field: "id", headerName: "ID" }],
+      rowData: [],
+      loading: true,
+      overlayLoadingTemplate: () => {
+        const custom = document.createElement("div");
+        custom.className = "custom-loading";
+        return custom;
+      }
+    });
+    expect(host.querySelector(".custom-loading")).toBeTruthy();
+    expect(host.querySelector(".mach-loading")).toBeNull();
     api.destroy();
   });
 });
