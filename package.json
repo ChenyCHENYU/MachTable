@@ -58,27 +58,27 @@
     "verify": "pnpm quality:static && pnpm test:coverage && pnpm quality:package && pnpm quality:docs"
   },
   "devDependencies": {
-    "@changesets/cli": "^3.0.1",
+    "@changesets/cli": "^3.0.2",
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",
-    "@playwright/test": "1.62.1",
+    "@playwright/test": "1.63.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitest/coverage-v8": "4.1.11",
+    "@vitest/coverage-v8": "5.0.0",
     "czg": "1.14.0",
-    "esbuild": "0.27.2",
-    "eslint": "10.9.1",
+    "esbuild": "0.28.2",
+    "eslint": "10.10.0",
     "husky": "9.1.7",
     "jsdom": "^30.0.1",
-    "knip": "6.33.0",
-    "lint-staged": "17.4.1",
+    "knip": "6.35.1",
+    "lint-staged": "17.5.1",
     "publint": "0.3.24",
     "rimraf": "^6.0.1",
     "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
-    "typescript-eslint": "8.68.0",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "8.70.0",
     "vitepress": "^1.6.4",
-    "vitest": "^4.1.11",
-    "vue-tsc": "3.0.0"
+    "vitest": "^5.0.0",
+    "vue-tsc": "3.3.11"
   }
 }
