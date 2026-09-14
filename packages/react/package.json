@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-react",
-  "version": "0.29.1",
+  "version": "0.29.2",
   "description": "Official React 18+ adapter for the MachTable enterprise data grid",
   "keywords": [
     "react",
@@ -100,7 +100,8 @@
     "build": "tsup && node ../../scripts/copy-adapter-style.mjs react",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "node ../../scripts/check-publish-agent.mjs"
   },
   "dependencies": {
     "@agile-team/mach-table": "workspace:*"

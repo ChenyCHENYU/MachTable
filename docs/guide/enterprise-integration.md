@@ -22,9 +22,9 @@
 业务只安装一个框架适配包：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.29.1
+pnpm add @agile-team/mach-table-vue@^0.29.2
 # 或
-pnpm add @agile-team/mach-table-react@^0.29.1
+pnpm add @agile-team/mach-table-react@^0.29.2
 ```
 
 适配包自动安装匹配的 Core。Vue 项目只需提供 `vue >= 3.2`；React 项目提供 `react/react-dom >= 18`。

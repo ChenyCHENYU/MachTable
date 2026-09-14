@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.29.2
+
+### Patch Changes
+
+- Publish the extension with a registry-resolved Core dependency instead of leaking the internal workspace protocol.
+- Updated dependencies
+  - @agile-team/mach-table@0.29.2
+
 ## 0.29.1
 
 ### Patch Changes

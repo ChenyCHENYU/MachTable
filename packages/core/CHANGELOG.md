@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.29.2
+
+### Patch Changes
+
+- Align the fixed release group after correcting framework adapter publish artifacts; no Core runtime behavior changed.
+
 ## 0.29.1
 
 ### Minor Changes
