@@ -1,13 +1,13 @@
 # @agile-team/mach-table
 
-## 0.29.0
+## 0.29.1
 
 ### Minor Changes
 
 - Polish the framework-neutral grid for production data workspaces: unify native selects behind an accessible themed listbox, stabilize cell and row editing, localize editor labels, restore utility-column ordering and alignment, add compact skeleton loading and illustrated empty states, refine header and selection visuals, and coalesce drag, scroll and resize work without changing existing configuration contracts.
 
 > `0.28.1` below records an internal implementation milestone folded into
-> `0.29.0`; it was not published as a separate npm version.
+> `0.29.1`; it was not published as a separate npm version.
 
 ## 0.28.1
 

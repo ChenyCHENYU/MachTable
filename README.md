@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.29.0-2563eb" alt="Source version 0.29.0" />
+  <img src="https://img.shields.io/badge/source-0.29.1-2563eb" alt="Source version 0.29.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -310,7 +310,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.29.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版在保持既有配置契约的基础上，补齐数据驱动 Vue 列、扁平配置、统一下拉、加载与空状态、编辑事务和滚动拖动性能治理。后续继续以真实项目反馈收口，不以堆叠 API 推动版本。
+当前源码版本为 `0.29.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版在保持既有配置契约的基础上，补齐数据驱动 Vue 列、扁平配置、统一下拉、加载与空状态、编辑事务和滚动拖动性能治理。后续继续以真实项目反馈收口，不以堆叠 API 推动版本。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

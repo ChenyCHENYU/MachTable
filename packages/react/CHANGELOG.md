@@ -1,15 +1,15 @@
 # @agile-team/mach-table-react
 
-## 0.29.0
+## 0.29.1
 
 ### Patch Changes
 
 - Keep active editors stable across equivalent React renders, inherit resolved column alignment in renderer hosts, and use the shared themed listbox and host-controlled modal editing contracts.
 - Updated dependencies
-  - @agile-team/mach-table@0.29.0
+  - @agile-team/mach-table@0.29.1
 
 > `0.28.1` below records an internal implementation milestone folded into
-> `0.29.0`; it was not published as a separate npm version.
+> `0.29.1`; it was not published as a separate npm version.
 
 ## 0.28.1
 
