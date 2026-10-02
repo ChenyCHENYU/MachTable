@@ -20,6 +20,8 @@ await excel.export(api, {
 
 第一次调用 `export()` 才加载引擎；普通列表路由的初始 chunk 不包含 XLSX 代码。扩展复用 Core 的 CSV 序列化规则，因此默认保留表头、可见列和公式注入防护。
 
+扩展只转换浏览器已加载的数据。服务端分页和无限数据源的全部匹配结果请使用[服务端全量导出](/recipes/remote-export)，不要依赖 XLSX 桥接读取未加载行。
+
 ## 导入
 
 ```ts

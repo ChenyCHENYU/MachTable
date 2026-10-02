@@ -7,6 +7,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: "指南", link: "/guide/overview" },
+      { text: "场景示例", link: "/guide/scenarios" },
       { text: "企业接入", link: "/guide/enterprise-integration" },
       { text: "API 参考", link: "/api/grid-options" },
       { text: "场景配方", link: "/recipes/selection" },
@@ -18,6 +19,7 @@ export default defineConfig({
           text: "开始",
           items: [
             { text: "概述", link: "/guide/overview" },
+            { text: "场景示例", link: "/guide/scenarios" },
             { text: "快速开始", link: "/guide/getting-started" },
             { text: "企业级项目接入", link: "/guide/enterprise-integration" },
             { text: "配置中心与覆盖规则", link: "/guide/configuration" },
@@ -70,6 +72,7 @@ export default defineConfig({
             { text: "主从明细", link: "/recipes/master-detail" },
             { text: "无限滚动", link: "/recipes/infinite-scroll" },
             { text: "随机访问远程数据源", link: "/recipes/random-access-datasource" },
+            { text: "服务端全量导出", link: "/recipes/remote-export" },
             { text: "分页 / 导入导出 / 打印 / 水印", link: "/recipes/pagination-io" },
             { text: "固定首末行", link: "/recipes/pinned-rows" },
             { text: "撤销 / 重做", link: "/recipes/undo-redo" },
@@ -94,6 +97,7 @@ export default defineConfig({
             { text: "架构说明", link: "/advanced/architecture" },
             { text: "质量门禁与高效开发", link: "/advanced/quality-gates" },
             { text: "竞品分析与调研计划", link: "/advanced/competitive-analysis" },
+            { text: "VTable 与 AG Grid 对照", link: "/advanced/compare-vtable-aggrid" },
             { text: "AG Grid 源码审计", link: "/advanced/ag-grid-source-study" },
             { text: "路线图与差距分析", link: "/advanced/roadmap" }
           ]

@@ -46,18 +46,18 @@ MachTable（马赫表格）是一个**高性能、零运行时依赖、跨框架
 
 ## 技术选型边界
 
-完整竞品证据、统一评分矩阵和实测计划见[《数据表格竞品调研与提升计划》](../advanced/competitive-analysis.md)。下面仅用于快速确认产品路线，不替代按版本和商业/社区功能拆分的正式选型。
+完整竞品证据、统一评分矩阵和实测计划见[《数据表格竞品调研与提升计划》](../advanced/competitive-analysis.md)；近期 VTable 与 AG Grid 对照见[专题分析](/advanced/compare-vtable-aggrid)。下面仅用于快速确认产品路线，不替代按版本和商业/社区功能拆分的正式选型。
 
 | 维度 | MachTable | AG Grid 社区版 | AG Grid 企业版 | TanStack Table | el-table |
 | --- | --- | --- | --- | --- | --- |
-| 渲染 | DOM + 双虚拟化 | DOM + 虚拟化 | DOM/canvas | Headless（自渲染） | DOM 全量 |
+| 渲染 | DOM + 双虚拟化 | DOM + 虚拟化 | DOM + 虚拟化 | Headless（自渲染） | DOM 全量 |
 | 运行时依赖 | **0** | 2 | 多 | 1 | 0（随 EP） |
 | 体积（gzip 内核） | `createGrid` 样本约 77 KiB；完整公开 ESM ≤ 86 KiB | 随模块与版本变化 | 随构建变化 | 轻量 headless | — |
 | 固定列 / 拖拽调宽换位 | ✅ | ✅ | ✅ | 自实现 | 有限 |
 | 范围框选 / 剪贴板 / 填充柄 | ✅ | ❌ | ✅ | 部分 | ❌ |
 | 行分组聚合 / 树形 / 主从 | ✅ | ❌ | ✅ | 树形 headless | 树形 |
 | 无限滚动 | ✅ | ✅ | ✅ | 手动 | ❌ |
-| 撤销重做 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 撤销重做 | ✅ | ✅ 单元格编辑 | ✅ 单元格编辑 | 自实现 | ❌ |
 | 列状态持久化 | ✅ 内置 | 手动 | 手动 | 手动 | ❌ |
 | Vue3 / React | ✅ | ✅ | ✅ | ✅ | Vue only |
 | 许可 | Source-available，需作者书面授权 | MIT | 商业 | MIT | MIT |

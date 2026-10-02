@@ -3,10 +3,14 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.29.2
+pnpm up @agile-team/mach-table-vue@^0.30.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.29.2
+pnpm up @agile-team/mach-table-react@^0.30.0
 ```
+
+## 0.29.2 → 0.30.0
+
+0.30.0 仅增加 `createRemoteExportRequest()` 辅助函数，不改变 `GridApi`、`GridOptions` 或既有渲染、编辑、CSV/XLSX 与工具栏的默认行为。现有页面可直接升级，无需迁移配置。服务端全量导出按[导出配方](/recipes/remote-export)由业务显式接入。
 
 ## 0.25 → 0.28
 

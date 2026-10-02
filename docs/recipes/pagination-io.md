@@ -34,7 +34,7 @@ createGrid(host, {
 | 每页条数 | 切换后保持首个可见行所在页 |
 | 过滤/排序 | 应用后页码自动收敛（超出时回到第 1 页） |
 | 序号列 | 跨页绝对编号（第 2 页首页显示 21） |
-| CSV 导出 / 打印 | 始终覆盖**全部页**（不只当前页） |
+| CSV 导出 / 打印 | 客户端完整数据集覆盖全部本地页；服务端分页或无限数据源只包含浏览器已加载的行 |
 | 事件 | `paginationChanged: { page, pageSize, pageCount, total }` |
 
 API：`api.pagination.setPage(n)` `api.pagination.setPageSize(n)` `api.pagination.getPage()` `api.pagination.getPageCount()` `api.pagination.getTotalRowCount()` `api.pagination.isEnabled()` `api.pagination.setEnabled(bool)`；运行时 `api.updateOptions({ pagination: false })`。
@@ -46,7 +46,7 @@ API：`api.pagination.setPage(n)` `api.pagination.setPageSize(n)` `api.paginatio
 ```ts
 import { downloadFile } from "@agile-team/mach-table";
 
-// 全量导出（跨页、含表头、防公式注入、Excel 中文 BOM）
+// 客户端完整数据集跨本地分页导出（含表头、防公式注入、Excel 中文 BOM）
 const csv = api.io.exportCsv({ prependBOM: true });
 downloadFile("设备清单.csv", csv, "text/csv;charset=utf-8");
 
@@ -56,6 +56,8 @@ api.io.exportCsv({ onlySelected: true, prependBOM: true });
 // 模板下载：只有表头
 downloadFile("导入模板.csv", api.io.exportCsv({ headersOnly: true, prependBOM: true }));
 ```
+
+服务端分页、顺序加载和随机块模式下，CSV/XLSX/打印均不能代替远程全量导出。[服务端全量导出](/recipes/remote-export)说明如何固定当前查询与选择规则并交给业务后端。
 
 ## 导入（CSV → 表格）
 
@@ -92,7 +94,7 @@ document.getElementById("file")!.addEventListener("change", async (e) => {
 
 ```ts
 api.io.print({ title: "设备清单" });
-// 打开新窗口：过滤/排序后的全部数据（跨页）、可见列、简洁表格样式，自动唤起打印
+// 打开新窗口：客户端已加载的过滤/排序数据、可见列、简洁表格样式，自动唤起打印
 // 弹窗被拦截时返回 false
 ```
 

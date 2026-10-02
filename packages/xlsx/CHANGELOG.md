@@ -1,5 +1,16 @@
 # @agile-team/mach-table-xlsx
 
+## 0.30.0
+
+### Minor Changes
+
+- Add an opt-in server export request snapshot for filtered and cross-page selected data. Preserve all existing grid, CSV, XLSX, toolbar, rendering, and editing behavior; clarify remote export scope and add scenario-oriented documentation.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.30.0
+
 ## 0.29.2
 
 ### Patch Changes

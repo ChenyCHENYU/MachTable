@@ -4,15 +4,14 @@ export default defineConfig({
   testDir: "./tests/e2e",
   // Functional E2E includes cold Vite transforms and WebKit startup; performance
   // budgets are enforced separately, so allow enough time for slow CI hosts.
-  timeout: 45_000,
+  timeout: 90_000,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   failOnFlakyTests: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  // WebKit startup can starve one of the three Vite-backed framework pages when
-  // all browser projects render the 8k-row demos at once. Two workers keeps the
-  // run deterministic while retries remain disabled for local verification.
-  workers: 2,
+  // Each project starts a Vite-backed demo with 8k rows. Serial browser runs
+  // avoid starving WebKit navigation during cold transforms on slower hosts.
+  workers: 1,
   reporter: process.env.CI ? "github" : "list",
   use: {
     trace: "on-first-retry"

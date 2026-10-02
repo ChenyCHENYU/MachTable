@@ -18,10 +18,13 @@ MachTable 按运行时成本和职责拆分入口。Vue/React 项目只安装对
 | 过滤 | `advancedFilterCondition`、`advancedFilterGroup`、`normalizeAdvancedFilterModel`、`normalizeFilterModel` |
 | 操作与渲染 | `createMachTableCommands`、`createActionButtonsRenderer`、`createRowActionsRenderer`、`createStatusTagRenderer`、`createProgressBarRenderer` |
 | 安全/IO 帮助 | `sanitizeFormulaCell`、`parseCsv`、`parseTsv`、`toTsv`、`escapeHtml`、`downloadFile` |
+| 服务端导出 | `createRemoteExportRequest`；`RemoteExportRequest`、`RemoteExportSelection` 等类型 |
 | 扩展治理 | `resolveGridFeatures`、`validateGridOptions`、`resolveSaveConflict` |
 | 国际化 | `DEFAULT_LOCALE`、`LOCALE_EN`、`formatText` |
 
 公共类型包括 `GridOptions`、`GridApi` 及全部领域 API、`ColDef`、`GridState`、`GridFeature`、`GridDatasource`、事件、编辑保存、业务列、视图和 Worker 消息契约。
+
+服务端导出辅助函数仅生成可序列化的请求快照，业务后端仍负责授权、全量查询与文件任务。示例见[服务端全量导出](/recipes/remote-export)。
 
 ### `@agile-team/mach-table/worker`
 

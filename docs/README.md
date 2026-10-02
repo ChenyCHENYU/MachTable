@@ -14,7 +14,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: 概述与场景
-      link: /guide/overview
+      link: /guide/scenarios
     - theme: alt
       text: API 参考
       link: /api/grid-options
@@ -31,7 +31,7 @@ features:
   - icon: 🛠
     title: 工程化
     details: TypeScript 字段路径类型、版本化状态、稳定错误码与诊断、i18n、Schema、CSV 防注入、消费端契约与 CI 发布流。
-footer: Source-available · Prior written authorization required | MachTable v0.29.2
+footer: Source-available · Prior written authorization required | MachTable v0.30.0
 ---
 
 ## 30 秒上手
@@ -56,7 +56,7 @@ const api = createGrid(document.getElementById("grid")!, {
 
 | 板块 | 内容 |
 | --- | --- |
-| [指南](/guide/overview) | 概述、快速开始、React / Vue、EP / Naive 集成 |
+| [指南](/guide/overview) | 概述、[场景示例](/guide/scenarios)、快速开始、React / Vue、EP / Naive 集成 |
 | [API 参考](/api/grid-options) | GridOptions、ColDef、事件、8 个领域 API 与 0.x 平面兼容接口 |
-| [场景配方](/recipes/controller-toolbar) | 21 个高频业务场景的可复制代码 |
+| [场景配方](/recipes/controller-toolbar) | 业务场景的可复制代码，包含[服务端全量导出](/recipes/remote-export) |
 | [进阶](/advanced/theming) | 主题定制、性能调优、i18n、架构、路线图 |

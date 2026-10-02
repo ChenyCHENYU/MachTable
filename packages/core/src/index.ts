@@ -2,6 +2,13 @@ import { version as packageVersion } from "../package.json";
 
 export { createGrid } from "./core/createGrid";
 export { getByPath, setByPath, isSafePath } from "./lib/path";
+export { createRemoteExportRequest } from "./lib/remoteExport";
+export type {
+  RemoteExportRequest,
+  RemoteExportRequestOptions,
+  RemoteExportScope,
+  RemoteExportSelection
+} from "./lib/remoteExport";
 
 export type {
   ColDef,

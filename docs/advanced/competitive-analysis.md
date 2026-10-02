@@ -2,6 +2,8 @@
 
 > 调研基线：2026-08-29。本文以产品官方文档、官方仓库和 npm 发布元数据为依据。当前结论属于桌面研究，不把厂商宣传中的“百万级”直接当成可复现的性能结论；最终评分必须经过统一基准与真实业务 UAT。
 
+> 2026-10 更新：MachTable 0.29.2 与 VTable、AG Grid 的当前对照及增量改进决策见[专题对照](/advanced/compare-vtable-aggrid)。本文较早的版本表与功能判断保留为历史基线。
+
 AG Grid 已完成固定 commit 的源码级审计，详见 [AG Grid 源码审计与 MachTable 演进台账](/advanced/ag-grid-source-study)。本文保留横向产品矩阵，源码结论与实施状态以后者为准。
 
 ## 目标与原则

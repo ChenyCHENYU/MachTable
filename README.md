@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.29.2-2563eb" alt="Source version 0.29.2" />
+  <img src="https://img.shields.io/badge/source-0.30.0-2563eb" alt="Source version 0.30.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -19,6 +19,7 @@
 <p align="center">
   <a href="./docs/guide/getting-started.md"><strong>快速开始</strong></a> ·
   <a href="./docs/guide/enterprise-integration.md"><strong>企业接入</strong></a> ·
+  <a href="./docs/guide/scenarios.md">场景示例</a> ·
   <a href="./docs/guide/vue.md">Vue</a> ·
   <a href="./docs/guide/react.md">React</a> ·
   <a href="./docs/api/grid-options.md">API</a> ·
@@ -36,11 +37,14 @@ MachTable 为后台管理、工业台账、订单/工单、财务报表和低代
 | --- | --- |
 | 大数据 | 行列双虚拟化、行池复用、可变行高索引、随机访问远程块、LRU 与并发控制、可选 Worker |
 | 数据模型 | 本地/服务端排序过滤、分页、无限滚动、树与懒加载、分组聚合、主从详情、固定行 |
+| 远程导出 | 可序列化的筛选、排序、可见列与跨页选择快照，供业务服务端执行全量导出；本地 CSV/XLSX 继续处理已加载数据 |
 | 编辑 | 单元格与原子整行编辑、对勾/取消、同步/异步校验、脏数据、撤销重做、部分保存与冲突处理 |
 | 交互 | 多选/范围选择、复制粘贴、填充柄、拖拽、列宽调整、列工作台、统一无闪烁下拉、上下文菜单、操作列 |
 | 框架体验 | Vue 原生 slots、React renderer、全局/局部/异步接入、远程查询与编辑工作流 |
 | 治理 | 分层配置、命名预设、配置来源解释、领域化 API、版本化状态、稳定错误码、诊断快照 |
 | 安全 | CSV 公式注入防护、安全字段路径、Overlay 默认文本渲染、资源销毁与请求取消 |
+
+服务端分页和无限数据源的全量导出使用 [`createRemoteExportRequest()`](./docs/recipes/remote-export.md) 固定请求范围，再由业务后端生成文件。原有 `api.io.exportCsv()`、可选 XLSX 扩展与工具栏行为不变。
 
 ## 安装：业务只装一个适配包
 
@@ -305,12 +309,12 @@ pnpm test:e2e
 | 首次接入 | [快速开始](./docs/guide/getting-started.md) · [企业接入手册](./docs/guide/enterprise-integration.md) |
 | 框架 | [Vue 3](./docs/guide/vue.md) · [React 18+](./docs/guide/react.md) · [SSR](./docs/guide/ssr.md) |
 | API | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) · [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
-| 高频场景 | [远程查询](./docs/recipes/remote-query.md) · [编辑](./docs/recipes/editing.md) · [状态持久化](./docs/recipes/grid-state.md) · [列宽](./docs/recipes/column-state.md) |
+| 高频场景 | [场景示例](./docs/guide/scenarios.md) · [远程查询](./docs/recipes/remote-query.md) · [服务端导出](./docs/recipes/remote-export.md) · [编辑](./docs/recipes/editing.md) · [状态持久化](./docs/recipes/grid-state.md) · [列宽](./docs/recipes/column-state.md) |
 | 工程治理 | [质量门禁](./docs/advanced/quality-gates.md) · [性能](./docs/advanced/performance.md) · [升级指南](./docs/guide/upgrading.md) |
 
 ## 版本与授权
 
-当前源码版本为 `0.29.2`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版在保持既有配置契约的基础上，补齐数据驱动 Vue 列、扁平配置、统一下拉、加载与空状态、编辑事务和滚动拖动性能治理。后续继续以真实项目反馈收口，不以堆叠 API 推动版本。
+当前源码版本为 `0.30.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版新增可选的服务端导出请求快照、场景索引和远程导出范围说明；既有表格配置、渲染、编辑、CSV/XLSX 与工具栏行为保持一致。后续继续以真实项目反馈收口。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
