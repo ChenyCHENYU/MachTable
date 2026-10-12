@@ -68,6 +68,7 @@ export class ColumnModel {
         const p = prev.get(uniqueId);
         if (p) {
           column.manualWidth = p.manualWidth;
+          column.contentWidth = p.contentWidth;
           column.flex = p.flex;
           column.hide = p.hide;
           column.pinned = p.pinned;
@@ -186,7 +187,7 @@ export class ColumnModel {
 
     let pinnedTotal = 0;
     for (const c of [...this.left, ...this.right]) {
-      c.currentWidth = clampWidth(c.manualWidth ?? c.colDef.width ?? DEFAULT_COLUMN_WIDTH, this.widthInputOf(c));
+      c.currentWidth = clampWidth(c.manualWidth ?? c.contentWidth ?? c.colDef.width ?? DEFAULT_COLUMN_WIDTH, this.widthInputOf(c));
       pinnedTotal += c.currentWidth;
     }
 
@@ -199,7 +200,7 @@ export class ColumnModel {
     let fixedTotal = 0;
     for (const column of fixed) {
       column.currentWidth = clampWidth(
-        column.manualWidth ?? column.colDef.width ?? DEFAULT_COLUMN_WIDTH,
+        column.manualWidth ?? column.contentWidth ?? column.colDef.width ?? DEFAULT_COLUMN_WIDTH,
         this.widthInputOf(column)
       );
       fixedTotal += column.currentWidth;
@@ -216,14 +217,11 @@ export class ColumnModel {
 
   private widthInputOf(c: Column): { width?: number; minWidth?: number; maxWidth?: number; flex?: number } {
     const def = c.colDef;
-    if (c.manualWidth != null) {
-      return { width: c.manualWidth, minWidth: def.minWidth, maxWidth: def.maxWidth };
-    }
     return {
-      width: def.width,
+      width: c.manualWidth ?? c.contentWidth ?? def.width,
       minWidth: def.minWidth,
       maxWidth: def.maxWidth,
-      ...(c.flex != null ? { flex: c.flex } : {})
+      flex: c.manualWidth == null ? c.flex ?? undefined : undefined
     };
   }
 
@@ -231,6 +229,13 @@ export class ColumnModel {
     if (!isPositiveFiniteNumber(width)) return false;
     column.manualWidth = clampWidth(width, this.widthInputOf(column));
     column.flex = null;
+    return true;
+  }
+
+  setContentWidth(column: Column, width: number): boolean {
+    if (!isPositiveFiniteNumber(width)) return false;
+    column.resetWidth();
+    column.contentWidth = clampWidth(width, this.widthInputOf(column));
     return true;
   }
 
@@ -291,6 +296,7 @@ export class ColumnModel {
         width: c.manualWidth ?? c.currentWidth,
         flex: c.flex,
         widthMode: c.manualWidth == null ? "auto" : "manual",
+        contentWidth: c.contentWidth ?? undefined,
         pinned: c.pinned
       };
     });
@@ -317,6 +323,9 @@ export class ColumnModel {
     } else if (isPositiveFiniteNumber(state.width)) {
       column.manualWidth = clampWidth(state.width, this.widthInputOf(column));
       column.flex = null;
+    }
+    if (isPositiveFiniteNumber(state.contentWidth)) {
+      column.contentWidth = clampWidth(state.contentWidth, this.widthInputOf(column));
     }
     if (column.movable && (state.pinned === "left" || state.pinned === "right" || state.pinned === null)) {
       column.pinned = state.pinned;

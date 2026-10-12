@@ -35,7 +35,7 @@ function resizeHandle(host: HTMLElement, colId = "name"): HTMLElement {
 }
 
 function setViewportWidth(host: HTMLElement, width: number): void {
-  Object.defineProperty(host.querySelector(".mach-body-viewport--scroll")!, "clientWidth", {
+  Object.defineProperty(host.querySelector(".mach-body")!, "clientWidth", {
     value: width,
     configurable: true
   });

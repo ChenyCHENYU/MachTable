@@ -79,6 +79,25 @@ api.columns.resetState();
 
 程序化宽度不受 `enableColumnResize` 限制。完成的变更统一触发列事件，并由 persistence 协调器保存。
 
+## 随容器宽度填满
+
+```ts
+const options = {
+  columnLayout: "fit",
+  columnDefs: [
+    { field: "name", width: 140, minWidth: 120 },
+    { field: "description", width: 280, minWidth: 180 },
+    { field: "status", width: 100, minWidth: 90, maxWidth: 160 }
+  ]
+};
+```
+
+`fit` 以列宽为比例，按容器的实际可用宽度分配空间；左右固定列和 `suppressSizeToFit` 列保留自身宽度。窄屏不足以容纳最小宽度时保留横向滚动，不强行挤压内容。
+
+在 `fit` 模式调用 `autoSize()` / `autoSizeAll()` 时，测量结果作为内容基准参与后续分配，容器变宽后仍会自动填满。`contentWidth` 随列状态保存，恢复时保留测量比例；选择、序号和操作等 `suppressSizeToFit` 列保持配置宽度。窗口缩放只重新分配已测量的宽度，不反复扫描数据。
+
+手动拖拽或 `setWidth()` 仍表示明确的固定宽度偏好，其余自动列分配剩余空间。正常布局模式下的内容自适应仍设置固定宽度。旧的手动列宽状态保持原意；需要重新按内容分配时使用列工作台的“全部自适应”，或重置列状态。
+
 ## 内置列工作台
 
 ```ts

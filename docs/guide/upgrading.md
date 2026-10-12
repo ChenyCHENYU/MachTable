@@ -3,10 +3,14 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.30.0
+pnpm up @agile-team/mach-table-vue@^0.30.1
 # 或
-pnpm up @agile-team/mach-table-react@^0.30.0
+pnpm up @agile-team/mach-table-react@^0.30.1
 ```
+
+## 0.30.0 → 0.30.1
+
+修正固定列宽被重复扣除造成的留白。`columnLayout: "fit"` 继续按定义比例填满容器，`autoSize()` / `autoSizeAll()` 的测量结果保留为响应式内容基准；旧手动宽度仍保持固定。`columns.fit()` 保留固定列及 `suppressSizeToFit` 列，在 `fit` 模式下恢复自动列的响应性。正常布局模式行为不变，业务无需增加 ResizeObserver 或 ready 回调。详见[列状态与内容自适应](/recipes/column-state)。
 
 ## 0.29.2 → 0.30.0
 

@@ -7,6 +7,7 @@ export class Column<TData = any> {
   hide: boolean;
   pinned: PinnedDirection | null;
   manualWidth: number | null = null;
+  contentWidth: number | null = null;
   flex: number | null = null;
   currentWidth = 0;
   parentGroup: ColumnGroup<TData> | null = null;
@@ -49,6 +50,7 @@ export class Column<TData = any> {
 
   resetWidth(): void {
     this.manualWidth = null;
+    this.contentWidth = null;
     this.flex = typeof this.colDef.flex === "number" && Number.isFinite(this.colDef.flex) && this.colDef.flex > 0
       ? this.colDef.flex
       : null;

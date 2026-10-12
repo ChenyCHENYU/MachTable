@@ -51,9 +51,10 @@ const consumerBudgets = [
       import { createGrid } from "./packages/core/dist/index.js";
       globalThis.__machTableCreateGrid = createGrid;
     `,
-    // The shared select and polished interaction paths remain bounded in a real
-    // createGrid consumer, independently from the larger compatibility entry.
-    limit: 80 * 1024
+    // Responsive content measurements and persisted sizing bases add 246 bytes
+    // over the published 0.30.0 consumer (81,846 bytes). Reserve half a KiB for
+    // this capability; the full Core, adapters and CSS retain their ceilings.
+    limit: 80.5 * 1024
   },
   {
     label: "Vue initial adapter",

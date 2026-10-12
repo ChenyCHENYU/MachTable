@@ -201,7 +201,11 @@ export class GridSkeleton {
   }
 
   measureViewportWidth(): number {
-    return this.bodyViewports.center.clientWidth;
+    // ColumnModel subtracts pinned panes itself; measuring the center here
+    // subtracts them twice after the first layout. Exclude only the scrollbar.
+    const center = this.bodyViewports.center;
+    const scrollbarWidth = Math.max(0, center.offsetWidth - center.clientWidth);
+    return Math.max(0, this.bodyEl.clientWidth - scrollbarWidth);
   }
 
   updateHeights(rowHeight: number, headerHeight: number): void {

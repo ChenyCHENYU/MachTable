@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.30.1
+
+### Patch Changes
+
+- Fix responsive column width budgeting so pinned panes are subtracted once and vertical scrollbar space is respected. In fit layout, preserve measured content widths as responsive bases across resizing, column definition updates, and state persistence; keep utility widths and explicit manual resizing intact. Normal-layout auto sizing remains unchanged.
+- Updated dependencies
+  - @agile-team/mach-table@0.30.1
+
 ## 0.30.0
 
 ### Minor Changes

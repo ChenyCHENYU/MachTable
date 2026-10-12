@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.30.0-2563eb" alt="Source version 0.30.0" />
+  <img src="https://img.shields.io/badge/source-0.30.1-2563eb" alt="Source version 0.30.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -314,7 +314,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.30.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版新增可选的服务端导出请求快照、场景索引和远程导出范围说明；既有表格配置、渲染、编辑、CSV/XLSX 与工具栏行为保持一致。后续继续以真实项目反馈收口。
+当前源码版本为 `0.30.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修正固定列重复扣宽，并让 `fit` 模式下的内容自适应保留响应能力和列宽记忆；业务只需声明列宽约束，无需添加窗口监听。0.30.0 的服务端导出请求快照继续按需使用。后续继续以真实项目反馈收口。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

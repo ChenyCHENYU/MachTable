@@ -206,5 +206,7 @@ export interface ColumnState {
   flex?: number | null;
   /** Distinguishes responsive/definition width from an explicit user or API override. */
   widthMode?: "auto" | "manual";
+  /** Measured content basis for responsive fit sizing; independent of the rendered width. */
+  contentWidth?: number;
   pinned?: "left" | "right" | null;
 }

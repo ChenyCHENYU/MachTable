@@ -25,9 +25,11 @@ function positiveNumber(value: unknown): number | undefined {
 }
 
 function addColumnSizing(state: ColumnState, source: Record<string, unknown>): void {
-  const width = positiveNumber(source.width);
   const flex = positiveNumber(source.flex);
-  if (width !== undefined) state.width = width;
+  for (const key of ["width", "contentWidth"] as const) {
+    const width = positiveNumber(source[key]);
+    if (width !== undefined) state[key] = width;
+  }
   if (source.flex === null) state.flex = null;
   else if (flex !== undefined) state.flex = flex;
   if (source.widthMode === "auto" || source.widthMode === "manual") state.widthMode = source.widthMode;

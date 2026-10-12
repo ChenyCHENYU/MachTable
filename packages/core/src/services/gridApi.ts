@@ -33,6 +33,7 @@ import { setByPath } from "../lib/path";
 import { formatCellValue } from "../render/cellContent";
 import { sanitizeGridOptionPatch } from "../core/gridOptionRuntime";
 import { normalizeGridState } from "../lib/gridState";
+import { fitColumnWidths } from "../lib/layout";
 import { createSaveSnapshot, normalizeBatchSaveResult } from "../lib/batchSave";
 import {
   createGridColumnsApi,
@@ -294,15 +295,20 @@ export class GridApiImpl<TData = any> {
 
   sizeColumnsToFit(width?: number): void {
     if (this.core.isDestroyed()) return;
-    const cols = this.core.columnModel.getOrderedVisible();
+    const visible = this.core.columnModel.getOrderedVisible();
+    const cols = visible.filter(col => col.pinned === null && !col.colDef.suppressSizeToFit);
     if (cols.length === 0) return;
     const target = width ?? this.core.skeleton.measureViewportWidth();
-    if (target <= 0) return;
-    const total = cols.reduce((acc, c) => acc + c.currentWidth, 0);
-    if (total <= 0) return;
-    const changed = cols.filter((col) =>
-      this.core.columnModel.setColumnWidth(col, Math.max(30, Math.floor((col.currentWidth * target) / total)))
-    );
+    if (!Number.isFinite(target) || target <= 0) return;
+    const fixedWidth = visible.reduce((sum, col) =>
+      sum + (col.pinned !== null || col.colDef.suppressSizeToFit ? col.currentWidth : 0), 0);
+    const fitted = fitColumnWidths(cols.map(col => ({
+      width: col.currentWidth, minWidth: col.colDef.minWidth, maxWidth: col.colDef.maxWidth
+    })), Math.max(0, target - fixedWidth));
+    const responsive = this.core.options.columnLayout === "fit" && width === undefined;
+    const changed = cols.filter((col, index) => responsive
+      ? this.core.columnModel.setContentWidth(col, fitted[index])
+      : this.core.columnModel.setColumnWidth(col, fitted[index]));
     this.core.relayoutColumns();
     this.core.commitColumnWidths(changed);
   }
@@ -322,7 +328,8 @@ export class GridApiImpl<TData = any> {
     column: Column<TData>,
     skipHeader: boolean
   ): boolean {
-
+    // Display/utility columns keep their configured width in responsive mode.
+    if (this.core.options.columnLayout === "fit" && column.colDef.suppressSizeToFit) return false;
     if (column.hasCheckbox || column.isDetailToggle) {
       return this.core.columnModel.setColumnWidth(column, column.isDetailToggle ? 38 : 46);
     }
@@ -350,7 +357,13 @@ export class GridApiImpl<TData = any> {
     }
 
     const extra = (column.sortable ? 20 : 0) + (column.filterable ? 28 : 0) + (this.core.options.columnMenu ? 22 : 0) + 28;
-    return this.core.columnModel.setColumnWidth(column, Math.ceil(maxWidth) + extra);
+    return this.setAutoSizeWidth(column, Math.ceil(maxWidth) + extra);
+  }
+
+  private setAutoSizeWidth(column: Column<TData>, width: number): boolean {
+    return this.core.options.columnLayout === "fit"
+      ? this.core.columnModel.setContentWidth(column, width)
+      : this.core.columnModel.setColumnWidth(column, width);
   }
 
   autoSizeAllColumns(skipHeader?: boolean): void {
