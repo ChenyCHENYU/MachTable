@@ -1090,10 +1090,11 @@ export class BodyRenderer {
   private renderTreeCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
     const expandable = this.core.rowModel.isRowExpandable(node);
     const depth = this.getNodeDepth(node);
+    const formatted = formatCellValueWith(this.core, node, column, this.core.getCellValue(node, column));
     const indent = el("span", "mach-tree-indent");
     indent.style.width = `${depth * 16}px`;
     const wrap = el("span", "mach-tree-cell");
-    wrap.appendChild(indent);
+    if (depth > 0) wrap.appendChild(indent);
     if (expandable) {
       const expanded = this.core.rowModel.isRowExpanded(node.id);
       cell.setAttribute("aria-expanded", expanded ? "true" : "false");
@@ -1103,18 +1104,31 @@ export class BodyRenderer {
         : node.treeLoadError
           ? " mach-detail-toggle--error"
           : "";
-      const toggle = el("span", `mach-detail-toggle${expanded ? " mach-detail-toggle--open" : ""}${stateClass}`);
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.tabIndex = -1;
+      toggle.className = "mach-tree-toggle";
+      toggle.setAttribute("aria-label", node.treeLoadError ? "Retry loading children" : expanded ? "Collapse row" : "Expand row");
+      toggle.setAttribute("aria-expanded", String(expanded));
       if (node.treeLoadError) toggle.title = "Retry loading children";
-      toggle.textContent = "▶";
+      const icon = el("span", `mach-detail-toggle${expanded ? " mach-detail-toggle--open" : ""}${stateClass}`);
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = "▶";
+      toggle.appendChild(icon);
+      toggle.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+      });
       wrap.appendChild(toggle);
     } else {
       const spacer = el("span", "mach-tree-toggle-spacer");
       wrap.appendChild(spacer);
     }
     const text = el("span", "mach-tree-text");
-    text.textContent = formatCellValueWith(this.core, node, column, this.core.getCellValue(node, column));
+    text.textContent = formatted;
     wrap.appendChild(text);
     cell.replaceChildren(wrap);
+    if (formatted && !this.core.options.tooltipComponent) cell.title = formatted;
+    else cell.removeAttribute("title");
     applyCellClasses(this.core, cell, node, column);
   }
 
@@ -2017,7 +2031,7 @@ export class BodyRenderer {
   }
 
   private handleTreeToggleClick(target: HTMLElement, node: RowNode<any>, cell: HTMLElement | null): boolean {
-    if (!this.core.rowModel.isTree || !target.closest(".mach-detail-toggle")) return false;
+    if (!this.core.rowModel.isTree || !target.closest(".mach-tree-toggle")) return false;
     const treeColumn = this.getTreeColumn();
     if (!treeColumn || cell?.dataset.colId !== treeColumn.id || !this.core.rowModel.isRowExpandable(node)) return false;
     this.focusGridRoot();
@@ -2105,7 +2119,7 @@ export class BodyRenderer {
 
   private shouldIgnoreRangeMouseDown(e: MouseEvent): boolean {
     return Boolean(
-      (e.target as HTMLElement).closest(".mach-cell-editor-shell, .mach-row-editor-shell") ||
+      (e.target as HTMLElement).closest(".mach-cell-editor-shell, .mach-row-editor-shell, .mach-tree-toggle") ||
       this.core.editingService.isCellEditing()
     );
   }

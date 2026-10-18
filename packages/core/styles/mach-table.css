@@ -505,13 +505,38 @@
 }
 
 .mach-header-resize:hover::after,
-.mach-root--resizing .mach-header-resize::after {
+.mach-header-resize--active::after {
   content: "";
   position: absolute;
   inset: 0 3px;
   background: var(--mach-primary);
   opacity: 0.45;
   border-radius: 1px;
+}
+
+.mach-column-resize-guide {
+  position: absolute;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+  background: var(--mach-primary);
+  box-shadow: 0 0 0 1px var(--mach-primary-weak);
+  z-index: 8;
+}
+
+.mach-column-resize-label {
+  position: absolute;
+  top: 6px;
+  min-width: 52px;
+  padding: 3px 7px;
+  border-radius: var(--mach-radius-sm);
+  color: #fff;
+  background: var(--mach-primary);
+  font: 600 11px/1.5 var(--mach-font-family);
+  text-align: center;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: var(--mach-shadow-sm);
 }
 
 .mach-header-cell--dragging {
@@ -814,7 +839,7 @@ input.mach-select-all {
 .mach-tree-cell {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   width: 100%;
 }
@@ -823,12 +848,55 @@ input.mach-select-all {
   flex-shrink: 0;
 }
 
-.mach-tree-toggle-spacer {
+.mach-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mach-radius-sm);
+  color: var(--mach-header-fg);
+  background: transparent;
+  cursor: pointer;
+}
+
+.mach-tree-toggle:hover,
+.mach-tree-toggle:focus-visible {
+  color: var(--mach-primary);
+  background: var(--mach-primary-weak);
+}
+
+.mach-tree-toggle:focus-visible {
+  outline: 1px solid var(--mach-primary);
+  outline-offset: -1px;
+}
+
+.mach-tree-toggle > .mach-detail-toggle {
   width: 10px;
-  flex-shrink: 0;
+  line-height: 1;
+  color: inherit;
+  pointer-events: none;
+}
+
+.mach-tree-toggle > .mach-detail-toggle--loading {
+  color: var(--mach-primary);
+}
+
+.mach-tree-toggle > .mach-detail-toggle--error {
+  color: var(--mach-danger);
+}
+
+.mach-tree-toggle-spacer {
+  flex: 0 0 20px;
+  width: 20px;
 }
 
 .mach-tree-text {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

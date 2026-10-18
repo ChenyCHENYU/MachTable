@@ -128,6 +128,10 @@ describe("opt-in column resizing", () => {
 
     const handle = resizeHandle(host);
     handle.dispatchEvent(pointer("pointerdown", 120));
+    expect(handle.classList.contains("mach-header-resize--active")).toBe(true);
+    expect(host.querySelector(".mach-column-resize-guide")).not.toBeNull();
+    expect(host.querySelector(".mach-column-resize-label")?.textContent).toBe("120 px");
+    expect(resizeHandle(host, "amount").classList.contains("mach-header-resize--active")).toBe(false);
     window.dispatchEvent(pointer("pointermove", 500));
     expect(save).not.toHaveBeenCalled();
     window.dispatchEvent(pointer("pointerup", 500));
@@ -143,6 +147,8 @@ describe("opt-in column resizing", () => {
       finished: true
     }));
     expect(save).toHaveBeenCalledTimes(1);
+    expect(host.querySelector(".mach-column-resize-guide")).toBeNull();
+    expect(handle.classList.contains("mach-header-resize--active")).toBe(false);
     expect(requireStoredState(stored).find((state) => state.colId === "name")?.width).toBe(240);
     api.destroy();
   });
@@ -166,7 +172,29 @@ describe("opt-in column resizing", () => {
     expect(api.columns.getState().find((state) => state.colId === "name")?.width).toBe(120);
     expect(save).not.toHaveBeenCalled();
     expect(host.querySelector(".mach-root--resizing")).toBeNull();
+    expect(host.querySelector(".mach-column-resize-guide")).toBeNull();
     api.destroy();
+  });
+
+  it("shows the clamped live width during dragging and removes feedback on destroy", async () => {
+    vi.useFakeTimers();
+    const host = createHost();
+    const api = createGrid(host, {
+      columnDefs: defs,
+      rowData: rows,
+      pagination: false,
+      enableColumnResize: true
+    });
+    const handle = resizeHandle(host);
+    handle.dispatchEvent(pointer("pointerdown", 120));
+    window.dispatchEvent(pointer("pointermove", 500));
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(host.querySelector(".mach-column-resize-label")?.textContent).toBe("240 px");
+    expect(api.columns.getState().find((state) => state.colId === "name")?.width).toBe(240);
+    api.destroy();
+    expect(host.querySelector(".mach-column-resize-guide")).toBeNull();
+    expect(handle.classList.contains("mach-header-resize--active")).toBe(false);
   });
 
   it("does not convert a flex column or persist when its handle is only clicked", () => {

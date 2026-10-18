@@ -385,6 +385,31 @@ describe("tree data", () => {
     api.destroy();
   });
 
+  it("keeps a tree toggle mounted during a real click when range selection is enabled", () => {
+    const host = createHost();
+    const api = createGrid<Row>(host, {
+      columnDefs: treeDefs(),
+      rowData: treeRows,
+      treeData: true,
+      enableRangeSelection: true,
+      pagination: false,
+      rowKey: "id"
+    });
+    const toggle = host.querySelector<HTMLElement>(".mach-detail-toggle")!;
+
+    toggle.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    // Browsers retarget click to the cell if mousedown replaces this element.
+    expect(toggle.isConnected).toBe(true);
+    expect(api.selection.getRange()).toBeNull();
+    toggle.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0 }));
+    toggle.click();
+    expect(api.rows.getCount()).toBe(4);
+
+    host.querySelector<HTMLElement>(".mach-detail-toggle")!.click();
+    expect(api.rows.getCount()).toBe(2);
+    api.destroy();
+  });
+
   it("cascades selection to children with tri-state parents", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

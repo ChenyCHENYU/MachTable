@@ -26,6 +26,8 @@ export class ResizeService {
   private active: ActiveResize | null = null;
   private rafId = 0;
   private pendingWidth = 0;
+  private guide: HTMLElement | null = null;
+  private widthLabel: HTMLElement | null = null;
 
   constructor(private core: ResizeContext) {}
 
@@ -58,6 +60,8 @@ export class ResizeService {
       // Window listeners keep resizing functional when pointer capture is unavailable.
     }
     this.core.skeleton.root.classList.add("mach-root--resizing");
+    handle.classList.add("mach-header-resize--active");
+    this.showFeedback(this.active);
   }
 
   cancelResize(restore = true): void {
@@ -72,6 +76,7 @@ export class ResizeService {
       this.core.relayoutColumns();
     }
     this.core.skeleton.root.classList.remove("mach-root--resizing");
+    this.removeFeedback(active);
   }
 
   private onMove = (event: PointerEvent): void => {
@@ -122,6 +127,7 @@ export class ResizeService {
       // The capture can already be released by the browser.
     }
     this.core.skeleton.root.classList.remove("mach-root--resizing");
+    this.removeFeedback(active);
     if (active.didResize) this.core.commitColumnWidths([active.column]);
   }
 
@@ -129,7 +135,39 @@ export class ResizeService {
     const active = this.active;
     if (!active || !this.core.columnModel.setColumnWidth(active.column, this.pendingWidth)) return;
     this.core.relayoutColumns();
+    this.updateFeedback(active);
     this.core.emitColumnResize(active.column, false);
+  }
+
+  private showFeedback(active: ActiveResize): void {
+    this.guide = document.createElement("div");
+    this.guide.className = "mach-column-resize-guide";
+    this.guide.setAttribute("aria-hidden", "true");
+    this.widthLabel = document.createElement("span");
+    this.widthLabel.className = "mach-column-resize-label";
+    this.guide.appendChild(this.widthLabel);
+    this.core.skeleton.root.appendChild(this.guide);
+    this.updateFeedback(active);
+  }
+
+  private updateFeedback(active: ActiveResize): void {
+    if (!this.guide || !this.widthLabel) return;
+    const root = this.core.skeleton.root;
+    const rootRect = root.getBoundingClientRect();
+    const headerRect = active.handle.parentElement!.getBoundingClientRect();
+    const boundary = Math.max(0, Math.min(root.clientWidth, headerRect.right - rootRect.left - root.clientLeft));
+    const labelCenter = Math.max(32, Math.min(root.clientWidth - 32, boundary));
+    this.guide.style.left = `${boundary}px`;
+    this.guide.style.top = `${Math.max(0, headerRect.top - rootRect.top - root.clientTop)}px`;
+    this.widthLabel.style.left = `${labelCenter - boundary}px`;
+    this.widthLabel.textContent = `${Math.round(active.column.currentWidth)} px`;
+  }
+
+  private removeFeedback(active: ActiveResize): void {
+    active.handle.classList.remove("mach-header-resize--active");
+    this.guide?.remove();
+    this.guide = null;
+    this.widthLabel = null;
   }
 
   private widthFromPointer(active: ActiveResize, clientX: number): number {
