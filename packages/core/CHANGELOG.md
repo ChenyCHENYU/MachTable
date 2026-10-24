@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.31.1
+
+### Patch Changes
+
+- Keep the fixed package group aligned with the Vue keyed-remount lifecycle fix. Core behavior is unchanged.
+
 ## 0.31.0
 
 ### Minor Changes

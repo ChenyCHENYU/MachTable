@@ -3,10 +3,14 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.31.0
+pnpm up @agile-team/mach-table-vue@^0.31.1
 # 或
-pnpm up @agile-team/mach-table-react@^0.31.0
+pnpm up @agile-team/mach-table-react@^0.31.1
 ```
+
+## 0.31.0 → 0.31.1
+
+修正 Vue 表格按 key 重建时组件 ref 可能早于 mounted 执行的问题。`useMachTable()` 与 `useMachTableController()` 会在挂载完成后绑定新 API，正确同步 ready、选择状态和工具栏命令；已替换或卸载实例的延迟任务不会回写。页面配置无需迁移。
 
 ## 0.30.1 → 0.31.0
 

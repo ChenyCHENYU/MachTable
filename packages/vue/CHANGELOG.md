@@ -1,5 +1,12 @@
 # @agile-team/mach-table-vue
 
+## 0.31.1
+
+### Patch Changes
+
+- Rebind the Vue table API after keyed component replacement even when Vue flushes the component ref before its mounted hook. Keep readiness, controller commands and selection listeners attached to the current table, and ignore deferred work from replaced or disposed instances.
+- @agile-team/mach-table@0.31.1
+
 ## 0.31.0
 
 ### Minor Changes

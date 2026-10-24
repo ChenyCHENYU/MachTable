@@ -700,6 +700,39 @@ describe("Vue adapter", () => {
     expect(grid!.ready.value).toBe(false);
   });
 
+  it("rebinds API and readiness after a keyed table is replaced", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const scenario = ref(0);
+    let grid!: UseMachTableReturn<{ id: number }>;
+    const app = createApp(defineComponent({
+      setup() {
+        grid = useMachTable<{ id: number }>();
+        return () => h(MachTable, {
+          key: scenario.value,
+          ref: grid.ref,
+          columnDefs: [{ field: "id" }],
+          rowData: [{ id: scenario.value }],
+          pagination: false,
+        });
+      },
+    }));
+    app.mount(host);
+    await vi.waitFor(() => expect(grid.ready.value).toBe(true));
+    const initialApi = grid.api.value!;
+    scenario.value++;
+    await vi.waitFor(() => {
+      expect(initialApi.isDestroyed()).toBe(true);
+      expect(grid.ready.value).toBe(true);
+      expect(grid.api.value).not.toBe(initialApi);
+      expect(grid.api.value?.rows.getAt(0)?.data?.id).toBe(1);
+    });
+    app.unmount();
+    await nextTick();
+    expect(grid.api.value).toBeNull();
+    expect(grid.ready.value).toBe(false);
+  });
+
   it("provides a reactive save, partial-success and rollback workflow", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);

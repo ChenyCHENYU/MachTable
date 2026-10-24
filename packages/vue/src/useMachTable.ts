@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, shallowRef, watch, type Ref, type ShallowRef } from "vue";
+import { nextTick, onScopeDispose, ref, shallowRef, watch, type Ref, type ShallowRef } from "vue";
 import type { GridApi } from "@agile-team/mach-table";
 import type { MachTableVueExposed } from "./MachTable";
 
@@ -18,20 +18,24 @@ export function useMachTable<TData = any>(): UseMachTableReturn<TData> {
     componentRef,
     (comp) => {
       const currentGeneration = ++generation;
+      api.value = null;
+      ready.value = false;
       if (comp && typeof comp.getApi === "function") {
-        api.value = comp.getApi();
-        ready.value = false;
-        const currentApi = api.value;
-        if (currentApi) {
+        const bindApi = (): void => {
+          if (generation !== currentGeneration || componentRef.value !== comp) return;
+          const currentApi = comp.getApi();
+          if (!currentApi || currentApi.isDestroyed()) return;
+          api.value = currentApi;
           void currentApi.whenReady().then(() => {
             if (generation === currentGeneration && api.value === currentApi && !currentApi.isDestroyed()) {
               ready.value = true;
             }
           });
-        }
-      } else {
-        api.value = null;
-        ready.value = false;
+        };
+        bindApi();
+        // During a keyed replacement Vue can flush the ref watcher before the
+        // new child's mounted hook creates its API. Retry after that flush.
+        if (!api.value) void nextTick().then(bindApi);
       }
     },
     { flush: "post" }

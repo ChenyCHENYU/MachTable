@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.31.0-2563eb" alt="Source version 0.31.0" />
+  <img src="https://img.shields.io/badge/source-0.31.1-2563eb" alt="Source version 0.31.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -342,7 +342,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.31.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版增加可配置整行颜色并完善行拖拽排序，统一 Core、Vue、React 的行为；同时包含树展开点击、树控件与列宽拖动反馈修正。原有包体积预算保持不变，升级时请留意拖拽事件时机及自动重排模式限制。
+当前源码版本为 `0.31.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版增加可配置整行颜色并完善行拖拽排序，统一 Core、Vue、React 的行为；同时包含树展开点击、树控件与列宽拖动反馈修正。同时修正 Vue 表格按 key 重建时的 API 就绪时序，确保控制器与当前表格保持同步。原有包体积预算保持不变，升级时请留意拖拽事件时机及自动重排模式限制。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
