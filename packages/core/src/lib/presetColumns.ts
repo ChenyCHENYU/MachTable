@@ -44,11 +44,15 @@ export function indexColumn<TData = any>(overrides: Partial<ColDef<TData>> = {})
 }
 
 export function dragColumn<TData = any>(overrides: Partial<ColDef<TData>> = {}): ColDef<TData> {
+  const width = overrides.width ?? 40;
   return {
     colId: "drag",
     headerName: "",
     rowDrag: true,
-    width: 40,
+    width,
+    minWidth: overrides.minWidth ?? width,
+    maxWidth: overrides.maxWidth ?? width,
+    pinned: "left",
     ...NO_INTERACT,
     ...overrides
   };

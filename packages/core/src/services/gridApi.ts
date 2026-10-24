@@ -544,7 +544,7 @@ export class GridApiImpl<TData = any> {
   }
 
   reorderRows(fromIndex: number, toIndex: number): boolean {
-    if (this.core.isDestroyed()) return false;
+    if (this.core.isDestroyed() || this.core.editingService.isEditing()) return false;
     return this.core.rowModel.reorderRowsByDisplayed(fromIndex, toIndex);
   }
 
@@ -1126,6 +1126,11 @@ export class GridApiImpl<TData = any> {
   }
 
   private updatePresentationOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    if (hasOwnOption(options, "rowStyleRules")) {
+      this.core.options.rowStyleRules = Array.isArray(options.rowStyleRules) ? options.rowStyleRules : [];
+      effects.needsCellRefresh = true;
+      this.core.requestUpdate({ pinned: true });
+    }
     this.updateWatermarkAndStatus(options, effects);
     this.updateSizePreset(options, effects);
     const resolved = this.core.options;
@@ -1251,7 +1256,10 @@ export class GridApiImpl<TData = any> {
     if (hasOwnOption(options, "advancedFilterModel")) {
       effects.filterChanged = this.core.rowModel.setAdvancedFilterModel(options.advancedFilterModel) || effects.filterChanged;
     }
-    if (options.applyRowDrag != null) resolved.applyRowDrag = options.applyRowDrag;
+    if (options.applyRowDrag != null) {
+      resolved.applyRowDrag = options.applyRowDrag;
+      effects.needsCellRefresh = true;
+    }
     if (options.suppressWarnings != null) resolved.suppressWarnings = options.suppressWarnings;
   }
 

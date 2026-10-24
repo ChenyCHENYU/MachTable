@@ -57,6 +57,7 @@ export default defineConfig({
           items: [
             { text: "控制器与标准工具栏", link: "/recipes/controller-toolbar" },
             { text: "行选择", link: "/recipes/selection" },
+            { text: "行拖拽与条件整行颜色", link: "/recipes/row-presentation" },
             { text: "远程查询与跨页选择", link: "/recipes/remote-query" },
             { text: "列工作台", link: "/recipes/column-workbench" },
             { text: "树表懒加载", link: "/recipes/tree-lazy-loading" },

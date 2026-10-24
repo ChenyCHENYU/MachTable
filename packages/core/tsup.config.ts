@@ -1,4 +1,5 @@
 import { defineConfig } from "tsup";
+import { privatePropertyPattern } from "../../scripts/private-property-mangling.mjs";
 
 export default defineConfig({
   entry: { index: "src/index.ts", adapter: "src/adapter.ts", worker: "src/worker.ts" },
@@ -8,6 +9,9 @@ export default defineConfig({
   sourcemap: process.env.MACH_TABLE_SOURCEMAP !== "false",
   clean: true,
   minify: true,
+  esbuildOptions(options) {
+    options.mangleProps = privatePropertyPattern();
+  },
   target: "es2020",
   outExtension({ format }) {
     return { js: format === "esm" ? ".js" : ".cjs" };

@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.30.1 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.31.0 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 ```bash
 pnpm add @agile-team/mach-table-react
@@ -112,6 +112,25 @@ const query = useMachTableQuery({
 ```
 
 该包自动依赖 `@agile-team/mach-table` 并重导出 Core 类型；宿主只需提供 `react` 和 `react-dom >= 18`。
+
+## 行拖拽与条件整行颜色
+
+```ts
+import { dragColumn, type GridOptions } from "@agile-team/mach-table-react";
+
+interface Plan { id: string; name: string; status: string }
+const options: GridOptions<Plan> = {
+  rowKey: "id",
+  columnDefs: [dragColumn(), { field: "name" }, { field: "status" }],
+  rowStyleRules: [
+    { when: ({ data }) => data.status === "pending", tone: "warning" },
+    { when: ({ data }) => data.status === "failed", tone: "danger" },
+    { when: ({ data }) => data.status === "done", tone: "success" }
+  ]
+};
+```
+
+状态码由应用定义，包内不识别业务状态。颜色规则取第一条命中结果，未命中时沿用默认样式；支持自定义背景/文字颜色、固定列、明暗主题、选择和虚拟行复用。拖拽提供主题手柄、落点线、位置浮层、边缘滚动、Esc 取消和 Alt + ↑/↓ 移动。扁平外部数据设置 `applyRowDrag: false`，由 `onRowDragEnd` 处理持久化；自动模式先完成移动再发出事件，使用 `targetIndex` 读取最终下标。树、分组及排序等自动模式限制见[完整配方](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/row-presentation.md)。
 
 文档：[React 指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/react.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [SSR](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/ssr.md)
 

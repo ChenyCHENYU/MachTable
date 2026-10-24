@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.30.1 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版修正固定列重复扣宽，并让 `fit` 模式下的内容自适应保留响应能力与列宽记忆。
+MachTable 0.31.0 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版增加可配置整行颜色、完善主题化行拖拽与键盘排序，并修正树交互与列宽拖动反馈。
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -58,6 +58,25 @@ Vue/React 项目请只安装对应适配包，它会自动安装并重导出 Cor
 
 - [@agile-team/mach-table-vue](https://www.npmjs.com/package/@agile-team/mach-table-vue)
 - [@agile-team/mach-table-react](https://www.npmjs.com/package/@agile-team/mach-table-react)
+
+## 行拖拽与条件整行颜色
+
+```ts
+import { dragColumn, type GridOptions } from "@agile-team/mach-table";
+
+interface Plan { id: string; name: string; status: string }
+const options: GridOptions<Plan> = {
+  rowKey: "id",
+  columnDefs: [dragColumn(), { field: "name" }, { field: "status" }],
+  rowStyleRules: [
+    { when: ({ data }) => data.status === "pending", tone: "warning" },
+    { when: ({ data }) => data.status === "failed", tone: "danger" },
+    { when: ({ data }) => data.status === "done", tone: "success" }
+  ]
+};
+```
+
+状态码由应用定义，包内不识别业务状态。颜色规则取第一条命中结果，未命中时沿用默认样式；支持自定义背景/文字颜色、固定列、明暗主题、选择和虚拟行复用。拖拽提供主题手柄、落点线、位置浮层、边缘滚动、Esc 取消和 Alt + ↑/↓ 移动。扁平外部数据设置 `applyRowDrag: false`，由 `onRowDragEnd` 处理持久化；自动模式先完成移动再发出事件，使用 `targetIndex` 读取最终下标。树、分组及排序等自动模式限制见[完整配方](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/row-presentation.md)。
 
 文档：[快速开始](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/getting-started.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [API](https://github.com/ChenyCHENYU/MachTable/tree/main/docs/api)
 

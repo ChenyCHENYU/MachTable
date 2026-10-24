@@ -56,7 +56,11 @@ export const DEFAULT_LOCALE = {
   actionConfirm: "确认",
   actionSave: "保存",
   actionCancel: "取消",
-  actionMore: "更多操作"
+  actionMore: "更多操作",
+  rowDragHandle: "拖动调整顺序；Alt + 上下方向键移动",
+  rowDragUnavailable: "当前排序或数据模式不支持自动调整顺序",
+  rowDragPosition: "第 {a} 行 → 第 {b} 行",
+  rowDragOutside: "移回表格内放置 · Esc 取消"
 } as const;
 
 export type MachTableLocaleKey = keyof typeof DEFAULT_LOCALE;
@@ -120,7 +124,11 @@ export const LOCALE_EN: MachTableLocale = {
   actionConfirm: "Confirm",
   actionSave: "Save",
   actionCancel: "Cancel",
-  actionMore: "More actions"
+  actionMore: "More actions",
+  rowDragHandle: "Drag to reorder; Alt + Up/Down to move",
+  rowDragUnavailable: "Reordering is unavailable in the current sort or data mode",
+  rowDragPosition: "Row {a} → Row {b}",
+  rowDragOutside: "Move inside to drop · Esc to cancel"
 };
 
 const MATCH_LOCALE_KEYS: Record<string, MachTableLocaleKey> = {

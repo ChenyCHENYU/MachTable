@@ -95,6 +95,7 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
 function resolveAppearance(options: GridOptions) {
   return {
     stripedRows: options.stripedRows ?? false,
+    rowStyleRules: Array.isArray(options.rowStyleRules) ? options.rowStyleRules : [],
     showCellBorders: options.showCellBorders ?? false,
     theme: resolveTheme(options),
     quickFilterText: options.quickFilterText ?? null,

@@ -6,9 +6,11 @@ import type { RowNode } from "../types/row";
 import type { RefreshCellsParams } from "../types/api";
 import { RangeSelectionModel, type NormalizedRange } from "../services/rangeSelectionModel";
 import { RowDragController } from "../services/rowDragController";
+import { applyRowAppearance, resolveRowAppearance } from "./rowAppearance";
 import { ColumnViewportIndex } from "../services/columnViewportIndex";
 import { VariableSizeIndex } from "../services/variableSizeIndex";
 import { el, clamp } from "../lib/dom";
+import { DEFAULT_LOCALE } from "../lib/locale";
 import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
 import {
   getCellRuntimeState,
@@ -147,6 +149,7 @@ export class BodyRenderer {
     body.addEventListener("mouseover", this.onMouseOver);
     body.addEventListener("mouseleave", this.onMouseLeave);
     body.addEventListener("pointerdown", this.onDragHandlePointerDown);
+    body.addEventListener("keydown", this.onDragHandleKeyDown);
     window.addEventListener("mouseup", this.onWindowMouseUp);
   }
 
@@ -162,6 +165,7 @@ export class BodyRenderer {
     body.removeEventListener("mouseover", this.onMouseOver);
     body.removeEventListener("mouseleave", this.onMouseLeave);
     body.removeEventListener("pointerdown", this.onDragHandlePointerDown);
+    body.removeEventListener("keydown", this.onDragHandleKeyDown);
     window.removeEventListener("mouseup", this.onWindowMouseUp);
     this.cancelFillDrag();
     this.rowDragController.destroy();
@@ -742,7 +746,13 @@ export class BodyRenderer {
     slot.kind = "master";
     for (const pane of PANES) {
       const row = slot.rows[pane];
-      if (row) row.style.display = "none";
+      if (row) {
+        row.style.display = "none";
+        delete row.dataset.id;
+        delete row.dataset.index;
+        applyRowAppearance(row, undefined);
+        row.classList.remove("mach-row--drag-source");
+      }
     }
     if (slot.detailRow) {
       this.cleanupDetail(slot.detailRow);
@@ -789,10 +799,12 @@ export class BodyRenderer {
     slot.kind = "master";
     if (slot.detailRow) slot.detailRow.style.display = "none";
     const state = this.resolveMasterRowState(node);
+    const appearance = resolveRowAppearance(this.core, node);
     for (const pane of PANES) {
       const row = slot.rows[pane];
       if (!row) continue;
       this.applyMasterRowState(row, node, index, y, h, state);
+      applyRowAppearance(row, appearance);
       this.renderPaneCells(slot, node, pane);
     }
     if (this.focusedCell && this.focusedCell.rowIndex === index) {
@@ -833,6 +845,7 @@ export class BodyRenderer {
     const hovered = this.hoverIndex === index && !this.core.options.suppressRowHoverHighlight;
     row.classList.toggle("mach-row--hover", hovered);
     row.classList.toggle("mach-row--odd", index % 2 === 1);
+    row.classList.toggle("mach-row--drag-source", this.rowDragController.isSource(node));
     this.applyExpandableRowState(row, state);
   }
 
@@ -1021,9 +1034,7 @@ export class BodyRenderer {
       if (cell.className !== "mach-cell mach-cell--selection") cell.className = "mach-cell mach-cell--selection";
       this.resetSpanStyle(cell);
     } else if (kind === "drag") {
-      const handle = el("span", "mach-row-drag-handle");
-      handle.textContent = "⠿";
-      cell.replaceChildren(handle);
+      this.renderDragHandle(cell, node);
       if (cell.className !== "mach-cell mach-cell--drag") cell.className = "mach-cell mach-cell--drag";
       this.resetSpanStyle(cell);
     } else if (kind === "index") {
@@ -1305,7 +1316,10 @@ export class BodyRenderer {
       return;
     }
     const refreshPane = columns == null || this.core.columnModel.hasColSpan();
+    const appearance = resolveRowAppearance(this.core, node);
     for (const pane of PANES) {
+      const row = slot.rows[pane];
+      if (row) applyRowAppearance(row, appearance);
       if (refreshPane) this.renderPaneCells(slot, node, pane);
       else this.refreshPaneCells(slot, node, pane, columns, force);
     }
@@ -1910,7 +1924,7 @@ export class BodyRenderer {
     this.core.skeleton.root.focus({ preventScroll: true });
   }
 
-  private resolveEventTarget(e: MouseEvent): { node: RowNode<any>; index: number; cellEl: HTMLElement | null } | null {
+  private resolveEventTarget(e: Event): { node: RowNode<any>; index: number; cellEl: HTMLElement | null } | null {
     const target = e.target as HTMLElement;
     const rowEl = target.closest<HTMLElement>(".mach-row");
     if (!rowEl) return null;
@@ -1927,7 +1941,7 @@ export class BodyRenderer {
     const target = e.target as HTMLElement;
     const resolved = this.resolveEventTarget(e);
     if (!resolved) return;
-    if (target.closest(".mach-cell-editor-shell, .mach-row-editor-shell")) return;
+    if (target.closest(".mach-cell-editor-shell, .mach-row-editor-shell, .mach-row-drag-handle")) return;
     if (e.detail > 1 && this.core.editingService.isCellEditing()) return;
     if (this.core.editingService.isCellEditing()) {
       const colId = resolved.cellEl?.dataset.colId ?? "";
@@ -2119,7 +2133,7 @@ export class BodyRenderer {
 
   private shouldIgnoreRangeMouseDown(e: MouseEvent): boolean {
     return Boolean(
-      (e.target as HTMLElement).closest(".mach-cell-editor-shell, .mach-row-editor-shell, .mach-tree-toggle") ||
+      (e.target as HTMLElement).closest(".mach-cell-editor-shell, .mach-row-editor-shell, .mach-tree-toggle, .mach-row-drag-handle") ||
       this.core.editingService.isCellEditing()
     );
   }
@@ -2158,5 +2172,23 @@ export class BodyRenderer {
 
     this.rowDragController.start(e, resolved.node);
     e.preventDefault();
+  };
+
+  private renderDragHandle(cell: HTMLElement, node: RowNode<any>): void {
+    const handle = document.createElement("button");
+    handle.className = "mach-row-drag-handle";
+    handle.type = "button";
+    handle.disabled = !this.rowDragController.canDrag(node);
+    const label = this.core.options.locale.rowDragHandle ?? DEFAULT_LOCALE.rowDragHandle;
+    handle.setAttribute("aria-label", label);
+    handle.title = handle.disabled ? this.core.options.locale.rowDragUnavailable ?? DEFAULT_LOCALE.rowDragUnavailable : label;
+    handle.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
+    cell.replaceChildren(handle);
+  }
+
+  private onDragHandleKeyDown = (event: KeyboardEvent): void => {
+    if (!(event.target as HTMLElement).closest(".mach-row-drag-handle")) return;
+    const resolved = this.resolveEventTarget(event);
+    if (resolved) this.rowDragController.moveWithKeyboard(event, resolved.node);
   };
 }

@@ -1,5 +1,14 @@
 # @agile-team/mach-table-xlsx
 
+## 0.31.0
+
+### Patch Changes
+
+- ba9bb12: Fix tree expansion clicks when range selection is enabled, give tree controls a fixed footprint so labels remain readable, and show an active-column guide with live pixel width while resizing.
+- Updated dependencies
+- Updated dependencies [ba9bb12]
+  - @agile-team/mach-table@0.31.0
+
 ## 0.30.1
 
 ### Patch Changes

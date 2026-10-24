@@ -909,16 +909,41 @@ input.mach-select-all {
 }
 
 .mach-row-drag-handle {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--mach-radius-sm);
   color: var(--mach-header-fg);
-  opacity: 0.5;
-  font-size: 12px;
+  background: transparent;
+  opacity: .55;
   cursor: grab;
   user-select: none;
+  touch-action: none;
+  transition: color var(--mach-transition), background var(--mach-transition), opacity var(--mach-transition);
 }
 
-.mach-row-drag-handle:hover {
+.mach-row-drag-handle::before {
+  content: "";
+  width: 10px;
+  height: 14px;
+  background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 5px 5px;
+}
+
+.mach-row-drag-handle:hover:not(:disabled),
+.mach-row-drag-handle:focus-visible {
   opacity: 1;
   color: var(--mach-primary);
+  background: var(--mach-primary-weak);
+  border-color: color-mix(in srgb, var(--mach-primary) 28%, transparent);
+  outline: none;
+}
+
+.mach-row-drag-handle:disabled {
+  opacity: .2;
+  cursor: not-allowed;
 }
 
 .mach-row-drop-indicator {
@@ -928,17 +953,56 @@ input.mach-select-all {
   width: 100%;
   height: 2px;
   background: var(--mach-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mach-body-bg) 65%, transparent);
   z-index: 5;
   pointer-events: none;
   will-change: transform;
 }
 
-.mach-root--row-dragging {
-  cursor: grabbing;
+.mach-row-drop-indicator::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mach-primary);
 }
 
-.mach-root--row-dragging .mach-row {
+.mach-pane--center .mach-row-drop-indicator::before,
+.mach-pane--right .mach-row-drop-indicator::before {
+  display: none;
+}
+
+.mach-row-drag-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: var(--mach-z-overlay);
+  max-width: min(216px, calc(100% - 16px));
+  padding: 9px 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--mach-primary) 35%, var(--mach-border-color));
+  border-radius: var(--mach-radius);
+  background: var(--mach-body-bg);
+  color: var(--mach-body-fg);
+  box-shadow: var(--mach-shadow);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.mach-root--row-dragging,
+.mach-root--row-dragging .mach-cell,
+.mach-root--row-dragging .mach-row-drag-handle {
   cursor: grabbing;
+  user-select: none;
+}
+
+.mach-root .mach-row--drag-source {
+  opacity: .45;
 }
 
 .mach-cell--index {
@@ -2371,4 +2435,33 @@ input.mach-select-all {
   .mach-action-drawer {
     animation: none !important;
   }
+}
+
+/* Opt-in row rules outrank zebra stripes; interaction overlays retain the status hue. */
+.mach-root {
+  --mach-row-warning-bg: color-mix(in srgb, var(--mach-warning) 11%, var(--mach-body-bg));
+  --mach-row-danger-bg: color-mix(in srgb, var(--mach-danger) 9%, var(--mach-body-bg));
+  --mach-row-success-bg: color-mix(in srgb, var(--mach-success) 10%, var(--mach-body-bg));
+  --mach-row-info-bg: color-mix(in srgb, var(--mach-info) 10%, var(--mach-body-bg));
+}
+
+.mach-row--styled[data-row-tone="warning"] { --mach-row-rule-bg: var(--mach-row-warning-bg); }
+.mach-row--styled[data-row-tone="danger"] { --mach-row-rule-bg: var(--mach-row-danger-bg); }
+.mach-row--styled[data-row-tone="success"] { --mach-row-rule-bg: var(--mach-row-success-bg); }
+.mach-row--styled[data-row-tone="info"] { --mach-row-rule-bg: var(--mach-row-info-bg); }
+
+.mach-root :is(.mach-row, .mach-pinned-row).mach-row--styled,
+.mach-root :is(.mach-row, .mach-pinned-row).mach-row--styled .mach-cell {
+  background-color: var(--mach-row-rule-bg, var(--mach-body-bg));
+  color: var(--mach-row-rule-fg, var(--mach-body-fg));
+}
+
+.mach-root .mach-row--styled.mach-row--hover,
+.mach-root .mach-row--styled.mach-row--hover .mach-cell {
+  background-color: color-mix(in srgb, var(--mach-primary) 4%, var(--mach-row-rule-bg, var(--mach-body-bg)));
+}
+
+.mach-root .mach-row--styled.mach-row--selected,
+.mach-root .mach-row--styled.mach-row--selected .mach-cell {
+  background-color: color-mix(in srgb, var(--mach-primary) 12%, var(--mach-row-rule-bg, var(--mach-body-bg)));
 }

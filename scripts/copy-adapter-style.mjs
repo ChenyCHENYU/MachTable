@@ -14,7 +14,7 @@ const outputDirectory = new URL(`packages/${adapter}/dist/`, workspaceRoot);
 await mkdir(fileURLToPath(outputDirectory), { recursive: true });
 await Promise.all([
   copyFile(
-    fileURLToPath(new URL("packages/core/styles/mach-table.css", workspaceRoot)),
+    fileURLToPath(new URL("packages/core/dist/mach-table.css", workspaceRoot)),
     fileURLToPath(new URL("mach-table.css", outputDirectory))
   ),
   copyFile(

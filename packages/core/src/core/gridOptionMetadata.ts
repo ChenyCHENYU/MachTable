@@ -45,6 +45,7 @@ export const GRID_OPTION_META = {
   multiSort: { kind: "boolean", update: "options" },
   size: { kind: "string", update: "options" },
   stripedRows: { kind: "boolean", update: "options" },
+  rowStyleRules: { kind: "array", update: "options" },
   showCellBorders: { kind: "boolean", update: "options" },
   theme: { kind: "string", update: "options" },
   quickFilterText: { kind: "string", update: "quickFilter" },

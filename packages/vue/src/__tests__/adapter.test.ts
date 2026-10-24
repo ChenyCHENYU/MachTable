@@ -63,6 +63,25 @@ beforeEach(() => {
   );
 });
 
+it("reactively replaces and clears row appearance rules through public props", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const tone = ref<"warning" | "success" | null>("warning");
+  const app = createApp({ render: () => h(MachTable, {
+    pagination: false, rowData: [{ id: 1 }], columnDefs: [{ field: "id" }],
+    rowStyleRules: tone.value ? [{ when: () => true, tone: tone.value }] : []
+  }) });
+  app.mount(host);
+  expect(host.querySelector<HTMLElement>(".mach-row")?.dataset.rowTone).toBe("warning");
+  tone.value = "success";
+  await nextTick();
+  expect(host.querySelector<HTMLElement>(".mach-row")?.dataset.rowTone).toBe("success");
+  tone.value = null;
+  await nextTick();
+  expect(host.querySelector(".mach-row--styled")).toBeNull();
+  app.unmount();
+});
+
 afterEach(() => {
   document.body.textContent = "";
   vi.restoreAllMocks();

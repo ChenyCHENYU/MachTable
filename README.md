@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.30.1-2563eb" alt="Source version 0.30.1" />
+  <img src="https://img.shields.io/badge/source-0.31.0-2563eb" alt="Source version 0.31.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -39,7 +39,7 @@ MachTable 为后台管理、工业台账、订单/工单、财务报表和低代
 | 数据模型 | 本地/服务端排序过滤、分页、无限滚动、树与懒加载、分组聚合、主从详情、固定行 |
 | 远程导出 | 可序列化的筛选、排序、可见列与跨页选择快照，供业务服务端执行全量导出；本地 CSV/XLSX 继续处理已加载数据 |
 | 编辑 | 单元格与原子整行编辑、对勾/取消、同步/异步校验、脏数据、撤销重做、部分保存与冲突处理 |
-| 交互 | 多选/范围选择、复制粘贴、填充柄、拖拽、列宽调整、列工作台、统一无闪烁下拉、上下文菜单、操作列 |
+| 交互 | 多选/范围选择、复制粘贴、填充柄、主题化行拖拽与条件整行颜色、列宽调整、列工作台、统一无闪烁下拉、上下文菜单、操作列 |
 | 框架体验 | Vue 原生 slots、React renderer、全局/局部/异步接入、远程查询与编辑工作流 |
 | 治理 | 分层配置、命名预设、配置来源解释、领域化 API、版本化状态、稳定错误码、诊断快照 |
 | 安全 | CSV 公式注入防护、安全字段路径、Overlay 默认文本渲染、资源销毁与请求取消 |
@@ -156,7 +156,35 @@ api.destroy();
 
 > 默认虚拟布局要求容器具有明确高度。小型详情表可使用 `domLayout: "autoHeight"`，大表或远程无限数据源不要使用自动高度。
 
-标准列表默认把 `indexColumn()` 放在第一列；存在 `selectionColumn()` 时序号紧随其后。表头和单元格内容默认居中，业务列可用 `align: "left" | "right"`、`headerAlign` 单独覆盖。
+标准列表默认把 `indexColumn()` 放在第一列；存在 `selectionColumn()` 时序号紧随其后。启用行拖拽时，可在最左侧增加 `dragColumn()` 手柄。表头和单元格内容默认居中，业务列可用 `align: "left" | "right"`、`headerAlign` 单独覆盖。
+
+## 行拖拽与条件整行颜色
+
+Vue、React 和 Core 使用同一份配置。只需增加 `dragColumn()` 和可选 `rowStyleRules`，不必逐列编写 renderer 或样式：
+
+```ts
+import { dragColumn, type GridOptions } from "@agile-team/mach-table-vue";
+
+interface Plan { id: string; name: string; status: string; issued: boolean }
+const options: GridOptions<Plan> = {
+  rowKey: "id",
+  columnDefs: [dragColumn(), { field: "name" }, { field: "status" }],
+  rowStyleRules: [
+    { when: ({ data }) => data.status === "S1B", tone: "danger" },
+    { when: ({ data }) => data.status === "S1C", tone: "success" },
+    { when: ({ data }) => data.issued, tone: "warning" }
+  ],
+  onRowDragEnd: ({ fromIndex, targetIndex, applied }) => {
+    // 自动模式已完成移动；需要持久化时，交给应用自己的保存流程。
+  }
+};
+```
+
+上面的状态码仅是使用侧示例。规则按顺序取第一条命中结果，未命中的行沿用默认样式；支持主题语义色及自定义 `backgroundColor` / `color`。整行颜色覆盖固定列，兼容斑马纹、选择、明暗主题和虚拟滚动，数据更新后自动重算。
+
+拖拽提供固定手柄、来源行提示、跨列落点线、位置浮层、边缘自动滚动、Esc 取消和 Alt + ↑/↓ 键盘移动。默认自动调整扁平本地行顺序；存在列排序、树、分组、远程或外部处理模式时禁用自动重排。扁平数据由服务端维护顺序时使用 `applyRowDrag: false` 接收移动意图。`targetIndex` 是最终显示下标，旧 `toIndex` 保留插入边界语义；自动模式现在先移动再发出事件。
+
+完整配置、限制和升级事项见[行拖拽与条件整行颜色](./docs/recipes/row-presentation.md)。
 
 ## 一份清爽的应用配置
 
@@ -309,12 +337,12 @@ pnpm test:e2e
 | 首次接入 | [快速开始](./docs/guide/getting-started.md) · [企业接入手册](./docs/guide/enterprise-integration.md) |
 | 框架 | [Vue 3](./docs/guide/vue.md) · [React 18+](./docs/guide/react.md) · [SSR](./docs/guide/ssr.md) |
 | API | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) · [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
-| 高频场景 | [场景示例](./docs/guide/scenarios.md) · [远程查询](./docs/recipes/remote-query.md) · [服务端导出](./docs/recipes/remote-export.md) · [编辑](./docs/recipes/editing.md) · [状态持久化](./docs/recipes/grid-state.md) · [列宽](./docs/recipes/column-state.md) |
+| 高频场景 | [场景示例](./docs/guide/scenarios.md) · [远程查询](./docs/recipes/remote-query.md) · [服务端导出](./docs/recipes/remote-export.md) · [编辑](./docs/recipes/editing.md) · [状态持久化](./docs/recipes/grid-state.md) · [列宽](./docs/recipes/column-state.md) · [行顺序与颜色](./docs/recipes/row-presentation.md) |
 | 工程治理 | [质量门禁](./docs/advanced/quality-gates.md) · [性能](./docs/advanced/performance.md) · [升级指南](./docs/guide/upgrading.md) |
 
 ## 版本与授权
 
-当前源码版本为 `0.30.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修正固定列重复扣宽，并让 `fit` 模式下的内容自适应保留响应能力和列宽记忆；业务只需声明列宽约束，无需添加窗口监听。0.30.0 的服务端导出请求快照继续按需使用。后续继续以真实项目反馈收口。
+当前源码版本为 `0.31.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版增加可配置整行颜色并完善行拖拽排序，统一 Core、Vue、React 的行为；同时包含树展开点击、树控件与列宽拖动反馈修正。原有包体积预算保持不变，升级时请留意拖拽事件时机及自动重排模式限制。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

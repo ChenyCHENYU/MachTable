@@ -34,6 +34,20 @@ afterEach(() => {
 });
 
 describe("React adapter", () => {
+  it("replaces and clears row appearance rules through public props", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const base = { pagination: false, rowData: [{ id: 1 }], columnDefs: [{ field: "id" }] };
+    await act(async () => root.render(createElement(MachTable, { ...base, rowStyleRules: [{ when: () => true, tone: "warning" }] })));
+    expect(host.querySelector<HTMLElement>(".mach-row")?.dataset.rowTone).toBe("warning");
+    await act(async () => root.render(createElement(MachTable, { ...base, rowStyleRules: [{ when: () => true, tone: "success" }] })));
+    expect(host.querySelector<HTMLElement>(".mach-row")?.dataset.rowTone).toBe("success");
+    await act(async () => root.render(createElement(MachTable, { ...base, rowStyleRules: [] })));
+    expect(host.querySelector(".mach-row--styled")).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it("re-exports the complete core API and types from its public entry", () => {
     const column: ColDef<{ id: number }> = { field: "id" };
     expect(column.field).toBe("id");

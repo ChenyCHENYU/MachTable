@@ -1,5 +1,17 @@
 # @agile-team/mach-table
 
+## 0.31.0
+
+### Minor Changes
+
+- Add optional, first-match rowStyleRules with theme-aware tones and custom colors across virtual and pinned rows. Improve row ordering with themed handles, cross-pane drop feedback, position previews, edge scrolling, pointer cancellation and keyboard moves. Reject automatic ordering for sorted, grouped, tree, remote and externally processed data; keep event-only intent available for flat external data. Row drag events now run after managed moves and expose targetIndex/applied while retaining the legacy toIndex insertion boundary.
+
+  Preserve existing bundle budgets by minifying unambiguous TypeScript-private implementation properties and shipping a minified stylesheet at the unchanged CSS import path. Public and string-addressed property names remain reserved.
+
+### Patch Changes
+
+- ba9bb12: Fix tree expansion clicks when range selection is enabled, give tree controls a fixed footprint so labels remain readable, and show an active-column guide with live pixel width while resizing.
+
 ## 0.30.1
 
 ### Patch Changes

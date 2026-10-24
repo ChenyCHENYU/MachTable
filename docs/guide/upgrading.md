@@ -3,10 +3,14 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.30.1
+pnpm up @agile-team/mach-table-vue@^0.31.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.30.1
+pnpm up @agile-team/mach-table-react@^0.31.0
 ```
+
+## 0.30.1 → 0.31.0
+
+新增可选 `rowStyleRules`，不配置时沿用原有样式。`dragColumn()` 默认固定左侧并固定工具列宽；可用 overrides 调整。自动拖拽与 `rows.reorder()` 在列排序、分组、树、远程和 dataProcessor 模式下会拒绝重排；外部维护顺序的扁平数据请使用 `applyRowDrag: false`。`rowDragEnd` 现在在自动移动完成后发出，新增 `targetIndex`（最终下标）和 `applied`；保留旧 `toIndex` 插入边界语义。依赖回调前读取旧顺序的代码需要调整。详见[行拖拽与条件整行颜色](/recipes/row-presentation)。
 
 ## 0.30.0 → 0.30.1
 

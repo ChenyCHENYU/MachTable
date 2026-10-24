@@ -30,7 +30,7 @@ const budgets = [
   ["Optional XLSX bridge", ["packages/xlsx/dist/index.js"], 3 * 1024],
   // Covers the shared listbox, skeleton and complete interaction states while
   // retaining a small, explicit ceiling for the framework-neutral stylesheet.
-  ["Core CSS", ["packages/core/styles/mach-table.css"], 8 * 1024]
+  ["Core CSS", ["packages/core/dist/mach-table.css"], 8 * 1024]
 ];
 
 let failed = false;

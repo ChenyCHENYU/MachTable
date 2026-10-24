@@ -43,6 +43,8 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 
 复杂度基线曾是迁移机制，现在已经完成使命。配置更新与解析、键盘导航、状态恢复、渲染、选择、筛选、布局和框架工作流均使用同一上限；如确有不可避免的复杂算法，必须先提交 ADR、可读性证据和覆盖用例，不能直接修改基线。
 
+生产构建会压缩未与公开字段或字符串访问重名的 TypeScript private 成员；公开契约字段保持原名。CSS 在 `styles/` 中维护可读源码，发布到 `dist/mach-table.css`，原有包导入路径保持不变。体积门禁测量实际发布的压缩产物，预算不变。
+
 ## 类型与异步安全
 
 公开 API 结构由 `api/public-api.snapshot.json` 锁定，生命周期规则由 `api/public-api-policy.json` 声明。任何删除、改名、新增或参数/返回值签名变化都会让 `check:api` 失败；贡献者必须先确认兼容策略、同步 Changelog/升级文档，再显式更新快照。快照覆盖 Core 根入口、Core adapter/worker、Vue/React 根入口及其 workflows/ui/adapters 子入口和 XLSX，并与 TypeScript consumer fixture 互补：前者检查结构漂移，后者检查真实 ESM/CJS/Vue SFC 消费。

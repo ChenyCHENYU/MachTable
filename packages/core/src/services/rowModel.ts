@@ -1632,25 +1632,26 @@ export class RowModel<TData = any> {
     return expanded;
   }
 
+  canReorderRows(): boolean {
+    return !this.isTree && !this.isInfinite && !this.core.options.dataProcessor &&
+      this.core.options.paginationMode !== "server" &&
+      this.core.columnModel.getSortModel().length === 0 &&
+      this.core.columnModel.getRowGroupColumns().length === 0;
+  }
+
   reorderRowsByDisplayed(fromIndex: number, toIndex: number): boolean {
-    if (this.isTree) return false;
+    if (!this.canReorderRows() || !Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) return false;
     const fromNode = this.getDisplayedRow(fromIndex);
     const toNode = this.getDisplayedRow(toIndex);
     if (!fromNode || !toNode || fromNode.isDetail || toNode.isDetail || fromNode.isGroup || toNode.isGroup) return false;
 
     const fromAllIdx = this.all.indexOf(fromNode);
-    let toAllIdx = this.all.indexOf(toNode);
+    const toAllIdx = this.all.indexOf(toNode);
     if (fromAllIdx < 0 || toAllIdx < 0) return false;
-    if (toAllIdx > fromAllIdx) {
-      let idx = toAllIdx;
-      while (idx + 1 < this.all.length && this.all[idx + 1].isDetail) idx++;
-      toAllIdx = idx;
-    }
     if (fromAllIdx === toAllIdx) return false;
 
     this.all.splice(fromAllIdx, 1);
-    const insertAt = this.all.indexOf(toNode);
-    this.all.splice(toAllIdx > fromAllIdx ? insertAt + 1 : insertAt, 0, fromNode);
+    this.all.splice(toAllIdx, 0, fromNode);
     this.refreshPipeline();
     this.core.requestUpdate({ data: true });
     return true;

@@ -226,7 +226,12 @@ export interface RowDragEndEvent<TData = any> extends GridEventBase<TData> {
   type: "rowDragEnd";
   rowNode: RowNode<TData>;
   fromIndex: number;
+  /** Legacy insertion boundary, before removing the source row. */
   toIndex: number;
+  /** Final displayed index after removing and inserting the source row. */
+  targetIndex: number;
+  /** True when the grid applied the move before emitting this event. */
+  applied: boolean;
 }
 
 export interface PaginationChangedEvent<TData = any> extends GridEventBase<TData> {

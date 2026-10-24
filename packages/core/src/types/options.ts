@@ -149,6 +149,24 @@ export type ThemeMode = "light" | "dark" | "auto";
 export type GridEditType = "cell" | "fullRow";
 export type EditableIndicator = "hover" | "always" | "none";
 
+export interface RowStyleParams<TData = any> {
+  data: TData;
+  node: RowNode<TData>;
+  api: import("./api").GridApi<TData>;
+  rowPinned: "top" | "bottom" | null;
+}
+
+export type RowTone = "warning" | "danger" | "success" | "info";
+
+/** First matching rule wins. Unmatched, group, detail and loading rows keep their default appearance. */
+export interface RowStyleRule<TData = any> {
+  when: (params: RowStyleParams<TData>) => boolean;
+  /** Theme-aware subtle background; custom colors take precedence. */
+  tone?: RowTone;
+  backgroundColor?: string;
+  color?: string;
+}
+
 export interface RowEditValidationParams<TData = any> {
   data: TData;
   node: RowNode<TData>;
@@ -239,6 +257,7 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   multiSort?: boolean;
   size?: GridSize;
   stripedRows?: boolean;
+  rowStyleRules?: readonly RowStyleRule<TData>[];
   showCellBorders?: boolean;
   theme?: ThemeMode;
   quickFilterText?: string | null;
@@ -282,6 +301,7 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   autoCheckedChildren?: boolean;
   defaultExpandAll?: boolean;
   indexOffset?: number;
+  /** Apply flat local row moves automatically (default true). False emits intent for server-controlled ordering. */
   applyRowDrag?: boolean;
   undoStackSize?: number;
   /** Milliseconds used to coalesce applyTransactionAsync calls. */
@@ -363,6 +383,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   multiSort: boolean;
   size: GridSize;
   stripedRows: boolean;
+  rowStyleRules: readonly RowStyleRule<TData>[];
   showCellBorders: boolean;
   theme: ThemeMode;
   quickFilterText: string | null;

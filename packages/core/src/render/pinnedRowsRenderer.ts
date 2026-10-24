@@ -2,6 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { PaneType } from "../services/columnModel";
 import type { RowNode } from "../types/row";
 import { el } from "../lib/dom";
+import { applyRowAppearance, resolveRowAppearance } from "./rowAppearance";
 import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle } from "./cellContent";
 
 type PinnedRowsContext = Pick<
@@ -123,8 +124,10 @@ export class PinnedRowsRenderer {
         selected: false
       };
       const cellsByPane = {} as Record<PaneType, HTMLElement[]>;
+      const appearance = resolveRowAppearance(this.core, node, sideName);
       for (const pane of PANES) {
         const wrapper = el("div", "mach-pinned-row");
+        applyRowAppearance(wrapper, appearance);
         wrapper.style.height = `${rowHeight}px`;
         wrapper.setAttribute("role", "row");
         cellsByPane[pane] = [];

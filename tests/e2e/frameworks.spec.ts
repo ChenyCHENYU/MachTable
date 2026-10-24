@@ -27,7 +27,7 @@ for (const example of examples) {
     const grid = page.getByRole("grid").first();
     await expect(grid).toHaveAttribute("aria-label", /.+/);
 
-    const firstCell = page.locator('.mach-row[data-index="0"] .mach-cell:not(.mach-cell--selection):visible').first();
+    const firstCell = page.locator('.mach-row[data-index="0"] .mach-cell:not(.mach-cell--selection):not(.mach-cell--drag):visible').first();
     await firstCell.click();
     const before = await page.locator(".mach-cell--focus").getAttribute("data-col-id");
     await grid.press("ArrowRight");

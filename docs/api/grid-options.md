@@ -44,6 +44,7 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 | `columnLayout` | `"normal" \| "fit"` | `"normal"` | `fit` 持续填满容器 |
 | `enableColumnResize` | `boolean` | `false` | 开启鼠标、触控、双击和键盘列宽调整 |
 | `domLayout` | `"normal" \| "autoHeight"` | `"normal"` | 自动高度只用于小型本地表 |
+| `rowStyleRules` | `readonly RowStyleRule<T>[]` | `[]` | 条件整行颜色，首条命中；见[行外观配方](/recipes/row-presentation) |
 | `stripedRows` | `boolean` | `false` | 斑马纹 |
 | `showCellBorders` | `boolean` | `false` | 纵向单元格边框 |
 | `className` | `string` | `""` | Core 根元素附加类名 |

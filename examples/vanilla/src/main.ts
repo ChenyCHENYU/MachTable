@@ -1,5 +1,5 @@
 import "@agile-team/mach-table/styles/mach-table.css";
-import { createGrid, buildColDefsFromSchema, indexColumn, selectionColumn } from "@agile-team/mach-table";
+import { createGrid, buildColDefsFromSchema, dragColumn, indexColumn, selectionColumn } from "@agile-team/mach-table";
 import type { GridApi, ColDef, CellRendererParams, DetailRowRendererParams } from "@agile-team/mach-table";
 
 interface MachineRow {
@@ -43,6 +43,7 @@ function statusRenderer(params: CellRendererParams<MachineRow>) {
 }
 
 const columnDefs: ColDef<MachineRow>[] = [
+  dragColumn(),
   selectionColumn({ colId: "select" }),
   indexColumn({ headerName: "序号" }),
   { field: "code", headerName: "设备编号", width: 120, pinned: "left", filter: "text", editable: true },
@@ -94,6 +95,10 @@ const api: GridApi<MachineRow> = createGrid<MachineRow>(host, {
   rowBuffer: 10,
   size: "compact",
   stripedRows: true,
+  rowStyleRules: [
+    { when: ({ data }) => data.status === "故障", tone: "danger" },
+    { when: ({ data }) => data.status === "待机", tone: "warning" }
+  ],
   pagination: false,
   columnMenu: true,
   enableColumnResize: true,
@@ -109,6 +114,7 @@ const api: GridApi<MachineRow> = createGrid<MachineRow>(host, {
     return message;
   },
   onGridReady: () => appendLog("grid ready"),
+  onRowDragEnd: ({ fromIndex, targetIndex }) => appendLog(`顺序调整: 第 ${fromIndex + 1} 行 → 第 ${targetIndex + 1} 行`),
   onSelectionChanged: (e) => {
     infoEl.textContent = `已选中 ${e.selectedRows.length} 行`;
   },

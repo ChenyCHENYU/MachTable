@@ -92,7 +92,7 @@ onGridReady: (e) => { /* grid 可交互，e.api 即命令接口 */ }
 | 事件 | 载荷 | 说明 |
 | --- | --- | --- |
 | `rangeSelectionChanged` | `{ range: { row1, row2, colId1, colId2 } \| null }` | 框选范围变化/取消 |
-| `rowDragEnd` | `{ rowNode, fromIndex, toIndex }` | 行拖拽松手（`applyRowDrag: false` 时自行处理数据） |
+| `rowDragEnd` | `{ rowNode, fromIndex, toIndex, targetIndex, applied }` | 行移动意图/完成；自动模式先更新顺序，再发出事件，见[拖拽配方](/recipes/row-presentation) |
 
 ## 明细
 
