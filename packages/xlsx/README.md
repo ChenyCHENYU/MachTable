@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-xlsx
 
-MachTable 0.31.1 的可选 XLSX 导入导出扩展。工作簿引擎由宿主动态注入，因此普通表格页面不会下载 Excel 代码。
+MachTable 0.31.2 的可选 XLSX 导入导出扩展。工作簿引擎由宿主动态注入，因此普通表格页面不会下载 Excel 代码。
 
 ```bash
 pnpm add @agile-team/mach-table-xlsx xlsx
@@ -27,7 +27,7 @@ await excel.import(api, await file.arrayBuffer(), {
 });
 ```
 
-0.31.1 与 Core/Vue/React 固定版本组同步发布；Excel 桥接 API 保持不变。行拖拽和条件整行颜色由表格配置启用，不需要更改 XLSX 集成。
+0.31.2 与 Core/Vue/React 固定版本组同步发布；Excel 桥接 API 保持不变，无需更改 XLSX 集成。
 
 扩展复用 Core 的选择范围、表头、公式注入防护和安全导入规则。`xlsx` 只是示例引擎，不是本包的捆绑依赖；可注入经过项目批准的兼容引擎。
 

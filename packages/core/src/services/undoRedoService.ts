@@ -3,6 +3,7 @@ import type { GridCore } from "../core/gridCore";
 type UndoContext = Pick<
   GridCore<any>,
   | "bodyRenderer"
+  | "cancelPendingInput"
   | "columnModel"
   | "emit"
   | "options"
@@ -81,6 +82,7 @@ export class UndoRedoService {
   }
 
   undo(): boolean {
+    this.core.cancelPendingInput();
     if (!this.canUndo()) return false;
     this.apply(this.stack[this.pointer], false);
     this.pointer--;
@@ -88,6 +90,7 @@ export class UndoRedoService {
   }
 
   redo(): boolean {
+    this.core.cancelPendingInput();
     if (!this.canRedo()) return false;
     this.pointer++;
     this.apply(this.stack[this.pointer], true);

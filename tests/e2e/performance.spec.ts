@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("100k rows and 100 columns remain virtualized under update pressure", async ({ page, browserName }) => {
+test("100k rows and 100 columns remain virtualized under update pressure", async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== "chromium", "Performance budgets use one stable browser engine.");
   await page.goto("http://127.0.0.1:4176");
   await page.selectOption("#rows", "100000");
@@ -46,6 +46,9 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   const performanceSnapshot = await page.evaluate(() =>
     (window as any).__MACH_BENCH__.api.diagnostics.getPerformance()
   );
+  await testInfo.attach("100k-update-metrics", {
+    body: JSON.stringify({ initial, updateMs, performanceSnapshot }, null, 2), contentType: "application/json"
+  });
   expect(performanceSnapshot.sampleCount).toBeGreaterThan(0);
   expect(performanceSnapshot.renderedRows).toBeLessThan(100);
   expect(performanceSnapshot.renderedCells).toBeLessThan(2_000);
@@ -57,7 +60,7 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   expect(performanceSnapshot.usedHeapBytes == null || performanceSnapshot.usedHeapBytes > 0).toBe(true);
 });
 
-test("continuous vertical scroll and a 500-column viewport stay bounded", async ({ page, browserName }) => {
+test("continuous vertical scroll and a 500-column viewport stay bounded", async ({ page, browserName }, testInfo) => {
   test.skip(browserName !== "chromium", "Performance budgets use one stable browser engine.");
   await page.goto("http://127.0.0.1:4176");
   await page.selectOption("#rows", "100000");
@@ -96,6 +99,9 @@ test("continuous vertical scroll and a 500-column viewport stay bounded", async 
       cells: document.querySelectorAll("#host .mach-cell").length,
       columns: document.querySelectorAll("#host .mach-header-cell").length
     };
+  });
+  await testInfo.attach("scroll-and-500-column-metrics", {
+    body: JSON.stringify({ vertical, horizontal }, null, 2), contentType: "application/json"
   });
   expect(horizontal.cells).toBeLessThan(2_000);
   expect(horizontal.columns).toBeLessThan(40);

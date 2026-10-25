@@ -3,10 +3,16 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.31.1
+pnpm up @agile-team/mach-table-vue@^0.31.2
 # 或
-pnpm up @agile-team/mach-table-react@^0.31.1
+pnpm up @agile-team/mach-table-react@^0.31.2
 ```
+
+## 0.31.1 → 0.31.2
+
+公共 API 与配置无需迁移。粘贴、清空、填充现在与编辑器一样执行已有列 `validate` 和整行 `rowEditValidator`；批量输入按行拒绝无效数据，有效行形成一条撤销记录。旧版本依赖“粘贴绕过校验”的逻辑应移除；可信数据更新继续使用 `rows.transact()`。
+
+随机块淘汰会保留未保存行供保存/回滚；渲染、焦点和编辑块所需范围可临时超过 `maxBlocksInCache`，上界为保护块数加一个取数槽。完整 `rows.setData()`、`reload()`、`purgeCache()` 和远程查询切换会清空旧作用域的脏状态与撤销历史。异步输入/保存不会写入同 ID 的新记录。Vue/React 编辑工作流隔离过期保存结果和冲突，React 查询也修正 StrictMode 与同值搜索的重复请求。详见[剪贴板](/recipes/clipboard)、[随机块缓存](/recipes/random-access-datasource)与[批量保存](/recipes/batch-save)。
 
 ## 0.31.0 → 0.31.1
 

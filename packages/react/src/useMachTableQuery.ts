@@ -344,10 +344,13 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     notifySelection(); syncVisibleSelection();
   }, [notifySelection, rowId, selected, syncVisibleSelection]);
 
-  const firstQueryEffect = useRef(true);
   const queryDependency = options.queryKey === undefined ? options.query : options.queryKey;
+  const previousQueryDependency = useRef(queryDependency);
   useEffect(() => {
-    if (firstQueryEffect.current) { firstQueryEffect.current = false; return; }
+    // StrictMode replays effects without changing the query. Only a changed
+    // dependency owns an automatic reload; initial loading stays below.
+    if (Object.is(previousQueryDependency.current, queryDependency)) return;
+    previousQueryDependency.current = queryDependency;
     if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
     if (optionsRef.current.mode !== "manual") scheduleLoad(true);
     else { stateRef.current.page = 1; setPage(1); }
@@ -398,6 +401,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     rows, loading, error, page, pageSize, total, sortModel, filterModel, advancedFilterModel,
     quickFilterText,
     setQuickFilterText(value) {
+      if (stateRef.current.quickFilterText === value) return;
       stateRef.current.quickFilterText = value;
       setQuickFilterText(value);
       suppressGrid.current = true;

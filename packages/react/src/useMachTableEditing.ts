@@ -47,6 +47,8 @@ export function useMachTableEditing<TData = any>(
   const [saveError, setSaveError] = useState<unknown | null>(null);
   const [lastSaveResult, setLastSaveResult] = useState<GridBatchSaveResult<TData> | null>(null);
   const savingRef = useRef(false);
+  const generationRef = useRef(0);
+  const resultCurrentRef = useRef<((rowId?: string) => boolean) | null>(null);
 
   const refresh = useCallback((): void => {
     const api = table.apiRef.current;
@@ -61,8 +63,18 @@ export function useMachTableEditing<TData = any>(
 
   useEffect(() => {
     const api = table.api;
+    generationRef.current++;
+    savingRef.current = false;
+    setSaving(false);
+    setSaveError(null);
+    setLastSaveResult(null);
+    resultCurrentRef.current = null;
     refresh();
-    return api && !api.isDestroyed() ? api.on("dirtyStateChanged", refresh) : undefined;
+    const remove = api && !api.isDestroyed() ? api.on("dirtyStateChanged", refresh) : undefined;
+    return () => {
+      generationRef.current++;
+      remove?.();
+    };
   }, [table.api, refresh]);
 
   const saveDetailed = useCallback(async (
@@ -76,20 +88,41 @@ export function useMachTableEditing<TData = any>(
     setSaving(true);
     setSaveError(null);
     setLastSaveResult(null);
+    resultCurrentRef.current = null;
+    const generation = generationRef.current;
+    // Keep late responses tied to the API that submitted them. In particular,
+    // an old finally must not unlock a replacement table's active save.
+    const isCurrentSave = (): boolean =>
+      generation === generationRef.current && table.apiRef.current === api && !api.isDestroyed();
+    const targets = api.editing.getDirtyRowIds()
+      .filter((rowId) => !rowIds || rowIds.includes(rowId))
+      .map((rowId) => { const node = api.rows.getById(rowId); return { rowId, node, data: node?.data }; });
+    // Reloads can replace rows without replacing the component or API.
+    const isCurrentResult = (rowId?: string): boolean => {
+      const selected = rowId === undefined ? targets : targets.filter((target) => target.rowId === rowId);
+      return isCurrentSave() && selected.every(({ rowId: id, node, data }) =>
+        api.rows.getById(id) === node && node?.data === data);
+    };
     try {
       const result = await api.editing.save(handler, rowIds);
+      if (!isCurrentResult()) return result;
+      resultCurrentRef.current = isCurrentResult;
       setLastSaveResult(result);
       refresh();
       options.onSaveSuccess?.(result.saved);
       options.onSaveResult?.(result);
       return result;
     } catch (error) {
-      setSaveError(error);
-      options.onSaveError?.(error);
+      if (isCurrentResult()) {
+        setSaveError(error);
+        options.onSaveError?.(error);
+      }
       throw error;
     } finally {
-      savingRef.current = false;
-      setSaving(false);
+      if (isCurrentSave()) {
+        savingRef.current = false;
+        setSaving(false);
+      }
     }
   }, [options, refresh, table.apiRef]);
   const save = useCallback(async (
@@ -97,15 +130,18 @@ export function useMachTableEditing<TData = any>(
     rowIds?: readonly string[]
   ): Promise<GridChange<TData>[]> => (await saveDetailed(handler, rowIds)).saved, [saveDetailed]);
 
-  const clearSaveIssues = useCallback((): void => setLastSaveResult(null), []);
+  const clearSaveIssues = useCallback((): void => {
+    resultCurrentRef.current = null;
+    setLastSaveResult(null);
+  }, []);
   const resolveConflict = useCallback((rowId: string, strategy: "acceptServer" | "keepLocal"): boolean => {
     const conflict = lastSaveResult?.conflicts.find((entry) => entry.rowId === rowId);
     const api = table.apiRef.current;
-    if (!lastSaveResult || !conflict || !api || !resolveCoreSaveConflict(api, conflict, strategy)) return false;
-    setLastSaveResult({
-      ...lastSaveResult,
-      failures: lastSaveResult.failures,
-      conflicts: lastSaveResult.conflicts.filter((entry) => entry.rowId !== rowId)
+    if (!lastSaveResult || !conflict || !api || !resultCurrentRef.current?.(rowId) ||
+      !resolveCoreSaveConflict(api, conflict, strategy)) return false;
+    setLastSaveResult((result) => result && {
+      ...result,
+      conflicts: result.conflicts.filter((entry) => entry.rowId !== rowId)
     });
     refresh();
     return true;

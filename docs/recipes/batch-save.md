@@ -2,6 +2,8 @@
 
 `api.editing.save()` 以稳定变更快照为边界：提交开始后用户可以继续编辑；旧请求成功时只确认快照中的同值修改，新产生的修改仍保持脏状态。
 
+完整替换行数据或重新加载远程查询会创建新的数据作用域。旧请求仍向调用方返回其保存结果，但不会确认新作用域的修改，即使两个作用域包含相同的行 ID。Vue/React 编辑工作流也会隔离重挂载前的请求结果、冲突与回调。
+
 ```ts
 const result = await api.editing.save(async (changes) => {
   const response = await orderApi.saveBatch(changes);

@@ -13,7 +13,7 @@ for (const example of examples) {
     await page.goto(example.url, { waitUntil: "domcontentloaded" });
     await expect(page).toHaveTitle(example.title);
     const grid = page.getByRole("grid").first();
-    await expect(grid).toBeVisible();
+    await expect(grid).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(".mach-row[data-index]").first()).toBeVisible();
     await grid.focus();
     await expect(grid).toBeFocused();
@@ -25,6 +25,9 @@ for (const example of examples) {
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(example.url, { waitUntil: "domcontentloaded" });
     const grid = page.getByRole("grid").first();
+    // The Vue example loads its grid asynchronously; the toolbar shell can be
+    // ready first. Wait for the component before checking keyboard behavior.
+    await expect(grid).toBeVisible({ timeout: 30_000 });
     await expect(grid).toHaveAttribute("aria-label", /.+/);
 
     const firstCell = page.locator('.mach-row[data-index="0"] .mach-cell:not(.mach-cell--selection):not(.mach-cell--drag):visible').first();

@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.31.1 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.31.2 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
 
@@ -68,6 +68,8 @@ const tableConfig = defineVueTableConfig<Row>({
 未声明 `#loading` / `#empty` 时会直接使用 Core 的紧凑骨架加载态与插画空态；只有产品确实需要品牌化呈现时才提供 slot，避免每个页面重复维护同类状态组件。
 
 单元格编辑在用户点击对勾/取消或执行 Enter、Escape、Tab 键盘命令前保持挂载，焦点变化和中文输入法组合输入不会提前提交。整行事务请设置 `edit-type="fullRow"` 并增加 `rowActionsColumn()`，该操作列会自动切换编辑、保存和取消状态。
+
+粘贴、清空和填充会复用相同的列与整行校验配置。`useMachTableEditing()` 将保存结果与提交时的实例和行数据关联，重挂载或替换数据后，旧请求的结果、错误与冲突不会影响新记录。
 
 ## 全局接入
 

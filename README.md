@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.31.1-2563eb" alt="Source version 0.31.1" />
+  <img src="https://img.shields.io/badge/source-0.31.2-2563eb" alt="Source version 0.31.2" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -38,7 +38,7 @@ MachTable 为后台管理、工业台账、订单/工单、财务报表和低代
 | 大数据 | 行列双虚拟化、行池复用、可变行高索引、随机访问远程块、LRU 与并发控制、可选 Worker |
 | 数据模型 | 本地/服务端排序过滤、分页、无限滚动、树与懒加载、分组聚合、主从详情、固定行 |
 | 远程导出 | 可序列化的筛选、排序、可见列与跨页选择快照，供业务服务端执行全量导出；本地 CSV/XLSX 继续处理已加载数据 |
-| 编辑 | 单元格与原子整行编辑、对勾/取消、同步/异步校验、脏数据、撤销重做、部分保存与冲突处理 |
+| 编辑 | 单元格与原子整行编辑、对勾/取消、编辑/粘贴/清空/填充共用同步异步校验、脏数据、撤销重做、部分保存与冲突处理 |
 | 交互 | 多选/范围选择、复制粘贴、填充柄、主题化行拖拽与条件整行颜色、列宽调整、列工作台、统一无闪烁下拉、上下文菜单、操作列 |
 | 框架体验 | Vue 原生 slots、React renderer、全局/局部/异步接入、远程查询与编辑工作流 |
 | 治理 | 分层配置、命名预设、配置来源解释、领域化 API、版本化状态、稳定错误码、诊断快照 |
@@ -342,7 +342,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.31.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版增加可配置整行颜色并完善行拖拽排序，统一 Core、Vue、React 的行为；同时包含树展开点击、树控件与列宽拖动反馈修正。同时修正 Vue 表格按 key 重建时的 API 就绪时序，确保控制器与当前表格保持同步。原有包体积预算保持不变，升级时请留意拖拽事件时机及自动重排模式限制。
+当前源码版本为 `0.31.2`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版统一编辑、粘贴、清空和填充校验，保留缓存淘汰后的未保存数据，隔离数据替换及框架重建前的异步输入和保存结果；同时优化筛选计划并修正失效列的排序处理。公共 API、使用侧配置和包体预算保持不变。批量输入现在会执行已有校验；完整重载数据会清理旧作用域的脏状态和撤销历史，详见[升级指南](./docs/guide/upgrading.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

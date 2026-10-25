@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.31.2
+
+### Patch Changes
+
+- Unify editing, clipboard, clearing and fill validation, cancel stale async input, retain unsaved remote rows across cache eviction, and isolate framework workflows across grid replacement. Compile filter metadata once per refresh and preserve stable sorting when saved columns no longer exist, without adding public configuration or runtime dependencies.
+
 ## 0.31.1
 
 ### Patch Changes

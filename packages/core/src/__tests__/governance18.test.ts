@@ -248,6 +248,16 @@ describe("0.17 advanced filters and saved views", () => {
 });
 
 describe("0.17 batch save review and conflict resolution", () => {
+  it("releases an active full-row draft before replacing local data", () => {
+    const api = createRowsGrid();
+    expect(api.editing.startRow(0)).toBe(true);
+    api.rows.setData(rows.map(row => ({ ...row, name: "Replacement" })));
+    expect(api.editing.isRowActive()).toBe(false);
+    expect(api.editing.startRow(0)).toBe(true);
+    expect(document.querySelector<HTMLInputElement>(".mach-editor-input")?.value).toBe("Replacement");
+    api.destroy();
+  });
+
   it("keeps failed/conflicting rows dirty and acknowledges only successful snapshots", async () => {
     const api = createRowsGrid();
     api.editing.startCell({ rowIndex: 0, colId: "name" });
@@ -292,6 +302,27 @@ describe("0.17 batch save review and conflict resolution", () => {
     const result = await saving;
     expect(result.saved[0].cells[0].value).toBe("First");
     expect(api.editing.getChanges()[0].cells[0]).toEqual(expect.objectContaining({ originalValue: "First", value: "Second" }));
+    api.destroy();
+  });
+
+  it.each([false, true])("keeps a completed save out of replacement rows (new edits: %s)", async (editReplacement) => {
+    const api = createRowsGrid();
+    const edit = (value: string) => {
+      api.editing.startCell({ rowIndex: 0, colId: "name" });
+      document.querySelector<HTMLInputElement>(".mach-editor-input")!.value = value;
+      api.editing.stop();
+    };
+    edit("Old pending value");
+    let finish!: () => void;
+    const saving = api.editing.save(() => new Promise<void>(resolve => { finish = resolve; }));
+    api.rows.setData(rows.map(row => ({ ...row, name: "New scope" })));
+    if (editReplacement) edit("New edit");
+    const before = api.editing.getChanges();
+    finish();
+    const result = await saving;
+    expect(result.saved[0].cells[0].value).toBe("Old pending value");
+    expect(api.editing.getChanges()).toEqual(before);
+    expect(api.rows.getById("1")?.data?.name).toBe(editReplacement ? "New edit" : "New scope");
     api.destroy();
   });
 });

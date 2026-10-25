@@ -9,7 +9,7 @@ function textOf(value: any): string {
 
 export function evaluateTextFilter(value: any, conditions: TextFilterCondition[], operator: "and" | "or"): boolean {
   const v = textOf(value);
-  const results = conditions.map((c) => {
+  const matches = (c: TextFilterCondition): boolean => {
     const fv = (c.value ?? "").toLowerCase();
     switch (c.match) {
       case "contains":
@@ -31,9 +31,8 @@ export function evaluateTextFilter(value: any, conditions: TextFilterCondition[]
       default:
         return true;
     }
-  });
-  if (results.length === 0) return true;
-  return operator === "or" ? results.some(Boolean) : results.every(Boolean);
+  };
+  return conditions.length === 0 || (operator === "or" ? conditions.some(matches) : conditions.every(matches));
 }
 
 function compareNumberCondition(
@@ -66,9 +65,8 @@ function evaluateNumberCondition(value: any, condition: NumberFilterCondition): 
 }
 
 export function evaluateNumberFilter(value: any, conditions: NumberFilterCondition[], operator: "and" | "or"): boolean {
-  const results = conditions.map((condition) => evaluateNumberCondition(value, condition));
-  if (results.length === 0) return true;
-  return operator === "or" ? results.some(Boolean) : results.every(Boolean);
+  const matches = (condition: NumberFilterCondition) => evaluateNumberCondition(value, condition);
+  return conditions.length === 0 || (operator === "or" ? conditions.some(matches) : conditions.every(matches));
 }
 
 function toTime(value: any): number | null {
@@ -80,12 +78,13 @@ function toTime(value: any): number | null {
 }
 
 export function evaluateDateFilter(value: any, conditions: DateFilterCondition[], operator: "and" | "or"): boolean {
-  const results = conditions.map((c) => {
-    const isBlank = toTime(value) == null;
+  const time = toTime(value);
+  const matches = (c: DateFilterCondition): boolean => {
+    const isBlank = time == null;
     if (c.match === "blank") return isBlank;
     if (c.match === "notBlank") return !isBlank;
     if (isBlank) return false;
-    const t = toTime(value)!;
+    const t = time;
     const f = c.value != null ? toTime(c.value) : null;
     if (f == null) return false;
     switch (c.match) {
@@ -104,9 +103,8 @@ export function evaluateDateFilter(value: any, conditions: DateFilterCondition[]
       default:
         return true;
     }
-  });
-  if (results.length === 0) return true;
-  return operator === "or" ? results.some(Boolean) : results.every(Boolean);
+  };
+  return conditions.length === 0 || (operator === "or" ? conditions.some(matches) : conditions.every(matches));
 }
 
 export function evaluateSetFilter(value: any, filterValues: (string | number | null)[]): boolean {
@@ -130,57 +128,49 @@ export function evaluateColumnFilter(value: any, filter: ColumnFilter): boolean 
   }
 }
 
-function evaluateAdvancedNode(
+type RowFilter = (node: RowNode<any>) => boolean;
+type CellValueReader = (node: RowNode<any>, column: Column) => any;
+
+/** Resolves column identities once per pipeline, without caching application values. */
+function compileAdvancedFilter(
   node: AdvancedFilterNode,
   columns: ReadonlyMap<string, Column>,
-  row: RowNode<any>,
-  getCellValue: (row: RowNode<any>, column: Column) => any
-): boolean {
+  read: CellValueReader
+): RowFilter {
   if (node.kind === "condition") {
     const column = columns.get(node.colId);
-    return !column || evaluateColumnFilter(getCellValue(row, column), node.filter);
+    return column ? (row) => evaluateColumnFilter(read(row, column), node.filter) : () => true;
   }
-  const passed = node.operator === "or"
-    ? node.children.some((child) => evaluateAdvancedNode(child, columns, row, getCellValue))
-    : node.children.every((child) => evaluateAdvancedNode(child, columns, row, getCellValue));
-  return node.not ? !passed : passed;
+  const children = node.children.map((child) => compileAdvancedFilter(child, columns, read));
+  return (row) => {
+    const passed = node.operator === "or"
+      ? children.some((test) => test(row))
+      : children.every((test) => test(row));
+    return node.not ? !passed : passed;
+  };
 }
 
-export function evaluateAdvancedFilter(
-  row: RowNode<any>,
-  columns: Column[],
-  model: AdvancedFilterModel | null,
-  getCellValue: (row: RowNode<any>, column: Column) => any
-): boolean {
-  if (!model) return true;
-  return evaluateAdvancedNode(model.root, new Map(columns.map((column) => [column.id, column])), row, getCellValue);
-}
-
-export function doesNodePassFilters(
-  node: RowNode<any>,
-  columns: Column[],
+/**
+ * A filter plan belongs to one refresh. Compile metadata and search tokens once,
+ * but keep getters live so external dictionaries/context never become stale.
+ */
+export function createRowFilter(
+  columns: readonly Column[],
   filterModel: FilterModel,
   advancedFilterModel: AdvancedFilterModel | null,
   quickFilter: string | null,
-  getCellValue: (node: RowNode<any>, column: Column) => any
-): boolean {
-  for (const colId of Object.keys(filterModel)) {
-    const filter = filterModel[colId];
-    const column = columns.find((c) => c.id === colId);
-    if (!column) continue;
-    const value = getCellValue(node, column);
-    if (!evaluateColumnFilter(value, filter)) return false;
-  }
-
-  if (!evaluateAdvancedFilter(node, columns, advancedFilterModel, getCellValue)) return false;
-
-  if (quickFilter && quickFilter.trim() !== "") {
-    const tokens = quickFilter.trim().toLowerCase().split(/\s+/);
-    for (const token of tokens) {
-      const hit = columns.some((column) => textOf(getCellValue(node, column)).includes(token));
-      if (!hit) return false;
-    }
-  }
-
-  return true;
+  read: CellValueReader
+): RowFilter {
+  const byId = new Map(columns.map((column) => [column.id, column]));
+  const filters = Object.entries(filterModel).flatMap(([id, filter]) => {
+    const column = byId.get(id);
+    return column ? [{ column, filter }] : [];
+  });
+  const advanced = advancedFilterModel ? compileAdvancedFilter(advancedFilterModel.root, byId, read) : () => true;
+  const tokens = quickFilter?.trim().toLowerCase().split(/\s+/).filter(Boolean) ?? [];
+  return (node) => {
+    if (!filters.every(({ column, filter }) => evaluateColumnFilter(read(node, column), filter))) return false;
+    if (!advanced(node)) return false;
+    return tokens.every((token) => columns.some((column) => textOf(read(node, column)).includes(token)));
+  };
 }

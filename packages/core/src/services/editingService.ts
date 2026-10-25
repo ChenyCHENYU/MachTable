@@ -4,10 +4,14 @@ import type { RowNode } from "../types/row";
 import type { ICellEditor } from "../types/params";
 import { createEditor } from "./editors";
 import { cleanupCellContent } from "../render/cellContent";
+import { isPromise, type InputChange } from "./inputService";
 
 type EditingContext = Pick<
   GridCore<any>,
   | "bodyRenderer"
+  | "cancelPendingInput"
+  | "inputService"
+  | "isDestroyed"
   | "columnModel"
   | "emit"
   | "getApi"
@@ -18,11 +22,9 @@ type EditingContext = Pick<
   | "reportError"
   | "resolveCellEditor"
   | "rowModel"
-  | "setCellValue"
   | "statusBarService"
   | "summaryRenderer"
   | "undoService"
-  | "writeValue"
 >;
 
 interface MountedEditor {
@@ -97,6 +99,11 @@ export class EditingService {
     return this.cellEditing != null;
   }
 
+  /** Keeps an active editor's remote block resident even when focus is elsewhere. */
+  getEditingRowIndex(): number | null {
+    return this.cellEditing?.node.rowIndex ?? (this.rowEditing ? this.currentRowIndex(this.rowEditing) : null);
+  }
+
   isRowEditing(rowIndex?: number): boolean {
     if (!this.rowEditing) return false;
     return rowIndex == null || this.currentRowIndex(this.rowEditing) === rowIndex;
@@ -140,6 +147,7 @@ export class EditingService {
     const cell = this.core.bodyRenderer.getCellElement(rowIndex, column.id);
     if (!cell) return false;
 
+    this.core.cancelPendingInput();
     const oldValue = this.core.getCellValue(node, column);
     const editor = this.createCellEditor(node, column, rowIndex, oldValue, keyPress);
     if (!editor) return false;
@@ -190,6 +198,7 @@ export class EditingService {
     const node = this.core.rowModel.getDisplayedRow(rowIndex);
     if (!node || node.data == null || node.isDetail || node.isGroup) return false;
 
+    this.core.cancelPendingInput();
     const drafts = new Map<string, RowDraft>();
     for (const column of this.core.columnModel.getOrderedVisible()) {
       if (!this.isEditable(node, column)) continue;
@@ -278,36 +287,30 @@ export class EditingService {
       return Promise.resolve(this.finishCellStop(editing, true, editing.oldValue));
     }
 
-    const validation = this.validateValue(editing.node, editing.column, editing.oldValue, newValue);
-    if (validation && typeof (validation as Promise<unknown>).then === "function") {
-      const token = ++this.stopToken;
-      this.setCellBusy(editing, true);
-      const task = Promise.resolve(validation)
-        .then((result) => {
-          if (token !== this.stopToken || this.cellEditing !== editing) return false;
-          if (typeof result === "string") {
-            this.showError(editing.editor, result);
-            return false;
-          }
-          return this.finishCellStop(editing, false, newValue);
-        })
-        .catch((error) => {
-          if (token !== this.stopToken || this.cellEditing !== editing) return false;
-          this.core.reportError(error, "validate", { colId: editing.column.id, rowId: editing.node.id });
-          this.showError(editing.editor, "Validation failed");
-          return false;
-        })
-        .finally(() => {
-          if (this.stopPromise === task) this.stopPromise = null;
-        });
-      this.stopPromise = task;
-      return task;
-    }
-    if (typeof validation === "string") {
-      this.showError(editing.editor, validation);
-      return Promise.resolve(false);
-    }
-    return Promise.resolve(this.finishCellStop(editing, false, newValue));
+    const changes = [{ node: editing.node, column: editing.column, oldValue: editing.oldValue, newValue }];
+    const guard = this.core.inputService.guard(changes);
+    const token = ++this.stopToken;
+    const current = () => token === this.stopToken && this.cellEditing === editing && guard();
+    const finish = (errors: Array<{ colId: string; message: string }>): boolean => {
+      if (!current()) {
+        if (token === this.stopToken && this.cellEditing === editing) this.finishCellStop(editing, true, editing.oldValue);
+        return false;
+      }
+      if (errors.length) {
+        this.setCellBusy(editing, false);
+        this.showError(editing.editor, errors[0].message);
+        return false;
+      }
+      return this.finishCellStop(editing, false, newValue);
+    };
+    const validation = this.core.inputService.validate(changes, current);
+    if (!isPromise(validation)) return Promise.resolve(finish(validation));
+    this.setCellBusy(editing, true);
+    const task = validation.then(finish).finally(() => {
+      if (this.stopPromise === task) this.stopPromise = null;
+    });
+    this.stopPromise = task;
+    return task;
   }
 
   stopRowAsync(cancel = false): Promise<boolean> {
@@ -319,52 +322,51 @@ export class EditingService {
       return Promise.resolve(this.finishRowStop(row, true));
     }
     if (this.stopPromise) return this.stopPromise;
-
     for (const draft of row.drafts.values()) this.captureRowDraft(draft);
     const changed = [...row.drafts.values()].filter((draft) => !Object.is(draft.oldValue, draft.value));
     if (changed.length === 0) return Promise.resolve(this.finishRowStop(row, false));
 
+    const changes = this.rowChanges(row, changed);
+    const guard = this.core.inputService.guard(changes);
     const token = ++this.stopToken;
+    const current = () => token === this.stopToken && this.rowEditing === row && guard();
     for (const draft of changed) draft.error = undefined;
+    const finish = (errors: Array<{ colId: string; message: string }>): boolean => {
+      if (!current()) {
+        if (token === this.stopToken && this.rowEditing === row) this.finishRowStop(row, true);
+        return false;
+      }
+      if (errors.length) {
+        this.showRowErrors(row, errors.map(({ colId, message }) => ({ draft: row.drafts.get(colId) ?? changed[0], message })));
+        return false;
+      }
+      return this.finishRowStop(row, false);
+    };
+    const validation = this.core.inputService.validate(changes, current);
+    if (!isPromise(validation)) return Promise.resolve(finish(validation));
     row.validating = true;
     this.setRowBusy(row, true);
-    const task = Promise.all(
-      changed.map(async (draft) => {
-        try {
-          const result = await this.validateValue(row.node, draft.column, draft.oldValue, draft.value);
-          return { draft, message: typeof result === "string" ? result : null };
-        } catch (error) {
-          this.core.reportError(error, "validate", { colId: draft.column.id, rowId: row.node.id });
-          return { draft, message: "Validation failed" };
-        }
-      })
-    )
-      .then(async (results) => {
-        if (token !== this.stopToken || this.rowEditing !== row) return false;
-        const invalid = results.filter((result) => result.message != null);
-        if (invalid.length > 0) {
-          this.showRowErrors(row, invalid.map((result) => ({ draft: result.draft, message: result.message! })));
-          return false;
-        }
-        const rowErrors = await this.validateRowDraft(row, changed);
-        if (token !== this.stopToken || this.rowEditing !== row) return false;
-        if (rowErrors.length > 0) {
-          this.showRowErrors(row, rowErrors);
-          return false;
-        }
-        return this.finishRowStop(row, false);
-      })
-      .finally(() => {
-        if (this.stopPromise === task) this.stopPromise = null;
-      });
+    const task = validation.then(finish).finally(() => {
+      if (this.stopPromise === task) this.stopPromise = null;
+    });
     this.stopPromise = task;
     return task;
   }
 
   private finishCellStop(editing: CellEditingState, cancel: boolean, newValue: any): boolean {
     if (this.cellEditing !== editing) return false;
+    const change = { node: editing.node, column: editing.column, oldValue: editing.oldValue, newValue };
+    const changed = !cancel && newValue !== undefined && !Object.is(editing.oldValue, newValue);
+    if (changed) {
+      const failure = this.core.inputService.commit([change], () => !this.core.isDestroyed());
+      if (failure) {
+        this.setCellBusy(editing, false);
+        this.showError(editing.editor, failure.message);
+        return false;
+      }
+    }
     this.cellEditing = null;
-    const changed = !cancel && this.applyValue(editing.node, editing.column, editing.oldValue, newValue);
+    if (changed) this.core.notifyCellValueChanged(editing.node, editing.column, editing.oldValue, newValue);
     this.destroyMountedEditor(editing, true);
 
     this.core.emit("cellEditingStopped", {
@@ -410,35 +412,25 @@ export class EditingService {
   ): Array<{ colId: string; oldValue: unknown; newValue: unknown }> | null {
     const changed = [...row.drafts.values()].filter((draft) => !Object.is(draft.oldValue, draft.value));
     if (changed.length === 0) return [];
-    const applied: RowDraft[] = [];
+    const changes = this.rowChanges(row, changed);
+    const failure = this.core.inputService.commit(changes, () => !this.core.isDestroyed());
+    if (failure) {
+      this.showRowErrors(row, [{ draft: row.drafts.get(failure.colId) ?? changed[0], message: failure.message }]);
+      return null;
+    }
+    const scope = this.core.inputService.scope(changes);
     this.core.undoService.beginBatch();
-    for (const draft of changed) {
-      if (!this.core.writeValue(row.node, draft.column, draft.value, draft.oldValue)) {
-        let rollbackFailed = false;
-        for (const previous of [...applied].reverse()) {
-          if (!this.core.writeValue(row.node, previous.column, previous.oldValue, previous.value)) rollbackFailed = true;
-        }
-        this.core.undoService.cancelBatch();
-        if (rollbackFailed) {
-          this.core.reportError(new Error("A valueSetter rejected full-row rollback"), "rowEditRollback", {
-            rowId: row.node.id,
-            colId: draft.column.id
-          });
-        }
-        this.showRowErrors(row, [{ draft, message: "Value was rejected by the column setter" }]);
-        return null;
+    try {
+      for (const change of changes) {
+        if (!scope()) break;
+        this.core.notifyCellValueChanged(row.node, change.column, change.oldValue, change.newValue);
       }
-      applied.push(draft);
-    }
-    for (const draft of applied) {
-      this.core.notifyCellValueChanged(row.node, draft.column, draft.oldValue, draft.value);
-    }
-    this.core.undoService.endBatch();
-    return applied.map((draft) => ({
-      colId: draft.column.id,
-      oldValue: draft.oldValue,
-      newValue: draft.value
-    }));
+    } finally { this.core.undoService.endBatch(); }
+    return changes.map(({ column, oldValue, newValue }) => ({ colId: column.id, oldValue, newValue }));
+  }
+
+  private rowChanges(row: RowEditingState, drafts: RowDraft[]): InputChange[] {
+    return drafts.map(({ column, oldValue, value }) => ({ node: row.node, column, oldValue, newValue: value }));
   }
 
   private mountRowDraft(rowIndex: number, row: RowEditingState, draft: RowDraft, cell: HTMLElement): boolean {
@@ -544,64 +536,6 @@ export class EditingService {
     return editor;
   }
 
-  private validateValue(
-    node: RowNode<any>,
-    column: Column,
-    oldValue: any,
-    newValue: any
-  ): string | true | null | undefined | Promise<string | true | null | undefined> {
-    const validate = column.colDef.validate;
-    if (!validate) return true;
-    try {
-      return validate(newValue, {
-        oldValue,
-        newValue,
-        data: node.data!,
-        node,
-        colDef: column.colDef,
-        column,
-        api: this.core.getApi()
-      });
-    } catch (error) {
-      this.core.reportError(error, "validate", { colId: column.id, rowId: node.id });
-      return "Validation failed";
-    }
-  }
-
-  private async validateRowDraft(
-    row: RowEditingState,
-    changed: RowDraft[]
-  ): Promise<Array<{ draft: RowDraft; message: string }>> {
-    const validator = this.core.options.rowEditValidator;
-    if (!validator) return [];
-    const values: Record<string, unknown> = Object.create(null);
-    for (const [colId, draft] of row.drafts) values[colId] = draft.value;
-    const changes = changed.map((draft) => ({
-      colId: draft.column.id,
-      oldValue: draft.oldValue,
-      newValue: draft.value
-    }));
-    let result: import("../types/options").RowEditValidationResult;
-    try {
-      result = await validator({ data: row.node.data!, node: row.node, values, changes, api: this.core.getApi() });
-    } catch (error) {
-      this.core.reportError(error, "rowEditValidator", { rowId: row.node.id });
-      return [{ draft: changed[0], message: "Row validation failed" }];
-    }
-    if (typeof result === "string") return [{ draft: changed[0], message: result }];
-    if (!result || result === true || typeof result !== "object") return [];
-    const errors: Array<{ draft: RowDraft; message: string }> = [];
-    for (const [colId, message] of Object.entries(result)) {
-      const draft = row.drafts.get(colId);
-      if (draft && typeof message === "string" && message) errors.push({ draft, message });
-    }
-    if (errors.length === 0) {
-      const firstMessage = Object.values(result).find((message) => typeof message === "string" && message);
-      if (typeof firstMessage === "string") errors.push({ draft: changed[0], message: firstMessage });
-    }
-    return errors;
-  }
-
   private showRowErrors(row: RowEditingState, errors: Array<{ draft: RowDraft; message: string }>): void {
     row.validating = false;
     this.setRowBusy(row, false);
@@ -651,11 +585,6 @@ export class EditingService {
       else editorEl.removeAttribute("aria-busy");
       editorEl.inert = busy;
     }
-  }
-
-  private applyValue(node: RowNode<any>, column: Column, oldValue: any, newValue: any): boolean {
-    if (newValue === undefined) return false;
-    return this.core.setCellValue(node, column, newValue, oldValue);
   }
 
   private focusEditor(editor: ICellEditor, column: Column, node: RowNode<any>): void {

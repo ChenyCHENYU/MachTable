@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.31.1 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.31.2 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 ```bash
 pnpm add @agile-team/mach-table-react
@@ -76,6 +76,8 @@ export default defineMachTableConfig({
 ```
 
 Provider 可按路由/布局嵌套，最近一层覆盖外层，表格 props 优先级最高。
+
+编辑、粘贴、清空和填充复用已有列与整行校验。`useMachTableEditing()` 隔离重挂载或数据替换前的保存结果、错误和冲突；查询工作流在 StrictMode 下保留 `immediate: false`，重复设置相同搜索值不会重新请求。
 
 ## 按需加载
 

@@ -7,6 +7,7 @@ type KeyboardContext = Pick<
   | "bodyRenderer"
   | "buildRangeTsv"
   | "clearRangeValues"
+  | "cancelPendingInput"
   | "columnModel"
   | "editingService"
   | "isDestroyed"
@@ -187,6 +188,7 @@ export class KeyboardService {
   private handleRangeCommand(e: KeyboardEvent): boolean {
     const body = this.core.bodyRenderer;
     if (e.key === "Escape") {
+      this.core.cancelPendingInput();
       if (this.core.options.enableRangeSelection && body.normalizedRange()) {
         e.preventDefault();
         body.clearRangeSelection();

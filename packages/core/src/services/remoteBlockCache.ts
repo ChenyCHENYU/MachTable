@@ -43,6 +43,7 @@ export class RemoteBlockCache<TData> {
   private missCount = 0;
   private evictionCount = 0;
   private activeRequests = 0;
+  private retainedBlocks = new Set<number>();
 
   constructor(
     private maxBlocks: number,
@@ -58,6 +59,15 @@ export class RemoteBlockCache<TData> {
     this.maxConcurrentRequests = normalizeBlockLimit(maxConcurrentRequests);
     this.evictOverflow();
     this.drainQueue();
+  }
+
+  /**
+   * The row model supplies only its bounded render/focus/edit window. Keep one
+   * demand slot beyond that window so a programmatic load can still make progress.
+   */
+  retain(blocks: Set<number>): void {
+    this.retainedBlocks = blocks;
+    this.evictOverflow();
   }
 
   peek(blockIndex: number): RemoteBlockResult<TData> | undefined {
@@ -116,6 +126,7 @@ export class RemoteBlockCache<TData> {
 
   purge(): void {
     this.generation++;
+    this.retainedBlocks.clear();
     for (const request of this.inflight.values()) {
       request.controller.abort();
       if (request.state === "queued") request.reject(abortError(request.controller.signal));
@@ -227,10 +238,12 @@ export class RemoteBlockCache<TData> {
   }
 
   private evictOverflow(): void {
-    while (this.blocks.size > this.maxBlocks) {
+    const limit = Math.max(this.maxBlocks, this.retainedBlocks.size + 1);
+    while (this.blocks.size > limit) {
       let oldestIndex = -1;
       let oldestTime = Number.POSITIVE_INFINITY;
       for (const [index, entry] of this.blocks) {
+        if (this.retainedBlocks.has(index)) continue;
         if (entry.touchedAt < oldestTime) {
           oldestIndex = index;
           oldestTime = entry.touchedAt;

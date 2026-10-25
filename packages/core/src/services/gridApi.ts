@@ -630,8 +630,13 @@ export class GridApiImpl<TData = any> {
   ): Promise<import("../types/api").GridBatchSaveResult<TData>> {
     const snapshot = createSaveSnapshot(this.core.changeTracker.getChanges(), rowIds);
     if (snapshot.length === 0) return { submitted: [], saved: [], failures: [], conflicts: [] };
+    const revision = this.core.rowModel.getDataRevision();
     const result = normalizeBatchSaveResult(snapshot, await handler(snapshot));
-    if (!this.core.isDestroyed()) this.core.changeTracker.acknowledge(result.saved);
+    // A completed request still belongs to its submitted data scope, even when
+    // the same grid instance now displays replacement rows with the same IDs.
+    if (!this.core.isDestroyed() && revision === this.core.rowModel.getDataRevision()) {
+      this.core.changeTracker.acknowledge(result.saved);
+    }
     return result;
   }
 

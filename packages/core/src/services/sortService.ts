@@ -9,30 +9,26 @@ export function sortNodes<TData>(
   columns: Column[],
   getCellValue: (node: RowNode<TData>, column: Column) => any
 ): RowNode<TData>[] {
-  const colById = new Map<string, Column>();
-  for (const c of columns) colById.set(c.id, c);
-
-  const comparators: ((a: any, b: any, na: RowNode<TData>, nb: RowNode<TData>) => number)[] = [];
-  const directions: ("asc" | "desc")[] = [];
-  for (const item of sortModel) {
-    const column = colById.get(item.colId);
-    if (!column) continue;
-    comparators.push(column.colDef.comparator ?? defaultComparator);
-    directions.push(item.direction);
-  }
-
+  const byId = new Map(columns.map((column) => [column.id, column]));
+  // Keep the resolved column and comparator together: obsolete column IDs must
+  // not shift the value slots of the remaining multi-sort clauses.
+  const clauses = sortModel.flatMap((item) => {
+    const column = byId.get(item.colId);
+    return column ? [{ column, compare: column.colDef.comparator ?? defaultComparator, direction: item.direction }] : [];
+  });
   const decorated = nodes.map((node) => ({
     node,
-    values: sortModel.map((s) => getCellValue(node, colById.get(s.colId)!))
+    values: clauses.map(({ column }) => getCellValue(node, column))
   }));
 
   decorated.sort((a, b) => {
-    for (let i = 0; i < comparators.length; i++) {
-      const r = comparators[i](a.values[i], b.values[i], a.node, b.node);
-      if (r !== 0) return directions[i] === "asc" ? r : -r;
+    for (let i = 0; i < clauses.length; i++) {
+      const clause = clauses[i];
+      const compared = clause.compare(a.values[i], b.values[i], a.node, b.node);
+      if (compared !== 0) return clause.direction === "asc" ? compared : -compared;
     }
     return 0;
   });
 
-  return decorated.map((d) => d.node);
+  return decorated.map(({ node }) => node);
 }

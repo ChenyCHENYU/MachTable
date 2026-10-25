@@ -7,6 +7,7 @@ import { ResizeService } from "../services/resizeService";
 import { ColumnDragService } from "../services/columnDragService";
 import { KeyboardService } from "../services/keyboardService";
 import { EditingService } from "../services/editingService";
+import { InputService, type InputChange } from "../services/inputService";
 import { FilterPopupService } from "../services/filterPopup";
 import { ColumnMenuService } from "../services/columnMenuService";
 import { ContextMenuService } from "../services/contextMenuService";
@@ -80,6 +81,7 @@ export class GridCore<TData = any> {
   readonly columnDragService: ColumnDragService;
   readonly keyboardService: KeyboardService;
   readonly editingService: EditingService;
+  readonly inputService: InputService;
   readonly undoService: UndoRedoService;
   readonly changeTracker: ChangeTrackingService<TData>;
   readonly performanceMonitor: PerformanceMonitor;
@@ -134,6 +136,7 @@ export class GridCore<TData = any> {
     this.columnDragService = new ColumnDragService(this);
     this.keyboardService = new KeyboardService(this);
     this.editingService = new EditingService(this);
+    this.inputService = new InputService(this);
     this.undoService = new UndoRedoService(this);
     this.performanceMonitor = new PerformanceMonitor();
     this.updateScheduler = new GridUpdateScheduler((request) => this.applyScheduledUpdate(request));
@@ -365,40 +368,11 @@ export class GridCore<TData = any> {
     return false;
   }
 
-  setCellValue(node: RowNode<any>, column: Column, newValue: any, oldValue: any): boolean {
-    if (newValue === undefined || newValue === oldValue) return false;
-    const colDef = column.colDef;
-
-    let changed: boolean;
-    if (colDef.valueSetter) {
-      try {
-        changed = colDef.valueSetter({
-          oldValue,
-          newValue,
-          data: node.data!,
-          node,
-          colDef,
-          column,
-          api: this.api
-        });
-      } catch (error) {
-        this.reportError(error, "valueSetter", { colId: column.id, rowId: node.id });
-        return false;
-      }
-    } else if (colDef.field) {
-      changed = setByPath(node.data, colDef.field, newValue);
-    } else {
-      return false;
-    }
-
-    if (changed) this.notifyCellValueChanged(node, column, oldValue, newValue);
-    return changed;
-  }
-
   /** Emits the shared value-change side effects after a caller has written data transactionally. */
   notifyCellValueChanged(node: RowNode<any>, column: Column, oldValue: any, newValue: any): void {
     this.bodyRenderer.invalidateRowHeight(node);
     this.bodyRenderer.queueFlash([node.rowIndex], [column.id]);
+    this.undoService.record({ nodeId: node.id, columnId: column.id, oldValue, newValue });
     this.emit("cellValueChanged", {
       oldValue,
       newValue,
@@ -408,7 +382,6 @@ export class GridCore<TData = any> {
       colDef: column.colDef,
       data: node.data!
     });
-    this.undoService.record({ nodeId: node.id, columnId: column.id, oldValue, newValue });
   }
 
   buildRangeTsv(range: { r1: number; c1: number; r2: number; c2: number }): string {
@@ -436,27 +409,26 @@ export class GridCore<TData = any> {
   clearRangeValues(range: { r1: number; c1: number; r2: number; c2: number }): void {
     if (this.destroyed) return;
     const flat = this.columnModel.getOrderedVisible();
-    const changedRows = new Set<number>();
-    this.undoService.beginBatch();
-    try {
-      for (let r = range.r1; r <= range.r2; r++) {
-        const node = this.rowModel.getDisplayedRow(r);
-        if (!node || node.isDetail || node.isGroup) continue;
-        for (let c = range.c1; c <= range.c2; c++) {
-          const col = flat[c];
-          if (!col || col.hasCheckbox || col.isDetailToggle || col.colDef.rowDrag) continue;
-          if (!this.editingService.isEditable(node, col)) continue;
-          const old = this.getCellValue(node, col);
-          if (this.setCellValue(node, col, null, old)) changedRows.add(r);
-        }
+    const changes: InputChange[] = [];
+    for (let r = range.r1; r <= range.r2; r++) {
+      const node = this.rowModel.getDisplayedRow(r);
+      if (!node || node.isDetail || node.isGroup) continue;
+      for (let c = range.c1; c <= range.c2; c++) {
+        const column = flat[c];
+        if (!column || column.hasCheckbox || column.isDetailToggle || column.colDef.rowDrag) continue;
+        changes.push({ node, column, oldValue: this.getCellValue(node, column), newValue: null });
       }
-    } finally {
-      this.undoService.endBatch();
     }
-    if (changedRows.size > 0) {
-      this.bodyRenderer.refreshRows([...changedRows]);
-      this.summaryRenderer.refresh();
-    }
+    this.applyInputChanges(changes);
+  }
+
+  /** User input is validated here; trusted data transactions and undo replay stay separate. */
+  applyInputChanges(changes: readonly InputChange[]): void {
+    this.inputService.apply(changes);
+  }
+
+  cancelPendingInput(): void {
+    this.inputService.cancel();
   }
 
   pasteText(text: string, startRow: number, startColIdx: number): void {
@@ -465,25 +437,15 @@ export class GridCore<TData = any> {
     if (grid.length === 0) return;
     const flat = this.columnModel.getOrderedVisible();
     const rowCount = this.rowModel.getDisplayedRowCount();
-    const changedRows = new Set<number>();
+    const changes: InputChange[] = [];
     let r = startRow;
-
-    this.undoService.beginBatch();
-    try {
-      for (const line of grid) {
-        const row = this.nextPasteRow(r, rowCount);
-        if (!row) break;
-        this.pasteLine(row.node, row.index, line, flat, startColIdx, changedRows);
-        r = row.index + 1;
-      }
-    } finally {
-      this.undoService.endBatch();
+    for (const line of grid) {
+      const row = this.nextPasteRow(r, rowCount);
+      if (!row) break;
+      this.pasteLine(row.node, line, flat, startColIdx, changes);
+      r = row.index + 1;
     }
-
-    if (changedRows.size > 0) {
-      this.bodyRenderer.refreshRows([...changedRows]);
-      this.summaryRenderer.refresh();
-    }
+    this.applyInputChanges(changes);
   }
 
   private nextPasteRow(start: number, rowCount: number): { index: number; node: RowNode<TData> } | null {
@@ -506,38 +468,45 @@ export class GridCore<TData = any> {
 
   private pasteLine(
     node: RowNode<TData>,
-    rowIndex: number,
     line: readonly string[],
     columns: Column[],
     startColIdx: number,
-    changedRows: Set<number>
+    changes: InputChange[]
   ): void {
     let columnIndex = startColIdx;
     for (const token of line) {
       columnIndex = this.nextPasteColumn(columns, columnIndex);
       if (columnIndex >= columns.length) return;
-      if (this.pasteCell(node, columns[columnIndex], token)) changedRows.add(rowIndex);
+      const column = columns[columnIndex];
+      const oldValue = this.getCellValue(node, column);
+      const numeric = (typeof oldValue === "number" || column.colDef.cellEditor === "number")
+        && token !== "" && !Number.isNaN(Number(token));
+      const newValue = token === "" ? null : numeric ? Number(token) : token;
+      changes.push({ node, column, oldValue, newValue });
       columnIndex++;
     }
-  }
-
-  private pasteCell(node: RowNode<TData>, column: Column, token: string): boolean {
-    if (!this.editingService.isEditable(node, column)) return false;
-    const oldValue = this.getCellValue(node, column);
-    const numeric = typeof oldValue === "number" && token !== "" && !Number.isNaN(Number(token));
-    const value = token === "" ? null : numeric ? Number(token) : token;
-    return this.setCellValue(node, column, value, oldValue);
   }
 
   pasteFromSystemClipboard(): Promise<void> {
     const start = this.bodyRenderer.getPasteStart();
     if (!start) return Promise.resolve();
+    const current = this.inputService.begin();
+    const node = this.rowModel.getDisplayedRow(start.row);
+    const column = this.columnModel.getOrderedVisible()[start.colIdx];
+    if (!node || !column) return Promise.resolve();
+    const oldValue = this.getCellValue(node, column);
+    const scope = this.inputService.scope([{ node, column, oldValue, newValue: oldValue }]);
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
         return navigator.clipboard
           .readText()
           .then((text) => {
-            if (text) this.pasteText(text, start.row, start.colIdx);
+            const anchor = this.bodyRenderer.getPasteStart();
+            if (text && current() && scope() && anchor?.row === start.row && anchor.colIdx === start.colIdx
+              && this.rowModel.getDisplayedRow(start.row) === node
+              && this.columnModel.getOrderedVisible()[start.colIdx] === column) {
+              this.pasteText(text, start.row, start.colIdx);
+            }
           })
           .catch(() => undefined);
       }
@@ -977,6 +946,7 @@ export class GridCore<TData = any> {
       this.persistGridState();
     }
     this.destroyed = true;
+    this.cancelPendingInput();
     if (this.readyRafId) cancelAnimationFrame(this.readyRafId);
     this.readyRafId = 0;
     this.settleReady();

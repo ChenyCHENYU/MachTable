@@ -38,7 +38,11 @@ export function useMachTableController<TData>(
 
   useEffect(() => {
     const api = table.api;
-    if (!api || api.isDestroyed() || query) return;
+    if (query) return;
+    if (!api || api.isDestroyed()) {
+      setLocalSelection((rows) => rows.length ? [] : rows);
+      return;
+    }
     const sync = () => setLocalSelection(api.selection.getRows());
     sync();
     return api.on("selectionChanged", sync);
@@ -46,7 +50,7 @@ export function useMachTableController<TData>(
   useEffect(() => {
     if (!query) table.apiRef.current?.filtering.setQuickText(search || null);
     else query.setQuickFilterText(search || null);
-  }, [query, search, table.apiRef]);
+  }, [query, search, table.api, table.apiRef]);
 
   const reload = useMemo(() => async (): Promise<void> => {
     if (query) await query.reload();

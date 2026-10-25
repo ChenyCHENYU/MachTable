@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { PaneType } from "../services/columnModel";
 import type { Column } from "../services/column";
+import type { InputChange } from "../services/inputService";
 import { hasColumnType } from "../core/resolveOptions";
 import type { RowNode } from "../types/row";
 import type { RefreshCellsParams } from "../types/api";
@@ -40,12 +41,11 @@ type BodyContext = Pick<
   | "resolveCellRenderer"
   | "rowModel"
   | "selectionService"
-  | "setCellValue"
+  | "applyInputChanges"
   | "skeleton"
   | "summaryRenderer"
   | "toggleDetail"
   | "tooltipService"
-  | "undoService"
 >;
 
 interface RowSlot {
@@ -645,6 +645,11 @@ export class BodyRenderer {
     this.colFirst = range.first;
     this.colLastExcl = range.lastExcl;
     return range.first !== prevFirst || range.lastExcl !== prevLast;
+  }
+
+  /** The pooled row window, including its bounded virtualization buffer. */
+  getRenderedRowRange(): { first: number; lastExcl: number } {
+    return { first: this.first, lastExcl: this.lastExcl };
   }
 
   updateRange(force = false, checkColumnWindow = true): void {
@@ -1677,21 +1682,10 @@ export class BodyRenderer {
     targetEnd: number
   ): void {
     const flat = this.core.columnModel.getOrderedVisible();
-    const changedRows = new Set<number>();
-    this.core.undoService.beginBatch();
-    try {
-      for (let r = r1; r <= r2; r++) {
-        this.fillHorizontalRow(r, c1, c2, targetEnd, flat, changedRows);
-      }
-    } finally {
-      this.core.undoService.endBatch();
-    }
-
-    if (changedRows.size > 0) {
-      this.refreshRows([...changedRows]);
-      this.core.summaryRenderer.refresh();
-      this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
-    }
+    const changes: InputChange[] = [];
+    for (let r = r1; r <= r2; r++) this.fillHorizontalRow(r, c1, c2, targetEnd, flat, changes);
+    this.core.applyInputChanges(changes);
+    this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
   }
 
   private fillHorizontalRow(
@@ -1700,7 +1694,7 @@ export class BodyRenderer {
     sourceEnd: number,
     targetEnd: number,
     columns: Column[],
-    changedRows: Set<number>
+    changes: InputChange[]
   ): void {
     const node = this.core.rowModel.getDisplayedRow(rowIndex);
     if (!node || node.isDetail || node.isGroup) return;
@@ -1715,7 +1709,7 @@ export class BodyRenderer {
       if (!isFillableColumn(column) || !this.core.editingService.isEditable(node, column)) continue;
       const value = fillPatternValue(pattern, index - sourceStart);
       const oldValue = this.core.getCellValue(node, column);
-      if (this.core.setCellValue(node, column, value, oldValue)) changedRows.add(rowIndex);
+      changes.push({ node, column, oldValue, newValue: value });
     }
   }
 
@@ -1766,19 +1760,10 @@ export class BodyRenderer {
 
   private fillValues(r1: number, r2: number, c1: number, c2: number, targetEnd: number): void {
     const flat = this.core.columnModel.getOrderedVisible();
-    const changedRows = new Set<number>();
-    this.core.undoService.beginBatch();
-    try {
-      this.fillValuesInner(r1, r2, c1, c2, targetEnd, flat, changedRows);
-    } finally {
-      this.core.undoService.endBatch();
-    }
-
-    if (changedRows.size > 0) {
-      this.refreshRows([...changedRows]);
-      this.core.summaryRenderer.refresh();
-      this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
-    }
+    const changes: InputChange[] = [];
+    this.fillValuesInner(r1, r2, c1, c2, targetEnd, flat, changes);
+    this.core.applyInputChanges(changes);
+    this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
   }
 
   private fillValuesInner(
@@ -1788,12 +1773,12 @@ export class BodyRenderer {
     c2: number,
     targetEnd: number,
     flat: Column[],
-    changedRows: Set<number>
+    changes: InputChange[]
   ): void {
     for (let c = c1; c <= c2; c++) {
       const col = flat[c];
       if (!isFillableColumn(col)) continue;
-      this.fillColumnDown(col, r1, r2, targetEnd, changedRows);
+      this.fillColumnDown(col, r1, r2, targetEnd, changes);
     }
   }
 
@@ -1802,7 +1787,7 @@ export class BodyRenderer {
     sourceStart: number,
     sourceEnd: number,
     targetEnd: number,
-    changedRows: Set<number>
+    changes: InputChange[]
   ): void {
     const values = this.verticalSourceValues(column, sourceStart, sourceEnd);
     if (values.length === 1 && values[0] === undefined) return;
@@ -1813,7 +1798,7 @@ export class BodyRenderer {
       if (!this.core.editingService.isEditable(node, column)) continue;
       const value = fillPatternValue(pattern, rowIndex - sourceStart);
       const oldValue = this.core.getCellValue(node, column);
-      if (this.core.setCellValue(node, column, value, oldValue)) changedRows.add(rowIndex);
+      changes.push({ node, column, oldValue, newValue: value });
     }
   }
 

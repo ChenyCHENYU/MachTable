@@ -52,7 +52,7 @@ describe("React B-side workflows", () => {
         markSaved: vi.fn(),
         startCell: vi.fn(() => true)
       },
-      rows: { getById: vi.fn(() => ({ rowIndex: 2 })) },
+      rows: { getById: vi.fn().mockReturnValue({ rowIndex: 2 }) },
       view: { scrollToRow: vi.fn() }
     };
     const table = {

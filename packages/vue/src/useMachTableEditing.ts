@@ -64,6 +64,8 @@ export function useMachTableEditing<TData = any>(
   ]);
   const failedRowIds = computed(() => [...new Set(saveIssues.value.map((issue) => issue.rowId))]);
   let removeDirtyListener: (() => void) | null = null;
+  let generation = 0;
+  let resultIsCurrent: (rowId?: string) => boolean = () => false;
 
   const refresh = (): void => {
     const api = table.api.value;
@@ -77,12 +79,17 @@ export function useMachTableEditing<TData = any>(
   };
 
   watch(table.api, (api) => {
+    generation++;
+    saving.value = false;
+    saveError.value = null;
+    lastSaveResult.value = null;
+    resultIsCurrent = () => false;
     removeDirtyListener?.();
     removeDirtyListener = null;
     refresh();
     if (!api || api.isDestroyed()) return;
     removeDirtyListener = api.on("dirtyStateChanged", refresh);
-  }, { immediate: true });
+  }, { immediate: true, flush: "sync" });
 
   const saveDetailed = async (
     handler: SaveChangesHandler<TData>,
@@ -94,19 +101,39 @@ export function useMachTableEditing<TData = any>(
     saving.value = true;
     saveError.value = null;
     lastSaveResult.value = null;
+    resultIsCurrent = () => false;
+    const saveGeneration = generation;
+    // A keyed replacement owns its own workflow even if the previous request
+    // cannot be cancelled. The caller still receives that request's outcome.
+    const isCurrentSave = (): boolean =>
+      saveGeneration === generation && table.api.value === api && !api.isDestroyed();
+    const targets = api.editing.getDirtyRowIds()
+      .filter((rowId) => !rowIds || rowIds.includes(rowId))
+      .map((rowId) => { const node = api.rows.getById(rowId); return { rowId, node, data: node?.data }; });
+    // A data reload may keep the same API and business IDs while replacing
+    // their nodes. Such a response must not offer conflicts for the new rows.
+    const isCurrentResult = (rowId?: string): boolean => {
+      const selected = rowId === undefined ? targets : targets.filter((target) => target.rowId === rowId);
+      return isCurrentSave() && selected.every(({ rowId: id, node, data }) =>
+        api.rows.getById(id) === node && node?.data === data);
+    };
     try {
       const result = await api.editing.save(handler, rowIds);
+      if (!isCurrentResult()) return result;
+      resultIsCurrent = isCurrentResult;
       lastSaveResult.value = result;
       refresh();
       options.onSaveSuccess?.(result.saved);
       options.onSaveResult?.(result);
       return result;
     } catch (error) {
-      saveError.value = error;
-      options.onSaveError?.(error);
+      if (isCurrentResult()) {
+        saveError.value = error;
+        options.onSaveError?.(error);
+      }
       throw error;
     } finally {
-      saving.value = false;
+      if (isCurrentSave()) saving.value = false;
     }
   };
   const save = async (
@@ -114,12 +141,12 @@ export function useMachTableEditing<TData = any>(
     rowIds?: readonly string[]
   ): Promise<GridChange<TData>[]> => (await saveDetailed(handler, rowIds)).saved;
 
-  const clearSaveIssues = (): void => { lastSaveResult.value = null; };
+  const clearSaveIssues = (): void => { resultIsCurrent = () => false; lastSaveResult.value = null; };
   const resolveConflict = (rowId: string, strategy: "acceptServer" | "keepLocal"): boolean => {
     const result = lastSaveResult.value;
     const conflict = result?.conflicts.find((entry) => entry.rowId === rowId);
     const api = table.api.value;
-    if (!result || !conflict || !api || !resolveSaveConflict(api, conflict, strategy)) return false;
+    if (!result || !conflict || !api || !resultIsCurrent(rowId) || !resolveSaveConflict(api, conflict, strategy)) return false;
     lastSaveResult.value = {
       ...result,
       failures: result.failures,
@@ -158,6 +185,7 @@ export function useMachTableEditing<TData = any>(
   }
 
   onScopeDispose(() => {
+    generation++;
     removeDirtyListener?.();
     removeDirtyListener = null;
     if (options.guardBeforeUnload && typeof window !== "undefined") {

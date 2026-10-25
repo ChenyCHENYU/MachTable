@@ -3,7 +3,7 @@ import type { RowNode } from "../types/row";
 import type { FilterModel } from "../types/colDef";
 import type { AdvancedFilterModel } from "../types/advancedFilter";
 import type { RowTransaction } from "../types/api";
-import { doesNodePassFilters } from "./filterService";
+import { createRowFilter } from "./filterService";
 import { sortNodes } from "./sortService";
 import { createAggResolver } from "../lib/aggregate";
 import { defaultComparator } from "../lib/compare";
@@ -18,8 +18,10 @@ type ColumnLike = import("./column").Column;
 type RowModelContext = Pick<
   GridCore<any>,
   | "bodyRenderer"
+  | "cancelPendingInput"
   | "changeTracker"
   | "columnModel"
+  | "editingService"
   | "emit"
   | "getApi"
   | "getCellValue"
@@ -76,9 +78,12 @@ export class RowModel<TData = any> {
   private treeLoadControllers = new Map<string, AbortController>();
   private treeLoadPromises = new Map<string, Promise<readonly TData[]>>();
   private displayRevision = 0;
+  private dataRevision = 0;
   private blockNodes = new Map<number, RowNode<TData>>();
   private blockPlaceholders = new Map<number, RowNode<TData>>();
   private installedBlocks = new Set<number>();
+  /** Sparse user changes survive block eviction without pinning whole blocks. */
+  private retainedBlockNodes = new Map<string, RowNode<TData>>();
   private blockCache = new RemoteBlockCache<TData>(12, (blockIndex) => this.evictBlock(blockIndex));
   private dataProcessorSeq = 0;
   private dataProcessorAbort: AbortController | null = null;
@@ -125,6 +130,9 @@ export class RowModel<TData = any> {
 
   getDisplayRevision(): number { return this.displayRevision; }
 
+  /** Full data replacements invalidate asynchronous saves, not ordinary cache churn. */
+  getDataRevision(): number { return this.dataRevision; }
+
   isLoadingInfinite(): boolean {
     return this.infiniteLoading;
   }
@@ -132,6 +140,11 @@ export class RowModel<TData = any> {
   startInfinite(signal?: AbortSignal): Promise<void> {
     if (!this.isInfinite) return Promise.resolve();
     if (signal?.aborted) return Promise.resolve();
+    this.dataRevision++;
+    // Reload/filter/sort replace the datasource scope, just like setRowData.
+    this.core.cancelPendingInput();
+    void this.core.getApi().editing.stop({ cancel: true });
+    this.core.changeTracker.clear();
     this.cancelInfiniteRequest();
     this.infiniteLastRow = null;
     this.infiniteRequested = false;
@@ -280,6 +293,10 @@ export class RowModel<TData = any> {
     this.blockNodes.clear();
     this.blockPlaceholders.clear();
     this.installedBlocks.clear();
+    for (const [id, node] of this.retainedBlockNodes) {
+      if (this.nodesById.get(id) === node) this.nodesById.delete(id);
+    }
+    this.retainedBlockNodes.clear();
   }
 
   private appendInfiniteRows(rows: TData[]): void {
@@ -307,6 +324,7 @@ export class RowModel<TData = any> {
     if (!this.isBlockDatasource || blockIndex < 0) return Promise.resolve();
     if (externalSignal?.aborted) return Promise.reject(this.abortError(externalSignal.reason));
     const blockSize = this.core.options.blockSize;
+    const seq = this.infiniteSeq;
     const start = blockIndex * blockSize;
     if (start >= this.resolveBlockRowCount()) return Promise.resolve();
     const stop = this.infiniteLastRow == null
@@ -320,7 +338,8 @@ export class RowModel<TData = any> {
     );
     this.setInfiniteLoading(this.all.length === 0 && this.blockCache.snapshot().loadingBlockCount > 0);
     return request.then((result) => {
-      if (externalSignal?.aborted || this.core.isDestroyed() || !this.isBlockDatasource) return;
+      if (seq !== this.infiniteSeq || externalSignal?.aborted || this.core.isDestroyed() ||
+        !this.isBlockDatasource || !this.blockCache.has(blockIndex)) return;
       if (this.installedBlocks.has(blockIndex)) return;
       this.installBlock(blockIndex, result);
       this.refreshPipeline();
@@ -332,7 +351,9 @@ export class RowModel<TData = any> {
       }
       throw error;
     }).finally(() => {
-      this.setInfiniteLoading(this.all.length === 0 && this.blockCache.snapshot().loadingBlockCount > 0);
+      if (seq === this.infiniteSeq) {
+        this.setInfiniteLoading(this.all.length === 0 && this.blockCache.snapshot().loadingBlockCount > 0);
+      }
     });
   }
 
@@ -427,17 +448,21 @@ export class RowModel<TData = any> {
       const absoluteIndex = start + offset;
       if (this.infiniteLastRow != null && absoluteIndex >= this.infiniteLastRow) return;
       const id = this.resolveRowId(data, absoluteIndex, `block-${absoluteIndex}`);
+      const retained = this.retainedBlockNodes.get(id);
       const duplicate = this.nodesById.get(id);
-      if (duplicate && duplicate.rowIndex !== absoluteIndex) {
+      if (duplicate && duplicate !== retained && duplicate.rowIndex !== absoluteIndex) {
         this.core.reportError(new Error(`Duplicate row id: ${id}`), "datasource.getRows", { rowId: id });
         return;
       }
-      const node: RowNode<TData> = {
+      const node: RowNode<TData> = retained ?? {
         id,
         data,
         rowIndex: absoluteIndex,
         selected: this.core.selectionService.isSelected(id)
       };
+      node.rowIndex = absoluteIndex;
+      node.selected = this.core.selectionService.isSelected(id);
+      this.retainedBlockNodes.delete(id);
       this.blockNodes.set(absoluteIndex, node);
       this.blockPlaceholders.delete(absoluteIndex);
       this.nodesById.set(id, node);
@@ -451,11 +476,14 @@ export class RowModel<TData = any> {
     this.installedBlocks.delete(blockIndex);
     const blockSize = this.core.options.blockSize;
     const start = blockIndex * blockSize;
+    let dirty: Set<string> | undefined;
     for (let index = start; index < start + blockSize; index++) {
       const node = this.blockNodes.get(index);
       if (!node) continue;
+      dirty ??= new Set(this.core.changeTracker.getDirtyRowIds());
       this.blockNodes.delete(index);
-      if (this.nodesById.get(node.id) === node) this.nodesById.delete(node.id);
+      if (dirty.has(node.id)) this.retainedBlockNodes.set(node.id, node);
+      else if (this.nodesById.get(node.id) === node) this.nodesById.delete(node.id);
     }
     this.rebuildLoadedBlockRows();
   }
@@ -530,11 +558,16 @@ export class RowModel<TData = any> {
 
   private prefetchVisibleBlocks(lastVisibleIndex: number): void {
     if (lastVisibleIndex < 0) return;
+    this.maintainBlockCache();
     const blockSize = this.core.options.blockSize;
     const target = Math.floor(lastVisibleIndex / blockSize);
+    const first = Math.floor(this.core.bodyRenderer.getRenderedRowRange().first / blockSize);
     const radius = this.core.options.blockPrefetch;
     const direction = target < this.lastRequestedBlock ? -1 : 1;
     this.lastRequestedBlock = target;
+    for (let block = first; block < target; block++) {
+      void this.loadRandomBlock(block, undefined, radius + 2).catch(() => undefined);
+    }
     for (let distance = 0; distance <= radius; distance++) {
       const candidates = distance === 0
         ? [target]
@@ -563,11 +596,20 @@ export class RowModel<TData = any> {
     this.cancelInfiniteRequest();
     this.cancelTreeLoads();
     this.cancelDataProcessor();
+    this.all = this.roots = this.displayed = this.pipelineRows = [];
+    this.nodesById.clear();
+    this.childIds.clear();
+    this.spanInfo.clear();
+    this.mastersBuf = [];
+    this.expandedIds.clear();
+    this.groupExpandedIds.clear();
+    this.knownGroupIds = [];
     this.core.options.dataProcessor?.destroy?.();
   }
 
   ensureRowsLoaded(startRow: number, endRow: number, signal?: AbortSignal): Promise<void> {
     if (!this.isBlockDatasource) return Promise.resolve();
+    this.maintainBlockCache();
     const blockSize = this.core.options.blockSize;
     const start = Math.max(0, Math.trunc(startRow));
     const end = Math.min(this.resolveBlockRowCount(), Math.max(start, Math.trunc(endRow)));
@@ -582,10 +624,12 @@ export class RowModel<TData = any> {
 
   purgeDatasourceCache(): void {
     if (!this.isBlockDatasource) return;
-    this.blockCache.purge();
-    this.blockNodes.clear();
-    this.blockPlaceholders.clear();
-    this.installedBlocks.clear();
+    this.dataRevision++;
+    this.core.cancelPendingInput();
+    void this.core.getApi().editing.stop({ cancel: true });
+    this.core.changeTracker.clear();
+    this.cancelInfiniteRequest();
+    this.core.undoService.clear();
     this.all = [];
     this.roots = [];
     this.nodesById.clear();
@@ -597,7 +641,30 @@ export class RowModel<TData = any> {
     return this.blockCache.snapshot();
   }
 
+  /** Keep operation state bounded by the render window, not by query history. */
+  private maintainBlockCache(): void {
+    const dirty = new Set(this.core.changeTracker.getDirtyRowIds());
+    for (const [id, node] of this.retainedBlockNodes) {
+      if (dirty.has(id)) continue;
+      this.retainedBlockNodes.delete(id);
+      if (this.nodesById.get(id) === node) this.nodesById.delete(id);
+    }
+    const blockSize = this.core.options.blockSize;
+    const retained = new Set<number>();
+    const { first, lastExcl } = this.core.bodyRenderer.getRenderedRowRange();
+    for (let row = first; row < lastExcl; row += blockSize) retained.add(Math.floor(row / blockSize));
+    if (lastExcl > first) retained.add(Math.floor((lastExcl - 1) / blockSize));
+    const focus = this.core.bodyRenderer.focusedCell;
+    if (focus) retained.add(Math.floor(focus.rowIndex / blockSize));
+    const editingRow = this.core.editingService.getEditingRowIndex();
+    if (editingRow != null) retained.add(Math.floor(editingRow / blockSize));
+    this.blockCache.retain(retained);
+  }
+
   setRowData(rows: TData[] | null | undefined): void {
+    this.dataRevision++;
+    this.core.cancelPendingInput();
+    void this.core.getApi().editing.stop({ cancel: true });
     this.cancelTreeLoads();
     this.core.changeTracker.clear();
     const resolveRowId = this.core.options.resolveRowId;
@@ -1017,8 +1084,8 @@ export class RowModel<TData = any> {
       rows = this.all;
       const filteringLocally = this.isFilterPresent() && !this.core.options.manualFiltering;
       if (filteringLocally) {
-        rows = rows.filter((node) => doesNodePassFilters(
-          node, columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
+        rows = rows.filter(createRowFilter(
+          columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
         ));
       }
       const sortModel = this.core.columnModel.getSortModel();
@@ -1295,15 +1362,16 @@ export class RowModel<TData = any> {
     const sortModel = this.core.options.manualSorting ? [] : this.core.columnModel.getSortModel();
     const passCache = new Map<string, boolean>();
     const filterPresent = this.isFilterPresent() && !this.core.options.manualFiltering;
+    const filter = createRowFilter(
+      columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
+    );
 
     const nodePasses = (node: RowNode<TData>): boolean => {
       const cached = passCache.get(node.id);
       if (cached !== undefined) return cached;
       let pass = true;
       if (filterPresent) {
-        pass = doesNodePassFilters(
-          node, columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
-        );
+        pass = filter(node);
         for (const childId of this.childIds.get(node.id) ?? []) {
           const child = this.nodesById.get(childId);
           if (child && nodePasses(child)) pass = true;
