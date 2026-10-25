@@ -107,6 +107,43 @@ describe("ordering controller with real grid gestures", () => {
     await vi.waitFor(() => expect((document.activeElement as HTMLElement).closest<HTMLElement>(".mach-row")?.dataset.id).toBe("a"));
   });
 
+  it("targets the next visible filtered row while preserving all thirty rows and full-model neighbours", async () => {
+    setup(false, { columnDefs: [dragColumn(), { field: "id" }, { field: "value" }] });
+    model = Array.from({ length: 30 }, (_, index) => ({ id: String(index + 1), value: index % 6 === 0 ? "matching" : "other" }));
+    api.rows.setData([...model]);
+    api.filtering.setQuickText("matching");
+    const visible = (): string[] => { const ids: string[] = []; api.rows.forEachDisplayed(node => ids.push(node.id)); return ids; };
+    const original = model;
+    const onDrop = vi.fn();
+    api.on("rowDragEnd", onDrop);
+    expect(visible()).toEqual(["1", "7", "13", "19", "25"]);
+    host.querySelector('.mach-row[data-id="1"] .mach-row-drag-handle')!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true }));
+    for (let index = 0; index < 20; index++) await Promise.resolve();
+    expect(visible()).toEqual(["7", "1", "13", "19", "25"]);
+    expect(onDrop).toHaveBeenCalledWith(expect.objectContaining({ intent: expect.objectContaining({ targetId: "7", beforeId: "7", afterId: "8" }) }));
+    expect(model.map(row => row.id)).toEqual(["2", "3", "4", "5", "6", "7", "1", ...original.slice(7).map(row => row.id)]);
+    await ordering.undo();
+    expect(model).toBe(original);
+    expect(visible()).toEqual(["1", "7", "13", "19", "25"]);
+    await ordering.redo();
+    expect(visible()).toEqual(["7", "1", "13", "19", "25"]);
+    expect(model).toHaveLength(30);
+    expect(new Set(model.map(row => row.id))).toEqual(new Set(original.map(row => row.id)));
+  });
+
+  it("skips hidden tree siblings without targeting their descendants", async () => {
+    setup(true, { columnDefs: [dragColumn(), { field: "id" }, { field: "value" }] });
+    model = model.map(row => ({ ...row, value: row.id === "a" ? "matching" : "other" }));
+    model = [...model, { id: "c", value: "matching", children: [{ id: "c1" }] }];
+    const children = model[0].children;
+    api.rows.setData([...model]);
+    api.filtering.setQuickText("matching");
+    host.querySelector('.mach-row[data-id="a"] .mach-row-drag-handle')!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true }));
+    for (let index = 0; index < 20; index++) await Promise.resolve();
+    expect(model.map(row => row.id)).toEqual(["b", "c", "a"]);
+    expect(model[2].children).toBe(children);
+  });
+
   it("rejects selected targets and descendants without emitting or changing the model", async () => {
     setup(true);
     const before = model;

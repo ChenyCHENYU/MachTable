@@ -1,4 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { GridApi } from "../../packages/core/src/index";
+
+interface FilteredOrderRow { id: string; marker: string }
+interface FilteredOrderingSnapshot {
+  rows: string[]; server: string[]; clientRevision: number; serverRevision: number;
+  calls: Array<{ operation: string; targetId: string; beforeId: string | null; afterId: string | null; expectedRevision: number; operations: number }>;
+}
+declare global { interface Window { filteredOrderingFixture: { api: GridApi<FilteredOrderRow>; snapshot(): FilteredOrderingSnapshot } } }
 
 const grid = "#orderingGrid";
 const initial = ["TASK-101", "TASK-102", "TASK-103", "TASK-104", "TASK-105", "TASK-106"];
@@ -81,6 +89,56 @@ test("tree keyboard moves a whole expanded subtree between siblings", async ({ p
   expect(await order(page)).toEqual(["PHASE-BUILD", "TASK-103", "TASK-104", "PHASE-PLAN", "TASK-101", "TASK-102", "PHASE-REVIEW", "TASK-105", "TASK-106"]);
   await expect(page.locator(`${grid} .mach-row[data-id="PHASE-PLAN"] .mach-row-drag-handle`)).toBeFocused();
   await expect(page.locator("#orderingIntent")).toContainText("相邻 ID：PHASE-BUILD / PHASE-REVIEW");
+});
+
+test("filtered keyboard targets the next visible order while one CAS preserves all thirty rows through undo and redo", async ({ page }) => {
+  const root = decodeURIComponent(new URL("../../packages/core", import.meta.url).pathname);
+  const url = "http://127.0.0.1:4173/__filtered-ordering";
+  await page.route(url, route => route.fulfill({ contentType: "text/html", body: `<!doctype html><html><head><meta charset="utf-8">
+    <link rel="stylesheet" href="/@fs${root}/styles/mach-table.css">
+    <style>#filteredOrderGrid{width:800px;height:360px}</style></head><body>
+    <button id="filteredOrderUndo">Undo order</button><button id="filteredOrderRedo">Redo order</button>
+    <div id="filteredOrderStatus" role="status"></div><div id="filteredOrderGrid"></div><script type="module">
+    import {createGrid,dragColumn} from '/@fs${root}/dist/index.js';
+    import {createRowOrderController} from '/@fs${root}/dist/ordering.js';
+    let rows=Array.from({length:30},(_,index)=>({id:String(index+1),marker:index%6===0?'matching':'other'}));
+    let server=rows,clientRevision=1,serverRevision=1;const calls=[];const status=document.getElementById('filteredOrderStatus');
+    const ordering=createRowOrderController({rowKey:'id',getRows:()=>rows,getRevision:()=>clientRevision,
+      applyRows:next=>{rows=next;api.rows.setData(rows);},
+      save:async(intent,context)=>{
+        if(context.operations.some(operation=>operation.expectedRevision!==serverRevision))return {status:'conflict',revision:serverRevision};
+        calls.push({operation:context.operation,targetId:intent.targetId,beforeId:intent.beforeId??null,afterId:intent.afterId??null,expectedRevision:intent.expectedRevision,operations:context.operations.length});
+        server=context.plan.after;return {revision:++serverRevision};},
+      onStateChange:state=>{status.dataset.status=state.status;if(state.status==='saved')clientRevision=state.revision;}});
+    const api=createGrid(document.getElementById('filteredOrderGrid'),{...ordering.bindings,rowKey:'id',rowData:rows,pagination:false,
+      columnDefs:[dragColumn(),{field:'id',width:160},{field:'marker',width:200}],defaultColDef:{sortable:false}});
+    window.filteredOrderingFixture={api,snapshot:()=>({rows:rows.map(row=>row.id),server:server.map(row=>row.id),clientRevision,serverRevision,calls})};
+    for(const operation of ['undo','redo'])document.getElementById(operation==='undo'?'filteredOrderUndo':'filteredOrderRedo').onclick=()=>{
+      void ordering[operation]().catch(error=>{status.dataset.status='error';status.textContent=error.message;});};
+    window.addEventListener('pagehide',()=>{ordering.dispose();api.destroy();},{once:true});
+    </script></body></html>` }));
+  await page.goto(url);
+  await expect(page.locator('#filteredOrderGrid .mach-row[data-id="1"] .mach-row-drag-handle')).toBeEnabled();
+  await page.evaluate(() => window.filteredOrderingFixture.api.filtering.setQuickText("matching"));
+  const visible = () => page.locator("#filteredOrderGrid .mach-pane--center .mach-row[data-id]").evaluateAll(rows => rows
+    .sort((a, b) => Number((a as HTMLElement).dataset.index) - Number((b as HTMLElement).dataset.index)).map(row => (row as HTMLElement).dataset.id!));
+  const snapshot = () => page.evaluate(() => window.filteredOrderingFixture.snapshot());
+  const baseline = Array.from({ length: 30 }, (_, index) => String(index + 1));
+  const moved = [...baseline.slice(1, 7), "1", ...baseline.slice(7)];
+  expect(await visible()).toEqual(["1", "7", "13", "19", "25"]);
+  await page.locator('#filteredOrderGrid .mach-row[data-id="1"] .mach-row-drag-handle').focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect.poll(visible).toEqual(["7", "1", "13", "19", "25"]);
+  await expect.poll(async () => (await snapshot()).rows).toEqual(moved);
+  expect((await snapshot()).calls[0]).toMatchObject({ targetId: "7", beforeId: "7", afterId: "8", expectedRevision: 1, operations: 1 });
+  await page.locator("#filteredOrderUndo").click();
+  await expect.poll(async () => (await snapshot()).server).toEqual(baseline);
+  expect(await visible()).toEqual(["1", "7", "13", "19", "25"]);
+  await page.locator("#filteredOrderRedo").click();
+  await expect.poll(async () => (await snapshot()).server).toEqual(moved);
+  expect(await visible()).toEqual(["7", "1", "13", "19", "25"]);
+  expect(await snapshot()).toMatchObject({ rows: moved, server: moved, clientRevision: 4, serverRevision: 4,
+    calls: [{ operation: "move", expectedRevision: 1, operations: 1 }, { operation: "undo", expectedRevision: 2, operations: 1 }, { operation: "redo", expectedRevision: 3, operations: 1 }] });
 });
 
 test("failed persistence restores the original order and allows a fresh successful move", async ({ page }) => {

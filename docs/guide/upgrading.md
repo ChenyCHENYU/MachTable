@@ -3,10 +3,18 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.32.0
+pnpm up @agile-team/mach-table-vue@^0.32.1
 # 或
-pnpm up @agile-team/mach-table-react@^0.32.0
+pnpm up @agile-team/mach-table-react@^0.32.1
 ```
+
+## 0.32.0 → 0.32.1
+
+公共 API 与配置无需迁移。修正可选 `/ordering` 控制器在筛选后执行 Alt + ↑/↓ 时，目标可能选到隐藏兄弟行的问题：现在跳过筛选隐藏行，以对应方向的相邻可见兄弟行作为目标；到达可见边界时不移动。
+
+排序仍基于宿主持有的完整数据模型，不把筛选后的可见数组写回数据源，隐藏记录不会丢失。例如完整数据为 A、B、C，筛选仅显示 A、C：C 上移后可见顺序为 C、A，完整模型仍保留 A、B、C 三条记录。保存继续使用稳定 ID 与完整排序计划，既有 CAS、撤销/重做和失败回滚协议不变。
+
+四包按固定版本组同步升级到 `0.32.1`，XLSX 桥接 API 不变。
 
 ## 0.31.2 → 0.32.0
 

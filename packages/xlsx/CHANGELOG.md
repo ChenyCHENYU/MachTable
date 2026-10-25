@@ -1,5 +1,13 @@
 # @agile-team/mach-table-xlsx
 
+## 0.32.1
+
+### Patch Changes
+
+- Keep advanced keyboard ordering within visible siblings when rows are filtered, while preserving the complete source model, atomic save intent and undo/redo history. Keep all four packages on the same patch version.
+- Updated dependencies
+  - @agile-team/mach-table@0.32.1
+
 ## 0.32.0
 
 ### Minor Changes

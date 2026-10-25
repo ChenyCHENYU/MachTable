@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.32.0-2563eb" alt="Source version 0.32.0" />
+  <img src="https://img.shields.io/badge/source-0.32.1-2563eb" alt="Source version 0.32.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -371,7 +371,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.32.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版以独立子入口提供高级过滤、修改审阅、诊断、企业偏好、多行与树排序及撤销重做、服务端分组、多范围和 Pivot/公式/图表工作台；继续统一资源所有权、框架生命周期和缓存故障恢复。已有领域 API 与普通列表接入方式保持兼容，新增高级模块及样式按需引入，详见[升级指南](./docs/guide/upgrading.md)。服务端分组采用 route 分页，分析限定当前已加载数据；完整边界和人工验收项见[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.32.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版以独立子入口提供高级过滤、修改审阅、诊断、企业偏好、多行与树排序及撤销重做、服务端分组、多范围和 Pivot/公式/图表工作台；继续统一资源所有权、框架生命周期和缓存故障恢复。已有领域 API 与普通列表接入方式保持兼容，新增高级模块及样式按需引入，详见[升级指南](./docs/guide/upgrading.md)。服务端分组采用 route 分页，分析限定当前已加载数据；完整边界和人工验收项见[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

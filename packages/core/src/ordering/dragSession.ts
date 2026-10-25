@@ -83,10 +83,12 @@ export function createOrderDragSession<T>(api: GridApi<T>, source: RowNode<T>, r
     remaining.forEach((id, index) => positions.set(id, index));
   }
   const ends = new Map<string, number>();
+  const displayed = new Set<string>();
   const sourceIndexes: number[] = [];
   const ancestors: RowNode<T>[] = [];
   let boundary = 0;
   api.rows.forEachDisplayed((node) => {
+    displayed.add(node.id);
     if (isSource(node.id)) sourceIndexes.push(node.rowIndex);
     boundary = node.rowIndex + 1;
     const depth = topology.depths.get(node.id) ?? 0;
@@ -127,7 +129,7 @@ export function createOrderDragSession<T>(api: GridApi<T>, source: RowNode<T>, r
       let index = candidates.indexOf(origin) + direction;
       while (index >= 0 && index < candidates.length) {
         const id = candidates[index];
-        if (!isSource(id) && nodes.has(id)) return nodes.get(id);
+        if (!isSource(id) && displayed.has(id) && nodes.has(id)) return nodes.get(id);
         index += direction;
       }
       return undefined;
