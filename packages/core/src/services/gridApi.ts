@@ -1,4 +1,6 @@
 import type { GridCore } from "../core/gridCore";
+import { attachAdapterLifecycle } from "../lib/adapterLifecycle";
+import { formatCellValueWith } from "../render/cellContent";
 import type {
   CsvExportParams,
   GridAsyncOptions,
@@ -131,6 +133,7 @@ function changedFinite(
   return normalized === undefined || normalized === current ? undefined : normalized;
 }
 
+/** @internal Only the domain facade, never this implementation instance, crosses the package boundary. */
 export class GridApiImpl<TData = any> {
   private publicApi?: GridApi<TData>;
   private measureCanvas: HTMLCanvasElement | null = null;
@@ -964,7 +967,7 @@ export class GridApiImpl<TData = any> {
       effects.needsColumnRebuild = true;
       effects.needsRowRebuild = true;
     }
-    if (hasOwnOption(options, "rowData")) {
+    if (hasOwnOption(options, "rowData") && options.rowData !== resolved.rowData) {
       resolved.rowData = Array.isArray(options.rowData) ? options.rowData : [];
       effects.needsRowRebuild = true;
     }
@@ -1263,6 +1266,10 @@ export class GridApiImpl<TData = any> {
     }
     if (options.applyRowDrag != null) {
       resolved.applyRowDrag = options.applyRowDrag;
+      effects.needsCellRefresh = true;
+    }
+    if (hasOwnOption(options, "rowDragPolicy")) {
+      resolved.rowDragPolicy = options.rowDragPolicy;
       effects.needsCellRefresh = true;
     }
     if (options.suppressWarnings != null) resolved.suppressWarnings = options.suppressWarnings;
@@ -1729,5 +1736,19 @@ export function createGridApi<TData>(core: GridCore<TData>): GridApi<TData> {
     isDestroyed: () => impl.isDestroyed()
   };
   impl.connectPublicApi(api);
+  attachAdapterLifecycle(api, {
+    suspend: () => core.suspend(), resume: () => api.view.refreshLayout(),
+    canReplaceData: () => !core.editingService.isEditing() && core.changeTracker.getDirtyRowIds().length === 0,
+    readCell: (rowId, colId) => {
+      const node = core.rowModel.getNodeById(rowId);
+      const column = core.columnModel.getColumn(colId);
+      return node && column ? formatCellValueWith(core, node, column, core.getCellValue(node, column)) : "";
+    },
+    writeInput: (cells) => core.applyInputChanges(cells.flatMap(({ rowId, colId, value }) => {
+      const node = core.rowModel.getNodeById(rowId);
+      const column = core.columnModel.getColumn(colId);
+      return node && column ? [{ node, column, oldValue: core.getCellValue(node, column), newValue: value }] : [];
+    }))
+  });
   return Object.freeze(api);
 }

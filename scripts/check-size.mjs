@@ -33,6 +33,14 @@ const budgets = [
   ["Core CSS", ["packages/core/dist/mach-table.css"], 8 * 1024]
 ];
 
+// New capabilities have their own ceilings; existing runtime/style/adapter
+// budgets above remain unchanged when a new optional entry is added.
+for (const [name, limit] of [["workbench", 12], ["preferences", 7], ["ordering", 9], ["server-side", 10], ["analysis", 9], ["multi-range", 4]]) {
+  budgets.push([`Optional ${name}`, [`packages/core/dist/${name}.js`], limit * 1024]);
+}
+budgets.push(["Workbench CSS", ["packages/core/dist/workbench.css"], 3 * 1024],
+  ["Server-side CSS", ["packages/core/dist/server-side.css"], 1024]);
+
 let failed = false;
 for (const [label, paths, limit] of budgets) {
   const contents = await Promise.all(paths.map((path) => readFile(new URL(`../${path}`, import.meta.url))));
@@ -127,6 +135,25 @@ for (const { label, source, limit } of consumerBudgets) {
   const status = size <= limit ? "OK" : "OVER";
   console.log(`${status.padEnd(4)} ${label.padEnd(20)} ${size} / ${limit} bytes gzip`);
   if (size > limit) failed = true;
+}
+
+// Published Core is a single bundle, so its consumer metafile cannot identify
+// the source modules folded into that file. Check the matching source graph as
+// well as measuring the real dist consumer above; do not infer isolation from
+// a disabled runtime option or from the absence of an exported name.
+for (const [name, entry] of [["Core", "core/src/index.ts"], ["Vue", "vue/src/index.ts"], ["React", "react/src/index.ts"]]) {
+  const result = await build({
+    entryPoints: [resolve(root, "packages", entry)], bundle: true, write: false,
+    minify: true, treeShaking: true, metafile: true, platform: "browser", format: "esm", target: "es2020",
+    external: ["vue", "react", "react-dom", "@agile-team/mach-table", "@agile-team/mach-table/adapter"]
+  });
+  const forbidden = Object.keys(result.metafile.inputs).filter(path =>
+    /packages\/core\/src\/(?:workbench|preferences|ordering|server-side|analysis)(?:\/|\.ts$)|packages\/core\/src\/multiRange\.ts$|\.(?:css)$/.test(path));
+  const cssOutputs = result.outputFiles.filter(file => file.path.endsWith(".css"));
+  if (forbidden.length || cssOutputs.length) {
+    failed = true;
+    console.error(`OVER ${name} default module boundary: ${forbidden.join(", ")}`);
+  } else console.log(`OK   ${name} default graph excludes all six advanced modules and optional CSS`);
 }
 
 if (failed) {

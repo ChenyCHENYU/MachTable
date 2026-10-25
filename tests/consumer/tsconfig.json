@@ -3,24 +3,130 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@agile-team/mach-table": ["../../packages/core/dist/index.d.ts"],
-      "@agile-team/mach-table/adapter": ["../../packages/core/dist/adapter.d.ts"],
-      "@agile-team/mach-table/worker": ["../../packages/core/dist/worker.d.ts"],
-      "@agile-team/mach-table-vue": ["../../packages/vue/dist/index.d.ts"],
-      "@agile-team/mach-table-vue/adapters": ["../../packages/vue/dist/adapters.d.ts"],
-      "@agile-team/mach-table-vue/workflows": ["../../packages/vue/dist/workflows.d.ts"],
-      "@agile-team/mach-table-vue/ui": ["../../packages/vue/dist/ui.d.ts"],
-      "@agile-team/mach-table-vue/editors": ["../../packages/vue/dist/editors.d.ts"],
-      "@agile-team/mach-table-vue/worker": ["../../packages/vue/dist/worker.d.ts"],
-      "@agile-team/mach-table-react": ["../../packages/react/dist/index.d.ts"],
-      "@agile-team/mach-table-react/adapters": ["../../packages/react/dist/adapters.d.ts"],
-      "@agile-team/mach-table-react/ui": ["../../packages/react/dist/ui.d.ts"],
-      "@agile-team/mach-table-react/workflows": ["../../packages/react/dist/workflows.d.ts"],
-      "@agile-team/mach-table-react/worker": ["../../packages/react/dist/worker.d.ts"],
-      "@agile-team/mach-table-xlsx": ["../../packages/xlsx/dist/index.d.ts"]
+      "@agile-team/mach-table": [
+        "../../packages/core/dist/index.d.ts"
+      ],
+      "@agile-team/mach-table/adapter": [
+        "../../packages/core/dist/adapter.d.ts"
+      ],
+      "@agile-team/mach-table/worker": [
+        "../../packages/core/dist/worker.d.ts"
+      ],
+      "@agile-team/mach-table-vue": [
+        "../../packages/vue/dist/index.d.ts"
+      ],
+      "@agile-team/mach-table-vue/adapters": [
+        "../../packages/vue/dist/adapters.d.ts"
+      ],
+      "@agile-team/mach-table-vue/workflows": [
+        "../../packages/vue/dist/workflows.d.ts"
+      ],
+      "@agile-team/mach-table-vue/ui": [
+        "../../packages/vue/dist/ui.d.ts"
+      ],
+      "@agile-team/mach-table-vue/editors": [
+        "../../packages/vue/dist/editors.d.ts"
+      ],
+      "@agile-team/mach-table-vue/worker": [
+        "../../packages/vue/dist/worker.d.ts"
+      ],
+      "@agile-team/mach-table-react": [
+        "../../packages/react/dist/index.d.ts"
+      ],
+      "@agile-team/mach-table-react/adapters": [
+        "../../packages/react/dist/adapters.d.ts"
+      ],
+      "@agile-team/mach-table-react/ui": [
+        "../../packages/react/dist/ui.d.ts"
+      ],
+      "@agile-team/mach-table-react/workflows": [
+        "../../packages/react/dist/workflows.d.ts"
+      ],
+      "@agile-team/mach-table-react/worker": [
+        "../../packages/react/dist/worker.d.ts"
+      ],
+      "@agile-team/mach-table-xlsx": [
+        "../../packages/xlsx/dist/index.d.ts"
+      ],
+      "@agile-team/mach-table/workbench": [
+        "../../packages/core/dist/workbench.d.ts"
+      ],
+      "@agile-team/mach-table/preferences": [
+        "../../packages/core/dist/preferences.d.ts"
+      ],
+      "@agile-team/mach-table/ordering": [
+        "../../packages/core/dist/ordering.d.ts"
+      ],
+      "@agile-team/mach-table/server-side": [
+        "../../packages/core/dist/server-side.d.ts"
+      ],
+      "@agile-team/mach-table/analysis": [
+        "../../packages/core/dist/analysis.d.ts"
+      ],
+      "@agile-team/mach-table/multi-range": [
+        "../../packages/core/dist/multi-range.d.ts"
+      ],
+      "@agile-team/mach-table/styles/workbench.css": [
+        "../../packages/core/styles/workbench.css.d.ts"
+      ],
+      "@agile-team/mach-table/styles/server-side.css": [
+        "../../packages/core/styles/server-side.css.d.ts"
+      ],
+      "@agile-team/mach-table-vue/workbench": [
+        "../../packages/vue/dist/workbench.d.ts"
+      ],
+      "@agile-team/mach-table-vue/preferences": [
+        "../../packages/vue/dist/preferences.d.ts"
+      ],
+      "@agile-team/mach-table-vue/ordering": [
+        "../../packages/vue/dist/ordering.d.ts"
+      ],
+      "@agile-team/mach-table-vue/server-side": [
+        "../../packages/vue/dist/server-side.d.ts"
+      ],
+      "@agile-team/mach-table-vue/analysis": [
+        "../../packages/vue/dist/analysis.d.ts"
+      ],
+      "@agile-team/mach-table-vue/multi-range": [
+        "../../packages/vue/dist/multi-range.d.ts"
+      ],
+      "@agile-team/mach-table-vue/styles/workbench.css": [
+        "../../packages/vue/dist/workbench.css.d.ts"
+      ],
+      "@agile-team/mach-table-vue/styles/server-side.css": [
+        "../../packages/vue/dist/server-side.css.d.ts"
+      ],
+      "@agile-team/mach-table-react/workbench": [
+        "../../packages/react/dist/workbench.d.ts"
+      ],
+      "@agile-team/mach-table-react/preferences": [
+        "../../packages/react/dist/preferences.d.ts"
+      ],
+      "@agile-team/mach-table-react/ordering": [
+        "../../packages/react/dist/ordering.d.ts"
+      ],
+      "@agile-team/mach-table-react/server-side": [
+        "../../packages/react/dist/server-side.d.ts"
+      ],
+      "@agile-team/mach-table-react/analysis": [
+        "../../packages/react/dist/analysis.d.ts"
+      ],
+      "@agile-team/mach-table-react/multi-range": [
+        "../../packages/react/dist/multi-range.d.ts"
+      ],
+      "@agile-team/mach-table-react/styles/workbench.css": [
+        "../../packages/react/dist/workbench.css.d.ts"
+      ],
+      "@agile-team/mach-table-react/styles/server-side.css": [
+        "../../packages/react/dist/server-side.css.d.ts"
+      ]
     },
     "jsx": "react-jsx",
-    "noEmit": true
+    "noEmit": true,
+    "noUncheckedSideEffectImports": true
   },
-  "include": ["*.ts", "*.tsx"]
+  "include": [
+    "*.ts",
+    "*.tsx"
+  ]
 }

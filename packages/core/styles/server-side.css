@@ -1,0 +1,12 @@
+.mach-server-header,.mach-server-cell,.mach-server-paging{display:flex;align-items:center;gap:6px;min-width:0;font:inherit;color:inherit}
+.mach-server-header{flex-wrap:wrap;gap:4px}
+.mach-server-cell{width:100%;box-sizing:border-box}
+.mach-server-cell input[type=checkbox]{flex:none;accent-color:var(--mach-primary,#2563eb);width:14px;height:14px;margin:0 2px}
+.mach-server-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:20px}
+.mach-server-paging{margin-inline-start:auto;flex:none;font-size:11px;gap:3px}
+.mach-server-range{font-variant-numeric:tabular-nums;opacity:.72;white-space:nowrap}
+.mach-server-button{font:inherit;font-size:11px;line-height:20px;min-width:22px;padding:0 5px;border:1px solid transparent;border-radius:4px;background:transparent;color:inherit;cursor:pointer;white-space:nowrap}
+.mach-server-button:hover:not(:disabled){background:var(--mach-row-hover-bg,rgba(128,140,160,.12));border-color:var(--mach-border-color,#d9e1eb)}
+.mach-server-button:focus-visible{outline:2px solid var(--mach-primary,#2563eb);outline-offset:1px}
+.mach-server-button:disabled{opacity:.35;cursor:default}
+.mach-server-sync-notice{position:absolute;inset-inline-start:8px;top:5px;z-index:15;max-width:calc(100% - 16px);box-sizing:border-box;padding:6px 10px;border:1px solid var(--mach-border-color,#d9e1eb);border-radius:5px;background:var(--mach-header-bg,#f4f7fb);color:var(--mach-header-fg,#344054);box-shadow:0 2px 8px rgba(15,23,42,.12);font-size:12px;line-height:18px}

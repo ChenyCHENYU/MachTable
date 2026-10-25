@@ -236,6 +236,18 @@ export interface ActionPolicy<TData = any> {
   onError?(error: unknown, context: ActionPolicyContext<TData>): void;
 }
 
+export interface RowDragPolicy<TData = any> {
+  /** Return a reason to disable the handle and explain the restriction. */
+  canDrag?(params: { node: RowNode<TData>; api: import("./api").GridApi<TData> }): boolean | string;
+  canDrop?(params: {
+    node: RowNode<TData>;
+    api: import("./api").GridApi<TData>;
+    targetNode: RowNode<TData> | undefined;
+    intent: import("./events").RowDragIntent;
+  }): boolean | string;
+  getRevision?(): string | number | undefined;
+}
+
 export interface GridOptions<TData = any> extends EventHandlers<TData> {
   columnDefs?: (ColDef<TData> | ColDefGroup<TData>)[] | null;
   rowData?: TData[] | null;
@@ -303,6 +315,7 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   indexOffset?: number;
   /** Apply flat local row moves automatically (default true). False emits intent for server-controlled ordering. */
   applyRowDrag?: boolean;
+  rowDragPolicy?: RowDragPolicy<TData>;
   undoStackSize?: number;
   /** Milliseconds used to coalesce applyTransactionAsync calls. */
   asyncTransactionWaitMillis?: number;
@@ -420,6 +433,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   defaultExpandAll: boolean;
   indexOffset: number;
   applyRowDrag: boolean;
+  rowDragPolicy?: RowDragPolicy<TData>;
   undoStackSize: number;
   asyncTransactionWaitMillis: number;
   getRowHeight?: (params: import("./params").GetRowHeightParams<TData>) => number;

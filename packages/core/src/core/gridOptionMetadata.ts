@@ -79,6 +79,7 @@ export const GRID_OPTION_META = {
   defaultExpandAll: { kind: "boolean", update: "options" },
   indexOffset: { kind: "number", update: "options" },
   applyRowDrag: { kind: "boolean", update: "options" },
+  rowDragPolicy: { kind: "object", update: "options" },
   undoStackSize: { kind: "number", update: "options" },
   asyncTransactionWaitMillis: { kind: "number", update: "options" },
   getRowHeight: { kind: "function", update: "options" },

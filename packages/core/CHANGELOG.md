@@ -1,5 +1,13 @@
 # @agile-team/mach-table
 
+## 0.32.0
+
+### Minor Changes
+
+- Add optional advanced filtering, change review, diagnostics, enterprise preferences, multi-row/tree ordering with persisted undo/redo, route-based server grouping, multi-range selection and bounded Pivot/formula/chart workspaces. Vue and React expose the same optional subpaths from a single installed adapter package.
+
+  Unify internal resource ownership and cover initialization failure, KeepAlive, async unmount and StrictMode. Protect in-progress edits and stale asynchronous responses; complete the remote cache fault matrix and initial visible block loading. Keep existing default runtime and CSS budgets, and measure the new optional entries separately.
+
 ## 0.31.2
 
 ### Patch Changes

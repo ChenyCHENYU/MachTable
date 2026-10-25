@@ -603,6 +603,8 @@
 .mach-body-viewport--scroll {
   overflow: auto;
   overscroll-behavior: contain;
+  /* Recycled row DOM must not become a browser scroll anchor. */
+  overflow-anchor: none;
 }
 
 .mach-body-viewport--scroll {

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GridCore } from "../core/gridCore";
 import { RemoteBlockCache } from "../services/remoteBlockCache";
+import { BodyRenderer } from "../render/bodyRenderer";
 import type { GridOptions } from "../types/options";
 
 interface Row { id: string; amount: number }
@@ -48,6 +49,14 @@ afterEach(() => {
 });
 
 describe("remote cache operation boundaries", () => {
+  it("fills an initial render window spanning several small blocks without a scroll request", async () => {
+    vi.spyOn(BodyRenderer.prototype, "getRenderedRowRange").mockReturnValue({ first: 0, lastExcl: 35 });
+    const { api } = grid();
+    await tick();
+    expect([0, 10, 20, 30].map(index => api.rows.getAt(index)?.data?.amount)).toEqual([0, 10, 20, 30]);
+    expect(api.rows.getCacheSnapshot().cachedBlockCount).toBe(4);
+  });
+
   it("bounds retained windows and returns to the configured budget when they are released", async () => {
     const cache = new RemoteBlockCache<number>(1);
     const load = (index: number) => cache.load(index, async () => ({ rows: [index] }));
@@ -96,6 +105,37 @@ describe("remote cache operation boundaries", () => {
     expect(api.rows.getAt(35)?.data?.amount).toBe(35);
     expect(api.rows.getAt(44)?.data?.amount).toBe(44);
     expect(api.rows.getCacheSnapshot().cachedBlockCount).toBeLessThanOrEqual(4);
+  });
+
+  it("hands off a focused row editor before an explicit scroll returns and restores its draft", async () => {
+    const { core, api, host } = grid({ rowHeight: 32, rowBuffer: 1, blockSize: 4 });
+    const viewport = core.skeleton.bodyViewports.center;
+    Object.defineProperties(viewport, { clientHeight: { value: 320 }, clientWidth: { value: 800 } });
+    api.view.refreshLayout();
+    await tick();
+    expect(api.editing.startRow(0)).toBe(true);
+    const input = host.querySelector<HTMLInputElement>('.mach-row[data-index="0"] .mach-editor-input')!;
+    input.value = "999";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.activeElement).toBe(input);
+
+    api.view.scrollToRow(40, "top");
+    // No native scroll event/RAF has run here. The old focused input must be
+    // released now, so a queued native caret reveal cannot restore its viewport.
+    expect(input.isConnected).toBe(false);
+    expect(viewport.scrollTop).toBe(1280);
+    expect(host.querySelector('.mach-row[data-index="40"]')).not.toBeNull();
+    expect(api.editing.isRowActive(0)).toBe(true);
+    expect(api.rows.getById("0")?.data?.amount).toBe(0);
+    await tick();
+    expect(api.rows.getAt(40)?.data?.amount).toBe(40);
+
+    api.view.scrollToRow(0, "top");
+    const restored = host.querySelector<HTMLInputElement>('.mach-row[data-index="0"] .mach-editor-input')!;
+    expect(restored.value).toBe("999");
+    expect(api.rows.getById("0")?.data?.amount).toBe(0);
+    await api.editing.stop({ cancel: true });
+    expect(api.editing.getChanges()).toEqual([]);
   });
 
   it("keeps only sparse dirty nodes outside the loaded cache and reuses their local data on refetch", async () => {

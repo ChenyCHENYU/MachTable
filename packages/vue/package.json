@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-vue",
-  "version": "0.31.2",
+  "version": "0.32.0",
   "description": "Official Vue 3 adapter for the MachTable enterprise data grid",
   "keywords": [
     "vue",
@@ -109,6 +109,74 @@
     "./styles/mach-table.css": {
       "types": "./dist/mach-table.css.d.ts",
       "default": "./dist/mach-table.css"
+    },
+    "./workbench": {
+      "import": {
+        "types": "./dist/workbench.d.ts",
+        "default": "./dist/workbench.js"
+      },
+      "require": {
+        "types": "./dist/workbench.d.cts",
+        "default": "./dist/workbench.cjs"
+      }
+    },
+    "./preferences": {
+      "import": {
+        "types": "./dist/preferences.d.ts",
+        "default": "./dist/preferences.js"
+      },
+      "require": {
+        "types": "./dist/preferences.d.cts",
+        "default": "./dist/preferences.cjs"
+      }
+    },
+    "./ordering": {
+      "import": {
+        "types": "./dist/ordering.d.ts",
+        "default": "./dist/ordering.js"
+      },
+      "require": {
+        "types": "./dist/ordering.d.cts",
+        "default": "./dist/ordering.cjs"
+      }
+    },
+    "./server-side": {
+      "import": {
+        "types": "./dist/server-side.d.ts",
+        "default": "./dist/server-side.js"
+      },
+      "require": {
+        "types": "./dist/server-side.d.cts",
+        "default": "./dist/server-side.cjs"
+      }
+    },
+    "./analysis": {
+      "import": {
+        "types": "./dist/analysis.d.ts",
+        "default": "./dist/analysis.js"
+      },
+      "require": {
+        "types": "./dist/analysis.d.cts",
+        "default": "./dist/analysis.cjs"
+      }
+    },
+    "./multi-range": {
+      "import": {
+        "types": "./dist/multi-range.d.ts",
+        "default": "./dist/multi-range.js"
+      },
+      "require": {
+        "types": "./dist/multi-range.d.cts",
+        "default": "./dist/multi-range.cjs"
+      }
+    },
+    "./styles/workbench.css": {
+      "types": "./dist/workbench.css.d.ts",
+      "default": "./dist/workbench.css"
+    },
+    "./styles/server-side.css": {
+      "types": "./dist/server-side.css.d.ts",
+      "default": "./dist/server-side.css"
     }
   },
   "files": [

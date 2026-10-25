@@ -31,8 +31,7 @@ class LongTaskHub {
       released = true;
       this.subscribers = Math.max(0, this.subscribers - 1);
       if (this.subscribers === 0) {
-        this.observer?.disconnect();
-        this.observer = null;
+        this.disconnect();
       }
     };
   }
@@ -50,8 +49,14 @@ class LongTaskHub {
       });
       this.observer.observe({ entryTypes: ["longtask"] });
     } catch {
-      this.observer = null;
+      this.disconnect();
     }
+  }
+
+  private disconnect(): void {
+    const observer = this.observer;
+    this.observer = null;
+    try { observer?.disconnect(); } catch { /* Optional browser diagnostics cannot prevent teardown. */ }
   }
 }
 

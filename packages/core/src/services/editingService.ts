@@ -76,6 +76,7 @@ function createEditButton(kind: "confirm" | "cancel", label: string): HTMLButton
   return button;
 }
 
+/** @internal The public editing domain delegates here without exposing this service. */
 export class EditingService {
   private cellEditing: CellEditingState | null = null;
   private rowEditing: RowEditingState | null = null;
@@ -369,6 +370,8 @@ export class EditingService {
     if (changed) this.core.notifyCellValueChanged(editing.node, editing.column, editing.oldValue, newValue);
     this.destroyMountedEditor(editing, true);
 
+    if (this.core.isDestroyed()) return true;
+
     this.core.emit("cellEditingStopped", {
       rowIndex: editing.rowIndex,
       colId: editing.column.id,
@@ -392,6 +395,8 @@ export class EditingService {
       draft.mounted = null;
     }
     this.rowEditing = null;
+
+    if (this.core.isDestroyed()) return true;
 
     const rowIndex = this.currentRowIndex(row);
     this.core.emit("rowEditingStopped", {

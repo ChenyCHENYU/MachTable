@@ -1,0 +1,77 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@agile-team/mach-table": [
+        "../../../packages/core/dist/index.d.cts"
+      ],
+      "@agile-team/mach-table/workbench": [
+        "../../../packages/core/dist/workbench.d.cts"
+      ],
+      "@agile-team/mach-table/preferences": [
+        "../../../packages/core/dist/preferences.d.cts"
+      ],
+      "@agile-team/mach-table/ordering": [
+        "../../../packages/core/dist/ordering.d.cts"
+      ],
+      "@agile-team/mach-table/server-side": [
+        "../../../packages/core/dist/server-side.d.cts"
+      ],
+      "@agile-team/mach-table/analysis": [
+        "../../../packages/core/dist/analysis.d.cts"
+      ],
+      "@agile-team/mach-table/multi-range": [
+        "../../../packages/core/dist/multi-range.d.cts"
+      ],
+      "@agile-team/mach-table-vue": [
+        "../../../packages/vue/dist/index.d.cts"
+      ],
+      "@agile-team/mach-table-vue/workbench": [
+        "../../../packages/vue/dist/workbench.d.cts"
+      ],
+      "@agile-team/mach-table-vue/preferences": [
+        "../../../packages/vue/dist/preferences.d.cts"
+      ],
+      "@agile-team/mach-table-vue/ordering": [
+        "../../../packages/vue/dist/ordering.d.cts"
+      ],
+      "@agile-team/mach-table-vue/server-side": [
+        "../../../packages/vue/dist/server-side.d.cts"
+      ],
+      "@agile-team/mach-table-vue/analysis": [
+        "../../../packages/vue/dist/analysis.d.cts"
+      ],
+      "@agile-team/mach-table-vue/multi-range": [
+        "../../../packages/vue/dist/multi-range.d.cts"
+      ],
+      "@agile-team/mach-table-react": [
+        "../../../packages/react/dist/index.d.cts"
+      ],
+      "@agile-team/mach-table-react/workbench": [
+        "../../../packages/react/dist/workbench.d.cts"
+      ],
+      "@agile-team/mach-table-react/preferences": [
+        "../../../packages/react/dist/preferences.d.cts"
+      ],
+      "@agile-team/mach-table-react/ordering": [
+        "../../../packages/react/dist/ordering.d.cts"
+      ],
+      "@agile-team/mach-table-react/server-side": [
+        "../../../packages/react/dist/server-side.d.cts"
+      ],
+      "@agile-team/mach-table-react/analysis": [
+        "../../../packages/react/dist/analysis.d.cts"
+      ],
+      "@agile-team/mach-table-react/multi-range": [
+        "../../../packages/react/dist/multi-range.d.cts"
+      ]
+    },
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true
+  },
+  "include": [
+    "*.cts"
+  ]
+}

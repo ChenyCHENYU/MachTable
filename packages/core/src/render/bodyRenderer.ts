@@ -110,6 +110,7 @@ export interface FocusedCell {
   colId: string;
 }
 
+/** @internal Per-grid DOM owner; render callbacks receive public parameters only. */
 export class BodyRenderer {
   private pool: RowSlot[] = [];
   private poolSize = 0;
@@ -151,6 +152,14 @@ export class BodyRenderer {
     body.addEventListener("pointerdown", this.onDragHandlePointerDown);
     body.addEventListener("keydown", this.onDragHandleKeyDown);
     window.addEventListener("mouseup", this.onWindowMouseUp);
+  }
+
+  suspend(): void {
+    cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
+    this.cancelFillDrag();
+    this.rowDragController.destroy();
+    this.rangeDragging = false;
   }
 
   destroy(): void {
@@ -1442,31 +1451,30 @@ export class BodyRenderer {
     const old = this.normalizedRange();
     this.rangeSelection.clear();
     if (old) {
-      this.refreshRowRange(old, null);
+      this.refreshRangeClasses();
       this.updateFillHandle();
       this.core.emit("rangeSelectionChanged", { range: null });
     }
   }
 
-  private refreshRowRange(
-    a: { r1: number; r2: number } | null,
-    b: { r1: number; r2: number } | null
-  ): void {
-    const indexes: number[] = [];
-    const collect = (r: { r1: number; r2: number } | null) => {
-      if (!r) return;
-      for (let i = r.r1; i <= r.r2; i++) indexes.push(i);
-    };
-    collect(a);
-    collect(b);
-    if (indexes.length > 0) this.refreshRows(indexes);
+  private refreshRangeClasses(): void {
+    // Range gestures change adornments only. Replacing content on mousedown
+    // destroys native double-click targets and unnecessarily remounts renderers.
+    for (const slot of this.pool) {
+      if (slot.index < 0 || slot.kind !== "master") continue;
+      for (const pane of PANES) {
+        const columns = this.activePaneColumns(pane);
+        slot.cells[pane]?.forEach((cell, index) => {
+          const column = columns[index];
+          if (column) this.applyRangeClass(cell, slot.index, column);
+        });
+      }
+    }
   }
 
   startRange(row: number, colIdx: number, extend: boolean): void {
-    const old = this.normalizedRange();
     this.rangeSelection.start({ row, colIdx }, extend);
-    const next = this.normalizedRange();
-    this.refreshRowRange(old, next);
+    this.refreshRangeClasses();
     this.updateFillHandle();
     this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
   }
@@ -1480,13 +1488,11 @@ export class BodyRenderer {
     }
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     const colCount = this.core.columnModel.getOrderedVisible().length;
-    const old = this.normalizedRange();
     this.rangeSelection.setEnd({
       row: Math.max(0, Math.min(row, rowCount - 1)),
       colIdx: Math.max(0, Math.min(colIdx, colCount - 1))
     });
-    const next = this.normalizedRange();
-    this.refreshRowRange(old, next);
+    this.refreshRangeClasses();
     this.updateFillHandle();
     const flat = this.core.columnModel.getOrderedVisible();
     const end = this.rangeSelection.getEnd();
@@ -1655,9 +1661,8 @@ export class BodyRenderer {
       const target = this.fillTargetRow(me);
       const end = this.rangeSelection.getEnd();
       if (end && end.row !== target) {
-        const old = this.normalizedRange();
         this.rangeSelection.setEnd({ row: target, colIdx: end.colIdx });
-        this.refreshRowRange(old, this.normalizedRange());
+        this.refreshRangeClasses();
         this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
       }
       return;
@@ -1666,9 +1671,8 @@ export class BodyRenderer {
     const targetCol = Math.max(drag.c2 + 1, this.fillTargetCol(me));
     const end = this.rangeSelection.getEnd();
     if (end && end.colIdx !== targetCol) {
-      const old = this.normalizedRange();
       this.rangeSelection.setEnd({ row: end.row, colIdx: targetCol });
-      this.refreshRowRange(old, this.normalizedRange());
+      this.refreshRangeClasses();
       this.updateFillHandle();
       this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
     }
@@ -1737,9 +1741,8 @@ export class BodyRenderer {
       } else {
         const end = this.rangeSelection.getEnd();
         if (!end || end.colIdx === drag.c2) return;
-        const old = this.normalizedRange();
         this.rangeSelection.setEnd({ row: end.row, colIdx: drag.c2 });
-        this.refreshRowRange(old, this.normalizedRange());
+        this.refreshRangeClasses();
       }
       return;
     }
@@ -1752,9 +1755,8 @@ export class BodyRenderer {
     } else {
       const end = this.rangeSelection.getEnd();
       if (!end || end.row === drag.r2) return;
-      const old = this.normalizedRange();
       this.rangeSelection.setEnd({ row: drag.r2, colIdx: end.colIdx });
-      this.refreshRowRange(old, this.normalizedRange());
+      this.refreshRangeClasses();
     }
   };
 
@@ -1886,6 +1888,9 @@ export class BodyRenderer {
 
     const maxScroll = Math.max(0, this.rowTop(rowCount) - viewportHeight);
     viewport.scrollTop = clamp(target, 0, maxScroll);
+    // Imperative navigation must release offscreen editors in this turn.
+    // A queued native caret reveal can otherwise undo the scroll before RAF.
+    this.syncScroll();
   }
 
   private setHoverIndex(index: number): void {
@@ -2163,10 +2168,12 @@ export class BodyRenderer {
     const handle = document.createElement("button");
     handle.className = "mach-row-drag-handle";
     handle.type = "button";
-    handle.disabled = !this.rowDragController.canDrag(node);
+    const decision = this.rowDragController.dragDecision(node);
+    handle.disabled = decision !== true;
     const label = this.core.options.locale.rowDragHandle ?? DEFAULT_LOCALE.rowDragHandle;
     handle.setAttribute("aria-label", label);
-    handle.title = handle.disabled ? this.core.options.locale.rowDragUnavailable ?? DEFAULT_LOCALE.rowDragUnavailable : label;
+    handle.title = typeof decision === "string" ? decision
+      : handle.disabled ? this.core.options.locale.rowDragUnavailable ?? DEFAULT_LOCALE.rowDragUnavailable : label;
     handle.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
     cell.replaceChildren(handle);
   }

@@ -146,4 +146,20 @@ describe("0.24 bounded resources", () => {
     second.destroy();
     expect(disconnects).toBe(1);
   });
+
+  it("releases an observer whose initialization fails even when browser cleanup throws", () => {
+    const disconnect = vi.fn(() => { throw new Error("disconnect failed"); });
+    class BrokenObserver {
+      observe() { throw new Error("longtask unsupported"); }
+      disconnect = disconnect;
+    }
+    vi.stubGlobal("PerformanceObserver", BrokenObserver);
+    const first = new PerformanceMonitor();
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(() => first.destroy()).not.toThrow();
+    // A failed observer is never cached as a successful subscription.
+    const second = new PerformanceMonitor();
+    expect(disconnect).toHaveBeenCalledTimes(2);
+    second.destroy();
+  });
 });

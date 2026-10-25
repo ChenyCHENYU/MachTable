@@ -28,7 +28,9 @@ import { StatusBarService } from "../render/statusBarService";
 import { getByPath, setByPath } from "../lib/path";
 import { loadGridState, saveGridState } from "../lib/gridStateStore";
 import { selectGridStateSections } from "../lib/gridState";
-import { BUILTIN_CELL_RENDERERS } from "../lib/presetRenderers";
+import { BUILTIN_CELL_RENDERERS, closeGridActionSurface } from "../lib/presetRenderers";
+import { closeGridSelect } from "../lib/selectControl";
+import { ResourceScope } from "../lib/resourceScope";
 import { validateColumnDefs } from "../lib/validateDefs";
 import { validateGridOptions } from "../lib/validateOptions";
 import { normalizeFeatureRequirements, resolveGridFeatures } from "../lib/featureManifest";
@@ -67,6 +69,7 @@ const GRID_STATE_CHANGE_EVENTS = new Set<GridEventType>([
 
 let gridUid = 0;
 
+/** @internal Per-grid services are exposed only through the frozen GridApi facade. */
 export class GridCore<TData = any> {
   readonly gridId: number;
   readonly options: ResolvedGridOptions<TData>;
@@ -104,7 +107,9 @@ export class GridCore<TData = any> {
   private readonly readyPromise: Promise<GridApi<TData>>;
   private readonly resolveReady: (api: GridApi<TData>) => void;
   private lastColumnLayoutSignature = "";
-  private activeFeatures = new Map<string, { feature: GridFeature<TData>; cleanups: Array<() => void> }>();
+  private resources = new ResourceScope((error) => console.error("[mach-table] resource cleanup error", error));
+  private activeFeatures = new Map<string, { feature: GridFeature<TData>; scope: ResourceScope }>();
+  private featureGeneration = 0;
   private recentErrors: GridDiagnosticError[] = [];
   private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private gridStateLoadToken = 0;
@@ -126,33 +131,34 @@ export class GridCore<TData = any> {
       else this.reportError(error, "eventBus.listener", { eventType });
     });
 
-    this.columnModel = new ColumnModel(this);
-    this.rowModel = new RowModel<TData>(this);
-    this.selectionService = new SelectionService(this);
-    this.skeleton = new GridSkeleton(this);
-    this.headerRenderer = new HeaderRenderer(this);
-    this.bodyRenderer = new BodyRenderer(this);
-    this.resizeService = new ResizeService(this);
-    this.columnDragService = new ColumnDragService(this);
-    this.keyboardService = new KeyboardService(this);
-    this.editingService = new EditingService(this);
-    this.inputService = new InputService(this);
-    this.undoService = new UndoRedoService(this);
-    this.performanceMonitor = new PerformanceMonitor();
-    this.updateScheduler = new GridUpdateScheduler((request) => this.applyScheduledUpdate(request));
-    this.filterPopup = new FilterPopupService(this);
-    this.columnMenu = new ColumnMenuService(this);
-    this.contextMenuService = new ContextMenuService(this);
-    this.tooltipService = new TooltipService(this);
-    this.watermarkService = new WatermarkService(this);
-    this.paginationBar = new PaginationBar(this);
-    this.pinnedRowsRenderer = new PinnedRowsRenderer(this);
-    this.summaryRenderer = new SummaryRenderer(this);
-    this.statusBarService = new StatusBarService(this);
-    this.api = createGridApi(this);
-    this.changeTracker = new ChangeTrackingService<TData>(this);
-
     try {
+      this.columnModel = new ColumnModel(this);
+      this.rowModel = this.resources.own(new RowModel<TData>(this));
+      this.selectionService = new SelectionService(this);
+      this.skeleton = this.resources.own(new GridSkeleton(this));
+      this.headerRenderer = this.resources.own(new HeaderRenderer(this));
+      this.bodyRenderer = this.resources.own(new BodyRenderer(this));
+      this.resizeService = this.resources.own(new ResizeService(this));
+      this.columnDragService = this.resources.own(new ColumnDragService(this));
+      this.keyboardService = this.resources.own(new KeyboardService(this));
+      this.editingService = this.resources.own(new EditingService(this));
+      this.inputService = new InputService(this);
+      this.undoService = new UndoRedoService(this);
+      this.performanceMonitor = this.resources.own(new PerformanceMonitor());
+      this.updateScheduler = this.resources.own(new GridUpdateScheduler((request) => this.applyScheduledUpdate(request)));
+      this.filterPopup = this.resources.own(new FilterPopupService(this));
+      this.columnMenu = this.resources.own(new ColumnMenuService(this));
+      this.contextMenuService = this.resources.own(new ContextMenuService(this));
+      this.tooltipService = this.resources.own(new TooltipService(this));
+      this.watermarkService = this.resources.own(new WatermarkService(this));
+      this.paginationBar = this.resources.own(new PaginationBar(this));
+      this.pinnedRowsRenderer = this.resources.own(new PinnedRowsRenderer(this));
+      this.summaryRenderer = this.resources.own(new SummaryRenderer(this));
+      this.statusBarService = this.resources.own(new StatusBarService(this));
+      this.api = createGridApi(this);
+      this.changeTracker = this.resources.own(new ChangeTrackingService<TData>(this));
+      this.resources.add(() => this.destroyFeatures());
+
       this.changeTracker.init();
       this.skeleton.init(container, this.options);
       this.watermarkService.init();
@@ -183,13 +189,15 @@ export class GridCore<TData = any> {
       this.pinnedRowsRenderer.setData(this.options.pinnedTopRowData, this.options.pinnedBottomRowData);
       this.setFeatures(this.options.features);
 
+      if (this.destroyed) return;
+
       this.readyRafId = requestAnimationFrame(() => {
         this.readyRafId = 0;
         if (!this.destroyed) this.emit("gridReady", {});
         this.settleReady();
       });
     } catch (error) {
-      this.reportError(error, "grid.constructor");
+      if (this.getApi()) this.reportError(error, "grid.constructor");
       this.destroy();
       throw error;
     }
@@ -224,8 +232,9 @@ export class GridCore<TData = any> {
   }
 
   setFeatures(features: readonly GridFeature<TData>[] | null | undefined): void {
+    const generation = this.featureGeneration + 1;
     this.destroyFeatures();
-    if (this.destroyed) return;
+    if (this.destroyed || this.featureGeneration !== generation) return;
     const resolved = resolveGridFeatures(features ?? []);
     for (const issue of resolved.issues) {
       this.reportError(new Error(issue.message), "feature.manifest", {
@@ -236,6 +245,7 @@ export class GridCore<TData = any> {
     }
 
     for (const feature of resolved.features) {
+      if (this.destroyed || this.featureGeneration !== generation) return;
       const key = feature.key.trim();
       const inactiveDependency = this.inactiveFeatureDependency(feature);
       if (inactiveDependency) {
@@ -246,17 +256,8 @@ export class GridCore<TData = any> {
         );
         continue;
       }
-      const cleanups: Array<() => void> = [];
-      const manage = (cleanup: () => void): (() => void) => {
-        let active = true;
-        const once = () => {
-          if (!active) return;
-          active = false;
-          cleanup();
-        };
-        cleanups.push(once);
-        return once;
-      };
+      const scope = new ResourceScope((error) => this.reportError(error, "feature.cleanup", { key }));
+      const manage = (cleanup: () => void): (() => void) => scope.add(cleanup);
       const context: GridFeatureContext<TData> = {
         api: this.api,
         root: this.skeleton.root,
@@ -282,39 +283,53 @@ export class GridCore<TData = any> {
       try {
         const cleanup = feature.setup(context);
         if (typeof cleanup === "function") manage(cleanup);
-        this.activeFeatures.set(key, { feature, cleanups });
-      } catch (error) {
-        for (const cleanup of cleanups.reverse()) {
-          try { cleanup(); } catch (cleanupError) {
-            this.reportError(cleanupError, "feature.cleanup", { key });
-          }
+        if (this.destroyed || this.featureGeneration !== generation) {
+          this.releaseFeature(key, { feature, scope });
+          return;
         }
+        this.activeFeatures.set(key, { feature, scope });
+      } catch (error) {
+        scope.dispose();
         this.reportError(error, "feature.setup", { key });
       }
     }
   }
 
   private destroyFeatures(): void {
+    this.featureGeneration++;
     const entries = [...this.activeFeatures.entries()].reverse();
     this.activeFeatures.clear();
-    for (const [key, active] of entries) {
-      for (const cleanup of active.cleanups.reverse()) {
-        try {
-          cleanup();
-        } catch (error) {
-          this.reportError(error, "feature.cleanup", { key });
-        }
-      }
-      try {
-        active.feature.destroy?.();
-      } catch (error) {
-        this.reportError(error, "feature.destroy", { key });
-      }
+    for (const [key, active] of entries) this.releaseFeature(key, active);
+  }
+
+  private releaseFeature(key: string, active: { feature: GridFeature<TData>; scope: ResourceScope }): void {
+    active.scope.dispose();
+    try {
+      active.feature.destroy?.();
+    } catch (error) {
+      this.reportError(error, "feature.destroy", { key });
     }
   }
 
   isDestroyed(): boolean {
     return this.destroyed;
+  }
+
+  /** KeepAlive closes transient interaction owners while retaining the model. */
+  suspend(): void {
+    this.cancelPendingInput();
+    void this.api.editing.stop({ cancel: true });
+    this.filterPopup.close();
+    this.columnMenu.close();
+    this.contextMenuService.close();
+    this.tooltipService.hide();
+    this.resizeService.cancelResize();
+    this.columnDragService.destroy();
+    this.bodyRenderer.suspend();
+    closeGridSelect(this.skeleton.root);
+    closeGridActionSurface(this.skeleton.root);
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && this.skeleton.root.contains(focused)) focused.blur();
   }
 
   nextId(): number {
@@ -428,7 +443,7 @@ export class GridCore<TData = any> {
   }
 
   cancelPendingInput(): void {
-    this.inputService.cancel();
+    this.inputService?.cancel();
   }
 
   pasteText(text: string, startRow: number, startColIdx: number): void {
@@ -949,36 +964,11 @@ export class GridCore<TData = any> {
     this.cancelPendingInput();
     if (this.readyRafId) cancelAnimationFrame(this.readyRafId);
     this.readyRafId = 0;
-    this.settleReady();
-    const safely = (source: string, fn: () => void): void => {
-      try {
-        fn();
-      } catch (error) {
-        console.error(`[mach-table] ${source} destroy error`, error);
-      }
-    };
-    safely("grid event", () => this.emit("gridDestroyed", {}));
-    safely("updateScheduler", () => this.updateScheduler.destroy());
-    safely("performanceMonitor", () => this.performanceMonitor.destroy());
-    safely("features", () => this.destroyFeatures());
-    safely("changeTracker", () => this.changeTracker.destroy());
-    safely("rowModel", () => this.rowModel.destroy());
-    safely("editingService", () => this.editingService.destroy());
-    safely("keyboardService", () => this.keyboardService.destroy());
-    safely("filterPopup", () => this.filterPopup.destroy());
-    safely("columnMenu", () => this.columnMenu.destroy());
-    safely("contextMenu", () => this.contextMenuService.destroy());
-    safely("tooltip", () => this.tooltipService.destroy());
-    safely("watermark", () => this.watermarkService.destroy());
-    safely("pagination", () => this.paginationBar.destroy());
-    safely("columnDrag", () => this.columnDragService.destroy());
-    safely("resize", () => this.resizeService.destroy());
-    safely("bodyRenderer", () => this.bodyRenderer.destroy());
-    safely("headerRenderer", () => this.headerRenderer.destroy());
-    safely("pinnedRowsRenderer", () => this.pinnedRowsRenderer.destroy());
-    safely("summaryRenderer", () => this.summaryRenderer.destroy());
-    safely("statusBar", () => this.statusBarService.destroy());
-    safely("skeleton", () => this.skeleton.destroy());
+    if (this.getApi()) {
+      this.settleReady();
+      try { this.emit("gridDestroyed", {}); } catch (error) { console.error("[mach-table] grid destroy event", error); }
+    }
+    this.resources.dispose();
     this.eventBus.clear();
   }
 }

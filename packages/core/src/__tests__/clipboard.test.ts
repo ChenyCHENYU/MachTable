@@ -62,6 +62,46 @@ describe("tsv codec", () => {
 });
 
 describe("range selection", () => {
+  it("changes range adornments without replacing pointer targets or destroying renderers", () => {
+    const destroyed = vi.fn();
+    const { api, host } = createRangeGrid({
+      columnDefs: [
+        { field: "id", width: 80 },
+        { field: "name", width: 120, editable: true, cellRenderer: ({ value }) => {
+          const text = document.createElement("span");
+          text.textContent = String(value);
+          return { el: text, destroy: destroyed };
+        } },
+        { field: "score", width: 100, editable: true }
+      ]
+    });
+    const cell = cellAt(host, 0, "name");
+    const text = cell.firstChild!;
+    const trigger = cell.querySelector(".mach-cell-edit-trigger");
+    const scoreText = cellAt(host, 1, "score").firstChild;
+    destroyed.mockClear();
+
+    // Native double-click recognition needs the original pointer target to
+    // remain attached between mousedown, click and the second mousedown.
+    for (const detail of [1, 2]) {
+      text.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, detail }));
+      expect(cell.firstChild).toBe(text);
+      expect(cell.querySelector(".mach-cell-edit-trigger")).toBe(trigger);
+      expect(destroyed).not.toHaveBeenCalled();
+    }
+    expect(cell.classList.contains("mach-cell--range")).toBe(true);
+    cellAt(host, 1, "score").dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    expect(cellAt(host, 1, "score").firstChild).toBe(scoreText);
+    expect(host.querySelectorAll(".mach-cell--range")).toHaveLength(4);
+    api.selection.clearRange();
+    expect(host.querySelectorAll(".mach-cell--range")).toHaveLength(0);
+    expect(cell.firstChild).toBe(text);
+    expect(destroyed).not.toHaveBeenCalled();
+    api.destroy();
+    expect(destroyed).toHaveBeenCalledTimes(6);
+  });
+
   it("selects range via mousedown + mouseover drag", () => {
     const { api, host } = createRangeGrid();
     cellAt(host, 0, "name").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));

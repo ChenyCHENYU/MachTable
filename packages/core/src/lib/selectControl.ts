@@ -42,12 +42,18 @@ export interface SelectControl {
 }
 
 interface ActiveSelectControl {
+  owner: HTMLElement | null;
   close: (restoreFocus?: boolean) => boolean;
   contains: (target: Node) => boolean;
   reposition: () => void;
 }
 
 let activeSelect: ActiveSelectControl | null = null;
+
+/** Close only the portalled select owned by the grid that is being suspended. */
+export function closeGridSelect(root: HTMLElement): void {
+  if (activeSelect?.owner && (root === activeSelect.owner || root.contains(activeSelect.owner))) activeSelect.close();
+}
 
 function onActiveSelectMouseDown(event: MouseEvent): void {
   const target = event.target as Node;
@@ -195,6 +201,7 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
   const open = (): void => {
     if (destroyed || trigger.disabled || listbox.classList.contains("mach-select-listbox--open")) return;
     activateSelect({
+      owner: currentThemeSource(),
       close,
       contains: (target) => root.contains(target) || listbox.contains(target),
       reposition: positionListbox

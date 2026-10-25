@@ -1,6 +1,9 @@
 import "@agile-team/mach-table/styles/mach-table.css";
+import { installWorkbenchDemo } from "./workbenchDemo";
+import { installServerSideDemo } from "./serverSideDemo";
+import { installOrderingDemo } from "./orderingDemo";
 import { createGrid, buildColDefsFromSchema, dragColumn, indexColumn, selectionColumn } from "@agile-team/mach-table";
-import type { GridApi, ColDef, CellRendererParams, DetailRowRendererParams } from "@agile-team/mach-table";
+import type { GridApi, ColDef, CellRendererParams, GridSchema, ThemeMode } from "@agile-team/mach-table";
 
 interface MachineRow {
   id: string;
@@ -85,7 +88,7 @@ const host = document.getElementById("gridHost")!;
 const logEl = document.getElementById("log")!;
 const infoEl = document.getElementById("info")!;
 
-let theme = "light";
+let theme: ThemeMode = "light";
 
 const api: GridApi<MachineRow> = createGrid<MachineRow>(host, {
   columnDefs,
@@ -207,7 +210,7 @@ const workSchema = {
     { field: "updatedAt", title: "更新时间", type: "date", format: "datetime", width: 150 }
   ],
   groups: [{ title: "执行信息", fields: ["owner", "level", "progress"] }]
-} as const;
+} satisfies GridSchema;
 
 function makeWorkRows(count: number): WorkItem[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -224,7 +227,7 @@ function makeWorkRows(count: number): WorkItem[] {
 const schemaHost = document.getElementById("schemaHost")!;
 
 const schemaApi: GridApi<WorkItem> = createGrid<WorkItem>(schemaHost, {
-  columnDefs: buildColDefsFromSchema<WorkItem>(workSchema as any),
+  columnDefs: buildColDefsFromSchema<WorkItem>(workSchema),
   rowData: makeWorkRows(300),
   rowKey: (row) => row.itemId,
   size: "compact",
@@ -323,3 +326,7 @@ const infiniteApi: GridApi<OrderRow> = createGrid<OrderRow>(infiniteHost, {
 });
 
 void infiniteApi;
+
+installWorkbenchDemo(api);
+installServerSideDemo(api);
+installOrderingDemo(api);

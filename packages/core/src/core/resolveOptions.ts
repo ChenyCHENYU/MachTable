@@ -122,6 +122,7 @@ function resolveEditingAndHistory(options: GridOptions) {
     showSummary: options.showSummary ?? false,
     indexOffset: options.indexOffset ?? 0,
     applyRowDrag: options.applyRowDrag ?? true,
+    rowDragPolicy: options.rowDragPolicy,
     undoStackSize: finiteAtLeast(options.undoStackSize, 100, 0, true),
     asyncTransactionWaitMillis: finiteAtLeast(options.asyncTransactionWaitMillis, 16, 0, true)
   };

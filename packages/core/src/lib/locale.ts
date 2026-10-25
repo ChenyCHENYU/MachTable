@@ -64,7 +64,7 @@ export const DEFAULT_LOCALE = {
 } as const;
 
 export type MachTableLocaleKey = keyof typeof DEFAULT_LOCALE;
-export type MachTableLocale = Partial<Record<MachTableLocaleKey, string>>;
+export type MachTableLocale = Partial<Record<MachTableLocaleKey | "rowDragSelection" | "rowDragBefore" | "rowDragAfter" | "rowDragInside" | "rowDragRejected", string>>;
 
 export const LOCALE_EN: MachTableLocale = {
   matchContains: "Contains",
@@ -128,7 +128,12 @@ export const LOCALE_EN: MachTableLocale = {
   rowDragHandle: "Drag to reorder; Alt + Up/Down to move",
   rowDragUnavailable: "Reordering is unavailable in the current sort or data mode",
   rowDragPosition: "Row {a} → Row {b}",
-  rowDragOutside: "Move inside to drop · Esc to cancel"
+  rowDragOutside: "Move inside to drop · Esc to cancel",
+  rowDragSelection: "{a} selected rows → Row {b}",
+  rowDragBefore: "Before",
+  rowDragAfter: "After",
+  rowDragInside: "Inside",
+  rowDragRejected: "This destination is unavailable"
 };
 
 const MATCH_LOCALE_KEYS: Record<string, MachTableLocaleKey> = {

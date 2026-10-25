@@ -6,6 +6,7 @@ import { el } from "../lib/dom";
 const SIZE_CLASSES: GridSize[] = ["compact", "normal", "large"];
 type SkeletonContext = Pick<GridCore<any>, "options" | "relayout" | "reportError">;
 
+/** @internal Layout ownership stays in Core; consumers receive only the root DOM element. */
 export class GridSkeleton {
   root!: HTMLElement;
   headerEl!: HTMLElement;
@@ -355,7 +356,7 @@ export class GridSkeleton {
     if (this.resizeRaf) cancelAnimationFrame(this.resizeRaf);
     this.resizeRaf = 0;
     this.cleanupOverlayContent();
-    this.root.remove();
+    this.root?.remove();
   }
 
   private cleanupOverlayContent(): void {

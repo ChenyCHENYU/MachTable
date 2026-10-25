@@ -12,15 +12,8 @@ const workspaceRoot = new URL("../", import.meta.url);
 const outputDirectory = new URL(`packages/${adapter}/dist/`, workspaceRoot);
 
 await mkdir(fileURLToPath(outputDirectory), { recursive: true });
-await Promise.all([
-  copyFile(
-    fileURLToPath(new URL("packages/core/dist/mach-table.css", workspaceRoot)),
-    fileURLToPath(new URL("mach-table.css", outputDirectory))
-  ),
-  copyFile(
-    fileURLToPath(new URL("packages/core/styles/mach-table.css.d.ts", workspaceRoot)),
-    fileURLToPath(new URL("mach-table.css.d.ts", outputDirectory))
-  )
-]);
+await Promise.all(["mach-table", "workbench", "server-side"].flatMap(name => ["css", "css.d.ts"].map(extension =>
+  copyFile(new URL(`packages/core/dist/${name}.${extension}`, workspaceRoot), new URL(`${name}.${extension}`, outputDirectory))
+)));
 
 console.log(`Copied the MachTable stylesheet into the ${adapter} adapter package.`);

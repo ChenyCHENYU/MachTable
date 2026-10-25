@@ -52,6 +52,7 @@ export interface RowTransactionImpact {
   updatedRowIds: readonly string[];
 }
 
+/** @internal Consumers receive plain RowNode records, not this model service. */
 export class RowModel<TData = any> {
   private all: RowNode<TData>[] = [];
   private roots: RowNode<TData>[] = [];
@@ -345,6 +346,11 @@ export class RowModel<TData = any> {
       this.refreshPipeline();
       this.core.requestUpdate({ data: true });
       this.core.headerRenderer.refreshSelectAllCheckbox();
+      // A small block may not fill the first viewport; seed its remaining
+      // visible blocks without requiring an initial user scroll.
+      if (seq === this.infiniteSeq && !this.core.isDestroyed()) {
+        this.prefetchVisibleBlocks(this.core.bodyRenderer.getRenderedRowRange().lastExcl - 1);
+      }
     }).catch((error) => {
       if ((error as { name?: string })?.name !== "AbortError") {
         this.core.reportError(error, "datasource.getRows", { startRow: start, endRow: stop });

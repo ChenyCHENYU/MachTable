@@ -40,6 +40,29 @@ MachTable 按运行时成本和职责拆分入口。Vue/React 项目只安装对
 import "@agile-team/mach-table/styles/mach-table.css";
 ```
 
+## 三个表格包共用的企业能力入口
+
+以下六个后缀同时由 `@agile-team/mach-table`、`@agile-team/mach-table-vue` 和 `@agile-team/mach-table-react` 提供。使用 Vue/React 时从对应适配包导入，无需直接安装 Core。它们均支持 ESM/CJS 和独立类型声明，不由根入口加载。
+
+| 后缀 | 主要函数与协议 | 附加样式 |
+| --- | --- | --- |
+| `/workbench` | `mountAdvancedFilterBuilder`、`mountChangeReview`、`mountDiagnostics`、`inspectGridRow` | `/styles/workbench.css` |
+| `/preferences` | `createGridPreferenceStore`、`migrateGridState`、身份/CAS/迁移报告 | 无 |
+| `/ordering` | `reorderRows`、`moveTreeNodes`、`createRowOrderController` 及排序保存/撤销/重做协议 | 沿用基础表格样式 |
+| `/server-side` | `createServerSideStore`、`bindServerSideGrid`、`createServerSideGroupColumn`、`serverSideDataColumn` | `/styles/server-side.css` |
+| `/analysis` | 无 DOM 的 `createPivot`、`evaluateFormulas`，以及 `mountAnalysis` 面板 | 面板使用 `/styles/workbench.css` |
+| `/multi-range` | `createMultiRangeSelection`，复用 Core 选区、复制、校验与编辑撤销 | `/styles/workbench.css` |
+
+两个附加样式同样从当前使用的包导入，不能替代基础表格样式。例如：
+
+```ts
+import { mountAdvancedFilterBuilder } from '@agile-team/mach-table-vue/workbench';
+import '@agile-team/mach-table-vue/styles.css';
+import '@agile-team/mach-table-vue/styles/workbench.css';
+```
+
+纯计算函数无需加载面板 CSS；多范围只需导入自己的 JS 入口及附加样式，无需加载工作台 JS。协议与边界见[工作台](/recipes/workbench)、[企业偏好](/recipes/enterprise-preferences)、[排序](/recipes/row-presentation)、[服务端 Store](/recipes/server-side-store)、[分析](/recipes/analysis)和[多范围](/recipes/multi-range)。
+
 ## Vue：`@agile-team/mach-table-vue`
 
 根入口导出：

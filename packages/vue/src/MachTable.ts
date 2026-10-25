@@ -1,9 +1,9 @@
-import { defineComponent, getCurrentInstance, h, onBeforeUnmount, onMounted, ref, watch, type DefineComponent } from "vue";
+import { defineComponent, getCurrentInstance, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type DefineComponent } from "vue";
 import {
   createGrid,
   EVENT_TYPES
 } from "@agile-team/mach-table";
-import { GRID_OPTION_KEYS, GRID_OPTION_META } from "@agile-team/mach-table/adapter";
+import { GRID_OPTION_KEYS, GRID_OPTION_META, resumeGrid, suspendGrid } from "@agile-team/mach-table/adapter";
 import type { GridApi, GridOptions } from "@agile-team/mach-table";
 import { useMachTableConfig } from "./defaults";
 import {
@@ -156,6 +156,11 @@ const MachTableImpl = defineComponent({
       api?.destroy();
       api = null;
     });
+
+    // KeepAlive retains the model and API. Only transient interaction is
+    // suspended; activation measures the restored host instead of remounting.
+    onDeactivated(() => { if (api) suspendGrid(api); });
+    onActivated(() => { if (api) resumeGrid(api); });
 
     watch(
       () => {

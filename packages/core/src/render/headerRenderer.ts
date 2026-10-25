@@ -62,6 +62,7 @@ function isHorizontalArrow(key: string): boolean {
   return key === "ArrowLeft" || key === "ArrowRight";
 }
 
+/** @internal Header callbacks receive public parameters, never the rendering service. */
 export class HeaderRenderer {
   private leafCells: HeaderCell[] = [];
   private groupCells: GroupCell[] = [];

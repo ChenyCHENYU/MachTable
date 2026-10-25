@@ -81,6 +81,21 @@ export class RemoteBlockCache<TData> {
     return this.blocks.has(blockIndex);
   }
 
+  /** Invalidate one route block without discarding unrelated sibling stores. */
+  invalidate(blockIndex: number): void {
+    const pending = this.inflight.get(blockIndex);
+    if (pending) {
+      this.inflight.delete(blockIndex);
+      pending.controller.abort();
+      if (pending.state === "queued") pending.reject(abortError(pending.controller.signal));
+    }
+    const block = this.blocks.get(blockIndex);
+    if (block) {
+      this.blocks.delete(blockIndex);
+      this.onEvict?.(blockIndex, block);
+    }
+  }
+
   load(
     blockIndex: number,
     loader: BlockLoader<TData>,

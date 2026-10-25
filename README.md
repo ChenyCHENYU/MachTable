@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.31.2-2563eb" alt="Source version 0.31.2" />
+  <img src="https://img.shields.io/badge/source-0.32.0-2563eb" alt="Source version 0.32.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -186,6 +186,35 @@ const options: GridOptions<Plan> = {
 
 完整配置、限制和升级事项见[行拖拽与条件整行颜色](./docs/recipes/row-presentation.md)。
 
+## 按需工作台与高级数据能力
+
+Core、Vue、React 共享下面六个子入口。Vue 项目将包名写为 `@agile-team/mach-table-vue`，React 写为 `@agile-team/mach-table-react`；仍然只安装一个适配包。普通根入口不导入这些高级实现和附加样式。
+
+| 子入口 | 能力 | 配方 |
+| --- | --- | --- |
+| `/workbench` | 高级过滤草稿、批量修改差异与冲突审阅、按需诊断与行状态解释 | [工作台](./docs/recipes/workbench.md) |
+| `/preferences` | 租户/用户/页面/Schema 隔离、CAS、有序写入、历史状态和列类型迁移报告 | [企业偏好](./docs/recipes/enterprise-preferences.md) |
+| `/ordering` | 多行与树移动、防环和父级约束、稳定身份保存、失败回滚、撤销/重做 | [排序协议](./docs/recipes/row-presentation.md) |
+| `/server-side` | 服务端分组、聚合、route 分页缓存、事务刷新和层级选择 | [层级 Store](./docs/recipes/server-side-store.md) |
+| `/multi-range` | Ctrl/Cmd 追加选区、格式化复制、校验清空与单次撤销 | [多范围](./docs/recipes/multi-range.md) |
+| `/analysis` | 有界 Pivot、算术与聚合公式、柱/折线图及完整数据表回退 | [分析](./docs/recipes/analysis.md) |
+
+```ts
+import { mountAdvancedFilterBuilder, mountChangeReview } from "@agile-team/mach-table-vue/workbench";
+import "@agile-team/mach-table-vue/styles/workbench.css";
+
+// 复用同一份表格 API、过滤 AST、校验及保存协议。
+const filters = mountAdvancedFilterBuilder(filterHost, { api });
+const review = mountChangeReview(reviewHost, { api, save: orderApi.saveChanges });
+// 宿主卸载时释放；表格销毁也会自动关闭对应工作台。
+filters.destroy();
+review.destroy();
+```
+
+服务端排序使用稳定 ID 和预期版本。`createRowOrderController()` 的 `bindings` 可直接合入表格配置；复杂撤销的保存端必须一次 CAS 处理 `context.operations` 全批次，或原子保存 `context.plan.after`，不能只保存首个意图。服务端分组使用独立 `/styles/server-side.css`；分析和多范围样式使用 `/styles/workbench.css`。没有 UI 的纯计算、偏好和排序控制器无需附加样式。
+
+Vanilla 示例包含高级筛选、修改审阅、分析、平面/树排序及服务端分组的可操作入口，模拟传输有明确标记。自动矩阵覆盖三浏览器、明暗和强制颜色；人工读屏与真实业务 UAT 的完成状态独立记录，不将模拟接口当作生产验收。
+
 ## 一份清爽的应用配置
 
 把通用约定集中在 `mach-table.config.ts`。应用入口只负责安装，具体页面通过 props 覆盖；优先级为：应用默认值 → 命名预设 → 表格 props。
@@ -342,7 +371,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.31.2`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版统一编辑、粘贴、清空和填充校验，保留缓存淘汰后的未保存数据，隔离数据替换及框架重建前的异步输入和保存结果；同时优化筛选计划并修正失效列的排序处理。公共 API、使用侧配置和包体预算保持不变。批量输入现在会执行已有校验；完整重载数据会清理旧作用域的脏状态和撤销历史，详见[升级指南](./docs/guide/upgrading.md)。
+当前源码版本为 `0.32.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版以独立子入口提供高级过滤、修改审阅、诊断、企业偏好、多行与树排序及撤销重做、服务端分组、多范围和 Pivot/公式/图表工作台；继续统一资源所有权、框架生命周期和缓存故障恢复。已有领域 API 与普通列表接入方式保持兼容，新增高级模块及样式按需引入，详见[升级指南](./docs/guide/upgrading.md)。服务端分组采用 route 分页，分析限定当前已加载数据；完整边界和人工验收项见[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

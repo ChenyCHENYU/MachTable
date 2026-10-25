@@ -156,6 +156,10 @@ export interface RowActionsConfig<TData = any> extends Omit<ActionButtonsConfig<
 let openActionSurface: HTMLElement | null = null;
 let openActionAnchor: HTMLElement | null = null;
 
+export function closeGridActionSurface(root: HTMLElement): void {
+  if (openActionAnchor && root.contains(openActionAnchor)) closeActionSurface();
+}
+
 function closeActionSurface(restoreFocus = false): void {
   openActionSurface?.remove();
   openActionSurface = null;

@@ -3,10 +3,24 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.31.2
+pnpm up @agile-team/mach-table-vue@^0.32.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.31.2
+pnpm up @agile-team/mach-table-react@^0.32.0
 ```
+
+## 0.31.2 → 0.32.0
+
+现有根入口、领域 API 和单行托管排序接入保持兼容。新增能力显式从 `/workbench`、`/preferences`、`/ordering`、`/server-side`、`/analysis`、`/multi-range` 导入；Vue/React 从对应适配包的同名子路径导入，继续只安装一个包。
+
+- 过滤/修改审阅/诊断和分析 UI 引入 `/styles/workbench.css`，服务端分组控件引入 `/styles/server-side.css`；原有 `styles.css`/`styles/mach-table.css` 路径保持有效。
+- 新增 `rowDragPolicy` 行级与目标判定。高级多行/树排序由 `createRowOrderController().bindings` 接入，复用默认手柄及主题；普通托管排序的旧事件下标语义保持不变。
+- 排序控制器 `undo()`/`redo()` 与移动共用保存通道和版本检查。保存端须原子处理 `context.operations` 全批次或 `context.plan.after`；旧的单意图 transport 只支持普通移动，不会自动实现复杂撤销。
+- 服务端 Store 是显式 route 分页的数据模型，绑定时接管手动排序/过滤和客户端分页；不能与原有 datasource 或查询工作流同时绑定同一表格。有编辑或未保存数据时新投影等待显示，保存/回滚/取消后继续。
+- 状态默认仍严格接受 v2；历史 v1、字段重命名、删除和过滤类型变化通过可选偏好适配器显式迁移并报告。切换账号须创建新 store，不能复用已绑定旧身份的实例。
+- Vue KeepAlive 停用会关闭临时编辑/弹层与拖拽，保留模型、脏数据、选择和滚动；重新激活只恢复布局，不抢占页面其他输入的焦点。
+- Pivot、公式及多范围有明确资源上限，超限报告错误，不截断为伪完整结果。远程分析限定已加载视图；多业务 UAT、人工读屏与双边性能比较不由自动测试代替。
+
+详见[按需工作台](../recipes/workbench.md)、[排序](../recipes/row-presentation.md)、[企业偏好](../recipes/enterprise-preferences.md)、[服务端 Store](../recipes/server-side-store.md)、[分析](../recipes/analysis.md)、[多范围](../recipes/multi-range.md)。
 
 ## 0.31.1 → 0.31.2
 

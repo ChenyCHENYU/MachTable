@@ -1,228 +1,122 @@
 import type { GridCore } from "../core/gridCore";
-import { clamp, el } from "../lib/dom";
-import { DEFAULT_LOCALE, formatTwo } from "../lib/locale";
+import type { RowDragIntent } from "../types/events";
 import type { RowNode } from "../types/row";
+import { clamp } from "../lib/dom";
+import { DEFAULT_LOCALE, formatTwo } from "../lib/locale";
+import { getGridRowDragFactory } from "../lib/adapterLifecycle";
+import type { RowDragDriver, RowDragDriverFactory, RowDragGuard } from "../lib/rowDragDriver";
+import { RowDragSurface, type SurfaceDrop } from "./rowDragSurface";
+import { singleRowDragIntent } from "./rowDragIntent";
 
-const PANES = ["left", "center", "right"] as const;
-type RowDragContext = Pick<GridCore<any>, "emit" | "options" | "rowModel" | "skeleton" | "columnModel" | "editingService">;
+type Context = Pick<GridCore<any>, "emit" | "getApi" | "reportError" | "options" | "rowModel" | "skeleton" | "columnModel" | "editingService">;
+interface Scope { node: RowNode; from: number; guard: RowDragGuard }
+interface Drop extends SurfaceDrop { node: RowNode; intent?: RowDragIntent }
 
-interface RowDragState {
-  node: RowNode<any>;
-  order: readonly RowNode<any>[];
-  fromIndex: number;
-  startY: number;
-  clientX: number;
-  clientY: number;
-  pointerId: number;
-  indicators: HTMLElement[];
-  preview: HTMLElement;
-  targetIndex: number;
-  active: boolean;
-}
-
-/** Owns pointer/keyboard ordering, feedback, scrolling and all cancellation paths. */
-export class RowDragController {
-  private state: RowDragState | null = null;
-  private moveRaf = 0;
-  private focusRaf = 0;
-
-  constructor(
-    private core: RowDragContext,
-    private getRowTop: (index: number) => number,
-    private findRowAt: (offset: number) => number
-  ) {}
-
-  canDrag(node: RowNode<any>): boolean {
-    if (this.core.editingService.isEditing()) return false;
-    if (node.isDetail || node.isGroup || node.loading || !node.data || this.core.rowModel.isTree) return false;
-    if (this.core.columnModel.getRowGroupColumns().length > 0) return false;
-    return !this.core.options.applyRowDrag || this.core.rowModel.canReorderRows();
+/** Core owns its compact single-row behavior; optional ordering supplies an internal driver. */
+export class RowDragController extends RowDragSurface {
+  private scope: Scope | null = null;
+  private driver: RowDragDriver | undefined;
+  private factory: RowDragDriverFactory | undefined;
+  constructor(private core: Context, getRowTop: (index: number) => number, findRowAt: (offset: number) => number) {
+    super({ get root() { return core.skeleton.root; }, get body() { return core.skeleton.bodyEl; }, get viewport() { return core.skeleton.bodyViewports.center; },
+      get containers() { return Object.values(core.skeleton.rowContainers); }, getRowTop, findRowAt });
   }
-
-  isSource(node: RowNode<any>): boolean {
-    return this.state?.active === true && this.state.node === node;
+  private isLoadedRow(node: RowNode): boolean { return !node.loading && !node.treeLoading && !node.isGroup; }
+  dragDecision(node: RowNode): boolean | string {
+    if (this.core.editingService.isEditing() || node.isDetail || !this.isLoadedRow(node) || node.data == null) return false;
+    if (this.core.columnModel.getRowGroupColumns().length || (this.core.options.applyRowDrag && !this.core.rowModel.canReorderRows())) return false;
+    const allowed = this.attempt("canDrag", () => this.core.options.rowDragPolicy?.canDrag?.({ node, api: this.core.getApi() }) ?? true, false);
+    if (allowed !== true) return allowed;
+    return !this.core.rowModel.isTree || Boolean(getGridRowDragFactory(this.core.getApi()));
   }
-
-  start(event: PointerEvent, node: RowNode<any>): void {
+  canDrag(node: RowNode): boolean { return this.dragDecision(node) === true; }
+  isSource(node: RowNode): boolean { return this.getDriver()?.isSource(node) ?? this.draggingSource(node.id); }
+  start(event: PointerEvent, node: RowNode): void {
     this.destroy();
     if (!this.canDrag(node) || event.isPrimary === false) return;
-    const indicators = PANES.map(pane => {
-      const indicator = el("div", "mach-row-drop-indicator");
-      indicator.hidden = true;
-      this.core.skeleton.rowContainers[pane].appendChild(indicator);
-      return indicator;
-    });
-    const preview = el("div", "mach-row-drag-preview");
-    preview.setAttribute("role", "status");
-    preview.hidden = true;
-    this.core.skeleton.root.appendChild(preview);
-    this.state = {
-      node, order: this.core.rowModel.getDisplayedRows().slice(), fromIndex: node.rowIndex,
-      startY: event.clientY, clientX: event.clientX, clientY: event.clientY,
-      pointerId: event.pointerId, indicators, preview, targetIndex: -1, active: false
-    };
-    window.addEventListener("pointermove", this.onMove);
-    window.addEventListener("pointerup", this.onUp);
-    window.addEventListener("pointercancel", this.onCancel);
-    window.addEventListener("keydown", this.onKeyDown);
-    window.addEventListener("blur", this.onCancel);
+    const driver = this.getDriver();
+    if (driver) { driver.start(event, node); return; }
+    const guard = this.attempt("getRevision", () => this.captureGuard(node), null);
+    if (!guard) return;
+    this.scope = { node, from: node.rowIndex, guard };
+    this.begin(event);
   }
-
-  moveWithKeyboard(event: KeyboardEvent, node: RowNode<any>): void {
+  moveWithKeyboard(event: KeyboardEvent, node: RowNode): void {
     if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
-    event.preventDefault();
-    event.stopPropagation();
+    event.preventDefault(); event.stopPropagation();
     if (!this.canDrag(node)) return;
-    const from = node.rowIndex;
+    const driver = this.getDriver();
+    if (driver) { driver.moveWithKeyboard(event, node); return; }
     const direction = event.key === "ArrowUp" ? -1 : 1;
-    let target = from + direction;
-    while (this.core.rowModel.getDisplayedRow(target)?.isDetail) target += direction;
-    if (!this.core.rowModel.getDisplayedRow(target)) return;
-    let boundary = target > from ? target + 1 : target;
-    while (this.core.rowModel.getDisplayedRow(boundary)?.isDetail) boundary++;
-    const applied = this.commit(node, from, target, boundary);
-    if (!applied) return;
-    this.focusRaf = requestAnimationFrame(() => {
-      this.focusRaf = 0;
-      this.core.skeleton.root.querySelector<HTMLElement>(`.mach-row[data-index="${node.rowIndex}"] .mach-row-drag-handle`)?.focus();
-    });
+    let index = node.rowIndex + direction;
+    while (this.core.rowModel.getDisplayedRow(index)?.isDetail) index += direction;
+    const target = this.core.rowModel.getDisplayedRow(index);
+    const guard = this.attempt("getRevision", () => this.captureGuard(node), null);
+    if (!target || !guard) return;
+    this.scope = { node, from: node.rowIndex, guard };
+    try { if (this.commitDrop(this.destination(target, direction > 0))) this.focusHandle(node.id); }
+    finally { this.release(); }
   }
-
-  private onMove = (event: PointerEvent): void => {
-    const drag = this.state;
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    drag.clientX = event.clientX;
-    drag.clientY = event.clientY;
-    if (!drag.active) {
-      if (Math.abs(event.clientY - drag.startY) < 5) return;
-      drag.active = true;
-      this.core.skeleton.root.classList.add("mach-root--row-dragging");
-      this.core.skeleton.root.querySelectorAll<HTMLElement>(".mach-row").forEach(row => {
-        row.classList.toggle("mach-row--drag-source", row.dataset.id === drag.node.id);
-      });
+  private attempt<T>(source: string, call: () => T, fallback: T): T {
+    try { return call(); } catch (error) { this.core.reportError(error, `rowDragPolicy.${source}`); return fallback; }
+  }
+  private captureGuard(node: RowNode): RowDragGuard {
+    const model = this.core.rowModel, columns = this.core.columnModel.getColumns(), policy = this.core.options.rowDragPolicy;
+    const version = model.getDataRevision(), view = model.getDisplayRevision(), managed = this.core.options.applyRowDrag;
+    const revision = policy?.getRevision?.();
+    return { revision, current: () => this.attempt("getRevision", () => policy?.getRevision?.() === revision && version === model.getDataRevision() && view === model.getDisplayRevision() &&
+      model.getNodeById(node.id) === node && columns === this.core.columnModel.getColumns() && policy === this.core.options.rowDragPolicy && managed === this.core.options.applyRowDrag, false) };
+  }
+  private getDriver(): RowDragDriver | undefined {
+    const factory = getGridRowDragFactory(this.core.getApi());
+    if (factory !== this.factory) {
+      this.driver?.destroy(); this.factory = factory;
+      this.driver = factory ? this.attempt("driver", () => factory({ ...this.host, api: this.core.getApi(), capture: node => this.captureGuard(node),
+        emit: (node, from, boundary, targetIndex, intent) => { this.core.emit("rowDragEnd", { rowNode: node, fromIndex: from, toIndex: boundary, targetIndex, applied: false, intent }); },
+        report: (error, source) => this.core.reportError(error, `rowDragPolicy.${source}`) }), undefined) : undefined;
     }
-    this.scheduleFrame();
-  };
-
-  private scheduleFrame(): void {
-    if (!this.moveRaf) this.moveRaf = requestAnimationFrame(this.onFrame);
+    return this.driver;
   }
-
-  private onFrame = (): void => {
-    this.moveRaf = 0;
-    if (!this.state?.active) return;
-    this.updateFeedback();
-    if (this.scrollAtEdge()) this.scheduleFrame();
-  };
-
-  private isInside(clientX: number, clientY: number, margin = 0): boolean {
-    const body = this.core.skeleton.bodyEl.getBoundingClientRect();
-    return clientX >= body.left && clientX <= body.right &&
-      clientY >= body.top - margin && clientY <= body.bottom + margin;
+  protected current(): boolean { return this.scope?.guard.current() ?? false; }
+  protected release(): void { this.scope = null; }
+  protected sourceContains(id: string): boolean { return this.scope?.node.id === id; }
+  protected outsideText(): string { return this.core.options.locale.rowDragOutside ?? DEFAULT_LOCALE.rowDragOutside; }
+  protected describe(y: number): Drop | null {
+    const index = clamp(this.host.findRowAt(y), 0, this.core.rowModel.getDisplayedRowCount() - 1);
+    let node = this.core.rowModel.getDisplayedRow(index);
+    if (node?.isDetail) node = this.core.rowModel.getNodeById(node.masterId!);
+    if (!node) return null;
+    const top = this.host.getRowTop(node.rowIndex), bottom = this.host.getRowTop(node.rowIndex + 1);
+    return this.destination(node, y >= (top + bottom) / 2);
   }
-
-  private scrollAtEdge(): boolean {
-    const drag = this.state;
-    if (!drag || !this.isInside(drag.clientX, drag.clientY, 28)) return false;
-    const viewport = this.core.skeleton.bodyViewports.center;
-    const rect = viewport.getBoundingClientRect();
-    const edge = Math.min(36, rect.height / 3);
-    if (edge <= 0) return false;
-    const delta = drag.clientY < rect.top + edge
-      ? -Math.ceil(14 * clamp((rect.top + edge - drag.clientY) / edge, 0, 1))
-      : Math.ceil(14 * clamp((drag.clientY - rect.bottom + edge) / edge, 0, 1));
-    const previous = viewport.scrollTop;
-    viewport.scrollTop = clamp(previous + delta, 0, Math.max(0, viewport.scrollHeight - viewport.clientHeight));
-    return viewport.scrollTop !== previous;
-  }
-
-  private updateFeedback(): void {
-    const drag = this.state;
-    if (!drag?.active) return;
-    const valid = this.isInside(drag.clientX, drag.clientY);
-    const viewport = this.core.skeleton.bodyViewports.center;
-    const y = drag.clientY - viewport.getBoundingClientRect().top + viewport.scrollTop;
-    const count = this.core.rowModel.getDisplayedRowCount();
-    let boundary = clamp(this.findRowAt(y), 0, count);
-    const top = this.getRowTop(boundary);
-    const bottom = this.getRowTop(Math.min(count, boundary + 1));
-    if (boundary < count && y >= top + (bottom - top) / 2) boundary++;
-    // Keep expanded master/detail pairs together.
+  private destination(node: RowNode, after: boolean): Drop {
+    const scope = this.scope!;
+    let boundary = node.rowIndex + Number(after);
     while (this.core.rowModel.getDisplayedRow(boundary)?.isDetail) boundary++;
-    drag.targetIndex = boundary;
-    for (const indicator of drag.indicators) {
-      indicator.hidden = !valid;
-      indicator.style.transform = `translate3d(0, ${this.getRowTop(boundary)}px, 0)`;
-    }
-    const rootRect = this.core.skeleton.root.getBoundingClientRect();
-    const target = this.finalIndex(drag.fromIndex, boundary);
-    drag.preview.hidden = false;
-    drag.preview.textContent = valid
-      ? formatTwo(this.core.options.locale.rowDragPosition ?? DEFAULT_LOCALE.rowDragPosition, drag.fromIndex + 1, target + 1)
-      : this.core.options.locale.rowDragOutside ?? DEFAULT_LOCALE.rowDragOutside;
-    drag.preview.style.transform = `translate3d(${clamp(drag.clientX - rootRect.left + 16, 8, Math.max(8, rootRect.width - 224))}px, ${clamp(drag.clientY - rootRect.top + 16, 8, Math.max(8, rootRect.height - 48))}px, 0)`;
+    const policy = this.core.options.rowDragPolicy;
+    const intent = !this.core.options.applyRowDrag || policy?.canDrop ? singleRowDragIntent(scope.node, this.core.rowModel.getDisplayedRows(), node, after ? "after" : "before", scope.guard.revision) : undefined;
+    const allowed = policy?.canDrop && intent ? this.attempt("canDrop", () => policy.canDrop!({ node: scope.node, api: this.core.getApi(), targetNode: node, intent }), false) : true;
+    const valid = allowed === true && this.isLoadedRow(node);
+    const text = typeof allowed === "string" ? allowed : formatTwo(this.core.options.locale.rowDragPosition ?? DEFAULT_LOCALE.rowDragPosition, scope.from + 1, this.finalIndex(scope.from, boundary) + 1);
+    return { node, intent, boundary, valid, text, position: after ? "after" : "before" };
   }
-
-  private onUp = (event: PointerEvent): void => {
-    const state = this.state;
-    if (!state || event.pointerId !== state.pointerId) return;
-    state.clientX = event.clientX;
-    state.clientY = event.clientY;
-    if (state.active) this.updateFeedback();
-    const drag = this.takeState();
-    if (!drag?.active || !this.isInside(event.clientX, event.clientY)) return;
-    const order = this.core.rowModel.getDisplayedRows();
-    if (order.length !== drag.order.length || order.some((node, index) => node !== drag.order[index])) return;
-    const boundary = drag.targetIndex;
-    let target = boundary > drag.fromIndex ? boundary - 1 : boundary;
-    while (this.core.rowModel.getDisplayedRow(target)?.isDetail) target--;
-    this.commit(drag.node, drag.fromIndex, target, boundary);
-  };
-
-  private commit(node: RowNode<any>, from: number, target: number, boundary: number): boolean {
-    if (from === target || target < 0 || !this.canDrag(node)) return false;
-    const finalIndex = this.finalIndex(from, boundary);
-    const applied = this.core.options.applyRowDrag && this.core.rowModel.reorderRowsByDisplayed(from, target);
+  protected commitDrop(drop: SurfaceDrop): boolean {
+    const scope = this.scope;
+    if (!scope || !this.current() || !this.canDrag(scope.node) || !this.current()) return false;
+    const target = this.destination((drop as Drop).node, drop.boundary > (drop as Drop).node.rowIndex);
+    if (!target.valid || !this.current()) return false;
+    let index = target.boundary > scope.from ? target.boundary - 1 : target.boundary;
+    while (this.core.rowModel.getDisplayedRow(index)?.isDetail) index--;
+    if (scope.from === index) return false;
+    const applied = this.core.options.applyRowDrag && this.core.rowModel.reorderRowsByDisplayed(scope.from, index);
     if (this.core.options.applyRowDrag && !applied) return false;
-    this.core.emit("rowDragEnd", { rowNode: node, fromIndex: from, toIndex: boundary, targetIndex: applied ? node.rowIndex : finalIndex, applied });
-    return applied;
+    this.core.emit("rowDragEnd", { rowNode: scope.node, fromIndex: scope.from, toIndex: target.boundary, targetIndex: applied ? scope.node.rowIndex : this.finalIndex(scope.from, target.boundary), applied, intent: target.intent });
+    return true;
   }
-
   private finalIndex(from: number, boundary: number): number {
     let end = from + 1;
     while (this.core.rowModel.getDisplayedRow(end)?.isDetail) end++;
     return boundary > from ? boundary - (end - from) : boundary;
   }
-
-  private onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === "Escape") { event.preventDefault(); this.destroy(); }
-  };
-
-  private onCancel = (event: Event): void => {
-    if (event.type === "pointercancel" && (event as PointerEvent).pointerId !== this.state?.pointerId) return;
-    this.destroy();
-  };
-
-  private takeState(): RowDragState | null {
-    const drag = this.state;
-    this.state = null;
-    window.removeEventListener("pointermove", this.onMove);
-    window.removeEventListener("pointerup", this.onUp);
-    window.removeEventListener("pointercancel", this.onCancel);
-    window.removeEventListener("keydown", this.onKeyDown);
-    window.removeEventListener("blur", this.onCancel);
-    cancelAnimationFrame(this.moveRaf);
-    this.moveRaf = 0;
-    this.core.skeleton.root.classList.remove("mach-root--row-dragging");
-    this.core.skeleton.root.querySelectorAll(".mach-row--drag-source").forEach(row => row.classList.remove("mach-row--drag-source"));
-    drag?.indicators.forEach(indicator => indicator.remove());
-    drag?.preview.remove();
-    return drag;
-  }
-
-  destroy(): void {
-    this.takeState();
-    cancelAnimationFrame(this.focusRaf);
-    this.focusRaf = 0;
-  }
+  override destroy(): void { this.driver?.destroy(); super.destroy(); }
 }

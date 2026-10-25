@@ -23,8 +23,10 @@ function isPositiveFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+/** @internal Column objects remain public; the collection/model service does not. */
 export class ColumnModel {
   private columns: Column[] = [];
+  private columnById = new Map<string, Column>();
   private rootChildren: (ColumnGroup<any> | Column<any>)[] = [];
   private left: Column[] = [];
   private center: Column[] = [];
@@ -94,6 +96,7 @@ export class ColumnModel {
     }
 
     this.columns = this.collectLeaves(this.rootChildren);
+    this.columnById = new Map(this.columns.map(column => [column.id, column]));
     this.headerDepth = this.columns.reduce((max, c) => Math.max(max, c.level + 1), 1);
 
     this.sortModel = this.sortModel.filter((s) => this.columns.some((c) => c.id === s.colId));
@@ -146,7 +149,7 @@ export class ColumnModel {
   }
 
   getColumn(colId: string): Column | undefined {
-    return this.columns.find((c) => c.id === colId);
+    return this.columnById.get(colId);
   }
 
   getPaneColumns(pane: PaneType): Column[] {

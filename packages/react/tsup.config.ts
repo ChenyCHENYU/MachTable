@@ -6,7 +6,9 @@ export default defineConfig({
     workflows: "src/workflows.ts",
     adapters: "src/adapterEntry.ts",
     ui: "src/ui.ts",
-    worker: "src/worker.ts"
+    worker: "src/worker.ts",
+    workbench: "src/workbench.ts", preferences: "src/preferences.ts", ordering: "src/ordering.ts",
+    "server-side": "src/server-side.ts", analysis: "src/analysis.ts", "multi-range": "src/multi-range.ts"
   },
   splitting: true,
   format: ["esm", "cjs"],

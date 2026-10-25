@@ -8,7 +8,9 @@ export default defineConfig({
     adapters: "src/adapterEntry.ts",
     worker: "src/worker.ts",
     ui: "src/ui.ts",
-    editors: "src/editors.ts"
+    editors: "src/editors.ts",
+    workbench: "src/workbench.ts", preferences: "src/preferences.ts", ordering: "src/ordering.ts",
+    "server-side": "src/server-side.ts", analysis: "src/analysis.ts", "multi-range": "src/multi-range.ts"
   },
   format: ["esm", "cjs"],
   splitting: true,

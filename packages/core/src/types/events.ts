@@ -222,6 +222,16 @@ export interface RangeSelectionChangedEvent<TData = any> extends GridEventBase<T
   range: GridCellRange | null;
 }
 
+/** Stable identities for persistence; displayed indexes remain presentation only. */
+export interface RowDragIntent {
+  rowIds: readonly string[];
+  targetId: string | null;
+  position: "before" | "after" | "inside";
+  beforeId: string | null;
+  afterId: string | null;
+  expectedRevision?: string | number;
+}
+
 export interface RowDragEndEvent<TData = any> extends GridEventBase<TData> {
   type: "rowDragEnd";
   rowNode: RowNode<TData>;
@@ -232,6 +242,7 @@ export interface RowDragEndEvent<TData = any> extends GridEventBase<TData> {
   targetIndex: number;
   /** True when the grid applied the move before emitting this event. */
   applied: boolean;
+  intent?: RowDragIntent;
 }
 
 export interface PaginationChangedEvent<TData = any> extends GridEventBase<TData> {
