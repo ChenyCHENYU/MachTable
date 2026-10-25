@@ -80,4 +80,9 @@
 
 ## 发布与消费项目
 
-本页记录自动验收完成状态。npm 发布、提交推送及 RobotAdmin 最新版本接入与业务回归另行登记实际结果，当前不标记为完成。
+- 四个 npm 包已发布 **0.32.1**：Core、Vue、React、XLSX。官方 `latest`、README、依赖版本与下载包 SHA512 均已回读校验，和本地经过门禁的 tarball 一致。
+- MachTable 实现提交为 `92ae3da`，筛选键盘排序补丁为 `58aa941`；发布标签为 `v0.32.0`、`v0.32.1`。
+- RobotAdmin 已用 Bun 安装官方 **0.32.1**，同步锁文件和双语 README；提交 [`007ce5f`](https://github.com/ChenyCHENYU/Robot_Admin/commit/007ce5f41159b1979d4ff42c2848208efee567ed) 已推送 `origin/main`。
+- RobotAdmin 原生 `verify` 通过：266 项 Bun 测试、113 项组件测试、类型、样式、两份构建与 bundle 门禁；排序/树表/列宽及生产冒烟 **16 项浏览器验收全部通过**。演示入口为 `/#/demo/table-manage/mach-table` 的“顺序调整”。其中保存、失败和版本冲突使用明确标注的本地模拟 transport；真实业务 UAT 仍按上文待人工清单执行。
+
+完整命令、元数据、校验报告和明暗截图保存在工作区 `output/machtable-completion-20261025/`。
