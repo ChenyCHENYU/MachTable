@@ -1,6 +1,6 @@
 # 0.33.0 实施与验收台账
 
-当前本轮版本为 **0.33.0**，在已发布的 0.32.1 基线上完善列值、导入、数值聚合、投影依赖、大坐标和资源所有权。采用 MachTable 自身的扁平协议，保持可选能力独立加载；本轮预算仍须按原门禁验收，不因源码完成而提前记作通过。
+当前本轮版本为 **0.33.0**，在已发布的 0.32.1 基线上完善列值、导入、数值聚合、投影依赖、大坐标和资源所有权。采用 MachTable 自身的扁平协议，保持可选能力独立加载；本轮已通过原门禁、正式发布及 RobotAdmin 自动验收，真实辅助技术和业务验收另列。
 
 ## 0.33.0 本轮实现范围
 
@@ -17,7 +17,7 @@
 
 ## 0.33.0 正式验证记录
 
-截至 **2026-10-26**，本轮正式产物已通过 `pnpm verify` 与三浏览器完整矩阵。以下统计来自本轮最终构建与实际命令，发布和消费项目按执行结果继续补齐，不复用 0.32.1 统计。证据目录为工作区 `output/machtable-optimization-20261026/`，正式日志使用 `verify-release.log` 和 `e2e-release.json`；故障诊断、修复前记录另行保留。
+截至 **2026-10-26**，本轮正式产物已通过 `pnpm verify`、三浏览器完整矩阵、发布回读和 RobotAdmin 消费验收。以下统计来自本轮最终构建与实际命令，不复用 0.32.1 统计。证据目录为工作区 `output/machtable-optimization-20261026/`，正式日志使用 `verify-release.log` 和 `e2e-release.json`；故障诊断、修复前记录另行保留。
 
 | 门禁 | 本轮最终状态 |
 | --- | --- |
@@ -27,9 +27,19 @@
 | 原默认/可选预算及发布解压体积 | 全部通过，原预算未扩大；默认 Core **91,747 / 92,160**、真实 createGrid 消费 **82,408 / 82,432**、新可选 `/import` **3,940 / 4,096** gzip 字节；Core 旧入口产物 **886,507 / 1,050,000**、可选新增 **323,296 / 350,000** 字节；无 sourcemap |
 | 示例、文档、许可、包声明与发布产物 | publint、许可、四包 README、完整导出、73 篇文档链接/导入、四示例类型及构建、文档构建通过；四个 tarball 的 README、依赖版本与入口文件已回读 |
 | Chromium / Firefox / WebKit 自动矩阵 | **165 项：157 通过、8 项预期跳过、0 失败**，耗时 1.8 分钟；跳过为 Firefox/WebKit 各 3 项 Chromium 专用性能场景及各 1 项 forced-colors 模拟。WebKit 大坐标场景另连续 5 轮 **20/20** 通过 |
-| 发布与 RobotAdmin 消费验收 | 待正式发布和消费项目结果 |
+| 发布与 RobotAdmin 消费验收 | 四包官方 **0.33.0** 的 `latest`、README、精确依赖和 tarball SHA512 已回读；RobotAdmin 正式安装同版 Vue/Core，**266 项 Bun + 113 项组件测试、16 项浏览器回归**、两份构建及原包体门禁通过 |
+
+本地全量验证使用 Node **24.19.0** / pnpm **11.21.0**；另用 Node **22.23.3** 验证产物体积与真实双模块运行。项目声明 pnpm 11.8.0，本轮保留现有安装，未执行该版本的全新安装；安装快照含未声明的 Terser 探测残留及 peer 组合差异，声明依赖基版本与共同包下载 resolution 均一致。正式构建使用 esbuild，没有新增声明依赖或运行时依赖。环境差异单独保存在 `toolchain-verification.json`，不将其写成干净安装或远端 CI 已通过。
 
 真实 AT、业务 UAT 与原生触摸仍按下方待人工清单执行。完成本轮已定义场景，不等同于覆盖所有行业流程或竞品全部能力。
+
+## 0.33.0 发布与消费项目
+
+- Core、Vue、React、XLSX 四个 npm 包均已正式发布 **0.33.0**。官方包的 README、导出文件和下载包 SHA512 与本地验收 tarball 一致，三个消费包均精确依赖 Core 0.33.0。
+- 实现提交 [`847a57d`](https://github.com/ChenyCHENYU/MachTable/commit/847a57d1ef83bc780a9c4a0b11a6a5e8d7b4cf0a) 与标签 `v0.33.0` 已推送 `origin`；README 与升级说明在发布前完成同步。
+- RobotAdmin 用 Bun 从官方 npm 安装 Vue/Core **0.33.0**，同步真实锁文件和双语 README。提交 [`05b07df`](https://github.com/ChenyCHENYU/Robot_Admin/commit/05b07dfeade8cd154f2677b82157f2a6d46a6a67) 已推送 `origin/main`，四文件范围审计未发现无关依赖升级、本地 link 或 MachTable 补丁。
+- RobotAdmin 的 `verify` 与 **16/16** 浏览器验收全部通过。`/#/demo/table-manage/mach-table` 的“顺序调整”保留 30 条订单、多选拖拽、键盘、顺序历史、失败补偿及版本冲突演示；保存仍使用明确标注的本地模拟，不替代真实接口 UAT。
+- 发布回读、安装哈希、消费项目日志和范围审计分别记录在 `registry-verification.json`、`robot-install-verification.json`、`robot-verify-release.log`、`robot-e2e-release.json`、`robot-scope-audit.json`；明暗主题截图为 `robot-reorder-light.png` / `robot-reorder-dark.png`。
 
 ## 0.32.1 已发布基线（历史记录）
 
@@ -117,7 +127,7 @@
 
 ## 0.32.1 历史发布与消费项目
 
-0.33.0 的发布及消费项目升级结果待正式记录。以下为已发布 0.32.1 的历史结果。
+以下仅为已发布 0.32.1 的历史结果；0.33.0 结果见上方本轮记录。
 
 - 四个 npm 包已发布 **0.32.1**：Core、Vue、React、XLSX。官方 `latest`、README、依赖版本与下载包 SHA512 均已回读校验，和本地经过门禁的 tarball 一致。
 - MachTable 实现提交为 `92ae3da`，筛选键盘排序补丁为 `58aa941`；发布标签为 `v0.32.0`、`v0.32.1`。
