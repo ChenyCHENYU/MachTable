@@ -1,4 +1,5 @@
 import { getByPath, isSafePath } from "../lib/path";
+import { accumulateNumeric, createNumericAccumulator, numericResult, type NumericAccumulator } from "../lib/aggregate";
 
 export type PivotAggregate = "sum" | "count" | "avg" | "min" | "max";
 export type PivotDimension = string | number | boolean | null;
@@ -24,7 +25,7 @@ export interface PivotResult {
   inputCount: number;
 }
 
-interface Accumulator { count: number; numeric: number; sum: number; min: number; max: number }
+type Accumulator = NumericAccumulator;
 interface Group { dimensions: PivotDimension[]; cells: Map<string, Accumulator> }
 const AGGREGATES = new Set<PivotAggregate>(["sum", "count", "avg", "min", "max"]);
 
@@ -63,21 +64,8 @@ function validateMeasure(value: PivotValue): void {
 
 function accumulate(cells: Map<string, Accumulator>, id: string, value: unknown): void {
   let cell = cells.get(id);
-  if (!cell) { cell = { count: 0, numeric: 0, sum: 0, min: Infinity, max: -Infinity }; cells.set(id, cell); }
-  cell.count++;
-  if (typeof value !== "number" || !Number.isFinite(value)) return;
-  cell.numeric++;
-  cell.sum += value;
-  cell.min = Math.min(cell.min, value);
-  cell.max = Math.max(cell.max, value);
-}
-
-function result(cell: Accumulator | undefined, aggregate: PivotAggregate): number | null {
-  if (aggregate === "count") return cell?.count ?? 0; // Count means records, including null measure values.
-  if (!cell?.numeric) return null;
-  if (aggregate === "avg") return Number.isFinite(cell.sum) ? cell.sum / cell.numeric : null;
-  if (aggregate === "sum") return Number.isFinite(cell.sum) ? cell.sum : null;
-  return aggregate === "min" ? cell.min : cell.max;
+  if (!cell) { cell = createNumericAccumulator(); cells.set(id, cell); }
+  accumulateNumeric(cell, value);
 }
 
 function columnId(dimensions: readonly PivotDimension[] | null, measure: PivotValue): string {
@@ -134,6 +122,6 @@ function addCell(group: Group, columns: Map<string, PivotColumn>, totals: Map<st
 
 function valuesFor(columns: readonly PivotColumn[], cells: Map<string, Accumulator>): Record<string, number | null> {
   const values: Record<string, number | null> = Object.create(null);
-  for (const column of columns) values[column.id] = result(cells.get(column.id), column.measure.aggregate);
+  for (const column of columns) values[column.id] = numericResult(cells.get(column.id), column.measure.aggregate);
   return values;
 }

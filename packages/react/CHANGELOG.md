@@ -1,5 +1,16 @@
 # @agile-team/mach-table-react
 
+## 0.33.0
+
+### Minor Changes
+
+- Unify column value parsing and serialization, add typed matrix IO and optional bounded import preview/validation, and keep XLSX cell types without a CSV round trip. Harden finite numeric aggregates and typed group identities with safe legacy expansion migration. Skip unrelated local projection work with conservative scalar dependency snapshots, preserve adapter configuration on unrelated updates, own processors per grid, and map oversized scroll ranges into bounded browser coordinates. Add reproducible, separately timed benchmark workloads, example type gates and shared byte-budget documentation.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.33.0
+
 ## 0.32.1
 
 ### Patch Changes

@@ -2,16 +2,16 @@ import type { GridCore } from "../core/gridCore";
 import type { RowStyleRule } from "../types/options";
 import type { RowNode } from "../types/row";
 
-type AppearanceContext = Pick<GridCore<any>, "options" | "getApi" | "reportError">;
+type AppearanceContext = Pick<GridCore<any>, "gridOptions" | "api" | "reportError">;
 const TONES = new Set(["warning", "danger", "success", "info"]);
 
 export function resolveRowAppearance(
   core: AppearanceContext, node: RowNode<any>, rowPinned: "top" | "bottom" | null = null
 ): RowStyleRule | undefined {
   if (node.data == null || node.isGroup || node.isDetail || node.loading) return;
-  for (const rule of core.options.rowStyleRules) {
+  for (const rule of core.gridOptions.rowStyleRules) {
     try {
-      if (rule.when({ data: node.data, node, api: core.getApi(), rowPinned }) === true) return rule;
+      if (rule.when({ data: node.data, node, api: core.api, rowPinned }) === true) return rule;
     } catch (error) {
       core.reportError(error, "rowStyleRules", { rowId: node.id });
     }

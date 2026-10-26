@@ -1,4 +1,5 @@
 import type { RemoteBlockCacheSnapshot } from "../types/api";
+import { abortable, createAbortError } from "../lib/abortable";
 
 export interface RemoteBlockResult<TData> {
   rows: readonly TData[];
@@ -23,10 +24,7 @@ interface InflightBlock<TData> {
 }
 
 function abortError(signal: AbortSignal): Error {
-  if (signal.reason instanceof Error) return signal.reason;
-  const error = new Error(typeof signal.reason === "string" ? signal.reason : "Block request aborted");
-  error.name = "AbortError";
-  return error;
+  return createAbortError(signal.reason, "Block request aborted");
 }
 
 function normalizeBlockLimit(value: number): number {
@@ -34,6 +32,7 @@ function normalizeBlockLimit(value: number): number {
 }
 
 /** Request-deduplicating LRU cache used by the random-access datasource row model. */
+/** @internal Grid and server stores own their cache instances; public snapshots are plain records. */
 export class RemoteBlockCache<TData> {
   private blocks = new Map<number, RemoteBlockEntry<TData>>();
   private inflight = new Map<number, InflightBlock<TData>>();
@@ -209,14 +208,10 @@ export class RemoteBlockCache<TData> {
 
   private runLoader(entry: InflightBlock<TData>): Promise<RemoteBlockResult<TData>> {
     const { signal } = entry.controller;
-    if (signal.aborted) return Promise.reject(abortError(signal));
-    return new Promise((resolve, reject) => {
-      const onAbort = () => reject(abortError(signal));
-      signal.addEventListener("abort", onAbort, { once: true });
-      void Promise.resolve().then(() => entry.loader(signal)).then(resolve, reject).finally(() => {
-        signal.removeEventListener("abort", onAbort);
-      });
-    });
+    return abortable(Promise.resolve().then(() => {
+      if (signal.aborted) throw abortError(signal);
+      return entry.loader(signal);
+    }), signal, () => abortError(signal));
   }
 
   private attachConsumer(

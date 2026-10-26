@@ -6,7 +6,7 @@ type ResizeContext = Pick<
   | "columnModel"
   | "commitColumnWidths"
   | "emitColumnResize"
-  | "options"
+  | "gridOptions"
   | "relayoutColumns"
   | "skeleton"
 >;
@@ -22,6 +22,7 @@ interface ActiveResize {
   startX: number;
 }
 
+/** @internal Resize interaction ownership stays with Core. */
 export class ResizeService {
   private active: ActiveResize | null = null;
   private rafId = 0;
@@ -32,7 +33,7 @@ export class ResizeService {
   constructor(private core: ResizeContext) {}
 
   startResize(event: PointerEvent, column: Column): void {
-    if (!this.core.options.enableColumnResize || !column.resizable || event.isPrimary === false) return;
+    if (!this.core.gridOptions.enableColumnResize || !column.resizable || event.isPrimary === false) return;
     this.cancelResize();
 
     const handle = event.currentTarget as HTMLElement;

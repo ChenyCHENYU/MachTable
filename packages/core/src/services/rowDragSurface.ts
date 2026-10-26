@@ -7,6 +7,7 @@ export interface RowDragSurfaceHost {
   containers: readonly HTMLElement[];
   getRowTop(index: number): number;
   findRowAt(offset: number): number;
+  scrollBy?(delta: number): boolean;
 }
 export interface SurfaceDrop { boundary: number; valid: boolean; text: string; style?: string; position?: string }
 interface SurfaceState {
@@ -15,6 +16,7 @@ interface SurfaceState {
 }
 
 /** Shared native gesture ownership; default and optional ordering supply only their drop behavior. */
+/** @internal Each bundle owns its complete drag driver and surface hierarchy. */
 export abstract class RowDragSurface {
   private drag: SurfaceState | null = null;
   private moveRaf = 0;
@@ -81,6 +83,7 @@ export abstract class RowDragSurface {
     if (edge <= 0) return false;
     const delta = drag.clientY < rect.top + edge ? -Math.ceil(14 * clamp((rect.top + edge - drag.clientY) / edge, 0, 1))
       : Math.ceil(14 * clamp((drag.clientY - rect.bottom + edge) / edge, 0, 1));
+    if (this.host.scrollBy) return this.host.scrollBy(delta);
     const previous = viewport.scrollTop;
     viewport.scrollTop = clamp(previous + delta, 0, Math.max(0, viewport.scrollHeight - viewport.clientHeight));
     return viewport.scrollTop !== previous;
@@ -97,7 +100,9 @@ export abstract class RowDragSurface {
       if (!drop) continue;
       indicator.dataset.dropPosition = drop.position ?? "";
       indicator.style.cssText = drop.style ?? "";
-      indicator.style.transform = `translate3d(0, ${this.host.getRowTop(drop.boundary)}px, 0)`;
+      const height = parseFloat(indicator.parentElement!.style.height);
+      const top = Math.min(this.host.getRowTop(drop.boundary), Number.isFinite(height) ? Math.max(0, height - 2) : Infinity);
+      indicator.style.transform = `translate3d(0, ${top}px, 0)`;
     }
     const root = this.host.root.getBoundingClientRect();
     drag.preview.hidden = false;

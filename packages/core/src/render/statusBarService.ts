@@ -9,14 +9,15 @@ type StatusBarContext = Pick<
   | "bodyRenderer"
   | "columnModel"
   | "eventBus"
-  | "getCellValue"
-  | "isDestroyed"
-  | "options"
+  | "readCellValue"
+  | "isDisposed"
+  | "gridOptions"
   | "rowModel"
   | "selectionService"
   | "skeleton"
 >;
 
+/** @internal Status consumers receive snapshots rather than the rendering service. */
 export class StatusBarService {
   private barEl: HTMLElement | null = null;
   private items: Partial<Record<StatusBarPanel, HTMLElement>> = {};
@@ -43,7 +44,7 @@ export class StatusBarService {
     if (!this.barEl) return;
     this.barEl.textContent = "";
     this.items = {};
-    const options = this.core.options;
+    const options = this.core.gridOptions;
     if (!options.statusBarEnabled) {
       this.barEl.style.display = "none";
       return;
@@ -88,7 +89,7 @@ export class StatusBarService {
       for (let columnIndex = range.c1; columnIndex <= range.c2; columnIndex++) {
         const column = flat[columnIndex];
         if (!column) continue;
-        const value = this.core.getCellValue(node, column);
+        const value = this.core.readCellValue(node, column);
         if (typeof value !== "number" || Number.isNaN(value)) continue;
         sum += value;
         count++;
@@ -101,8 +102,8 @@ export class StatusBarService {
   }
 
   refresh(): void {
-    if (!this.barEl || this.core.isDestroyed()) return;
-    const options = this.core.options;
+    if (!this.barEl || this.core.isDisposed()) return;
+    const options = this.core.gridOptions;
     this.barEl.style.display = options.statusBarEnabled ? "" : "none";
     if (!options.statusBarEnabled) return;
 

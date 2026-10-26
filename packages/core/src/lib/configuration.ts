@@ -1,6 +1,6 @@
 import { createMachTablePreset } from "./presets";
 import type { ColDef } from "../types/colDef";
-import type { GridComponents, GridOptions } from "../types/options";
+import type { GridComponents, GridDataProcessor, GridOptions } from "../types/options";
 
 export type MachTablePresetSelection = string | readonly string[] | false;
 
@@ -16,7 +16,10 @@ export type MachTableInstanceOptionKey =
   | "columnTypes";
 
 /** Safe application/preset defaults. Data, request state and persistence identity stay per table. */
-export type MachTableDefaults = Omit<Partial<GridOptions<any>>, MachTableInstanceOptionKey>;
+export type MachTableDefaults = Omit<Partial<GridOptions<any>>, MachTableInstanceOptionKey | "dataProcessor"> & {
+  /** Called once for each grid; a processor instance belongs to only that grid. */
+  dataProcessor?: () => GridDataProcessor<any>;
+};
 export type MachTablePreset = MachTableDefaults;
 
 export interface MachTableConfigWarning {
@@ -100,7 +103,7 @@ function sanitizeConfigLayer(
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const output: Record<string, unknown> = {};
   for (const [key, optionValue] of Object.entries(value)) {
-    if (!INSTANCE_ONLY_OPTIONS.has(key)) {
+    if (!INSTANCE_ONLY_OPTIONS.has(key) && (key !== "dataProcessor" || optionValue == null || typeof optionValue === "function")) {
       output[key] = optionValue;
       continue;
     }
@@ -108,7 +111,9 @@ function sanitizeConfigLayer(
       code: layer === "defaults" ? "INVALID_DEFAULT_OPTION" : "INVALID_PRESET_OPTION",
       option: key,
       layer,
-      message: `[MachTable] "${key}" is instance-only and cannot be declared in config ${layer}.`
+      message: key === "dataProcessor"
+        ? `[MachTable] "dataProcessor" in config ${layer} must be a factory returning a fresh per-grid instance.`
+        : `[MachTable] "${key}" is instance-only and cannot be declared in config ${layer}.`
     };
     config.onConfigWarning?.(warning);
     if (config.strict !== false) throw new TypeError(warning.message);
@@ -147,7 +152,7 @@ export function mergeMachTableConfig(
   });
   const presets: Record<string, MachTablePreset> = { ...parent.presets };
   for (const [name, preset] of Object.entries(normalizedChild.presets)) {
-    presets[name] = createMachTablePreset(parent.presets[name] ?? {}, preset);
+    presets[name] = createMachTablePreset(parent.presets[name] ?? {}, preset) as MachTableDefaults;
   }
   return {
     defaults: createMachTablePreset(parent.defaults, normalizedChild.defaults) as MachTableDefaults,

@@ -10,16 +10,17 @@ type ContextMenuContext = Pick<
   | "clearRangeValues"
   | "columnModel"
   | "copyActiveRange"
-  | "getApi"
-  | "getCellValue"
+  | "api"
+  | "readCellValue"
   | "getLocaleText"
-  | "options"
+  | "gridOptions"
   | "pasteFromSystemClipboard"
   | "reportError"
   | "rowModel"
   | "skeleton"
 >;
 
+/** @internal Consumers configure menu items without receiving this service. */
 export class ContextMenuService {
   private panel: HTMLElement | null = null;
 
@@ -39,12 +40,12 @@ export class ContextMenuService {
   }
 
   private readCustomItems(node: RowNode<any>, column: Column): readonly ContextMenuItem[] | null {
-    const getter = this.core.options.getContextMenuItems;
+    const getter = this.core.gridOptions.getContextMenuItems;
     if (!getter) return null;
     try {
       return getter({
-        data: node.data, node, api: this.core.getApi(), colId: column.id,
-        value: this.core.getCellValue(node, column), rowIndex: node.rowIndex
+        data: node.data, node, api: this.core.api, colId: column.id,
+        value: this.core.readCellValue(node, column), rowIndex: node.rowIndex
       }) ?? null;
     } catch (error) {
       this.core.reportError(error, "getContextMenuItems", { colId: column.id, rowId: node.id });
@@ -64,7 +65,7 @@ export class ContextMenuService {
         panel.appendChild(el("div", "mach-context-menu-separator"));
         continue;
       }
-      const button = el("button", "mach-context-menu-item") as HTMLButtonElement;
+      const button = el("button", "mach-context-menu-item");
       button.type = "button";
       button.textContent = item.label ?? "";
       if (item.danger) button.classList.add("mach-context-menu-item--danger");
@@ -88,7 +89,7 @@ export class ContextMenuService {
   }
 
   private appendDefaultButton(panel: HTMLElement, label: string, action: () => void): void {
-    const button = el("button", "mach-context-menu-item") as HTMLButtonElement;
+    const button = el("button", "mach-context-menu-item");
     button.type = "button";
     button.textContent = label;
     button.addEventListener("click", action);
@@ -101,7 +102,7 @@ export class ContextMenuService {
       void core.copyActiveRange();
       this.close();
     });
-    if (core.options.suppressClipboard) return;
+    if (core.gridOptions.suppressClipboard) return;
     this.appendDefaultButton(panel, core.getLocaleText("menuPaste"), () => {
       void core.pasteFromSystemClipboard();
       this.close();
@@ -119,7 +120,7 @@ export class ContextMenuService {
     if (!resolved) return;
     const panel = el("div", "mach-context-menu");
     panel.setAttribute("role", "menu");
-    if (this.core.options.getContextMenuItems) {
+    if (this.core.gridOptions.getContextMenuItems) {
       const items = this.readCustomItems(resolved.node, resolved.column);
       if (!items || !this.populateCustomPanel(panel, items, resolved.node, resolved.column)) return;
       this.attach(panel, x, y);

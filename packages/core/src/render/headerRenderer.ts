@@ -16,11 +16,11 @@ type HeaderContext = Pick<
   | "cycleSort"
   | "emit"
   | "filterPopup"
-  | "getApi"
+  | "api"
   | "getLocaleText"
-  | "isDestroyed"
+  | "isDisposed"
   | "moveColumn"
-  | "options"
+  | "gridOptions"
   | "relayoutColumns"
   | "reportError"
   | "resizeService"
@@ -123,7 +123,7 @@ export class HeaderRenderer {
         : trees;
     }
 
-    const perRowHeight = this.core.options.headerHeight;
+    const perRowHeight = this.core.gridOptions.headerHeight;
     for (const pane of ["left", "center", "right"] as PaneType[]) {
       const rows = this.core.skeleton.headerRows[pane];
       for (const row of rows) row.textContent = "";
@@ -143,7 +143,7 @@ export class HeaderRenderer {
       for (const tree of this.paneTrees[pane]) appendCell(tree);
     }
 
-    if (!this.core.options.suppressHeaderFocus) {
+    if (!this.core.gridOptions.suppressHeaderFocus) {
       this.leafCells.forEach((cell, index) => {
         cell.el.tabIndex = index === 0 ? 0 : -1;
       });
@@ -217,14 +217,14 @@ export class HeaderRenderer {
   }
 
   private attachHeaderFocus(cellEl: HTMLElement, column: Column): void {
-    if (this.core.options.suppressHeaderFocus) return;
+    if (this.core.gridOptions.suppressHeaderFocus) return;
     cellEl.tabIndex = -1;
     cellEl.addEventListener("mousedown", () => this.focusHeaderCell(column));
     cellEl.addEventListener("keydown", (event: KeyboardEvent) => this.onHeaderKeyDown(event, column));
   }
 
   private appendSelectAll(cellEl: HTMLElement, column: Column): HTMLInputElement | undefined {
-    if (!column.hasCheckbox || this.core.options.rowSelection !== "multiple") return undefined;
+    if (!column.hasCheckbox || this.core.gridOptions.rowSelection !== "multiple") return undefined;
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.className = "mach-select-all";
@@ -247,7 +247,7 @@ export class HeaderRenderer {
       return;
     }
     try {
-      output = headerComponent({ colDef, column, api: this.core.getApi() });
+      output = headerComponent({ colDef, column, api: this.core.api });
     } catch (error) {
       this.core.reportError(error, "headerComponent", { colId: column.id });
       output = null;
@@ -310,7 +310,7 @@ export class HeaderRenderer {
   }
 
   private appendColumnMenu(cellEl: HTMLElement, column: Column): void {
-    if (!this.core.options.columnMenu || column.hasCheckbox || column.colDef.suppressColumnMenu) return;
+    if (!this.core.gridOptions.columnMenu || column.hasCheckbox || column.colDef.suppressColumnMenu) return;
     const menuBtn = document.createElement("button");
     menuBtn.type = "button";
     menuBtn.className = "mach-menu-btn";
@@ -338,7 +338,7 @@ export class HeaderRenderer {
     });
     resizeEl.addEventListener("dblclick", (event) => {
       event.stopPropagation();
-      this.core.getApi().columns.autoSize(column.id);
+      this.core.api.columns.autoSize(column.id);
     });
     resizeEl.addEventListener("click", (event) => event.stopPropagation());
     cellEl.appendChild(resizeEl);
@@ -379,7 +379,7 @@ export class HeaderRenderer {
         leafLefts.set(column.id, x);
         x += column.currentWidth;
       }
-      const perRowHeight = this.core.options.headerHeight;
+      const perRowHeight = this.core.gridOptions.headerHeight;
       for (const cell of this.leafCells) {
         if (this.core.columnModel.paneOf(cell.column) !== pane) continue;
         const left = leafLefts.get(cell.column.id) ?? 0;
@@ -413,7 +413,7 @@ export class HeaderRenderer {
   }
 
   private onHeaderKeyDown(e: KeyboardEvent, column: Column): void {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     if (this.activateHeaderFromKeyboard(e, column)) return;
     if (this.resizeColumnFromKeyboard(e, column)) return;
     if (this.moveColumnFromKeyboard(e, column)) return;
@@ -505,7 +505,7 @@ export class HeaderRenderer {
   }
 
   private canResizeColumn(column: Column): boolean {
-    return this.core.options.enableColumnResize && column.resizable;
+    return this.core.gridOptions.enableColumnResize && column.resizable;
   }
 
   refreshSortIndicators(): void {

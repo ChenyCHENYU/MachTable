@@ -6,7 +6,7 @@ type UndoContext = Pick<
   | "cancelPendingInput"
   | "columnModel"
   | "emit"
-  | "options"
+  | "gridOptions"
   | "rowModel"
   | "statusBarService"
   | "summaryRenderer"
@@ -20,6 +20,7 @@ export interface UndoEntry {
   newValue: any;
 }
 
+/** @internal The editing facade delegates history operations without exposing this service. */
 export class UndoRedoService {
   private stack: UndoEntry[][] = [];
   private pointer = -1;
@@ -39,10 +40,6 @@ export class UndoRedoService {
     if (batch.length > 0) this.push(batch);
   }
 
-  cancelBatch(): void {
-    this.pending = null;
-  }
-
   record(entry: UndoEntry): void {
     if (this.pending) {
       this.pending.push(entry);
@@ -52,7 +49,7 @@ export class UndoRedoService {
   }
 
   private push(batch: UndoEntry[]): void {
-    const maxSize = Math.max(0, this.core.options.undoStackSize);
+    const maxSize = Math.max(0, this.core.gridOptions.undoStackSize);
     if (maxSize === 0) return;
     this.stack.length = this.pointer + 1;
     this.stack.push(batch);
@@ -61,7 +58,7 @@ export class UndoRedoService {
   }
 
   trimToSize(): void {
-    const maxSize = Math.max(0, this.core.options.undoStackSize);
+    const maxSize = Math.max(0, this.core.gridOptions.undoStackSize);
     if (maxSize === 0) {
       this.clear();
       return;

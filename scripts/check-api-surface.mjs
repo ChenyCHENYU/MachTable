@@ -50,7 +50,7 @@ function declarationSignatures(file, names, prefix = "") {
 
 // Resolve module symbols rather than spelling: adapter `export *` wrappers are part
 // of the same reviewed surface, even when a source barrel contains no named exports.
-const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range"];
+const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"];
 const entryFiles = {
   "@agile-team/mach-table": "packages/core/src/index.ts",
   "@agile-team/mach-table/adapter": "packages/core/src/adapter.ts",
@@ -170,7 +170,7 @@ function captureDependencies(symbol) {
           const dependency = resolvedSymbol(referenced);
           const declared = dependency.declarations?.find(item => ts.isTypeAliasDeclaration(item) || ts.isInterfaceDeclaration(item) || ts.isClassDeclaration(item) || ts.isEnumDeclaration(item));
           const relative = declared && path.relative(root, declared.getSourceFile().fileName).replaceAll(path.sep, "/");
-          if (relative && /^packages\/core\/src\/(workbench|analysis|ordering|preferences|server-side)\//.test(relative)) {
+          if (relative && /^packages\/core\/src\/(workbench|analysis|ordering|preferences|server-side|import)\//.test(relative)) {
             if (!publicOptionalSymbols.has(dependency)) optionalDependencies[`${relative}#${dependency.name}`] = publicSignature(dependency);
             captureDependencies(dependency);
           }
@@ -223,7 +223,7 @@ const current = {
     .filter(symbol => symbol.name === "resolveSaveConflict")
     .map(symbol => [symbol.name, publicSignature(symbol)])),
   adapterCapabilities: Object.fromEntries(moduleExports("packages/core/src/adapter.ts")
-    .filter(symbol => ["suspendGrid", "resumeGrid", "readGridCell", "writeGridInput", "canReplaceGridData", "GridInputCell"].includes(symbol.name))
+    .filter(symbol => ["suspendGrid", "resumeGrid", "readGridCell", "writeGridInput", "canReplaceGridData", "beginGridInput", "equivalentConfigValue", "equivalentGridOption", "GridInputCell"].includes(symbol.name))
     .map(symbol => [symbol.name, publicSignature(symbol)])),
   optionalDependencies: Object.fromEntries(Object.entries(optionalDependencies).sort(([a], [b]) => a.localeCompare(b, "en"))),
   interfaces: {

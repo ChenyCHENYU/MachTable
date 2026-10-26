@@ -45,6 +45,9 @@
       ],
       "@agile-team/mach-table/multi-range": [
         "packages/core/src/multiRange.ts"
+      ],
+      "@agile-team/mach-table/import": [
+        "packages/core/src/import.ts"
       ]
     },
     "strict": true,

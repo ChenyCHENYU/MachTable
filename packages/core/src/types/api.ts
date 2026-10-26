@@ -23,6 +23,20 @@ export interface ImportCsvOptions {
   parseValue?: (params: { value: string; field: string; rowIndex: number; columnIndex: number }) => any;
 }
 
+export interface ImportMatrixOptions {
+  mode?: "replace" | "append" | "paste";
+  /** -1 means no header. Explicit columns default to -1; otherwise the first row is a header. */
+  headerRowIndex?: number;
+  /** Explicit destination column IDs/fields, in matrix order. */
+  columns?: readonly string[];
+  coerceNumbers?: boolean;
+  /** Per-operation override; takes priority over the column parser. */
+  parseValue?: (params: { value: unknown; field: string; rowIndex: number; columnIndex: number }) => any;
+}
+export interface MatrixExportParams extends CsvExportParams {
+  target?: "csv" | "xlsx";
+}
+
 export interface PrintOptions {
   title?: string;
   includeHeader?: boolean;
@@ -270,6 +284,9 @@ export interface GridViewApi<TData = any> {
 export interface GridIoApi {
   exportCsv(params?: CsvExportParams): string;
   importCsv(text: string, options?: ImportCsvOptions): boolean;
+  exportMatrix(params?: MatrixExportParams): unknown[][];
+  /** Synchronous result: replace/append load parser-normalized records; paste starts interactive validation, which may finish later. */
+  importMatrix(rows: readonly (readonly unknown[])[], options?: ImportMatrixOptions): boolean;
   print(options?: PrintOptions): boolean;
   copyRange(): Promise<boolean>;
 }

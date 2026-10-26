@@ -100,3 +100,16 @@ export function reactSaveContext(context: reactOrdering.RowOrderSaveContext<Row>
   context.operations.forEach(intent => intent.rowIds.forEach(id => id.toUpperCase()));
   return context.operation;
 }
+
+import coreImport = require("@agile-team/mach-table/import");
+import vueImport = require("@agile-team/mach-table-vue/import");
+import reactImport = require("@agile-team/mach-table-react/import");
+export function importCore(api: CoreGridApi<Row>): coreImport.ImportPlan {
+  return coreImport.createImportPlan(api, { kind: "rows", rows: [{ id: "a", amount: 1 }] });
+}
+export function importVue(api: VueGridApi<Row>): vueImport.ImportPlan {
+  return vueImport.createImportPlan(api, { kind: "matrix", rows: [["id", "amount"], ["a", 1]] });
+}
+export function importReact(api: ReactGridApi<Row>): reactImport.ImportPlan {
+  return reactImport.createImportPlan(api, { kind: "rows", rows: [] });
+}

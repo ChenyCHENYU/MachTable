@@ -120,12 +120,12 @@ function selectedIndex(options: readonly SelectControlOption[], value: string): 
 
 export function createSelectControl(config: SelectControlOptions): SelectControl {
   const root = el("div", classNames("mach-select-control", config.classNames?.root));
-  const native = el("select", classNames("mach-select-native", config.classNames?.native)) as HTMLSelectElement;
+  const native = el("select", classNames("mach-select-native", config.classNames?.native));
   native.hidden = true;
   native.tabIndex = -1;
   native.setAttribute("aria-hidden", "true");
 
-  const trigger = el("button", classNames("mach-select-trigger", config.classNames?.trigger)) as HTMLButtonElement;
+  const trigger = el("button", classNames("mach-select-trigger", config.classNames?.trigger));
   trigger.type = "button";
   trigger.setAttribute("role", "combobox");
   trigger.setAttribute("aria-haspopup", "listbox");
@@ -239,7 +239,7 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
       nativeOption.textContent = option.label;
       nativeOption.disabled = option.disabled === true;
       native.appendChild(nativeOption);
-      const item = el("button", classNames("mach-select-option", config.classNames?.option)) as HTMLButtonElement;
+      const item = el("button", classNames("mach-select-option", config.classNames?.option));
       item.id = `${listbox.id}-option-${index}`;
       item.type = "button";
       item.tabIndex = -1;

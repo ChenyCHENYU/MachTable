@@ -6,8 +6,8 @@ import type { CellClassParams, CellRendererParams } from "../types/params";
 import { getCellRuntimeState, peekCellRuntimeState } from "./runtimeState";
 
 type ErrorContext = Pick<GridCore<any>, "reportError">;
-type CellValueContext = Pick<GridCore<any>, "getApi" | "getCellValue" | "reportError">;
-type CellRenderContext = CellValueContext & Pick<GridCore<any>, "options" | "resolveCellRenderer">;
+type CellValueContext = Pick<GridCore<any>, "api" | "readCellValue" | "reportError">;
+type CellRenderContext = CellValueContext & Pick<GridCore<any>, "gridOptions" | "resolveCellRenderer">;
 
 export function defaultFormat(value: any): string {
   if (value == null) return "";
@@ -49,12 +49,12 @@ function updateCellTooltip(
   value: any,
   formatted: string
 ): void {
-  let tooltip = core.options.tooltipComponent ? "" : formatted;
+  let tooltip = core.gridOptions.tooltipComponent ? "" : formatted;
   const tooltipGetter = column.colDef.tooltipValueGetter;
   if (tooltipGetter) {
     try {
       tooltip = tooltipGetter({
-        api: core.getApi(), colDef: column.colDef, column, node, data: node.data, value
+        api: core.api, colDef: column.colDef, column, node, data: node.data, value
       }) ?? formatted;
     } catch (error) {
       core.reportError(error, "tooltipValueGetter", { colId: column.id, rowId: node.id });
@@ -89,24 +89,7 @@ function tryRefreshRenderer(
 }
 
 export function formatCellValue(core: CellValueContext, node: RowNode<any>, column: Column): string {
-  const value = core.getCellValue(node, column);
-  const formatter = column.colDef.valueFormatter;
-  if (formatter) {
-    try {
-      const out = formatter({
-        api: core.getApi(),
-        colDef: column.colDef,
-        column,
-        node,
-        data: node.data,
-        value
-      });
-      return out == null ? "" : String(out);
-    } catch (error) {
-      core.reportError(error, "valueFormatter", { colId: column.id, rowId: node.id });
-    }
-  }
-  return defaultFormat(value);
+  return formatCellValueWith(core, node, column, core.readCellValue(node, column));
 }
 
 export function formatCellValueWith(core: CellValueContext, node: RowNode<any>, column: Column, value: any): string {
@@ -114,7 +97,7 @@ export function formatCellValueWith(core: CellValueContext, node: RowNode<any>, 
   if (formatter) {
     try {
       const out = formatter({
-        api: core.getApi(),
+        api: core.api,
         colDef: column.colDef,
         column,
         node,
@@ -144,10 +127,10 @@ export function applyCellStyle(core: CellValueContext, cell: HTMLElement, node: 
   }
   let styles: Partial<CSSStyleDeclaration> | null | undefined;
   if (typeof rule === "function") {
-    const value = core.getCellValue(node, column);
+    const value = core.readCellValue(node, column);
     try {
       styles = rule({
-        api: core.getApi(),
+        api: core.api,
         colDef: column.colDef,
         column,
         node,
@@ -174,7 +157,7 @@ export function applyCellStyle(core: CellValueContext, cell: HTMLElement, node: 
 }
 
 export function renderCellContent(core: CellRenderContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
-  const value = core.getCellValue(node, column);
+  const value = core.readCellValue(node, column);
   const formatted = formatCellValue(core, node, column);
   const rendererDef = column.colDef.cellRenderer;
   const renderer =
@@ -182,7 +165,7 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
 
   if (renderer) {
     const params: CellRendererParams = {
-      api: core.getApi(),
+      api: core.api,
       colDef: column.colDef,
       column,
       node,
@@ -263,7 +246,7 @@ function appendConfiguredClasses(
     return;
   }
   const params: CellClassParams = {
-    api: core.getApi(), colDef: column.colDef, column, node,
+    api: core.api, colDef: column.colDef, column, node,
     data: node.data, value, rowIndex: node.rowIndex
   };
   try {
@@ -282,7 +265,7 @@ function appendRuntimeClasses(classes: string[], cell: HTMLElement, column: Colu
 }
 
 export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
-  const value = core.getCellValue(node, column);
+  const value = core.readCellValue(node, column);
   const classes = ["mach-cell"];
   appendAlignmentClass(classes, column, value);
   appendConfiguredClasses(core, classes, node, column, value);

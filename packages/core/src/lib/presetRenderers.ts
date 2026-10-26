@@ -2,7 +2,7 @@ import type { CellRendererParams } from "../types/params";
 import type { CellRendererFn } from "../types/colDef";
 import type { ActionPolicyContext } from "../types/options";
 import type { GridChange } from "../types/api";
-import { applyPortalTheme } from "./dom";
+import { applyPortalTheme, el, positionAnchoredPortal } from "./dom";
 import { DEFAULT_LOCALE } from "./locale";
 
 export type TagVariant = "success" | "warning" | "danger" | "info" | "neutral";
@@ -56,19 +56,15 @@ export function createProgressBarRenderer(config: ProgressConfig = {}): CellRend
     const raw = Number(params.value);
     if (isNaN(raw)) return params.formatted;
     const pct = Math.max(0, Math.min(100, raw));
-    const wrap = document.createElement("div");
-    wrap.className = "mach-progress";
-    const track = document.createElement("div");
-    track.className = "mach-progress__track";
-    const bar = document.createElement("div");
-    bar.className = "mach-progress__bar";
+    const wrap = el("div", "mach-progress");
+    const track = el("div", "mach-progress__track");
+    const bar = el("div", "mach-progress__bar");
     bar.style.width = `${pct}%`;
     if (config.color) bar.style.background = config.color;
     track.appendChild(bar);
     wrap.appendChild(track);
     if (config.showValue !== false) {
-      const label = document.createElement("span");
-      label.className = "mach-progress__label";
+      const label = el("span", "mach-progress__label");
       label.textContent = `${Math.round(pct)}${config.unit ?? "%"}`;
       wrap.appendChild(label);
     }
@@ -78,8 +74,7 @@ export function createProgressBarRenderer(config: ProgressConfig = {}): CellRend
 
 export function linkRenderer(params: CellRendererParams): string | HTMLElement {
   if (params.value == null || params.value === "") return "";
-  const link = document.createElement("span");
-  link.className = "mach-link";
+  const link = el("span", "mach-link");
   link.textContent = params.formatted || String(params.value);
   return link;
 }
@@ -226,8 +221,7 @@ function makeSurfaceButton(item: SurfaceItem, className: string): HTMLButtonElem
 
 function showActionMenu(anchor: HTMLElement, items: SurfaceItem[]): void {
   closeActionSurface();
-  const menu = document.createElement("div");
-  menu.className = "mach-context-menu mach-action-menu";
+  const menu = el("div", "mach-context-menu mach-action-menu");
   menu.setAttribute("role", "menu");
   for (const item of items) {
     const button = makeSurfaceButton(item, "mach-context-menu-item");
@@ -236,10 +230,7 @@ function showActionMenu(anchor: HTMLElement, items: SurfaceItem[]): void {
   }
   applyPortalTheme(menu, anchor.closest<HTMLElement>(".mach-root"));
   document.body.appendChild(menu);
-  const rect = anchor.getBoundingClientRect();
-  const menuRect = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(Math.max(8, rect.left), window.innerWidth - menuRect.width - 8)}px`;
-  menu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - menuRect.height - 8)}px`;
+  positionAnchoredPortal(menu, anchor);
   openActionSurface = menu;
   openActionAnchor = anchor;
   anchor.setAttribute("aria-expanded", "true");
@@ -250,15 +241,12 @@ function showActionMenu(anchor: HTMLElement, items: SurfaceItem[]): void {
 
 function showActionDrawer(anchor: HTMLElement, title: string, items: SurfaceItem[]): void {
   closeActionSurface();
-  const backdrop = document.createElement("div");
-  backdrop.className = "mach-action-drawer-backdrop";
-  const drawer = document.createElement("section");
-  drawer.className = "mach-action-drawer";
+  const backdrop = el("div", "mach-action-drawer-backdrop");
+  const drawer = el("section", "mach-action-drawer");
   drawer.setAttribute("role", "dialog");
   drawer.setAttribute("aria-modal", "true");
   drawer.setAttribute("aria-label", title);
-  const header = document.createElement("header");
-  header.className = "mach-action-drawer__header";
+  const header = el("header", "mach-action-drawer__header");
   const heading = document.createElement("strong");
   heading.textContent = title;
   const close = document.createElement("button");
@@ -269,8 +257,7 @@ function showActionDrawer(anchor: HTMLElement, title: string, items: SurfaceItem
   close.innerHTML = iconSvg("close", 16);
   close.addEventListener("click", () => closeActionSurface(true));
   header.append(heading, close);
-  const body = document.createElement("div");
-  body.className = "mach-action-drawer__body";
+  const body = el("div", "mach-action-drawer__body");
   for (const item of items) body.appendChild(makeSurfaceButton(item, "mach-action-drawer__item"));
   drawer.append(header, body);
   backdrop.appendChild(drawer);
@@ -509,8 +496,7 @@ export function createActionButtonsRenderer<TData = any>(config: ActionButtonsCo
     const visible = visibleActions(config.actions, params);
     if (visible.length === 0) return "";
 
-    const wrap = document.createElement("div");
-    wrap.className = "mach-actions";
+    const wrap = el("div", "mach-actions");
     const shown = overflowMode === "inline" ? visible : visible.slice(0, max);
     const overflow = overflowMode === "inline" ? [] : visible.slice(max);
     const run = createActionRunner(params);

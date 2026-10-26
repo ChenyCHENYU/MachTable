@@ -7,6 +7,8 @@
 | 行虚拟化 | 行池复用（`index % poolSize` 槽位 + `index+nodeId` 双校验），滚动只更新 diff |
 | 列虚拟化 | 20+ 列自动启用；表头与正文共享前缀宽度索引 + 二分窗口定位（±2 列缓冲），不保留离窗表头 DOM |
 | 变高行索引 | Fenwick 树维护高度与偏移；单行变化 O(log n) 更新、O(log n) 定位，无需重建完整前缀数组 |
+| 字段依赖投影 | 普通活动字段保存上次标量基线，无关事务不重跑排序、过滤、分组；相关字段与不可证明依赖保持完整重算 |
+| 超大滚动坐标 | 普通布局超 16000000px 时压缩物理滚动轴，逻辑行高与 API 定位保持不变，不按总行数分配空白 DOM |
 | 预取值排序 | Schwartzian 变换预提取排序键，避免 O(n log n) 次 valueGetter |
 | 合帧与去重 | rAF 滚动合帧、className/title/style 写入前比较、`contain: layout style` |
 | 范围缓存 | 框选坐标帧内缓存（8 个变更点失效），高亮零额外分配 |
@@ -84,7 +86,7 @@ api.batch((grid) => {
 
 ## 测量基准
 
-可复现基准见 `examples/bench`（`pnpm --filter bench-demo dev`）：1k/10k/100k 行 × 8/30/60/100 列，含状态/进度/操作预设列，自动滚动统计帧耗时与可见 DOM 计数。
+可复现基准使用固定种子 `20261026` 和固定日期，见 `examples/bench`（`pnpm --filter bench-demo dev`）：1k/10k/100k 行 × 8/30/60/100 列，含状态/进度/操作预设列，数据准备、Grid 同步构造、构造后两次 rAF 的可呈现机会分别计时，后者不等同于浏览器实际绘制或业务首屏 SLA。自动滚动报告 rAF 回调平均间隔（不伪装成 FPS）、内核渲染耗时和可见 DOM 计数。四个示例的正式构建均先通过 TypeScript / Vue SFC 检查，500 列扩展 getter 使用真实 `node.rowIndex`，避免将 NaN 列当成有效负载。
 
 Playwright 的 Chromium 性能门禁固定验证 10 万行 × 100 列、60 帧连续纵向滚动、1 万行 × 500 列横向跳转和 30 次重复挂载/销毁：初次构建、1000 次异步更新、DOM 上限、P95 视口渲染和生命周期均有保守 CI 阈值。可单独运行：
 
@@ -108,15 +110,43 @@ const metrics = api.diagnostics.getPerformance();
 
 ## 发布体积预算
 
-`pnpm check:size` 在构建后检查 gzip 消费体积；`pnpm check:release-artifacts` 检查解压产物并阻止 sourcemap 进入 npm 发布包。CI/本地 `pnpm verify` 使用相同门槛：
+`pnpm check:size` 在构建后检查 gzip 消费体积；`pnpm check:release-artifacts` 检查解压产物并阻止 sourcemap 进入 npm 发布包。CI/本地 `pnpm verify` 使用相同门槛；下表由 `scripts/bundle-budgets.mjs` 生成，`pnpm check:budgets` 阻止文档与实际门禁漂移：
 
-| 产物 | gzip 上限 |
+<!-- bundle-budgets:start -->
+<!-- Generated from scripts/bundle-budgets.mjs; run node scripts/check-budget-docs.mjs --write. -->
+| 产物 / 真实消费入口 | gzip 上限 |
 | --- | ---: |
-| `@agile-team/mach-table` 全公开 ESM / `createGrid` 真实消费 | 87 KiB / 79 KiB |
-| 可选 `/worker` ESM | 8 KiB |
-| Vue 全部 ESM 产物 / 默认入口 / 工作流入口 / 可选编辑器 | 10.5 KiB / 6.75 KiB / 5 KiB / 3 KiB |
-| React 全部 ESM / 默认入口 / 工作流入口 | 8 KiB / 6.25 KiB / 5 KiB |
-| Core CSS | 7.5 KiB |
+| Core ESM | 90 KiB (92160 bytes) |
+| Optional Worker | 8 KiB (8192 bytes) |
+| Vue ESM artifacts | 11.25 KiB (11520 bytes) |
+| React ESM artifacts | 8 KiB (8192 bytes) |
+| Optional XLSX bridge | 3 KiB (3072 bytes) |
+| Core CSS | 8 KiB (8192 bytes) |
+| Optional workbench | 12 KiB (12288 bytes) |
+| Optional preferences | 7 KiB (7168 bytes) |
+| Optional ordering | 9 KiB (9216 bytes) |
+| Optional server-side | 10 KiB (10240 bytes) |
+| Optional analysis | 9 KiB (9216 bytes) |
+| Optional multi-range | 4 KiB (4096 bytes) |
+| Optional import planning | 4 KiB (4096 bytes) |
+| Workbench CSS | 3 KiB (3072 bytes) |
+| Server-side CSS | 1 KiB (1024 bytes) |
+| Core createGrid consumer | 80.5 KiB (82432 bytes) |
+| Vue initial adapter | 6.75 KiB (6912 bytes) |
+| Vue B-side workflows | 5 KiB (5120 bytes) |
+| Vue optional editors | 3 KiB (3072 bytes) |
+| Vue optional UI | 3 KiB (3072 bytes) |
+| React initial adapter | 6.25 KiB (6400 bytes) |
+| React B-side workflows | 5 KiB (5120 bytes) |
+
+| 解压产物图 | 字节上限 |
+| --- | ---: |
+| core 原有导出依赖图 | 1050000 |
+| vue 原有导出依赖图 | 450000 |
+| react 原有导出依赖图 | 350000 |
+| xlsx 原有导出依赖图 | 80000 |
+| Core 七个可选能力新增依赖图 | 350000 |
+<!-- bundle-budgets:end -->
 
 日常只验证运行时代码可执行 `pnpm build:runtime`，跳过耗时的声明汇总；正式包必须执行 `pnpm build:release`，保留 `.d.ts` 但不发布约占旧包 70% 解压空间的 `.map`。项目仍使用 tsup + esbuild：当前瓶颈是 TypeScript 声明汇总，不是 JS 打包，因此没有为了工具潮流迁移到 tsdown。
 

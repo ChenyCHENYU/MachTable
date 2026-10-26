@@ -30,18 +30,6 @@ export function createEditor(column: Column, value: any, keyPress?: string | nul
   const def = column.colDef;
   const name = typeof def.cellEditor === "string" ? def.cellEditor : inferEditorType(value, def.cellEditorParams);
 
-  if (name === "number") {
-    const input = baseInput("number", value);
-    return {
-      el: input,
-      getValue: () => (input.value === "" ? null : Number(input.value)),
-      focus: () => {
-        input.focus({ preventScroll: true });
-        input.select();
-      }
-    };
-  }
-
   if (name === "date") {
     const input = baseInput("date", value);
     const raw = value == null ? "" : String(value);
@@ -84,11 +72,12 @@ export function createEditor(column: Column, value: any, keyPress?: string | nul
     };
   }
 
-  const input = baseInput("text", value);
-  if (keyPress && keyPress.length === 1) input.value = keyPress;
+  const numeric = name === "number";
+  const input = baseInput(numeric ? "number" : "text", value);
+  if (!numeric && keyPress && keyPress.length === 1) input.value = keyPress;
   return {
     el: input,
-    getValue: () => input.value,
+    getValue: () => numeric ? input.value === "" ? null : Number(input.value) : input.value,
     focus: () => {
       input.focus({ preventScroll: true });
       input.select();

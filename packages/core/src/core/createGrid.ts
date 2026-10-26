@@ -9,5 +9,5 @@ export function createGrid<TData = any>(container: HTMLElement, options: GridOpt
     throw new Error("[mach-table] createGrid can only be used in a browser environment");
   }
   const core = new GridCore<TData>(container, options);
-  return core.getApi();
+  return core.api;
 }

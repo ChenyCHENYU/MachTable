@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.32.1-2563eb" alt="Source version 0.32.1" />
+  <img src="https://img.shields.io/badge/source-0.33.0-2563eb" alt="Source version 0.33.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -188,7 +188,7 @@ const options: GridOptions<Plan> = {
 
 ## 按需工作台与高级数据能力
 
-Core、Vue、React 共享下面六个子入口。Vue 项目将包名写为 `@agile-team/mach-table-vue`，React 写为 `@agile-team/mach-table-react`；仍然只安装一个适配包。普通根入口不导入这些高级实现和附加样式。
+Core、Vue、React 共享下面七个子入口。Vue 项目将包名写为 `@agile-team/mach-table-vue`，React 写为 `@agile-team/mach-table-react`；仍然只安装一个适配包。普通根入口不导入这些高级实现和附加样式。
 
 | 子入口 | 能力 | 配方 |
 | --- | --- | --- |
@@ -198,6 +198,7 @@ Core、Vue、React 共享下面六个子入口。Vue 项目将包名写为 `@agi
 | `/server-side` | 服务端分组、聚合、route 分页缓存、事务刷新和层级选择 | [层级 Store](./docs/recipes/server-side-store.md) |
 | `/multi-range` | Ctrl/Cmd 追加选区、格式化复制、校验清空与单次撤销 | [多范围](./docs/recipes/multi-range.md) |
 | `/analysis` | 有界 Pivot、算术与聚合公式、柱/折线图及完整数据表回退 | [分析](./docs/recipes/analysis.md) |
+| `/import` | 有界导入预览、规范值、异步校验、结构化错误与过期保护 | [导入预览](./docs/recipes/import-preview.md) |
 
 ```ts
 import { mountAdvancedFilterBuilder, mountChangeReview } from "@agile-team/mach-table-vue/workbench";
@@ -214,6 +215,12 @@ review.destroy();
 服务端排序使用稳定 ID 和预期版本。`createRowOrderController()` 的 `bindings` 可直接合入表格配置；复杂撤销的保存端必须一次 CAS 处理 `context.operations` 全批次，或原子保存 `context.plan.after`，不能只保存首个意图。服务端分组使用独立 `/styles/server-side.css`；分析和多范围样式使用 `/styles/workbench.css`。没有 UI 的纯计算、偏好和排序控制器无需附加样式。
 
 Vanilla 示例包含高级筛选、修改审阅、分析、平面/树排序及服务端分组的可操作入口，模拟传输有明确标记。自动矩阵覆盖三浏览器、明暗和强制颜色；人工读屏与真实业务 UAT 的完成状态独立记录，不将模拟接口当作生产验收。
+
+## 一份列值策略贯通输入与导出
+
+在 `columnTypes` 或列上配置 `valueParser` / `valueSerializer`，编辑、粘贴与导入复用解析；CSV、剪贴板和 XLSX 复用序列化。排序与过滤读取已经规范化的记录值，可信事务与撤销不重复解析。长整型标识默认不会被不安全的数字转换舍入；精确小数与业务日期格式应由列策略显式定义。
+
+`api.io.importMatrix()` 的 replace/append 同步装载经 parser 规范化的记录，不运行交互校验；paste 复用交互校验与撤销管线，同步 boolean 不代表异步校验完成。需要整批校验、预览和问题明细时按需使用 `createImportPlan()`。XLSX 默认直接传递 number、boolean 和 Date，不经格式化 CSV 往返。详见[列值策略](./docs/recipes/column-values.md)和[导入预览](./docs/recipes/import-preview.md)。
 
 ## 一份清爽的应用配置
 
@@ -371,7 +378,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.32.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版以独立子入口提供高级过滤、修改审阅、诊断、企业偏好、多行与树排序及撤销重做、服务端分组、多范围和 Pivot/公式/图表工作台；继续统一资源所有权、框架生命周期和缓存故障恢复。已有领域 API 与普通列表接入方式保持兼容，新增高级模块及样式按需引入，详见[升级指南](./docs/guide/upgrading.md)。服务端分组采用 route 分页，分析限定当前已加载数据；完整边界和人工验收项见[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.33.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版完善列值解析/序列化、typed matrix 与 XLSX 类型直通、可选导入预览、有限数聚合和类型化分组身份、普通字段事务依赖跳过、按表 Worker 所有权和超大滚动坐标。Vue/React 保持一个包接入，无关属性更新不再重建等价列配置；默认入口与既有体积门槛保持独立受控。升级边界见[升级指南](./docs/guide/upgrading.md)，真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

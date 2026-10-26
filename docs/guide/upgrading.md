@@ -3,10 +3,25 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.32.1
+pnpm up @agile-team/mach-table-vue@^0.33.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.32.1
+pnpm up @agile-team/mach-table-react@^0.33.0
 ```
+
+## 0.32.1 → 0.33.0
+
+四包固定版本组同步升级。原有领域 API 与单包框架接入保持有效，新增 `/import` 为可选入口，无附加样式。请关注以下行为收口：
+
+- 应用 defaults / preset 中的 `dataProcessor` 改为每表工厂 `() => createWorkerDataProcessor(...)`，避免共享实例被其他表销毁；直接单表 `GridOptions.dataProcessor` 仍接受独占实例。动态替换会释放旧实例，工厂每个 owner 只解析一次。
+- 可在既有 `columnTypes` / `defaultColDef` / 列配置中声明同步 `valueParser` / `valueSerializer`。单次导入显式 `parseValue` 优先于列 parser，不重复调用；排序、过滤、可信事务和撤销使用已有规范值。解析异常会拒绝输入，而不是悄悄保留未经解析的原文。
+- `io.exportMatrix()` 默认返回保留类型的二维值，`target` 默认为 `"xlsx"`，文件读写仍由独立 XLSX 包提供。`importMatrix()` 与 `importCsv()` 返回同步 `boolean`，受 10000 数据行、含表头共 100000 单元格边界约束；replace/append 装载记录，paste 发起既有输入校验，其返回值不表达后续异步校验结果。需要预览、整批校验后 replace/append 或逐行 paste 时使用 `/import`；已有编辑或未保存记录不能被计划装载悄悄覆盖。详见[列值策略](/recipes/column-values)和[导入预览](/recipes/import-preview)。
+- `/import` 的 replace/append 计划明确要求扁平本地模型，`treeData: true` 返回 `UNSUPPORTED`；树的当前显示节点仍可 paste。计划 paste 与既有输入一致：同值和 parser 返回 `undefined` 不写 setter、不发事件、不产生 undo；全部无变化是成功请求，`importedRowCount: 0`，不把无变化行算作部分失败。
+- XLSX 默认保留 number/boolean/Date，`valueFormatter` 不再先转为显示 CSV。默认读取 `raw: true`、`cellDates: true`；旧显式字符串 `transformCell` / `parseValue` 继续执行。需要自定义导出形态时配置列 serializer 或转换回调。
+- 默认数字聚合忽略 NaN / Infinity，空数值集合与溢出返回 null，min/max 不再对大数组展开；count 仍计全部记录。自定义聚合不改变原始输入契约。
+- 分组身份采用列 ID 与类型化路径，数字 `1`、文本 `"1"`、空值和文本 `"(空)"` 各自独立。既有持久化展开路径仅在全量输入中唯一时迁移；歧义清除并通过 `gridState.groupExpansion` 报告，避免展开错误分组。业务不应解析内部分组 ID 字符串。canonical 分组 ID 的持久化上限为 65536 个 JavaScript 字符（按 `String.length`，非 UTF-8 字节数），展开 ID 列表的总字符预算仍为 `100000 × 512`；普通行/列和旧路径 ID 仍为 512 字符。超协议长度的身份不参与状态恢复，模型本身可继续展示这些分组；内置持久化 store 的 `maxBytes` 另行限制整个快照。
+- 超大普通布局采用最多 16000000px 的物理滚动轴，行高保持不变。API、键盘、滚轮、填充与拖拽使用逻辑坐标；原生触屏惯性滚动仍按物理轴比例映射，真实设备手势验收单列待人工。`autoHeight` 不属于虚拟滚动路径。
+
+普通字段的无关更新可以跳过排序、过滤和分组；上次投影保存活动字段的标量基线，以兼容原地修改后提交副本。getter、自定义 comparator/aggregate、对象叶值、树和处理器等无法可靠声明依赖的情形保持完整重算，相关字段变化仍完整刷新，不承诺已有局部祖先聚合缓存。
 
 ## 0.32.0 → 0.32.1
 

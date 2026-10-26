@@ -2,6 +2,7 @@ import type { GridOptions, GridSize, ResolvedGridOptions } from "../types/option
 import type { ColDef } from "../types/colDef";
 import { getByPath } from "../lib/path";
 import { normalizeAdvancedFilterModel } from "../lib/advancedFilter";
+import { normalizeFinite, normalizePersistence } from "../lib/optionValues";
 
 export const DEFAULT_COL_DEF: Partial<ColDef> = {
   align: "center",
@@ -25,9 +26,56 @@ export const GRID_SIZE_PRESETS: Record<GridSize, GridSizePreset> = {
   large: { rowHeight: 44, headerHeight: 48, fontSize: 14, cellPadding: 12 }
 };
 
+// Primitive defaults share one immutable schema; object defaults remain grid-local.
+export const VALUE_DEFAULTS = {
+  multiSort: true,
+  stripedRows: false,
+  showCellBorders: false,
+  quickFilterText: null,
+  suppressCellFocus: false,
+  suppressRowHoverHighlight: false,
+  suppressNoRowsOverlay: false,
+  suppressHeaderFocus: false,
+  loading: false,
+  error: null,
+  className: "",
+  singleClickEdit: false,
+  manualSorting: false,
+  manualFiltering: false,
+  showSummary: false,
+  indexOffset: 0,
+  applyRowDrag: true,
+  masterDetail: false,
+  detailToggleColumn: true,
+  treeData: false,
+  childrenKey: "children",
+  autoCheckedChildren: true,
+  defaultExpandAll: false,
+  columnMenu: false,
+  suppressWarnings: false,
+  enableRangeSelection: false,
+  suppressClipboard: false,
+  contextMenu: false,
+  flashCells: true,
+  fillHandle: true,
+  ariaLabel: "MachTable data grid",
+  ariaLabelledBy: "",
+  ariaDescribedBy: "",
+  overlayNoRowsTemplate: "",
+  overlayLoadingTemplate: "",
+  overlayErrorTemplate: "",
+  allowUnsafeOverlayHtml: false,
+} as const;
+const VALUE_DEFAULT_KEYS = Object.keys(VALUE_DEFAULTS) as (keyof typeof VALUE_DEFAULTS)[];
+
+function resolveValueDefaults(options: GridOptions): Pick<ResolvedGridOptions, keyof typeof VALUE_DEFAULTS> {
+  const values: Record<string, unknown> = {};
+  for (const key of VALUE_DEFAULT_KEYS) values[key] = options[key] ?? VALUE_DEFAULTS[key];
+  return values as Pick<ResolvedGridOptions, keyof typeof VALUE_DEFAULTS>;
+}
+
 function finiteAtLeast(value: unknown, fallback: number, min: number, integer = false): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < min) return fallback;
-  return integer ? Math.floor(value) : value;
+  return normalizeFinite(value, min, integer) ?? fallback;
 }
 
 function resolveSize(value: GridOptions["size"]): GridSize {
@@ -85,7 +133,6 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
       options.rowSelection === "single" || options.rowSelection === "multiple"
         ? options.rowSelection
         : "none" as const,
-    multiSort: options.multiSort ?? true,
     size,
     pinnedTopRowData: Array.isArray(options.pinnedTopRowData) ? options.pinnedTopRowData : [],
     pinnedBottomRowData: Array.isArray(options.pinnedBottomRowData) ? options.pinnedBottomRowData : []
@@ -94,18 +141,8 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
 
 function resolveAppearance(options: GridOptions) {
   return {
-    stripedRows: options.stripedRows ?? false,
     rowStyleRules: Array.isArray(options.rowStyleRules) ? options.rowStyleRules : [],
-    showCellBorders: options.showCellBorders ?? false,
     theme: resolveTheme(options),
-    quickFilterText: options.quickFilterText ?? null,
-    suppressCellFocus: options.suppressCellFocus ?? false,
-    suppressRowHoverHighlight: options.suppressRowHoverHighlight ?? false,
-    suppressNoRowsOverlay: options.suppressNoRowsOverlay ?? false,
-    suppressHeaderFocus: options.suppressHeaderFocus ?? false,
-    loading: options.loading ?? false,
-    error: options.error ?? null,
-    className: options.className ?? ""
   };
 }
 
@@ -116,12 +153,6 @@ function resolveEditingAndHistory(options: GridOptions) {
       options.editableIndicator === "always" || options.editableIndicator === "none"
         ? options.editableIndicator
         : "hover" as const,
-    singleClickEdit: options.singleClickEdit ?? false,
-    manualSorting: options.manualSorting ?? false,
-    manualFiltering: options.manualFiltering ?? false,
-    showSummary: options.showSummary ?? false,
-    indexOffset: options.indexOffset ?? 0,
-    applyRowDrag: options.applyRowDrag ?? true,
     rowDragPolicy: options.rowDragPolicy,
     undoStackSize: finiteAtLeast(options.undoStackSize, 100, 0, true),
     asyncTransactionWaitMillis: finiteAtLeast(options.asyncTransactionWaitMillis, 16, 0, true)
@@ -130,13 +161,7 @@ function resolveEditingAndHistory(options: GridOptions) {
 
 function resolveHierarchy(options: GridOptions) {
   return {
-    masterDetail: options.masterDetail ?? false,
     detailRowHeight: finiteAtLeast(options.detailRowHeight, 240, 1),
-    detailToggleColumn: options.detailToggleColumn ?? true,
-    treeData: options.treeData ?? false,
-    childrenKey: options.childrenKey ?? "children",
-    autoCheckedChildren: options.autoCheckedChildren ?? true,
-    defaultExpandAll: options.defaultExpandAll ?? false
   };
 }
 
@@ -160,7 +185,7 @@ function resolvePagination<TData>(options: GridOptions<TData>) {
   };
 }
 
-function resolveWatermark(options: GridOptions) {
+export function resolveWatermark(options: GridOptions) {
   return {
     watermarkEnabled: options.watermark != null && options.watermark !== false,
     watermarkConfig:
@@ -174,38 +199,16 @@ function resolveWatermark(options: GridOptions) {
 
 function resolveInteraction(options: GridOptions) {
   return {
-    columnMenu: options.columnMenu ?? false,
     advancedFilterModel: normalizeAdvancedFilterModel(options.advancedFilterModel),
-    ...resolveStatePersistence(options),
+    persistence: normalizePersistence(options.persistence),
     locale: options.locale ?? {},
-    suppressWarnings: options.suppressWarnings ?? false,
-    enableRangeSelection: options.enableRangeSelection ?? false,
-    suppressClipboard: options.suppressClipboard ?? false,
-    contextMenu: options.contextMenu ?? false,
     tooltipShowDelay: finiteAtLeast(options.tooltipShowDelay, 600, 0),
-    flashCells: options.flashCells ?? true,
-    fillHandle: options.fillHandle ?? true,
     statusBarEnabled:
       options.statusBar === true || (typeof options.statusBar === "object" && options.statusBar != null),
     statusBarPanels:
       typeof options.statusBar === "object" && options.statusBar?.panels
         ? options.statusBar.panels
         : ["rowCount", "selectedRowCount", "rangeAggregate"] as const
-  };
-}
-
-function resolveStatePersistence(options: GridOptions) {
-  const persistence = options.persistence;
-  if (!persistence || typeof persistence.key !== "string" || !persistence.key.trim()) {
-    return { persistence: null };
-  }
-  return {
-    persistence: {
-      key: persistence.key.trim(),
-      debounceMs: finiteAtLeast(persistence.debounceMs, 160, 0, true),
-      ...(persistence.sections ? { sections: [...new Set(persistence.sections)] } : {}),
-      ...(persistence.store ? { store: persistence.store } : {})
-    }
   };
 }
 
@@ -224,18 +227,6 @@ function resolveDatasource(options: GridOptions) {
     datasourceRetryCount: finiteAtLeast(options.datasourceRetryCount, 2, 0, true),
     datasourceRetryDelay: finiteAtLeast(options.datasourceRetryDelay, 300, 0, true),
     datasourceRetryJitter: Math.min(1, finiteAtLeast(options.datasourceRetryJitter, 0.15, 0))
-  };
-}
-
-function resolveAccessibility(options: GridOptions) {
-  return {
-    ariaLabel: options.ariaLabel ?? "MachTable data grid",
-    ariaLabelledBy: options.ariaLabelledBy ?? "",
-    ariaDescribedBy: options.ariaDescribedBy ?? "",
-    overlayNoRowsTemplate: options.overlayNoRowsTemplate ?? "",
-    overlayLoadingTemplate: options.overlayLoadingTemplate ?? "",
-    overlayErrorTemplate: options.overlayErrorTemplate ?? "",
-    allowUnsafeOverlayHtml: options.allowUnsafeOverlayHtml ?? false
   };
 }
 
@@ -262,14 +253,14 @@ function copyOptionalOptions<TData>(
   target: ResolvedGridOptions<TData>
 ): void {
   for (const key of OPTIONAL_OPTION_KEYS) {
-    if (source[key]) Object.assign(target, { [key]: source[key] });
+    if (source[key]) Reflect.set(target, key, source[key]);
   }
 }
 
 function copyEventHandlers<TData>(source: GridOptions<TData>, target: ResolvedGridOptions<TData>): void {
   for (const key of Object.keys(source) as (keyof GridOptions<TData>)[]) {
     if (key.startsWith("on") && typeof source[key] === "function") {
-      Object.assign(target, { [key]: source[key] });
+      Reflect.set(target, key, source[key]);
     }
   }
 }
@@ -277,6 +268,7 @@ function copyEventHandlers<TData>(source: GridOptions<TData>, target: ResolvedGr
 export function resolveOptions<TData>(userOptions: GridOptions<TData>): ResolvedGridOptions<TData> {
   const size = resolveSize(userOptions.size);
   const resolved = {
+    ...resolveValueDefaults(userOptions),
     ...resolveDataAndLayout(userOptions, size),
     ...resolveAppearance(userOptions),
     ...resolveEditingAndHistory(userOptions),
@@ -285,7 +277,6 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     ...resolveWatermark(userOptions),
     ...resolveInteraction(userOptions),
     ...resolveDatasource(userOptions),
-    ...resolveAccessibility(userOptions),
     features: Array.isArray(userOptions.features) ? userOptions.features : []
   } as ResolvedGridOptions<TData>;
 

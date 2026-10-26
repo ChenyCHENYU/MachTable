@@ -163,10 +163,8 @@ export function createGridViewApi<TData>(api: GridApiImpl<TData>): GridViewApi<T
     refreshLayout: () => api.refreshLayout(),
     flush: () => api.flushUpdates(),
     setOverlay: (type) => api.setOverlay(type),
-    getPinnedRows: (position) => position === "top" ? api.getPinnedTopRowData() : api.getPinnedBottomRowData(),
-    setPinnedRows: (position, rows) => position === "top"
-      ? api.setPinnedTopRowData(rows)
-      : api.setPinnedBottomRowData(rows)
+    getPinnedRows: (position) => api.getPinnedRows(position),
+    setPinnedRows: (position, rows) => api.setPinnedRows(position, rows)
   };
 }
 
@@ -174,6 +172,8 @@ export function createGridIoApi<TData>(api: GridApiImpl<TData>): GridIoApi {
   return {
     exportCsv: (params) => api.getDataAsCsv(params),
     importCsv: (value, options) => api.importCsv(value, options),
+    exportMatrix: (params) => api.getDataAsMatrix(params),
+    importMatrix: (rows, options) => api.importMatrix(rows, options),
     print: (options) => api.print(options),
     copyRange: () => api.copyRangeToClipboard()
   };

@@ -68,6 +68,7 @@ function now(): number {
     : Date.now();
 }
 
+/** @internal Consumers receive bounded metric snapshots, not the monitor instance. */
 export class PerformanceMonitor {
   private samples: RenderSample[] = [];
   private layoutSamples: number[] = [];

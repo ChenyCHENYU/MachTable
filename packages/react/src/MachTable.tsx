@@ -6,7 +6,7 @@ import {
   type MutableRefObject
 } from "react";
 import { createGrid, EVENT_TYPES } from "@agile-team/mach-table";
-import { GRID_OPTION_KEYS, resolveMachTableGridOptions } from "@agile-team/mach-table/adapter";
+import { GRID_OPTION_KEYS, equivalentConfigValue, equivalentGridOption, resolveMachTableGridOptions } from "@agile-team/mach-table/adapter";
 import type { GridApi, GridOptions, MachTablePresetSelection } from "@agile-team/mach-table";
 import { useMachTableConfig } from "./defaults";
 
@@ -17,26 +17,6 @@ function handlerNameOf(eventType: string): string {
 }
 
 const EVENT_HANDLER_KEYS = new Set(EVENT_TYPES.map(handlerNameOf));
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (!value || typeof value !== "object") return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function equivalentConfigValue(left: unknown, right: unknown, depth = 2): boolean {
-  if (Object.is(left, right)) return true;
-  if (depth <= 0) return false;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length || left.length > 100) return false;
-    return left.every((value, index) => equivalentConfigValue(value, right[index], depth - 1));
-  }
-  if (!isPlainObject(left) || !isPlainObject(right)) return false;
-  const keys = Object.keys(left);
-  if (keys.length !== Object.keys(right).length || keys.length > 50) return false;
-  return keys.every((key) => Object.prototype.hasOwnProperty.call(right, key) &&
-    equivalentConfigValue(left[key], right[key], depth - 1));
-}
 
 function effectiveInputsEqual(
   current: readonly unknown[],
@@ -175,8 +155,8 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
     }
     const changed: Record<string, unknown> = {};
     optionValues.forEach((value, index) => {
-      if (Object.is(value, previous[index])) return;
       const key = GRID_OPTION_KEYS[index];
+      if (equivalentGridOption(key, value, previous[index])) return;
       changed[key] = value;
     });
     if (Object.keys(changed).length > 0) {

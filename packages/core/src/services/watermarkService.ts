@@ -1,8 +1,9 @@
 import type { GridCore } from "../core/gridCore";
 import type { WatermarkConfig } from "../types/options";
 
-type WatermarkContext = Pick<GridCore<any>, "isDestroyed" | "options" | "skeleton">;
+type WatermarkContext = Pick<GridCore<any>, "isDisposed" | "gridOptions" | "skeleton">;
 
+/** @internal Watermark rendering is grid-owned; only its options cross the facade. */
 export class WatermarkService {
   private overlay: HTMLElement | null = null;
 
@@ -18,8 +19,8 @@ export class WatermarkService {
   }
 
   apply(): void {
-    if (!this.overlay || this.core.isDestroyed()) return;
-    const config = this.core.options.watermarkEnabled ? this.core.options.watermarkConfig : null;
+    if (!this.overlay || this.core.isDisposed()) return;
+    const config = this.core.gridOptions.watermarkEnabled ? this.core.gridOptions.watermarkConfig : null;
     if (!config || !config.text) {
       this.overlay.style.display = "none";
       this.overlay.style.backgroundImage = "";

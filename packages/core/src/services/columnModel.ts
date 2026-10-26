@@ -17,7 +17,7 @@ import { computeColumnWidths, fitColumnWidths, clampWidth, DEFAULT_COLUMN_WIDTH 
 export type PaneType = "left" | "center" | "right";
 
 export const DETAIL_TOGGLE_COL_ID = "__rg_detail_toggle__";
-type ColumnModelContext = Pick<GridCore<any>, "options">;
+type ColumnModelContext = Pick<GridCore<any>, "gridOptions">;
 
 function isPositiveFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -42,9 +42,9 @@ export class ColumnModel {
   setColumnDefs(colDefs: ColDefOrGroup<any>[] | null | undefined): void {
     this.defs = colDefs ? [...colDefs] : [];
     const prev = new Map(this.columns.map((c) => [c.id, c]));
-    const defaults = this.core.options.defaultColDef;
+    const defaults = this.core.gridOptions.defaultColDef;
     const usedIds = new Set<string>(
-      this.core.options.masterDetail && this.core.options.detailToggleColumn
+      this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn
         ? [DETAIL_TOGGLE_COL_ID]
         : []
     );
@@ -64,7 +64,7 @@ export class ColumnModel {
         let suffix = 2;
         while (usedIds.has(uniqueId)) uniqueId = `${id}_${suffix++}`;
         usedIds.add(uniqueId);
-        const column = new Column(uniqueId, mergeColDef(colDef, defaults, this.core.options.columnTypes));
+        const column = new Column(uniqueId, mergeColDef(colDef, defaults, this.core.gridOptions.columnTypes));
         column.parentGroup = parent;
         column.level = level;
         const p = prev.get(uniqueId);
@@ -80,7 +80,7 @@ export class ColumnModel {
 
     this.rootChildren = build(this.defs, null, 0);
 
-    if (this.core.options.masterDetail && this.core.options.detailToggleColumn) {
+    if (this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn) {
       const toggleCol = new Column(DETAIL_TOGGLE_COL_ID, {
         colId: DETAIL_TOGGLE_COL_ID,
         headerName: "",
@@ -210,7 +210,7 @@ export class ColumnModel {
     }
     const scalableInputs = scalable.map((column) => this.widthInputOf(column));
     const scalableWidth = Math.max(0, available - fixedTotal);
-    const widths = this.core.options.columnLayout === "fit"
+    const widths = this.core.gridOptions.columnLayout === "fit"
       ? fitColumnWidths(scalableInputs, scalableWidth)
       : computeColumnWidths(scalableInputs, scalableWidth);
     scalable.forEach((column, index) => {
@@ -400,7 +400,7 @@ export class ColumnModel {
     const idx = model.findIndex((s) => s.colId === column.id);
     const current = idx >= 0 ? model[idx].direction : null;
     const next: SortDirection | null = current === null ? "asc" : current === "asc" ? "desc" : null;
-    const multi = additive && this.core.options.multiSort;
+    const multi = additive && this.core.gridOptions.multiSort;
 
     if (multi) {
       if (next === null) {

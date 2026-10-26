@@ -58,6 +58,7 @@ function mergeRequests(current: GridUpdateRequest, next: GridUpdateRequest): Gri
 }
 
 /** Coalesces explicit API batches while preserving synchronous behavior outside a batch. */
+/** @internal The scheduler exposes plain diagnostic snapshots through the API. */
 export class GridUpdateScheduler {
   private depth = 0;
   private pending: GridUpdateRequest | null = null;

@@ -65,6 +65,15 @@
       ],
       "@agile-team/mach-table-react/multi-range": [
         "../../../packages/react/dist/multi-range.d.cts"
+      ],
+      "@agile-team/mach-table/import": [
+        "../../../packages/core/dist/import.d.cts"
+      ],
+      "@agile-team/mach-table-vue/import": [
+        "../../../packages/vue/dist/import.d.cts"
+      ],
+      "@agile-team/mach-table-react/import": [
+        "../../../packages/react/dist/import.d.cts"
       ]
     },
     "module": "NodeNext",

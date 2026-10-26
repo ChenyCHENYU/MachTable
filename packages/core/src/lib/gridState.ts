@@ -1,6 +1,7 @@
 import type { ColumnState, SortModel } from "../types/colDef";
 import type { GridState, GridStateInput, GridStateSection } from "../types/state";
 import { normalizeAdvancedFilterModel, normalizeFilterModel } from "./advancedFilter";
+import { GROUP_ID_PREFIX, MAX_PERSISTED_GROUP_ID_LENGTH } from "./groupIdentity";
 
 const MAX_COLUMNS = 2_000;
 const MAX_ROW_IDS = 100_000;
@@ -12,6 +13,21 @@ function stringIds(value: unknown): string[] {
   return [...new Set(value.slice(0, MAX_ROW_IDS).filter((entry): entry is string =>
     typeof entry === "string" && entry.length > 0 && entry.length <= MAX_ID_LENGTH
   ))];
+}
+
+function groupIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set<string>();
+  // Typed paths grow through escaping and column identities; retain the former aggregate character bound.
+  let remaining = MAX_ROW_IDS * MAX_ID_LENGTH;
+  for (const entry of value.slice(0, MAX_ROW_IDS)) {
+    if (typeof entry !== "string" || !entry.length || ids.has(entry)) continue;
+    const limit = entry.startsWith(GROUP_ID_PREFIX) ? MAX_PERSISTED_GROUP_ID_LENGTH : MAX_ID_LENGTH;
+    if (entry.length > limit || entry.length > remaining) continue;
+    ids.add(entry);
+    remaining -= entry.length;
+  }
+  return [...ids];
 }
 
 function positiveInteger(value: unknown, fallback: number): number {
@@ -104,7 +120,7 @@ export function normalizeGridState(input: unknown): GridState | null {
     },
     selectedRowIds: stringIds(state.selectedRowIds),
     expandedRowIds: stringIds(state.expandedRowIds),
-    expandedGroupIds: stringIds(state.expandedGroupIds)
+    expandedGroupIds: groupIds(state.expandedGroupIds)
   };
 }
 

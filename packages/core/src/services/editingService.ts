@@ -5,20 +5,22 @@ import type { ICellEditor } from "../types/params";
 import { createEditor } from "./editors";
 import { cleanupCellContent } from "../render/cellContent";
 import { isPromise, type InputChange } from "./inputService";
+import { parseColumnValue } from "../lib/columnValues";
+import { el } from "../lib/dom";
 
 type EditingContext = Pick<
   GridCore<any>,
   | "bodyRenderer"
   | "cancelPendingInput"
   | "inputService"
-  | "isDestroyed"
+  | "isDisposed"
   | "columnModel"
   | "emit"
-  | "getApi"
-  | "getCellValue"
+  | "api"
+  | "readCellValue"
   | "keyboardService"
   | "notifyCellValueChanged"
-  | "options"
+  | "gridOptions"
   | "reportError"
   | "resolveCellEditor"
   | "rowModel"
@@ -117,12 +119,12 @@ export class EditingService {
     if (typeof editable === "function") {
       try {
         return editable({
-          api: this.core.getApi(),
+          api: this.core.api,
           colDef: column.colDef,
           column,
           node,
           data: node.data,
-          value: this.core.getCellValue(node, column),
+          value: this.core.readCellValue(node, column),
           rowIndex: node.rowIndex
         });
       } catch (error) {
@@ -134,7 +136,7 @@ export class EditingService {
   }
 
   start(rowIndex: number, column: Column, keyPress?: string | null): boolean {
-    if (this.core.options.editType === "fullRow") return this.startRow(rowIndex, column.id);
+    if (this.core.gridOptions.editType === "fullRow") return this.startRow(rowIndex, column.id);
     if (this.rowEditing) return false;
     if (this.cellEditing) {
       if (this.cellEditing.rowIndex === rowIndex && this.cellEditing.column.id === column.id) return true;
@@ -149,15 +151,13 @@ export class EditingService {
     if (!cell) return false;
 
     this.core.cancelPendingInput();
-    const oldValue = this.core.getCellValue(node, column);
+    const oldValue = this.core.readCellValue(node, column);
     const editor = this.createCellEditor(node, column, rowIndex, oldValue, keyPress);
     if (!editor) return false;
 
     cleanupCellContent(this.core, cell);
-    const shell = document.createElement("div");
-    shell.className = "mach-cell-editor-shell";
-    const controls = document.createElement("div");
-    controls.className = "mach-cell-editor-controls";
+    const shell = el("div", "mach-cell-editor-shell");
+    const controls = el("div", "mach-cell-editor-controls");
     const confirmButton = createEditButton("confirm", "Confirm edit");
     const cancelButton = createEditButton("cancel", "Cancel edit");
     controls.append(confirmButton, cancelButton);
@@ -203,7 +203,7 @@ export class EditingService {
     const drafts = new Map<string, RowDraft>();
     for (const column of this.core.columnModel.getOrderedVisible()) {
       if (!this.isEditable(node, column)) continue;
-      const oldValue = this.core.getCellValue(node, column);
+      const oldValue = this.core.readCellValue(node, column);
       drafts.set(column.id, { column, oldValue, value: oldValue, mounted: null });
     }
     if (drafts.size === 0) return false;
@@ -280,6 +280,13 @@ export class EditingService {
       return Promise.resolve(this.finishCellStop(editing, true, editing.oldValue));
     }
     try {
+      if (!Object.is(newValue, editing.oldValue)) newValue = parseColumnValue(this.core, editing.node, editing.column, newValue, "editor", editing.oldValue);
+    } catch (error) {
+      this.core.reportError(error, "valueParser", { colId: editing.column.id, rowId: editing.node.id });
+      this.showError(editing.editor, error instanceof Error ? error.message : String(error));
+      return Promise.resolve(false);
+    }
+    try {
       if (editing.editor.isCancelAfterEnd?.(newValue)) {
         return Promise.resolve(this.finishCellStop(editing, true, editing.oldValue));
       }
@@ -289,7 +296,7 @@ export class EditingService {
     }
 
     const changes = [{ node: editing.node, column: editing.column, oldValue: editing.oldValue, newValue }];
-    const guard = this.core.inputService.guard(changes);
+    const guard = this.core.inputService.guardChanges(changes);
     const token = ++this.stopToken;
     const current = () => token === this.stopToken && this.cellEditing === editing && guard();
     const finish = (errors: Array<{ colId: string; message: string }>): boolean => {
@@ -304,7 +311,7 @@ export class EditingService {
       }
       return this.finishCellStop(editing, false, newValue);
     };
-    const validation = this.core.inputService.validate(changes, current);
+    const validation = this.core.inputService.validateChanges(changes, current);
     if (!isPromise(validation)) return Promise.resolve(finish(validation));
     this.setCellBusy(editing, true);
     const task = validation.then(finish).finally(() => {
@@ -324,11 +331,23 @@ export class EditingService {
     }
     if (this.stopPromise) return this.stopPromise;
     for (const draft of row.drafts.values()) this.captureRowDraft(draft);
-    const changed = [...row.drafts.values()].filter((draft) => !Object.is(draft.oldValue, draft.value));
-    if (changed.length === 0) return Promise.resolve(this.finishRowStop(row, false));
-
-    const changes = this.rowChanges(row, changed);
-    const guard = this.core.inputService.guard(changes);
+    const changes: InputChange[] = [];
+    for (const draft of row.drafts.values()) {
+      if (Object.is(draft.oldValue, draft.value)) continue;
+      try {
+        const newValue = parseColumnValue(this.core, row.node, draft.column, draft.value, "editor", draft.oldValue);
+        if (newValue !== undefined && !Object.is(draft.oldValue, newValue)) changes.push({ node: row.node, column: draft.column, oldValue: draft.oldValue, newValue });
+      }
+      catch (error) {
+        this.core.reportError(error, "valueParser", { colId: draft.column.id, rowId: row.node.id });
+        this.showRowErrors(row, [{ draft, message: error instanceof Error ? error.message : String(error) }]);
+        return Promise.resolve(false);
+      }
+    }
+    if (changes.length === 0) return Promise.resolve(this.finishRowStop(row, false, changes));
+    const changed = changes.map(change => row.drafts.get(change.column.id)!);
+    const rawValues = changed.map(draft => draft.value);
+    const guard = this.core.inputService.guardChanges(changes);
     const token = ++this.stopToken;
     const current = () => token === this.stopToken && this.rowEditing === row && guard();
     for (const draft of changed) draft.error = undefined;
@@ -341,9 +360,14 @@ export class EditingService {
         this.showRowErrors(row, errors.map(({ colId, message }) => ({ draft: row.drafts.get(colId) ?? changed[0], message })));
         return false;
       }
-      return this.finishRowStop(row, false);
+      if (changed.some((draft, index) => !Object.is(draft.value, rawValues[index]))) {
+        row.validating = false;
+        this.setRowBusy(row, false);
+        return false;
+      }
+      return this.finishRowStop(row, false, changes);
     };
-    const validation = this.core.inputService.validate(changes, current);
+    const validation = this.core.inputService.validateChanges(changes, current);
     if (!isPromise(validation)) return Promise.resolve(finish(validation));
     row.validating = true;
     this.setRowBusy(row, true);
@@ -359,7 +383,7 @@ export class EditingService {
     const change = { node: editing.node, column: editing.column, oldValue: editing.oldValue, newValue };
     const changed = !cancel && newValue !== undefined && !Object.is(editing.oldValue, newValue);
     if (changed) {
-      const failure = this.core.inputService.commit([change], () => !this.core.isDestroyed());
+      const failure = this.core.inputService.commitChanges([change], () => !this.core.isDisposed());
       if (failure) {
         this.setCellBusy(editing, false);
         this.showError(editing.editor, failure.message);
@@ -370,7 +394,7 @@ export class EditingService {
     if (changed) this.core.notifyCellValueChanged(editing.node, editing.column, editing.oldValue, newValue);
     this.destroyMountedEditor(editing, true);
 
-    if (this.core.isDestroyed()) return true;
+    if (this.core.isDisposed()) return true;
 
     this.core.emit("cellEditingStopped", {
       rowIndex: editing.rowIndex,
@@ -385,18 +409,18 @@ export class EditingService {
     return true;
   }
 
-  private finishRowStop(row: RowEditingState, cancelled: boolean): boolean {
+  private finishRowStop(row: RowEditingState, cancelled: boolean, values: readonly InputChange[] = []): boolean {
     if (this.rowEditing !== row) return false;
-    const changes = cancelled ? [] : this.commitRowDrafts(row);
+    const changes = cancelled ? [] : this.commitRowDrafts(row, values);
     if (changes == null) return false;
     for (const draft of row.drafts.values()) {
-      if (!cancelled) this.captureRowDraft(draft);
+      // Canonical changes were validated separately; raw drafts may have been remounted meanwhile.
       if (draft.mounted) this.destroyMountedEditor(draft.mounted, true);
       draft.mounted = null;
     }
     this.rowEditing = null;
 
-    if (this.core.isDestroyed()) return true;
+    if (this.core.isDisposed()) return true;
 
     const rowIndex = this.currentRowIndex(row);
     this.core.emit("rowEditingStopped", {
@@ -413,17 +437,15 @@ export class EditingService {
   }
 
   private commitRowDrafts(
-    row: RowEditingState
+    row: RowEditingState, changes: readonly InputChange[]
   ): Array<{ colId: string; oldValue: unknown; newValue: unknown }> | null {
-    const changed = [...row.drafts.values()].filter((draft) => !Object.is(draft.oldValue, draft.value));
-    if (changed.length === 0) return [];
-    const changes = this.rowChanges(row, changed);
-    const failure = this.core.inputService.commit(changes, () => !this.core.isDestroyed());
+    if (changes.length === 0) return [];
+    const failure = this.core.inputService.commitChanges(changes, () => !this.core.isDisposed());
     if (failure) {
-      this.showRowErrors(row, [{ draft: row.drafts.get(failure.colId) ?? changed[0], message: failure.message }]);
+      this.showRowErrors(row, [{ draft: row.drafts.get(failure.colId) ?? row.drafts.get(changes[0].column.id)!, message: failure.message }]);
       return null;
     }
-    const scope = this.core.inputService.scope(changes);
+    const scope = this.core.inputService.captureScope(changes);
     this.core.undoService.beginBatch();
     try {
       for (const change of changes) {
@@ -434,16 +456,11 @@ export class EditingService {
     return changes.map(({ column, oldValue, newValue }) => ({ colId: column.id, oldValue, newValue }));
   }
 
-  private rowChanges(row: RowEditingState, drafts: RowDraft[]): InputChange[] {
-    return drafts.map(({ column, oldValue, value }) => ({ node: row.node, column, oldValue, newValue: value }));
-  }
-
   private mountRowDraft(rowIndex: number, row: RowEditingState, draft: RowDraft, cell: HTMLElement): boolean {
     const editor = this.createCellEditor(row.node, draft.column, rowIndex, draft.value, null);
     if (!editor) return false;
     cleanupCellContent(this.core, cell);
-    const shell = document.createElement("div");
-    shell.className = "mach-row-editor-shell";
+    const shell = el("div", "mach-row-editor-shell");
     shell.appendChild(editor.el);
     cell.replaceChildren(shell);
     cell.classList.add("mach-cell--editing", "mach-cell--row-editing");
@@ -501,7 +518,7 @@ export class EditingService {
     let editor: ICellEditor;
     try {
       const params = {
-        api: this.core.getApi(),
+        api: this.core.api,
         colDef: def,
         column,
         node,

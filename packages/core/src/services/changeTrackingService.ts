@@ -8,7 +8,7 @@ type ChangeTrackingContext = Pick<
   | "columnModel"
   | "emit"
   | "eventBus"
-  | "getCellValue"
+  | "readCellValue"
   | "rowModel"
   | "statusBarService"
   | "summaryRenderer"
@@ -22,6 +22,7 @@ interface CellChange {
   value: unknown;
 }
 
+/** @internal The editing facade exposes records and closures rather than this tracker. */
 export class ChangeTrackingService<TData = any> {
   private changes = new Map<string, CellChange>();
   private rollingBack = false;
@@ -98,7 +99,7 @@ export class ChangeTrackingService<TData = any> {
         const node = this.core.rowModel.getNodeById(row.rowId);
         const column = this.core.columnModel.getColumn(cell.colId);
         if (!node || !column || node.data == null) continue;
-        const value = this.core.getCellValue(node, column);
+        const value = this.core.readCellValue(node, column);
         if (!Object.is(value, cell.value)) {
           this.changes.set(key, {
             rowId: row.rowId,
@@ -124,7 +125,7 @@ export class ChangeTrackingService<TData = any> {
         const node = this.core.rowModel.getNodeById(change.rowId);
         const column = this.core.columnModel.getColumn(change.colId);
         if (!node || !column || node.data == null) continue;
-        const current = this.core.getCellValue(node, column);
+        const current = this.core.readCellValue(node, column);
         if (Object.is(current, change.originalValue)) {
           completed.add(key);
           continue;

@@ -1,3 +1,4 @@
+import { FILTER_MATCHES } from "./filterMatches";
 import type { ColumnFilter } from "../types/colDef";
 import type {
   AdvancedFilterCondition,
@@ -12,22 +13,16 @@ const MAX_CONDITIONS = 20;
 const MAX_SET_VALUES = 2_000;
 const MAX_FILTER_COLUMNS = 2_000;
 
-const TEXT_MATCHES = new Set([
-  "contains", "notContains", "equals", "notEquals", "startsWith", "endsWith", "blank", "notBlank"
-]);
-const NUMBER_MATCHES = new Set([
-  "equals", "notEquals", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual", "inRange", "blank", "notBlank"
-]);
-const DATE_MATCHES = new Set(["equals", "notEquals", "lessThan", "greaterThan", "inRange", "blank", "notBlank"]);
+const MATCHES = {
+  text: new Set<string>(FILTER_MATCHES.text),
+  number: new Set<string>(FILTER_MATCHES.number),
+  date: new Set<string>(FILTER_MATCHES.date)
+};
 
 function primitive(value: unknown): value is string | number | null {
   return value == null || typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
 }
 
-function matchesFor(type: "text" | "number" | "date"): ReadonlySet<string> {
-  if (type === "text") return TEXT_MATCHES;
-  return type === "number" ? NUMBER_MATCHES : DATE_MATCHES;
-}
 
 function normalizedCondition(
   entry: unknown,
@@ -62,7 +57,7 @@ function normalizedConditions(
   type: "text" | "number" | "date"
 ): Array<Record<string, unknown>> {
   const output: Array<Record<string, unknown>> = [];
-  const matches = matchesFor(type);
+  const matches = MATCHES[type];
   for (const entry of input.slice(0, MAX_CONDITIONS)) {
     const condition = normalizedCondition(entry, type, matches);
     if (condition) output.push(condition);

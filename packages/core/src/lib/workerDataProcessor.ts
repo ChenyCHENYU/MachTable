@@ -6,6 +6,7 @@ import type {
 import type { AdvancedFilterNode } from "../types/advancedFilter";
 import { getByPath } from "./path";
 import { defaultComparator } from "./compare";
+import { createAbortError } from "./abortable";
 import { evaluateColumnFilter } from "../services/filterService";
 
 export type GridDataProcessorPayload<TData = any> = Omit<GridDataProcessorRequest<TData>, "signal">;
@@ -114,9 +115,7 @@ function sortProcessedRows<TData>(
 
 function throwIfCancelled(isCancelled?: () => boolean): void {
   if (!isCancelled?.()) return;
-  const error = new Error("Data processing aborted");
-  error.name = "AbortError";
-  throw error;
+  throw createAbortError(undefined, "Data processing aborted");
 }
 
 /** Built-in serializable field-path processor intended to run inside an application Worker. */
@@ -179,15 +178,14 @@ export function installGridDataWorker(scope: GridDataWorkerScope): void {
 }
 
 function abortError(reason?: unknown): Error {
-  if (reason instanceof Error) return reason;
-  const error = new Error(typeof reason === "string" ? reason : "Data processing aborted");
-  error.name = "AbortError";
-  return error;
+  return createAbortError(reason, "Data processing aborted");
 }
 
 /**
  * Adapts a dedicated Web Worker to GridDataProcessor without Blob URLs or eval.
  * The host controls the worker URL, keeping CSP and bundler behavior explicit.
+ * In application defaults use `dataProcessor: () => createWorkerDataProcessor(...)`;
+ * the returned processor is a per-grid owner, even when worker termination is disabled.
  */
 export function createWorkerDataProcessor<TData = any>(
   createWorker: () => Worker,

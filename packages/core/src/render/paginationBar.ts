@@ -5,9 +5,10 @@ import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type PaginationContext = Pick<
   GridCore<any>,
-  "eventBus" | "isDestroyed" | "options" | "rowModel" | "skeleton"
+  "eventBus" | "isDisposed" | "gridOptions" | "rowModel" | "skeleton"
 >;
 
+/** @internal Pagination DOM ownership stays in Core; the public API delegates through closures. */
 export class PaginationBar {
   private barEl: HTMLElement | null = null;
   private totalEl: HTMLElement | null = null;
@@ -28,7 +29,7 @@ export class PaginationBar {
     this.barEl.setAttribute("role", "navigation");
 
     const mkBtn = (cls: string, label: string, text: string): HTMLButtonElement => {
-      const btn = el("button", `mach-pagination-btn ${cls}`) as HTMLButtonElement;
+      const btn = el("button", `mach-pagination-btn ${cls}`);
       btn.type = "button";
       btn.title = label;
       btn.setAttribute("aria-label", label);
@@ -50,7 +51,7 @@ export class PaginationBar {
 
     this.barEl.append(this.totalEl, this.firstBtn, this.prevBtn, this.pageEl, this.nextBtn, this.lastBtn);
 
-    if (this.core.options.paginationShowSizeSelector) {
+    if (this.core.gridOptions.paginationShowSizeSelector) {
       this.sizeControl = createSelectControl({
         ariaLabel: "page size",
         options: [],
@@ -80,8 +81,8 @@ export class PaginationBar {
 
   private buildSizeOptions(): void {
     if (!this.sizeSelect) return;
-    const options = this.core.options.paginationPageSizeOptions;
-    const current = this.core.options.paginationPageSize;
+    const options = this.core.gridOptions.paginationPageSizeOptions;
+    const current = this.core.gridOptions.paginationPageSize;
     if (!options.includes(current)) {
       options.push(current);
       options.sort((a, b) => a - b);
@@ -93,12 +94,12 @@ export class PaginationBar {
   }
 
   private t(key: Parameters<GridCore<any>["getLocaleText"]>[0]): string {
-    return this.core.options.locale?.[key] ?? DEFAULT_LOCALE[key];
+    return this.core.gridOptions.locale?.[key] ?? DEFAULT_LOCALE[key];
   }
 
   rebuild(): void {
     if (!this.barEl) return;
-    if (this.sizeSelect && this.core.options.paginationShowSizeSelector) {
+    if (this.sizeSelect && this.core.gridOptions.paginationShowSizeSelector) {
       this.buildSizeOptions();
     }
     this.refresh();
@@ -118,7 +119,7 @@ export class PaginationBar {
   }
 
   refresh(): void {
-    if (!this.barEl || this.core.isDestroyed()) return;
+    if (!this.barEl || this.core.isDisposed()) return;
     const rm = this.core.rowModel;
     const active = rm.paginationActive;
     const total = rm.getTotalRowCount();
@@ -129,13 +130,13 @@ export class PaginationBar {
     const page = rm.getCurrentPage();
     const pageCount = rm.getPageCount();
 
-    if (this.totalEl && this.core.options.paginationShowTotal) {
+    if (this.totalEl && this.core.gridOptions.paginationShowTotal) {
       this.setText(this.totalEl, formatText(this.t("paginationTotal"), total));
     }
     this.setText(this.pageEl, formatTwo(this.t("paginationPage"), page, pageCount));
     this.refreshNavigation(page, pageCount);
-    if (this.sizeSelect && Number(this.sizeSelect.value) !== this.core.options.paginationPageSize) {
-      this.sizeControl?.setValue(String(this.core.options.paginationPageSize));
+    if (this.sizeSelect && Number(this.sizeSelect.value) !== this.core.gridOptions.paginationPageSize) {
+      this.sizeControl?.setValue(String(this.core.gridOptions.paginationPageSize));
     }
   }
 

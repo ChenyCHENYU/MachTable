@@ -10,8 +10,8 @@ type KeyboardContext = Pick<
   | "cancelPendingInput"
   | "columnModel"
   | "editingService"
-  | "isDestroyed"
-  | "options"
+  | "isDisposed"
+  | "gridOptions"
   | "pasteText"
   | "rowModel"
   | "selectionService"
@@ -53,6 +53,7 @@ interface KeyboardPosition {
   row: number;
 }
 
+/** @internal Keyboard interaction is grid-owned and never a callback parameter. */
 export class KeyboardService {
   constructor(private core: KeyboardContext) {}
 
@@ -112,7 +113,7 @@ export class KeyboardService {
   }
 
   private onCopy = (e: ClipboardEvent): void => {
-    if (this.core.options.suppressClipboard || this.core.editingService.isEditing()) return;
+    if (this.core.gridOptions.suppressClipboard || this.core.editingService.isEditing()) return;
     const range = this.core.bodyRenderer.getNormalizedRangeOrFocus();
     if (!range) return;
     const text = this.core.buildRangeTsv(range);
@@ -126,7 +127,7 @@ export class KeyboardService {
   };
 
   private onCut = (e: ClipboardEvent): void => {
-    if (this.core.options.suppressClipboard || this.core.editingService.isEditing()) return;
+    if (this.core.gridOptions.suppressClipboard || this.core.editingService.isEditing()) return;
     const range = this.core.bodyRenderer.getNormalizedRangeOrFocus();
     if (!range) return;
     const text = this.core.buildRangeTsv(range);
@@ -141,7 +142,7 @@ export class KeyboardService {
   };
 
   private onPaste = (e: ClipboardEvent): void => {
-    if (this.core.options.suppressClipboard || this.core.editingService.isEditing()) return;
+    if (this.core.gridOptions.suppressClipboard || this.core.editingService.isEditing()) return;
     const start = this.core.bodyRenderer.getPasteStart();
     if (!start) return;
     const dt = e.clipboardData;
@@ -152,7 +153,7 @@ export class KeyboardService {
   };
 
   private onKeyDown = (e: KeyboardEvent): void => {
-    if (this.core.isDestroyed() || this.core.editingService.isEditing()) return;
+    if (this.core.isDisposed() || this.core.editingService.isEditing()) return;
     if (this.handleSelectAll(e) || this.handleHistoryShortcut(e)) return;
     if (!NAVIGATION_KEYS.has(e.key)) return;
     if (this.handleRangeCommand(e)) return;
@@ -163,7 +164,7 @@ export class KeyboardService {
   private handleSelectAll(e: KeyboardEvent): boolean {
     const modifier = e.ctrlKey || e.metaKey;
     if (!modifier || e.key.toLowerCase() !== "a") return false;
-    if (this.core.options.rowSelection === "multiple") {
+    if (this.core.gridOptions.rowSelection === "multiple") {
       e.preventDefault();
       this.core.selectionService.selectAll(true);
     }
@@ -189,14 +190,14 @@ export class KeyboardService {
     const body = this.core.bodyRenderer;
     if (e.key === "Escape") {
       this.core.cancelPendingInput();
-      if (this.core.options.enableRangeSelection && body.normalizedRange()) {
+      if (this.core.gridOptions.enableRangeSelection && body.normalizedRange()) {
         e.preventDefault();
         body.clearRangeSelection();
       }
       return true;
     }
     if (e.key !== "Delete" && e.key !== "Backspace") return false;
-    if (!this.core.options.enableRangeSelection) return true;
+    if (!this.core.gridOptions.enableRangeSelection) return true;
     const range = body.normalizedRange();
     if (range && !(range.r1 === range.r2 && range.c1 === range.c2)) {
       e.preventDefault();
@@ -230,7 +231,7 @@ export class KeyboardService {
     e.preventDefault();
 
     const moved = position.row !== start.row || position.colIdx !== start.colIdx;
-    if (e.shiftKey && this.core.options.enableRangeSelection && moved) {
+    if (e.shiftKey && this.core.gridOptions.enableRangeSelection && moved) {
       body.moveRangeEnd(position.row, position.colIdx);
       return;
     }
@@ -297,7 +298,7 @@ export class KeyboardService {
 
   private movePage(key: string, row: number, rowCount: number): number {
     const viewport = this.core.skeleton.bodyViewports.center;
-    const pageRows = Math.max(1, Math.floor(viewport.clientHeight / this.core.options.rowHeight));
+    const pageRows = Math.max(1, Math.floor(viewport.clientHeight / this.core.gridOptions.rowHeight));
     const direction: 1 | -1 = key === "PageUp" ? -1 : 1;
     const target = Math.max(0, Math.min(rowCount - 1, row + pageRows * direction));
     return this.validSkippedRow(row, this.skipDetailRows(target, direction), rowCount);
@@ -326,11 +327,11 @@ export class KeyboardService {
       this.core.rowModel.toggleGroup(node.id);
       return;
     }
-    if (this.core.options.rowSelection === "none") return;
+    if (this.core.gridOptions.rowSelection === "none") return;
     this.core.selectionService.setNodeSelected(
       node,
       !node.selected,
-      this.core.options.rowSelection === "single"
+      this.core.gridOptions.rowSelection === "single"
     );
   }
 

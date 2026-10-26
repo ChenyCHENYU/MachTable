@@ -3,7 +3,7 @@ import {
   createGrid,
   EVENT_TYPES
 } from "@agile-team/mach-table";
-import { GRID_OPTION_KEYS, GRID_OPTION_META, resumeGrid, suspendGrid } from "@agile-team/mach-table/adapter";
+import { GRID_OPTION_KEYS, GRID_OPTION_META, equivalentGridOption, resumeGrid, suspendGrid } from "@agile-team/mach-table/adapter";
 import type { GridApi, GridOptions } from "@agile-team/mach-table";
 import { useMachTableConfig } from "./defaults";
 import {
@@ -42,35 +42,25 @@ export interface MachTableVueComponent extends DefineComponent<MachTableVueProps
   };
 }
 
-const ADAPTER_OPTION_KEYS = GRID_OPTION_KEYS.filter(
-  (key) => !["className", "ariaLabel", "ariaLabelledBy", "ariaDescribedBy"].includes(key)
-);
+const HOST_PROPS = {
+  gridClassName: "className", gridAriaLabel: "ariaLabel",
+  gridAriaLabelledBy: "ariaLabelledBy", gridAriaDescribedBy: "ariaDescribedBy"
+} as const;
+const HOST_PROP_ENTRIES = Object.entries(HOST_PROPS);
+const INNER_OPTION_KEYS = new Set<string>(Object.values(HOST_PROPS));
+const ADAPTER_OPTION_KEYS = GRID_OPTION_KEYS.filter(key => !INNER_OPTION_KEYS.has(key));
 
+const PROP_TYPES: Readonly<Record<string, unknown>> = {
+  boolean: Boolean, number: Number, array: Array, function: Function,
+  "boolean-object": [Boolean, Object], "object-function": [Object, Function], object: Object, string: String
+};
 const runtimeProps: Record<string, { type?: any; default: undefined }> = {};
 for (const key of ADAPTER_OPTION_KEYS) {
-  const kind = GRID_OPTION_META[key].kind;
-  const type = kind === "boolean"
-    ? Boolean
-    : kind === "number"
-      ? Number
-      : kind === "array"
-        ? Array
-        : kind === "function"
-          ? Function
-          : kind === "boolean-object"
-            ? [Boolean, Object]
-            : kind === "object"
-              ? Object
-              : kind === "string"
-                ? String
-                : undefined;
-  runtimeProps[key] = { type, default: undefined };
+  runtimeProps[key] = { type: PROP_TYPES[GRID_OPTION_META[key].kind], default: undefined };
 }
-runtimeProps.className = { type: String, default: undefined };
-runtimeProps.gridClassName = { type: String, default: undefined };
-runtimeProps.gridAriaLabel = { type: String, default: undefined };
-runtimeProps.gridAriaLabelledBy = { type: String, default: undefined };
-runtimeProps.gridAriaDescribedBy = { type: String, default: undefined };
+for (const key of ["className", ...Object.keys(HOST_PROPS)]) {
+  runtimeProps[key] = { type: String, default: undefined };
+}
 runtimeProps.preset = { type: [String, Array, Boolean], default: undefined };
 
 function handlerNameOf(eventType: string): string {
@@ -97,10 +87,9 @@ const MachTableImpl = defineComponent({
         const value = props[key];
         if (value !== undefined) explicit[key] = value;
       }
-      if (props.gridClassName !== undefined) explicit.className = props.gridClassName;
-      if (props.gridAriaLabel !== undefined) explicit.ariaLabel = props.gridAriaLabel;
-      if (props.gridAriaLabelledBy !== undefined) explicit.ariaLabelledBy = props.gridAriaLabelledBy;
-      if (props.gridAriaDescribedBy !== undefined) explicit.ariaDescribedBy = props.gridAriaDescribedBy;
+      for (const [prop, key] of HOST_PROP_ENTRIES) {
+        if (props[prop] !== undefined) explicit[key] = props[prop];
+      }
       const resolution = resolveMachTableGridOptions(
         config.value,
         props.preset as MachTablePresetSelection | undefined,
@@ -171,8 +160,8 @@ const MachTableImpl = defineComponent({
         if (!api) return;
         const changed: Record<string, unknown> = {};
         values.forEach((value, index) => {
-          if (Object.is(value, previous[index])) return;
           const key = GRID_OPTION_KEYS[index];
+          if (equivalentGridOption(key, value, previous[index])) return;
           changed[key] = value;
         });
         if (Object.keys(changed).length > 0) api.updateOptions(changed as Partial<GridOptions<any>>);

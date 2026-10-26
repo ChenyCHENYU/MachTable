@@ -62,6 +62,8 @@ export default defineConfig({
             { text: "列工作台", link: "/recipes/column-workbench" },
             { text: "筛选、审阅与诊断工作台", link: "/recipes/workbench" },
             { text: "树表懒加载", link: "/recipes/tree-lazy-loading" },
+            { text: "列值解析与序列化", link: "/recipes/column-values" },
+            { text: "导入预览与校验", link: "/recipes/import-preview" },
             { text: "可选 XLSX", link: "/recipes/xlsx" },
             { text: "业务字段、字典与权限", link: "/recipes/business-columns" },
             { text: "操作列与状态列", link: "/recipes/action-columns" },

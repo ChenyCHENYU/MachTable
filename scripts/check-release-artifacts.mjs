@@ -1,13 +1,12 @@
 import { readdir, stat, readFile } from "node:fs/promises";
 import path from "node:path";
+import { releaseBudgets as limits, optionalReleaseBudget as optionalLimit } from "./bundle-budgets.mjs";
 
 const packages = ["core", "vue", "react", "xlsx"];
 // The original distribution graph keeps its existing allowance. New optional
 // artifacts are a separate, bounded addition; total npm unpacked size is always
 // reported too, rather than presenting it as the default application download.
-const limits = { core: 1_050_000, vue: 450_000, react: 350_000, xlsx: 80_000 };
-const optionalLimit = 350_000;
-const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range"];
+const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"];
 let failed = false;
 
 async function walk(directory) {

@@ -1,4 +1,5 @@
 /** Fenwick-tree index for incremental variable-size row offsets. */
+/** @internal The height index is internal to the row model. */
 export class VariableSizeIndex<TKey extends object> {
   private sizes = new Float64Array(0);
   private tree = new Float64Array(1);
@@ -25,10 +26,6 @@ export class VariableSizeIndex<TKey extends object> {
 
   indexOf(key: TKey): number {
     return this.indexes.get(key) ?? -1;
-  }
-
-  sizeAt(index: number): number {
-    return this.sizes[index] ?? 0;
   }
 
   update(index: number, size: number): boolean {

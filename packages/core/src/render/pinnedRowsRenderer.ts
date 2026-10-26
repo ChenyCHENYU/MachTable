@@ -8,10 +8,10 @@ import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle
 type PinnedRowsContext = Pick<
   GridCore<any>,
   | "columnModel"
-  | "getApi"
-  | "getCellValue"
-  | "isDestroyed"
-  | "options"
+  | "api"
+  | "readCellValue"
+  | "isDisposed"
+  | "gridOptions"
   | "relayout"
   | "reportError"
   | "resolveCellRenderer"
@@ -29,6 +29,7 @@ interface SideState {
   data: any[];
 }
 
+/** @internal Renderer callbacks receive public cell parameters, never this service. */
 export class PinnedRowsRenderer {
   private top: SideState | null = null;
   private bottom: SideState | null = null;
@@ -61,7 +62,7 @@ export class PinnedRowsRenderer {
   }
 
   setData(top: any[] | null, bottom: any[] | null): void {
-    if (this.core.isDestroyed() || !this.top || !this.bottom) return;
+    if (this.core.isDisposed() || !this.top || !this.bottom) return;
     this.top.data = top ?? [];
     this.bottom.data = bottom ?? [];
     this.rebuild();
@@ -69,28 +70,17 @@ export class PinnedRowsRenderer {
     this.core.relayout();
   }
 
-  setTopData(rows: any[] | null): void {
-    if (this.core.isDestroyed() || !this.top) return;
-    this.top.data = rows ?? [];
-    this.rebuildSide(this.top, "top");
+  setRows(position: "top" | "bottom", rows: any[] | null): void {
+    const side = this[position];
+    if (this.core.isDisposed() || !side) return;
+    side.data = rows ?? [];
+    this.rebuildSide(side, position);
     this.applyLayout();
     this.core.relayout();
   }
 
-  setBottomData(rows: any[] | null): void {
-    if (this.core.isDestroyed() || !this.bottom) return;
-    this.bottom.data = rows ?? [];
-    this.rebuildSide(this.bottom, "bottom");
-    this.applyLayout();
-    this.core.relayout();
-  }
-
-  getTopData(): any[] {
-    return this.top ? this.top.data.slice() : [];
-  }
-
-  getBottomData(): any[] {
-    return this.bottom ? this.bottom.data.slice() : [];
+  getRows(position: "top" | "bottom"): any[] {
+    return this[position]?.data.slice() ?? [];
   }
 
   rebuild(): void {
@@ -113,7 +103,7 @@ export class PinnedRowsRenderer {
     side.root.style.display = side.data.length > 0 ? "" : "none";
     if (side.data.length === 0) return;
 
-    const rowHeight = this.core.options.rowHeight;
+    const rowHeight = this.core.gridOptions.rowHeight;
     const cm = this.core.columnModel;
 
     side.data.forEach((data, i) => {

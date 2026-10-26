@@ -5,9 +5,10 @@ import { DEFAULT_LOCALE, formatText } from "../lib/locale";
 
 type SummaryContext = Pick<
   GridCore<any>,
-  "columnModel" | "getCellValue" | "isDestroyed" | "options" | "reportError" | "rowModel" | "skeleton"
+  "columnModel" | "readCellValue" | "isDisposed" | "gridOptions" | "reportError" | "rowModel" | "skeleton"
 >;
 
+/** @internal Summary rendering is owned by Core and never exposed through callbacks. */
 export class SummaryRenderer {
   private footerEl: HTMLElement | null = null;
   private rows: Record<PaneType, HTMLElement> = { left: undefined!, center: undefined!, right: undefined! };
@@ -22,7 +23,7 @@ export class SummaryRenderer {
     this.core.skeleton.root.appendChild(this.footerEl);
     for (const pane of ["left", "center", "right"] as PaneType[]) {
       const row = el("div", `mach-footer-row mach-footer-row--${pane}`);
-      row.style.height = `${this.core.options.rowHeight}px`;
+      row.style.height = `${this.core.gridOptions.rowHeight}px`;
       this.footerEl.appendChild(row);
       this.rows[pane] = row;
     }
@@ -34,14 +35,14 @@ export class SummaryRenderer {
   }
 
   refresh(): void {
-    if (!this.footerEl || this.core.isDestroyed()) return;
-    const show = this.core.options.showSummary;
+    if (!this.footerEl || this.core.isDisposed()) return;
+    const show = this.core.gridOptions.showSummary;
     this.setVisible(show);
     if (!show) return;
 
-    const method = this.core.options.summaryMethod;
+    const method = this.core.gridOptions.summaryMethod;
     const masterRows = this.core.rowModel.getDisplayedRows().filter((n) => !n.isDetail && !n.isGroup);
-    const locale = { ...DEFAULT_LOCALE, ...this.core.options.locale };
+    const locale = { ...DEFAULT_LOCALE, ...this.core.gridOptions.locale };
 
     for (const pane of ["left", "center", "right"] as PaneType[]) {
       const cols = this.core.columnModel.getPaneColumns(pane);
@@ -71,7 +72,7 @@ export class SummaryRenderer {
             cell.textContent = method({
               colId: col.id,
               column: col,
-              values: masterRows.map((node) => this.core.getCellValue(node, col))
+              values: masterRows.map((node) => this.core.readCellValue(node, col))
             });
           } catch (error) {
             this.core.reportError(error, "summaryMethod", { colId: col.id });

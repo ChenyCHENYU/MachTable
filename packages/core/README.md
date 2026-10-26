@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.32.1 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版增加六个按需高级子入口，完善内部资源所有权、框架生命周期与缓存操作边界。
+MachTable 0.33.0 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版提供七个按需高级子入口，并完善列值策略、类型化 IO、分组聚合、局部更新与超大滚动边界。
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -82,7 +82,7 @@ const options: GridOptions<Plan> = {
 
 文档：[快速开始](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/getting-started.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [API](https://github.com/ChenyCHENYU/MachTable/tree/main/docs/api)
 
-## 按需高级入口（0.32）
+## 按需高级入口（0.33）
 
 仍从本包导入，无需另装高级功能包。普通根入口不加载这些实现或附加 CSS。
 
@@ -93,6 +93,7 @@ const options: GridOptions<Plan> = {
 | `/ordering` | 多行/树移动、防环与业务约束、失败回滚、持久化撤销/重做 |
 | `/server-side` | 服务端分组/聚合、route 分页、缓存/刷新/事务及层级选择 |
 | `/multi-range` | Ctrl/Cmd 追加范围、格式化复制、校验清空及撤销 |
+| `/import` | 有界数据预览、共享同步/异步校验、结构化错误与过期保护 |
 | `/analysis` | Pivot、安全公式、柱/折线图和数据表回退 |
 
 ```ts
@@ -109,3 +110,9 @@ filters.destroy();
 完整示例与限制：[工作台](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/workbench.md) · [排序](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/row-presentation.md) · [企业偏好](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/enterprise-preferences.md) · [服务端 Store](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/server-side-store.md) · [多范围](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/multi-range.md) · [分析](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/analysis.md)。
 
 Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。
+
+## 0.33 列值与运行边界
+
+`ColDef.valueParser` 统一编辑、粘贴和导入的规范值；`valueSerializer` 按 clipboard/csv/xlsx 定义输出，沿用已有 `columnTypes` 优先级。排序/过滤读取规范值，可信事务与撤销不重复解析。`api.io.importMatrix()` / `exportMatrix()` 直传类型，完整导入预览从当前包的 `/import` 导入 `createImportPlan()`，不加载到默认入口。
+
+`sum` / `avg` / `min` / `max` 只聚合有限数，空数值集合返回 null，sum/avg 溢出返回 null；`count` 计全部记录，空集合为 0。自定义聚合保留原始输入。分组 ID 区分数字/文本/空值，旧展开路径仅在唯一时迁移，歧义报告错误。超大远程滚动使用有界物理坐标，API、滚轮和交互共用逻辑偏移；应用默认配置的 `dataProcessor` 使用每表工厂。完整边界与升级说明见[升级指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/upgrading.md)。

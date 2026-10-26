@@ -1,3 +1,4 @@
+import { FILTER_MATCHES } from "../lib/filterMatches";
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type {
@@ -6,37 +7,14 @@ import type {
   NumberFilterMatch,
   TextFilterMatch
 } from "../types/colDef";
-import { applyPortalTheme, el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, positionAnchoredPortal } from "../lib/dom";
 import { matchLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type FilterPopupContext = Pick<
   GridCore<any>,
-  "applyColumnFilter" | "getCellValue" | "getLocaleText" | "rowModel" | "skeleton"
+  "applyColumnFilter" | "readCellValue" | "getLocaleText" | "rowModel" | "skeleton"
 >;
-
-const TEXT_MATCHES: TextFilterMatch[] = [
-  "contains",
-  "notContains",
-  "equals",
-  "notEquals",
-  "startsWith",
-  "endsWith",
-  "blank",
-  "notBlank"
-];
-const NUMBER_MATCHES: NumberFilterMatch[] = [
-  "equals",
-  "notEquals",
-  "lessThan",
-  "lessThanOrEqual",
-  "greaterThan",
-  "greaterThanOrEqual",
-  "inRange",
-  "blank",
-  "notBlank"
-];
-const DATE_MATCHES: DateFilterMatch[] = ["equals", "notEquals", "lessThan", "greaterThan", "inRange", "blank", "notBlank"];
 
 type ConditionFilterType = "text" | "number" | "date";
 type ConditionMatch = TextFilterMatch | NumberFilterMatch | DateFilterMatch;
@@ -49,17 +27,13 @@ function isBlankMatch(match: string): boolean {
   return match === "blank" || match === "notBlank";
 }
 
-function conditionMatches(type: ConditionFilterType): readonly ConditionMatch[] {
-  if (type === "number") return NUMBER_MATCHES;
-  if (type === "date") return DATE_MATCHES;
-  return TEXT_MATCHES;
-}
 
 function setValueKey(value: string | number | null): string {
   if (value === null) return "null:";
   return `${typeof value}:${String(value)}`;
 }
 
+/** @internal Filter popup state stays with its owning grid. */
 export class FilterPopupService {
   private panel: HTMLElement | null = null;
   private openColId: string | null = null;
@@ -110,14 +84,14 @@ export class FilterPopupService {
     else this.buildConditionBody(panel, column, type, filter);
 
     const footer = el("div", "mach-filter-footer");
-    const resetBtn = el("button", "mach-filter-btn-reset") as HTMLButtonElement;
+    const resetBtn = el("button", "mach-filter-btn-reset");
     resetBtn.type = "button";
     resetBtn.textContent = this.core.getLocaleText("reset");
     resetBtn.addEventListener("click", () => {
       this.core.applyColumnFilter(column, null);
       this.close();
     });
-    const applyBtn = el("button", "mach-filter-btn-apply") as HTMLButtonElement;
+    const applyBtn = el("button", "mach-filter-btn-apply");
     applyBtn.type = "button";
     applyBtn.textContent = this.core.getLocaleText("apply");
     applyBtn.addEventListener("click", () => {
@@ -133,15 +107,7 @@ export class FilterPopupService {
     this.panel = panel;
     this.openColId = column.id;
 
-    const rect = anchor.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    const left = clamp(rect.left, 8, window.innerWidth - panelRect.width - 8);
-    let top = rect.bottom + 4;
-    if (top + panelRect.height > window.innerHeight - 8) {
-      top = Math.max(8, rect.top - panelRect.height - 4);
-    }
-    panel.style.left = `${left}px`;
-    panel.style.top = `${top}px`;
+    positionAnchoredPortal(panel, anchor);
 
     document.addEventListener("mousedown", this.docMouseDown, true);
     document.addEventListener("keydown", this.docKeyDown, true);
@@ -193,7 +159,7 @@ export class FilterPopupService {
   private createConditionSelect(type: ConditionFilterType, current: ConditionMatch): ConditionSelectElements {
     const control = createSelectControl({
       ariaLabel: "Filter condition",
-      options: conditionMatches(type).map((match) => ({
+      options: FILTER_MATCHES[type].map((match) => ({
         value: match,
         label: this.core.getLocaleText(matchLocaleKey(match))
       })),
@@ -219,7 +185,7 @@ export class FilterPopupService {
 
   private createConditionInput(type: ConditionFilterType, second = false): HTMLInputElement {
     const className = `mach-filter-input${second ? " mach-filter-input--second" : ""}`;
-    const input = el("input", className) as HTMLInputElement;
+    const input = el("input", className);
     if (type === "number") input.type = "number";
     if (type === "date") input.type = "date";
     return input;
@@ -277,7 +243,7 @@ export class FilterPopupService {
       const nodes = this.core.rowModel.getAllNodes();
       const cap = Math.min(nodes.length, params?.maxValues ?? 500);
       for (let i = 0; i < cap; i++) {
-        const v = this.core.getCellValue(nodes[i], column);
+        const v = this.core.readCellValue(nodes[i], column);
         const key = setValueKey(v == null ? null : v);
         if (seen.has(key)) continue;
         seen.add(key);
@@ -289,7 +255,7 @@ export class FilterPopupService {
       filter?.type === "set" ? filter.values.map(setValueKey) : values.map(setValueKey)
     );
 
-    const search = el("input", "mach-filter-input mach-filter-input--search") as HTMLInputElement;
+    const search = el("input", "mach-filter-input mach-filter-input--search");
     search.type = "text";
     search.placeholder = this.core.getLocaleText("search");
 

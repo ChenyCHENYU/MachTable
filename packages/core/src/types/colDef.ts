@@ -17,6 +17,16 @@ export type SortDirection = "asc" | "desc";
 export type PinnedDirection = "left" | "right";
 export type FilterType = "text" | "number" | "date" | "set";
 export type CellAlign = "left" | "center" | "right";
+export type ValueInputSource = "editor" | "clipboard" | "import";
+export type ValueOutputTarget = "clipboard" | "csv" | "xlsx";
+export interface ValueParserParams<TData = any, TValue = any> extends ValueGetterParams<TData, TValue> {
+  value: unknown;
+  oldValue: TValue | undefined;
+  source: ValueInputSource;
+}
+export interface ValueSerializerParams<TData = any, TValue = any> extends ValueFormatterParams<TData, TValue> {
+  target: ValueOutputTarget;
+}
 
 export type TextFilterMatch =
   | "contains"
@@ -173,6 +183,10 @@ export interface ColDef<TData = any, TValue = any> {
   rowDrag?: boolean;
   valueGetter?: (params: ValueGetterParams<TData, TValue>) => TValue;
   valueSetter?: (params: ValueSetterParams<TData, TValue>) => boolean;
+  /** Synchronous user-input normalization. Not called by trusted transactions or undo replay. */
+  valueParser?: (params: ValueParserParams<TData, TValue>) => TValue;
+  /** Clipboard/file output; display formatting and sort/filter continue to use stored values. */
+  valueSerializer?: (params: ValueSerializerParams<TData, TValue>) => unknown;
   valueFormatter?: (params: ValueFormatterParams<TData, TValue>) => any;
   cellRenderer?: CellRendererFn | string;
   cellRendererParams?: Record<string, any>;

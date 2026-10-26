@@ -11,6 +11,7 @@ export interface NormalizedRange {
 }
 
 /** Pure state model for range selection; DOM painting stays in BodyRenderer. */
+/** @internal The selection facade exposes plain cell ranges rather than this model. */
 export class RangeSelectionModel {
   private anchor: GridPoint | null = null;
   private end: GridPoint | null = null;

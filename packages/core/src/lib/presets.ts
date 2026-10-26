@@ -1,4 +1,4 @@
-import type { GridOptions } from "../types/options";
+import type { GridDataProcessor, GridOptions } from "../types/options";
 
 function mergeSwitchableObject<T extends object>(
   base: boolean | T | undefined,
@@ -114,6 +114,13 @@ export function createEnterprisePreset<TData>(
 }
 
 /** Compile-time helper for a reusable partial preset. */
+type FactoryPreset<TData> = Omit<Partial<GridOptions<TData>>, "dataProcessor"> & {
+  dataProcessor?: () => GridDataProcessor<TData>;
+};
+// Keep factory-only defaults assignable to the application configuration while
+// retaining the existing per-table overload for an explicitly owned instance.
+export function defineMachTablePreset<TData>(preset: FactoryPreset<TData>): FactoryPreset<TData>;
+export function defineMachTablePreset<TData>(preset: Partial<GridOptions<TData>>): Partial<GridOptions<TData>>;
 export function defineMachTablePreset<TData>(
   preset: Partial<GridOptions<TData>>
 ): Partial<GridOptions<TData>> {

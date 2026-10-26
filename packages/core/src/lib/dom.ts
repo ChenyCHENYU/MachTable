@@ -1,4 +1,8 @@
-export function el(tag: string, className?: string, attrs?: Record<string, string>): HTMLElement {
+export function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+  attrs?: Record<string, string>
+): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (className) e.className = className;
   if (attrs) {
@@ -13,42 +17,14 @@ export function setStyles(e: HTMLElement, styles: Partial<CSSStyleDeclaration>):
   Object.assign(e.style, styles);
 }
 
-const PORTAL_THEME_PROPERTIES = [
-  "--mach-font-family",
-  "--mach-font-size",
-  "--mach-font-size-sm",
-  "--mach-header-font-weight",
-  "--mach-cell-padding",
-  "--mach-header-h",
-  "--mach-primary",
-  "--mach-primary-weak",
-  "--mach-success",
-  "--mach-warning",
-  "--mach-danger",
-  "--mach-info",
-  "--mach-border-color",
-  "--mach-border-width",
-  "--mach-header-bg",
-  "--mach-header-fg",
-  "--mach-body-bg",
-  "--mach-body-fg",
-  "--mach-row-hover-bg",
-  "--mach-radius-sm",
-  "--mach-radius",
-  "--mach-radius-lg",
-  "--mach-shadow-sm",
-  "--mach-shadow",
-  "--mach-transition",
-  "--mach-z-popup",
-  "--mach-z-menu"
-] as const;
-
 /** Keeps body-mounted overlays visually scoped to their owning grid instance. */
 export function applyPortalTheme(portal: HTMLElement, source: HTMLElement | null): void {
   portal.classList.add("mach-portal");
   if (!source) return;
   const styles = window.getComputedStyle(source);
-  for (const property of PORTAL_THEME_PROPERTIES) {
+  for (let index = 0; index < styles.length; index++) {
+    const property = styles.item(index);
+    if (!property.startsWith("--mach-")) continue;
     const value = styles.getPropertyValue(property).trim();
     if (value) portal.style.setProperty(property, value);
   }
@@ -57,6 +33,16 @@ export function applyPortalTheme(portal: HTMLElement, source: HTMLElement | null
 
 export function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
+}
+
+/** Place a measured body portal below its anchor, flipping above when space runs out. */
+export function positionAnchoredPortal(panel: HTMLElement, anchor: Element, gap = 4): void {
+  const rect = anchor.getBoundingClientRect();
+  const size = panel.getBoundingClientRect();
+  const below = rect.bottom + gap;
+  const top = below + size.height > window.innerHeight - 8 ? rect.top - size.height - gap : below;
+  panel.style.left = `${clamp(rect.left, 8, Math.max(8, window.innerWidth - size.width - 8))}px`;
+  panel.style.top = `${clamp(top, 8, Math.max(8, window.innerHeight - size.height - 8))}px`;
 }
 
 let uidCounter = 0;

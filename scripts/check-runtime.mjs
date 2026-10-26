@@ -114,9 +114,45 @@ async function checkServer(runtime, server) {
     assert.equal(element.querySelector('.mach-cell[data-col-id="amount"]')?.textContent, "12");
   } finally { dispose?.(); api.destroy(); store.dispose(); element.remove(); }
 }
+async function checkImport(runtime, importing) {
+  const element = host(), date = new Date("2026-10-26T00:00:00Z");
+  const api = runtime.createGrid(element, {
+    rowKey: "id", pagination: false, onGridError() {},
+    columnDefs: [{ field: "id" }, { field: "amount", type: "amount" }, { field: "date" }],
+    columnTypes: { amount: { editable: true, valueParser: ({ value }) => Number(value), validate: value => value < 0 ? "negative" : undefined } },
+    rowData: [{ id: "old", amount: 1, date }]
+  });
+  let plan;
+  try {
+    plan = importing.createImportPlan(api, { kind: "matrix", rows: [["id", "amount", "date"], ["9223372036854775807", "3.5", date]] });
+    const preview = await plan.preview();
+    assert.equal(preview.status, "ready");
+    assert.equal(preview.cells.find(cell => cell.colId === "amount").value, 3.5);
+    assert.equal(api.rows.getAt(0).data.id, "old");
+    assert.equal((await plan.commit()).status, "applied");
+    assert.equal(api.rows.getAt(0).data.id, "9223372036854775807");
+    assert.equal(api.rows.getAt(0).data.amount, 3.5);
+    const matrix = api.io.exportMatrix({ target: "xlsx" });
+    assert.equal(matrix[1][0], "9223372036854775807");
+    assert.equal(matrix[1][1], 3.5);
+    assert.equal(matrix[1][2].getTime(), date.getTime());
+    plan.destroy();
+    plan = importing.createImportPlan(api, { kind: "matrix", rows: [["amount"], ["4.25"]] }, { mode: "paste" });
+    assert.equal((await plan.preview()).status, "ready");
+    assert.equal((await plan.commit()).status, "applied");
+    assert.equal(api.rows.getAt(0).data.amount, 4.25);
+    assert.equal(api.editing.undo(), true);
+    assert.equal(api.rows.getAt(0).data.amount, 3.5);
+    plan.destroy();
+    plan = importing.createImportPlan(api, { kind: "matrix", rows: [["amount"], ["-1"]] }, { mode: "paste" });
+    assert.equal((await plan.preview()).status, "invalid");
+    assert.equal((await plan.commit()).status, "invalid");
+    assert.equal(api.rows.getAt(0).data.amount, 3.5);
+  } finally { plan?.destroy(); api.destroy(); element.remove(); }
+}
 async function checkOptional(runtime, framework, format) {
-  const [workbench, preferences, ordering, server, analysis, multi] = await Promise.all(
-    ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range"].map(entry => load(framework, entry, format))
+  const [workbench, preferences, ordering, server, analysis, multi, importing] = await Promise.all(
+    ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"].map(entry => load(framework, entry, format))
   );
   const ranges = multi.createMultiRangeSelection();
   const element = host();
@@ -128,6 +164,7 @@ async function checkOptional(runtime, framework, format) {
   });
   const handles = [];
   try {
+    await checkImport(runtime, importing);
     await checkPreferences(preferences, api.state.get());
     await checkOrdering(ordering);
     const inspection = workbench.inspectGridRow(api, "a");
@@ -185,7 +222,7 @@ try {
     await checkGrid(runtime);
     for (const framework of ["core", "vue", "react"]) await checkOptional(runtime, framework, format);
   }
-  console.log("OK   published ESM/CJS grid and Core/Vue/React optional entry mounts, input bridge, save, analysis, server binding and cleanup");
+  console.log("OK   published ESM/CJS grid and Core/Vue/React optional entry mounts, typed import/preview/validation/undo bridge, save, analysis, server binding and cleanup");
 } finally {
   window.close();
   for (const [key, descriptor] of previous) {

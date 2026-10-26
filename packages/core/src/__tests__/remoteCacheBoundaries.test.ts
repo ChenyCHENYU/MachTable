@@ -31,7 +31,7 @@ function grid(options: Partial<GridOptions<Row>> = {}) {
     ...options
   });
   cores.push(core);
-  return { core, api: core.getApi(), host };
+  return { core, api: core.api, host };
 }
 
 function change(core: GridCore<Row>, id: string, value: number): void {

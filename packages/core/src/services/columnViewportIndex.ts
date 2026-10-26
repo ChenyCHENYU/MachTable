@@ -23,6 +23,7 @@ function lowerBound(values: Float64Array, target: number): number {
 }
 
 /** Prefix-width index used by horizontal virtualization and layout. */
+/** @internal The column window index stays in the rendering owner. */
 export class ColumnViewportIndex {
   private offsets = new Float64Array(1);
 

@@ -1,13 +1,14 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { applyPortalTheme, el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, positionAnchoredPortal } from "../lib/dom";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type ColumnMenuContext = Pick<
   GridCore<any>,
-  "columnModel" | "getApi" | "getLocaleText" | "options" | "skeleton"
+  "columnModel" | "api" | "getLocaleText" | "gridOptions" | "skeleton"
 >;
 
+/** @internal The column menu service stays behind the column facade. */
 export class ColumnMenuService {
   private panel: HTMLElement | null = null;
   private openColId: string | null = null;
@@ -36,7 +37,7 @@ export class ColumnMenuService {
         const fake = document.createElement("div");
         fake.style.position = "fixed";
         fake.style.left = `${rect.right - 16}px`;
-        fake.style.top = `${rect.top + this.core.options.headerHeight}px`;
+        fake.style.top = `${rect.top + this.core.gridOptions.headerHeight}px`;
         fake.style.width = "1px";
         fake.style.height = "1px";
         document.body.appendChild(fake);
@@ -80,7 +81,7 @@ export class ColumnMenuService {
   };
 
   private open(column: Column | null, anchor: HTMLElement): void {
-    const api = this.core.getApi();
+    const api = this.core.api;
     const panel = el("div", "mach-filter-panel mach-column-panel");
     panel.setAttribute("role", column ? "menu" : "dialog");
     if (!column) {
@@ -97,7 +98,7 @@ export class ColumnMenuService {
     if (column && column.sortable) {
       const sortRow = el("div", "mach-column-panel-actions");
       const makeSortBtn = (labelKey: "sortAsc" | "sortDesc" | "clearSort", dir: "asc" | "desc" | null) => {
-        const btn = el("button", "mach-column-panel-btn") as HTMLButtonElement;
+        const btn = el("button", "mach-column-panel-btn");
         btn.type = "button";
         btn.textContent = this.core.getLocaleText(labelKey);
         btn.addEventListener("click", () => {
@@ -112,7 +113,7 @@ export class ColumnMenuService {
 
     const pinRow = el("div", "mach-column-panel-actions");
     const makePinBtn = (labelKey: "pinLeft" | "pinRight" | "clearPin", pinned: "left" | "right" | null) => {
-      const btn = el("button", "mach-column-panel-btn") as HTMLButtonElement;
+      const btn = el("button", "mach-column-panel-btn");
       btn.type = "button";
       btn.textContent = this.core.getLocaleText(labelKey);
       btn.addEventListener("click", () => {
@@ -127,7 +128,7 @@ export class ColumnMenuService {
     }
 
     const toolRow = el("div", "mach-column-panel-actions");
-    const fitBtn = el("button", "mach-column-panel-btn") as HTMLButtonElement;
+    const fitBtn = el("button", "mach-column-panel-btn");
     fitBtn.type = "button";
     fitBtn.textContent = this.core.getLocaleText("autoSize");
     fitBtn.addEventListener("click", () => {
@@ -135,7 +136,7 @@ export class ColumnMenuService {
       else api.columns.autoSizeAll();
       this.close();
     });
-    const hideBtn = el("button", "mach-column-panel-btn") as HTMLButtonElement;
+    const hideBtn = el("button", "mach-column-panel-btn");
     hideBtn.type = "button";
     hideBtn.textContent = this.core.getLocaleText("hideColumn");
     hideBtn.addEventListener("click", () => {
@@ -173,14 +174,14 @@ export class ColumnMenuService {
     panel.appendChild(list);
 
     const footer = el("div", "mach-filter-footer");
-    const resetBtn = el("button", "mach-filter-btn-reset") as HTMLButtonElement;
+    const resetBtn = el("button", "mach-filter-btn-reset");
     resetBtn.type = "button";
     resetBtn.textContent = this.core.getLocaleText("resetAll");
     resetBtn.addEventListener("click", () => {
       api.columns.resetState();
       this.close();
     });
-    const allFitBtn = el("button", "mach-filter-btn-apply") as HTMLButtonElement;
+    const allFitBtn = el("button", "mach-filter-btn-apply");
     allFitBtn.type = "button";
     allFitBtn.textContent = this.core.getLocaleText("autoSizeAll");
     allFitBtn.addEventListener("click", () => {
@@ -195,15 +196,7 @@ export class ColumnMenuService {
     this.panel = panel;
     this.openColId = column ? column.id : "__standalone__";
 
-    const rect = anchor.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    const left = clamp(rect.left, 8, window.innerWidth - panelRect.width - 8);
-    let top = rect.bottom + 4;
-    if (top + panelRect.height > window.innerHeight - 8) {
-      top = Math.max(8, rect.top - panelRect.height - 4);
-    }
-    panel.style.left = `${left}px`;
-    panel.style.top = `${top}px`;
+    positionAnchoredPortal(panel, anchor);
 
     document.addEventListener("mousedown", this.docMouseDown, true);
     document.addEventListener("keydown", this.docKeyDown, true);
@@ -216,7 +209,7 @@ export class ColumnMenuService {
   }
 
   private renderColumnList(list: HTMLElement, workbench: boolean): void {
-    const api = this.core.getApi();
+    const api = this.core.api;
     this.destroySelectControls(list);
     list.replaceChildren();
     const columns = this.core.columnModel.getColumns().filter((candidate) => {
@@ -273,7 +266,7 @@ export class ColumnMenuService {
         );
         const position = siblings.indexOf(col);
         const move = (caption: string, next: number, disabled: boolean) => {
-          const button = el("button", "mach-column-workbench-move") as HTMLButtonElement;
+          const button = el("button", "mach-column-workbench-move");
           button.type = "button";
           button.textContent = caption;
           button.disabled = disabled || col.hide || !col.movable;

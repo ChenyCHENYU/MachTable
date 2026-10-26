@@ -72,7 +72,7 @@ function assertFunctions(specifier, names) {
   }
 }
 assertFunctions("@agile-team/mach-table", ["createGrid", "createColumnHelper", "createEnterprisePreset"]);
-assertFunctions("@agile-team/mach-table/adapter", ["normalizeMachTableConfig", "resolveMachTableGridOptions", "suspendGrid", "resumeGrid", "readGridCell", "writeGridInput", "canReplaceGridData"]);
+assertFunctions("@agile-team/mach-table/adapter", ["normalizeMachTableConfig", "resolveMachTableGridOptions", "suspendGrid", "resumeGrid", "readGridCell", "writeGridInput", "canReplaceGridData", "beginGridInput", "equivalentConfigValue", "equivalentGridOption"]);
 assertFunctions("@agile-team/mach-table-xlsx", ["createXlsxExtension", "exportGridToXlsx"]);
 for (const suffix of ["", "-vue", "-react"]) {
   const packageName = `@agile-team/mach-table${suffix}`;
@@ -83,7 +83,8 @@ for (const suffix of ["", "-vue", "-react"]) {
     ordering: ["reorderRows", "moveTreeNodes", "createRowOrderController", "RowOrderConflictError"],
     "server-side": ["createServerSideStore", "bindServerSideGrid", "createServerSideGroupColumn", "serverSideDataColumn", "ServerSideVersionConflictError"],
     analysis: ["createPivot", "evaluateFormulas", "mountAnalysis"],
-    "multi-range": ["createMultiRangeSelection"]
+    "multi-range": ["createMultiRangeSelection"],
+    import: ["createImportPlan"]
   })) assertFunctions(`${packageName}/${entry}`, names);
 }
 for (const packageName of ["@agile-team/mach-table-vue", "@agile-team/mach-table-react"]) {

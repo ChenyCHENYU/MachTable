@@ -102,6 +102,27 @@ describe("Vue configuration helpers", () => {
 });
 
 describe("Vue adapter", () => {
+  it("forwards only changed options when config layers recreate equivalent objects", async () => {
+    const host = document.createElement("div"); document.body.append(host);
+    const table = ref<any>(null), striped = ref(false);
+    const columns = [{ field: "id" }], rows = [{ id: 1 }];
+    const app = createApp({ render: () => h(MachTable, {
+      ref: table, columnDefs: columns, rowData: rows, stripedRows: striped.value
+    }) });
+    app.use(MachTablePlugin, {
+      defaults: { pagination: false, defaultColDef: { sortable: true } },
+      columnTypes: { amount: { type: "rightAligned" } }
+    });
+    app.mount(host); await nextTick();
+    const grid = table.value.getApi() as GridApi;
+    const defaults = grid.getOption("defaultColDef"), types = grid.getOption("columnTypes");
+    striped.value = true; await nextTick();
+    expect(grid.getOption("stripedRows")).toBe(true);
+    expect(grid.getOption("defaultColDef")).toBe(defaults);
+    expect(grid.getOption("columnTypes")).toBe(types);
+    app.unmount();
+  });
+
   it("re-exports the complete core API and types from its public entry", () => {
     const column: ColDef<{ id: number }> = { field: "id" };
     expect(column.field).toBe("id");

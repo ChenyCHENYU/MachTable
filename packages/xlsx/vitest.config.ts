@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   resolve: {
     alias: {
+      "@agile-team/mach-table/adapter": fileURLToPath(new URL("../core/src/adapter.ts", import.meta.url)),
       "@agile-team/mach-table": fileURLToPath(new URL("../core/src/index.ts", import.meta.url))
     }
   },

@@ -24,7 +24,7 @@ import { createWorkerDataProcessor } from "@agile-team/mach-table-vue/worker";
 export default defineMachTableConfig({
   defaults: {
     dataProcessorMinRows: 10_000,
-    dataProcessor: createWorkerDataProcessor(
+    dataProcessor: () => createWorkerDataProcessor(
       () => new Worker(
         new URL("../workers/mach-table.worker.ts", import.meta.url),
         { type: "module", name: "mach-table-data" }
@@ -34,7 +34,11 @@ export default defineMachTableConfig({
 });
 ```
 
-该桥接不创建 Blob URL、不使用 `eval`，Worker URL 和 CSP 策略完全由宿主构建工具控制。Worker 按首次真正触发大数据过滤/排序时懒创建，Grid 销毁后默认自动 `terminate()`。
+应用 defaults/preset 必须使用工厂，每次返回新的 processor。表格构造时取得自己的实例，Worker 仍在首次真正触发大数据过滤/排序时懒创建。卸载一个表格不会销毁另一个表格的 Worker。React 的配置方式相同，只需把上面两个导入改为 `@agile-team/mach-table-react` 与 `@agile-team/mach-table-react/worker`。
+
+该桥接不创建 Blob URL、不使用 `eval`，Worker URL 和 CSP 策略完全由宿主构建工具控制。每个 processor 由一个 Grid 独占；销毁、动态替换和构造失败均由 Grid 释放，默认自动 `terminate()`。单表显式 `dataProcessor: instance` 保持支持，但不能把同一个实例交给多个表格。`terminateOnDestroy: false` 只把 Worker 终止责任交给宿主，不会让已销毁的 processor 再次可用。
+
+`api.updateOptions({ dataProcessor: factory })` 在工厂引用未变时复用当前实例；切换为另一工厂、实例或 `undefined` 时释放原实例。新工厂抛错时，更新抛出并保留旧 processor；初始化工厂抛错时，构造失败且释放已登记的资源。工厂应只创建实例，不调用表格 API；processor 的 `process` 仍须遵守下面的取消合同。
 
 ## 标准处理器的能力边界
 

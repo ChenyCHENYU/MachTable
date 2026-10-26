@@ -13,6 +13,24 @@ function mount(features: GridFeature[] = []): GridApi {
 }
 
 describe("reentrant feature resource ownership", () => {
+  it("releases completed timer registrations before a callback replaces its feature", () => {
+    vi.useFakeTimers();
+    try {
+      const clear = vi.spyOn(globalThis, "clearTimeout");
+      let id: ReturnType<typeof setTimeout>;
+      const handler = vi.fn(() => {
+        expect(clear).toHaveBeenCalledWith(id);
+        api!.updateOptions({ features: [] });
+      });
+      mount([{ key: "timer", setup(context) { id = context.setManagedTimeout(handler, 50); } }]);
+      vi.advanceTimersByTime(50);
+      expect(handler).toHaveBeenCalledOnce();
+      expect(clear.mock.calls.filter(([value]) => value === id)).toHaveLength(1);
+      api!.destroy();
+      expect(clear.mock.calls.filter(([value]) => value === id)).toHaveLength(1);
+    } finally { vi.useRealTimers(); }
+  });
+
   it("releases a feature that destroys its grid synchronously during setup", () => {
     const release = vi.fn(), destroy = vi.fn(), listener = vi.fn();
     const frame = vi.spyOn(globalThis, "requestAnimationFrame");

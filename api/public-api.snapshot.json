@@ -169,6 +169,7 @@
         "ICellEditor",
         "ICellRendererResult",
         "ImportCsvOptions",
+        "ImportMatrixOptions",
         "InfiniteGetRowsParams",
         "LOCALE_EN",
         "LocalGridStateStoreOptions",
@@ -185,6 +186,7 @@
         "MachTablePresetSelection",
         "MachTableRuntimeConfig",
         "ManagedGridStateStore",
+        "MatrixExportParams",
         "ModelUpdatedEvent",
         "NumberFilterCondition",
         "NumberFilterMatch",
@@ -250,6 +252,10 @@
         "TreeDataLoadParams",
         "ValueFormatterParams",
         "ValueGetterParams",
+        "ValueInputSource",
+        "ValueOutputTarget",
+        "ValueParserParams",
+        "ValueSerializerParams",
         "ValueSetterParams",
         "WatermarkConfig",
         "WorkerDataProcessorOptions",
@@ -396,8 +402,11 @@
         "SelectControlClassNames",
         "SelectControlOption",
         "SelectControlOptions",
+        "beginGridInput",
         "canReplaceGridData",
         "createSelectControl",
+        "equivalentConfigValue",
+        "equivalentGridOption",
         "mergeMachTableConfig",
         "normalizeMachTableConfig",
         "readGridCell",
@@ -409,8 +418,11 @@
       "runtimeNames": [
         "GRID_OPTION_KEYS",
         "GRID_OPTION_META",
+        "beginGridInput",
         "canReplaceGridData",
         "createSelectControl",
+        "equivalentConfigValue",
+        "equivalentGridOption",
         "mergeMachTableConfig",
         "normalizeMachTableConfig",
         "readGridCell",
@@ -586,6 +598,7 @@
         "ICellEditor",
         "ICellRendererResult",
         "ImportCsvOptions",
+        "ImportMatrixOptions",
         "InfiniteGetRowsParams",
         "LOCALE_EN",
         "LocalGridStateStoreOptions",
@@ -610,6 +623,7 @@
         "MachTableVueExposed",
         "MachTableVueProps",
         "ManagedGridStateStore",
+        "MatrixExportParams",
         "ModelUpdatedEvent",
         "NumberFilterCondition",
         "NumberFilterMatch",
@@ -676,6 +690,10 @@
         "UseMachTableReturn",
         "ValueFormatterParams",
         "ValueGetterParams",
+        "ValueInputSource",
+        "ValueOutputTarget",
+        "ValueParserParams",
+        "ValueSerializerParams",
         "ValueSetterParams",
         "VueCellRender",
         "VueColDef",
@@ -1092,6 +1110,7 @@
         "ICellEditor",
         "ICellRendererResult",
         "ImportCsvOptions",
+        "ImportMatrixOptions",
         "InfiniteGetRowsParams",
         "LOCALE_EN",
         "LocalGridStateStoreOptions",
@@ -1112,6 +1131,7 @@
         "MachTableReactProps",
         "MachTableRuntimeConfig",
         "ManagedGridStateStore",
+        "MatrixExportParams",
         "ModelUpdatedEvent",
         "NumberFilterCondition",
         "NumberFilterMatch",
@@ -1178,6 +1198,10 @@
         "UseMachTableReturn",
         "ValueFormatterParams",
         "ValueGetterParams",
+        "ValueInputSource",
+        "ValueOutputTarget",
+        "ValueParserParams",
+        "ValueSerializerParams",
         "ValueSetterParams",
         "WatermarkConfig",
         "WorkerDataProcessorOptions",
@@ -2082,6 +2106,82 @@
       ],
       "hasDefault": false,
       "reexports": "@agile-team/mach-table/multi-range"
+    },
+    "@agile-team/mach-table/import": {
+      "names": [
+        "ImportIssue",
+        "ImportPlan",
+        "ImportPlanOptions",
+        "ImportPreview",
+        "ImportPreviewCell",
+        "ImportResult",
+        "ImportSource",
+        "createImportPlan"
+      ],
+      "runtimeNames": [
+        "createImportPlan"
+      ],
+      "hasDefault": false,
+      "signatures": {
+        "createImportPlan": [
+          "function createImportPlan<TData>(api: GridApi<TData>, source: ImportSource<TData>, options?: ImportPlanOptions): ImportPlan"
+        ],
+        "ImportIssue": [
+          "export interface ImportIssue { rowIndex: number; columnIndex?: number; colId?: string; code: \"MAPPING\" | \"PARSE\" | \"VALIDATION\" | \"STALE\" | \"UNSUPPORTED\"; message: string; }"
+        ],
+        "ImportPlan": [
+          "export interface ImportPlan { preview(): Promise<ImportPreview>; commit(): Promise<ImportResult>; destroy(): void; }"
+        ],
+        "ImportPlanOptions": [
+          "export type ImportPlanOptions = ImportMatrixOptions;"
+        ],
+        "ImportPreview": [
+          "export interface ImportPreview { status: \"ready\" | \"invalid\" | \"stale\" | \"destroyed\"; rowCount: number; cells: readonly ImportPreviewCell[]; issues: readonly ImportIssue[]; }"
+        ],
+        "ImportPreviewCell": [
+          "export interface ImportPreviewCell { rowIndex: number; colId: string; value: unknown; }"
+        ],
+        "ImportResult": [
+          "export interface ImportResult { status: \"applied\" | \"partial\" | \"invalid\" | \"stale\" | \"destroyed\"; importedRowCount: number; issues: readonly ImportIssue[]; }"
+        ],
+        "ImportSource": [
+          "export type ImportSource<TData = Record<string, unknown>> = { kind: \"matrix\"; rows: readonly (readonly unknown[])[]; } | { kind: \"rows\"; rows: readonly TData[]; };"
+        ]
+      }
+    },
+    "@agile-team/mach-table-vue/import": {
+      "names": [
+        "ImportIssue",
+        "ImportPlan",
+        "ImportPlanOptions",
+        "ImportPreview",
+        "ImportPreviewCell",
+        "ImportResult",
+        "ImportSource",
+        "createImportPlan"
+      ],
+      "runtimeNames": [
+        "createImportPlan"
+      ],
+      "hasDefault": false,
+      "reexports": "@agile-team/mach-table/import"
+    },
+    "@agile-team/mach-table-react/import": {
+      "names": [
+        "ImportIssue",
+        "ImportPlan",
+        "ImportPlanOptions",
+        "ImportPreview",
+        "ImportPreviewCell",
+        "ImportResult",
+        "ImportSource",
+        "createImportPlan"
+      ],
+      "runtimeNames": [
+        "createImportPlan"
+      ],
+      "hasDefault": false,
+      "reexports": "@agile-team/mach-table/import"
     }
   },
   "rootCapabilities": {
@@ -2090,8 +2190,17 @@
     ]
   },
   "adapterCapabilities": {
+    "beginGridInput": [
+      "function beginGridInput(api: GridApi): () => boolean"
+    ],
     "canReplaceGridData": [
       "function canReplaceGridData(api: GridApi<any>): boolean"
+    ],
+    "equivalentConfigValue": [
+      "function equivalentConfigValue(left: unknown, right: unknown, depth?: number): boolean"
+    ],
+    "equivalentGridOption": [
+      "function equivalentGridOption(key: string, left: unknown, right: unknown): boolean"
     ],
     "GridInputCell": [
       "export interface GridInputCell { rowId: string; colId: string; value: unknown; }"
@@ -2236,7 +2345,9 @@
     "GridIoApi": [
       "copyRange(): Promise<boolean>;",
       "exportCsv(params?: CsvExportParams): string;",
+      "exportMatrix(params?: MatrixExportParams): unknown[][];",
       "importCsv(text: string, options?: ImportCsvOptions): boolean;",
+      "importMatrix(rows: readonly (readonly unknown[])[], options?: ImportMatrixOptions): boolean;",
       "print(options?: PrintOptions): boolean;"
     ],
     "GridApi": [
@@ -2293,7 +2404,7 @@
       "columnTypes?: Readonly<Record<string, Partial<ColDef<TData>>>>;",
       "components?: GridComponents;",
       "contextMenu?: boolean;",
-      "dataProcessor?: GridDataProcessor<TData>;",
+      "dataProcessor?: GridDataProcessor<TData> | (() => GridDataProcessor<TData>);",
       "dataProcessorMinRows?: number;",
       "datasource?: GridDatasource<TData>;",
       "datasourceMaxConcurrentRequests?: number;",
@@ -2408,19 +2519,19 @@
     "core.GridDataProcessor": "export interface GridDataProcessor<TData = any> { process(request: GridDataProcessorRequest<TData>): Promise<GridDataProcessorResult>; destroy?(): void; }",
     "core.PaginationConfig": "export interface PaginationConfig { mode?: \"client\" | \"server\"; page?: number; total?: number; pageSize?: number; pageSizeOptions?: number[]; showTotal?: boolean; showPageSizeSelector?: boolean; }",
     "core.RowDragPolicy": "export interface RowDragPolicy<TData = any> { canDrag?(params: { node: RowNode<TData>; api: import(\"./api\").GridApi<TData>; }): boolean | string; canDrop?(params: { node: RowNode<TData>; api: import(\"./api\").GridApi<TData>; targetNode: RowNode<TData> | undefined; intent: import(\"./events\").RowDragIntent; }): boolean | string; getRevision?(): string | number | undefined; }",
-    "core.GridOptions": "export interface GridOptions<TData = any> extends EventHandlers<TData> { columnDefs?: (ColDef<TData> | ColDefGroup<TData>)[] | null; rowData?: TData[] | null; defaultColDef?: Partial<ColDef<TData>>; columnTypes?: Readonly<Record<string, Partial<ColDef<TData>>>>; rowKey?: FieldPath<TData> | ((row: TData) => string | number); rowHeight?: number; headerHeight?: number; rowBuffer?: number; columnLayout?: ColumnLayoutMode; enableColumnResize?: boolean; domLayout?: DomLayoutMode; rowSelection?: RowSelectionMode; multiSort?: boolean; size?: GridSize; stripedRows?: boolean; rowStyleRules?: readonly RowStyleRule<TData>[]; showCellBorders?: boolean; theme?: ThemeMode; quickFilterText?: string | null; advancedFilterModel?: AdvancedFilterModel | null; masterDetail?: boolean; detailRowHeight?: number; detailRowRenderer?: (params: DetailRowRendererParams<TData>) => string | HTMLElement | import(\"./params\").ICellRendererResult | null | undefined; isRowExpandable?: (params: DetailRowRendererParams<TData>) => boolean; detailToggleColumn?: boolean; columnMenu?: boolean; aggFuncs?: Record<string, (values: any[]) => any>; components?: GridComponents; actionPolicy?: ActionPolicy<TData>; features?: readonly GridFeature<TData>[]; initialState?: GridStateInput; persistence?: GridPersistenceOptions | false; locale?: import(\"../lib/locale\").MachTableLocale; editType?: GridEditType; editableIndicator?: EditableIndicator; rowEditValidator?: (params: RowEditValidationParams<TData>) => RowEditValidationResult | Promise<RowEditValidationResult>; singleClickEdit?: boolean; manualSorting?: boolean; manualFiltering?: boolean; showSummary?: boolean; summaryMethod?: (params: { colId: string; column: import(\"../services/column\").Column<any>; values: any[]; }) => string; treeData?: boolean; childrenKey?: string; isTreeRowExpandable?: (params: Omit<TreeDataLoadParams<TData>, \"signal\">) => boolean; loadTreeChildren?: (params: TreeDataLoadParams<TData>) => Promise<readonly TData[]>; autoCheckedChildren?: boolean; defaultExpandAll?: boolean; indexOffset?: number; applyRowDrag?: boolean; rowDragPolicy?: RowDragPolicy<TData>; undoStackSize?: number; asyncTransactionWaitMillis?: number; getRowHeight?: (params: import(\"./params\").GetRowHeightParams<TData>) => number; pinnedTopRowData?: TData[] | null; pinnedBottomRowData?: TData[] | null; pagination?: boolean | PaginationConfig; watermark?: boolean | WatermarkConfig; suppressWarnings?: boolean; enableRangeSelection?: boolean; suppressClipboard?: boolean; contextMenu?: boolean; getContextMenuItems?: (params: import(\"./params\").ContextMenuParams<TData>) => import(\"./params\").ContextMenuItem[] | null; tooltipComponent?: (params: import(\"./params\").TooltipParams<TData>) => string | HTMLElement; tooltipShowDelay?: number; flashCells?: boolean; fillHandle?: boolean; statusBar?: boolean | StatusBarConfig; datasource?: GridDatasource<TData>; datasourceMode?: DatasourceMode; blockSize?: number; infiniteBufferRows?: number; maxBlocksInCache?: number; datasourceMaxConcurrentRequests?: number; blockPrefetch?: number; datasourceRowCount?: number; dataProcessor?: GridDataProcessor<TData>; dataProcessorMinRows?: number; datasourceRetryCount?: number; datasourceRetryDelay?: number; datasourceRetryJitter?: number; suppressCellFocus?: boolean; suppressRowHoverHighlight?: boolean; suppressNoRowsOverlay?: boolean; suppressHeaderFocus?: boolean; ariaLabel?: string; ariaLabelledBy?: string; ariaDescribedBy?: string; loading?: boolean; error?: unknown | null; overlayNoRowsTemplate?: OverlayTemplate; overlayLoadingTemplate?: OverlayTemplate; overlayErrorTemplate?: OverlayTemplate; allowUnsafeOverlayHtml?: boolean; className?: string; }",
+    "core.GridOptions": "export interface GridOptions<TData = any> extends EventHandlers<TData> { columnDefs?: (ColDef<TData> | ColDefGroup<TData>)[] | null; rowData?: TData[] | null; defaultColDef?: Partial<ColDef<TData>>; columnTypes?: Readonly<Record<string, Partial<ColDef<TData>>>>; rowKey?: FieldPath<TData> | ((row: TData) => string | number); rowHeight?: number; headerHeight?: number; rowBuffer?: number; columnLayout?: ColumnLayoutMode; enableColumnResize?: boolean; domLayout?: DomLayoutMode; rowSelection?: RowSelectionMode; multiSort?: boolean; size?: GridSize; stripedRows?: boolean; rowStyleRules?: readonly RowStyleRule<TData>[]; showCellBorders?: boolean; theme?: ThemeMode; quickFilterText?: string | null; advancedFilterModel?: AdvancedFilterModel | null; masterDetail?: boolean; detailRowHeight?: number; detailRowRenderer?: (params: DetailRowRendererParams<TData>) => string | HTMLElement | import(\"./params\").ICellRendererResult | null | undefined; isRowExpandable?: (params: DetailRowRendererParams<TData>) => boolean; detailToggleColumn?: boolean; columnMenu?: boolean; aggFuncs?: Record<string, (values: any[]) => any>; components?: GridComponents; actionPolicy?: ActionPolicy<TData>; features?: readonly GridFeature<TData>[]; initialState?: GridStateInput; persistence?: GridPersistenceOptions | false; locale?: import(\"../lib/locale\").MachTableLocale; editType?: GridEditType; editableIndicator?: EditableIndicator; rowEditValidator?: (params: RowEditValidationParams<TData>) => RowEditValidationResult | Promise<RowEditValidationResult>; singleClickEdit?: boolean; manualSorting?: boolean; manualFiltering?: boolean; showSummary?: boolean; summaryMethod?: (params: { colId: string; column: import(\"../services/column\").Column<any>; values: any[]; }) => string; treeData?: boolean; childrenKey?: string; isTreeRowExpandable?: (params: Omit<TreeDataLoadParams<TData>, \"signal\">) => boolean; loadTreeChildren?: (params: TreeDataLoadParams<TData>) => Promise<readonly TData[]>; autoCheckedChildren?: boolean; defaultExpandAll?: boolean; indexOffset?: number; applyRowDrag?: boolean; rowDragPolicy?: RowDragPolicy<TData>; undoStackSize?: number; asyncTransactionWaitMillis?: number; getRowHeight?: (params: import(\"./params\").GetRowHeightParams<TData>) => number; pinnedTopRowData?: TData[] | null; pinnedBottomRowData?: TData[] | null; pagination?: boolean | PaginationConfig; watermark?: boolean | WatermarkConfig; suppressWarnings?: boolean; enableRangeSelection?: boolean; suppressClipboard?: boolean; contextMenu?: boolean; getContextMenuItems?: (params: import(\"./params\").ContextMenuParams<TData>) => import(\"./params\").ContextMenuItem[] | null; tooltipComponent?: (params: import(\"./params\").TooltipParams<TData>) => string | HTMLElement; tooltipShowDelay?: number; flashCells?: boolean; fillHandle?: boolean; statusBar?: boolean | StatusBarConfig; datasource?: GridDatasource<TData>; datasourceMode?: DatasourceMode; blockSize?: number; infiniteBufferRows?: number; maxBlocksInCache?: number; datasourceMaxConcurrentRequests?: number; blockPrefetch?: number; datasourceRowCount?: number; dataProcessor?: GridDataProcessor<TData> | (() => GridDataProcessor<TData>); dataProcessorMinRows?: number; datasourceRetryCount?: number; datasourceRetryDelay?: number; datasourceRetryJitter?: number; suppressCellFocus?: boolean; suppressRowHoverHighlight?: boolean; suppressNoRowsOverlay?: boolean; suppressHeaderFocus?: boolean; ariaLabel?: string; ariaLabelledBy?: string; ariaDescribedBy?: string; loading?: boolean; error?: unknown | null; overlayNoRowsTemplate?: OverlayTemplate; overlayLoadingTemplate?: OverlayTemplate; overlayErrorTemplate?: OverlayTemplate; allowUnsafeOverlayHtml?: boolean; className?: string; }",
     "core.RowDragIntent": "export interface RowDragIntent { rowIds: readonly string[]; targetId: string | null; position: \"before\" | \"after\" | \"inside\"; beforeId: string | null; afterId: string | null; expectedRevision?: string | number; }",
     "core.RowDragEndEvent": "export interface RowDragEndEvent<TData = any> extends GridEventBase<TData> { type: \"rowDragEnd\"; rowNode: RowNode<TData>; fromIndex: number; toIndex: number; targetIndex: number; applied: boolean; intent?: RowDragIntent; }",
     "core.SortModel": "export type SortModel = SortModelItem[];",
     "core.SelectEditorOption": "export interface SelectEditorOption { label: string; value: string | number; disabled?: boolean; }",
     "core.SelectEditorParams": "export interface SelectEditorParams { values?: readonly (string | number)[]; options?: readonly SelectEditorOption[]; }",
-    "core.ColDef": "export interface ColDef<TData = any, TValue = any> { colId?: string; field?: string; headerName?: string; align?: CellAlign; headerAlign?: CellAlign; headerClass?: string | string[]; headerTooltip?: string; headerComponent?: (params: HeaderComponentParams<TData>) => string | HTMLElement | ICellRendererResult | null | undefined; width?: number; minWidth?: number; maxWidth?: number; flex?: number; suppressSizeToFit?: boolean; suppressColumnMenu?: boolean; hide?: boolean; pinned?: PinnedDirection | boolean; sortable?: boolean; resizable?: boolean; movable?: boolean; filter?: boolean | FilterType; filterParams?: SetFilterParams; editable?: boolean | ((params: EditableParams<TData, TValue>) => boolean); cellEditor?: \"text\" | \"number\" | \"date\" | \"select\" | CellEditorFactory | string; cellEditorParams?: SelectEditorParams; wrapText?: boolean; checkboxSelection?: boolean; rowGroup?: boolean; aggFunc?: string; cellStyle?: CellStyleRule; selectable?: (params: CellClassParams<TData, TValue>) => boolean; singleClickEdit?: boolean; tooltipValueGetter?: (params: ValueFormatterParams<TData, TValue>) => string | null | undefined; rowSpan?: (params: CellClassParams<TData, TValue>) => number; autoRowSpan?: boolean; colSpan?: (params: CellClassParams<TData, TValue>) => number; autoHeight?: boolean; validate?: (newValue: TValue, params: ValueSetterParams<TData, TValue>) => string | true | null | undefined | Promise<string | true | null | undefined>; rowDrag?: boolean; valueGetter?: (params: ValueGetterParams<TData, TValue>) => TValue; valueSetter?: (params: ValueSetterParams<TData, TValue>) => boolean; valueFormatter?: (params: ValueFormatterParams<TData, TValue>) => any; cellRenderer?: CellRendererFn | string; cellRendererParams?: Record<string, any>; cellClass?: CellClassRule; comparator?: (valueA: any, valueB: any, nodeA: RowNode<TData>, nodeB: RowNode<TData>) => number; type?: string | readonly string[]; initialSort?: SortDirection; onCellClick?: (event: CellClickEvent<TData, TValue>) => void; onCellDoubleClick?: (event: CellDoubleClickEvent<TData, TValue>) => void; }",
+    "core.ColDef": "export interface ColDef<TData = any, TValue = any> { colId?: string; field?: string; headerName?: string; align?: CellAlign; headerAlign?: CellAlign; headerClass?: string | string[]; headerTooltip?: string; headerComponent?: (params: HeaderComponentParams<TData>) => string | HTMLElement | ICellRendererResult | null | undefined; width?: number; minWidth?: number; maxWidth?: number; flex?: number; suppressSizeToFit?: boolean; suppressColumnMenu?: boolean; hide?: boolean; pinned?: PinnedDirection | boolean; sortable?: boolean; resizable?: boolean; movable?: boolean; filter?: boolean | FilterType; filterParams?: SetFilterParams; editable?: boolean | ((params: EditableParams<TData, TValue>) => boolean); cellEditor?: \"text\" | \"number\" | \"date\" | \"select\" | CellEditorFactory | string; cellEditorParams?: SelectEditorParams; wrapText?: boolean; checkboxSelection?: boolean; rowGroup?: boolean; aggFunc?: string; cellStyle?: CellStyleRule; selectable?: (params: CellClassParams<TData, TValue>) => boolean; singleClickEdit?: boolean; tooltipValueGetter?: (params: ValueFormatterParams<TData, TValue>) => string | null | undefined; rowSpan?: (params: CellClassParams<TData, TValue>) => number; autoRowSpan?: boolean; colSpan?: (params: CellClassParams<TData, TValue>) => number; autoHeight?: boolean; validate?: (newValue: TValue, params: ValueSetterParams<TData, TValue>) => string | true | null | undefined | Promise<string | true | null | undefined>; rowDrag?: boolean; valueGetter?: (params: ValueGetterParams<TData, TValue>) => TValue; valueSetter?: (params: ValueSetterParams<TData, TValue>) => boolean; valueParser?: (params: ValueParserParams<TData, TValue>) => TValue; valueSerializer?: (params: ValueSerializerParams<TData, TValue>) => unknown; valueFormatter?: (params: ValueFormatterParams<TData, TValue>) => any; cellRenderer?: CellRendererFn | string; cellRendererParams?: Record<string, any>; cellClass?: CellClassRule; comparator?: (valueA: any, valueB: any, nodeA: RowNode<TData>, nodeB: RowNode<TData>) => number; type?: string | readonly string[]; initialSort?: SortDirection; onCellClick?: (event: CellClickEvent<TData, TValue>) => void; onCellDoubleClick?: (event: CellDoubleClickEvent<TData, TValue>) => void; }",
     "core.ColDefGroup": "export interface ColDefGroup<TData = any> { groupId?: string; headerName?: string; headerClass?: string | string[]; children: (ColDefGroup<TData> | ColDef<TData>)[]; }",
     "core.ColumnState": "export interface ColumnState { colId: string; hide?: boolean; width?: number; flex?: number | null; widthMode?: \"auto\" | \"manual\"; contentWidth?: number; pinned?: \"left\" | \"right\" | null; }",
     "core.GridState": "export interface GridState extends GridStateBase { version: 2; advancedFilterModel: AdvancedFilterModel | null; }",
     "core.GridStateSection": "export type GridStateSection = \"columns\" | \"sort\" | \"filter\" | \"pagination\" | \"selection\" | \"expansion\";",
     "core.ApplyGridStateOptions": "export interface ApplyGridStateOptions { sections?: readonly GridStateSection[]; emitEvents?: boolean; }",
-    "core.MachTableDefaults": "export type MachTableDefaults = Omit<Partial<GridOptions<any>>, MachTableInstanceOptionKey>;",
+    "core.MachTableDefaults": "export type MachTableDefaults = Omit<Partial<GridOptions<any>>, MachTableInstanceOptionKey | \"dataProcessor\"> & { dataProcessor?: () => GridDataProcessor<any>; };",
     "core.MachTableRuntimeConfig": "export interface MachTableRuntimeConfig { defaults?: MachTableDefaults; columnTypes?: Readonly<Record<string, Partial<ColDef<any>>>>; components?: GridComponents; presets?: Readonly<Record<string, MachTablePreset>>; defaultPreset?: MachTablePresetSelection; strict?: boolean; onConfigWarning?: (warning: MachTableConfigWarning) => void; }",
     "core.ActionItem": "export interface ActionItem<TData = any> { id?: string; icon?: BuiltInActionIcon; label?: string; title?: string; variant?: ActionVariant; show?: (params: CellRendererParams<TData>) => boolean; disabled?: boolean | ((params: CellRendererParams<TData>) => boolean); loading?: boolean | ((params: CellRendererParams<TData>) => boolean); permission?: string | readonly string[]; confirm?: boolean | string | ((params: CellRendererParams<TData>) => boolean | string | Promise<boolean | string>); onClick: (params: CellRendererParams<TData>) => unknown | Promise<unknown>; }",
     "core.ActionButtonsConfig": "export interface ActionButtonsConfig<TData = any> { actions: ActionItem<TData>[]; max?: number; overflow?: ActionOverflowMode; moreLabel?: string; drawerTitle?: string; }",

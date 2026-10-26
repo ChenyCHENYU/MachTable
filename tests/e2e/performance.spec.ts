@@ -6,16 +6,27 @@ test("100k rows and 100 columns remain virtualized under update pressure", async
   await page.selectOption("#rows", "100000");
   await page.selectOption("#cols", "100");
   await page.click("#rebuild");
-  await page.waitForFunction(() => (window as any).__MACH_BENCH__?.rowCount === 100000);
+  await page.waitForFunction(() => (window as any).__MACH_BENCH__?.rowCount === 100000 && (window as any).__MACH_BENCH__.frameReadyMs != null);
 
   const initial = await page.evaluate(() => {
     const bench = (window as any).__MACH_BENCH__;
     return {
       initMs: bench.initMs,
+      dataMs: bench.dataMs,
+      frameReadyMs: bench.frameReadyMs,
+      seed: bench.seed,
+      firstRow: bench.api.rows.getById("r0")?.data,
       renderedCells: document.querySelectorAll("#host .mach-cell").length,
       renderedRows: bench.api.diagnostics.get().renderedRowCount
     };
   });
+  expect(initial.seed).toBe(20261026);
+  expect(initial.firstRow.id).toBe("r0");
+  expect(initial.firstRow.c6).toMatch(/^2026-/);
+  expect(initial.dataMs).toBeGreaterThanOrEqual(0);
+  expect(initial.frameReadyMs).toBeGreaterThanOrEqual(initial.initMs);
+  // Keep the original end-to-end allowance in addition to constructor timing.
+  expect(initial.dataMs + initial.initMs).toBeLessThan(process.env.CI ? 10_000 : 5_000);
   expect(initial.initMs).toBeLessThan(process.env.CI ? 10_000 : 5_000);
   expect(initial.renderedCells).toBeLessThan(2_000);
   expect(initial.renderedRows).toBeLessThan(100);
@@ -94,15 +105,42 @@ test("continuous vertical scroll and a 500-column viewport stay bounded", async 
     viewport.scrollLeft = viewport.scrollWidth;
     viewport.dispatchEvent(new Event("scroll"));
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    // Unbound pool slots also receive the new column structure, but intentionally have no row content.
+    const cells = Array.from(document.querySelectorAll<HTMLElement>("#host .mach-cell[data-col-id^='x']"));
+    const active = cells.filter(cell => cell.closest(".mach-row")!.hasAttribute("data-index"));
+    const empty = cells.filter(cell => cell.textContent === "");
+    const hiddenEmpty = empty.filter(cell => {
+      const row = cell.closest<HTMLElement>(".mach-row")!;
+      return !row.hasAttribute("data-index") && getComputedStyle(row).display === "none";
+    });
     return {
       metrics: api.diagnostics.getPerformance(),
       cells: document.querySelectorAll("#host .mach-cell").length,
-      columns: document.querySelectorAll("#host .mach-header-cell").length
+      columns: document.querySelectorAll("#host .mach-header-cell").length,
+      activeRows: new Set(active.map(cell => cell.closest<HTMLElement>(".mach-row")!.dataset.index)).size,
+      extendedColumns: document.querySelectorAll("#host .mach-header-cell[data-col-id^='x']").length,
+      rowCount: api.rows.getCount(),
+      values: active.map(cell => cell.textContent),
+      expectedValues: active.map(cell => String((Number(cell.closest<HTMLElement>(".mach-row")!.dataset.index) + Number(cell.dataset.colId!.slice(1))) % 997)),
+      emptyPoolCells: empty.length,
+      hiddenEmptyPoolCells: hiddenEmpty.length,
+      emptyPoolSample: empty.slice(0, 6).map(cell => {
+        const row = cell.closest<HTMLElement>(".mach-row")!;
+        const rect = row.getBoundingClientRect();
+        return { rowIndex: row.dataset.index ?? null, display: getComputedStyle(row).display, width: rect.width, height: rect.height };
+      })
     };
   });
   await testInfo.attach("scroll-and-500-column-metrics", {
     body: JSON.stringify({ vertical, horizontal }, null, 2), contentType: "application/json"
   });
+  expect(horizontal.values.length).toBeGreaterThan(0);
+  expect(horizontal.values.every(value => value !== "" && Number.isFinite(Number(value)))).toBe(true);
+  expect(horizontal.values).toEqual(horizontal.expectedValues);
+  expect(horizontal.values).toHaveLength(horizontal.activeRows * horizontal.extendedColumns);
+  expect(horizontal.activeRows).toBe(horizontal.metrics.renderedRows);
+  expect(horizontal.rowCount).toBe(10_000);
+  expect(horizontal.emptyPoolCells).toBe(horizontal.hiddenEmptyPoolCells);
   expect(horizontal.cells).toBeLessThan(2_000);
   expect(horizontal.columns).toBeLessThan(40);
   expect(horizontal.metrics.p95RenderMs).toBeLessThan(process.env.CI ? 250 : 120);

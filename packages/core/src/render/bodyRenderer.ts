@@ -10,6 +10,7 @@ import { RowDragController } from "../services/rowDragController";
 import { applyRowAppearance, resolveRowAppearance } from "./rowAppearance";
 import { ColumnViewportIndex } from "../services/columnViewportIndex";
 import { VariableSizeIndex } from "../services/variableSizeIndex";
+import { VirtualScrollCoordinates } from "./virtualScrollCoordinates";
 import { el, clamp } from "../lib/dom";
 import { DEFAULT_LOCALE } from "../lib/locale";
 import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
@@ -29,12 +30,12 @@ type BodyContext = Pick<
   | "contextMenuService"
   | "editingService"
   | "emit"
-  | "getApi"
-  | "getCellValue"
+  | "api"
+  | "readCellValue"
   | "gridId"
   | "headerRenderer"
-  | "isDestroyed"
-  | "options"
+  | "isDisposed"
+  | "gridOptions"
   | "performanceMonitor"
   | "pinnedRowsRenderer"
   | "reportError"
@@ -119,6 +120,10 @@ export class BodyRenderer {
   private rafId = 0;
   private lastScrollLeft = 0;
   private lastScrollTop = 0;
+  private lastLogicalScrollTop = 0;
+  private scrollCoordinates = new VirtualScrollCoordinates();
+  private rowOffset = 0;
+  private wheelInstalled = false;
   private hoverIndex = -1;
   private rowSizes = new VariableSizeIndex<RowNode<any>>();
   private columnViewport = new ColumnViewportIndex();
@@ -132,8 +137,9 @@ export class BodyRenderer {
   constructor(private core: BodyContext) {
     this.rowDragController = new RowDragController(
       core,
-      (index) => this.rowTop(index),
-      (offset) => this.rowAtOffset(offset, this.core.rowModel.getDisplayedRowCount())
+      (index) => this.rowTop(index) - this.rowOffset,
+      (offset) => this.rowAtOffset(offset + this.rowOffset, this.core.rowModel.getDisplayedRowCount()),
+      (delta) => this.scrollByLogical(delta)
     );
   }
 
@@ -166,6 +172,7 @@ export class BodyRenderer {
     cancelAnimationFrame(this.rafId);
     const viewport = this.core.skeleton.bodyViewports.center;
     viewport.removeEventListener("scroll", this.onScroll);
+    viewport.removeEventListener("wheel", this.onWheel);
     const body = this.core.skeleton.bodyEl;
     body.removeEventListener("click", this.onBodyClick);
     body.removeEventListener("dblclick", this.onBodyDblClick);
@@ -193,7 +200,7 @@ export class BodyRenderer {
     this.poolSize = 0;
     this.pendingFlash = [];
     this.dirtyHeightNodes.clear();
-    this.rowSizes.reset([], () => this.core.options.rowHeight);
+    this.rowSizes.reset([], () => this.core.gridOptions.rowHeight);
     this.columnViewport.update([]);
     this.measureCanvas = null;
   }
@@ -211,25 +218,26 @@ export class BodyRenderer {
   };
 
   syncScroll(force = false): void {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     const sk = this.core.skeleton;
     const viewport = sk.bodyViewports.center;
     const scrollLeft = viewport.scrollLeft;
     const scrollTop = viewport.scrollTop;
+    const logicalTop = this.scrollCoordinates.read(scrollTop);
     const horizontalChanged = force || scrollLeft !== this.lastScrollLeft;
-    const verticalChanged = force || scrollTop !== this.lastScrollTop;
+    const verticalChanged = force || scrollTop !== this.lastScrollTop || logicalTop !== this.lastLogicalScrollTop;
     if (!horizontalChanged && !verticalChanged) return;
 
     this.lastScrollLeft = scrollLeft;
     this.lastScrollTop = scrollTop;
+    this.lastLogicalScrollTop = logicalTop;
     if (horizontalChanged) {
       sk.headerRowContainers.center.style.transform = `translate3d(${-scrollLeft}px, 0, 0)`;
       this.core.headerRenderer.updateColumnWindow();
       this.core.pinnedRowsRenderer.onScrollLeft(scrollLeft);
     }
     if (verticalChanged) {
-      sk.rowContainers.left.style.transform = `translate3d(0, ${-scrollTop}px, 0)`;
-      sk.rowContainers.right.style.transform = `translate3d(0, ${-scrollTop}px, 0)`;
+      this.syncPinnedScroll(scrollTop);
     }
     this.core.tooltipService.hide();
     this.updateRange(false, horizontalChanged);
@@ -267,12 +275,12 @@ export class BodyRenderer {
 
   private resolveRowLayout(displayedCount: number): RowLayoutState {
     const rowCount = this.core.rowModel.getDisplayTotalCount();
-    const rowHeight = this.core.options.rowHeight;
-    const autoHeightColumns = this.core.options.masterDetail ? [] : this.collectAutoHeightColumns();
+    const rowHeight = this.core.gridOptions.rowHeight;
+    const autoHeightColumns = this.core.gridOptions.masterDetail ? [] : this.collectAutoHeightColumns();
     // Sparse random-access blocks cannot materialize a variable-height prefix for every remote row.
-    const variable = this.core.options.datasourceMode !== "block" && (
-      this.core.options.masterDetail ||
-      this.core.options.getRowHeight != null ||
+    const variable = this.core.gridOptions.datasourceMode !== "block" && (
+      this.core.gridOptions.masterDetail ||
+      this.core.gridOptions.getRowHeight != null ||
       autoHeightColumns.length > 0
     );
     const signature = variable
@@ -290,7 +298,7 @@ export class BodyRenderer {
 
   private variableRowLayoutSignature(rowHeight: number, columns: Column[]): string {
     const columnWidths = columns.map((column) => `${column.id}:${column.currentWidth}`).join(",");
-    return `${this.core.rowModel.getDisplayRevision()}|${rowHeight}|${this.core.options.detailRowHeight}|${columnWidths}`;
+    return `${this.core.rowModel.getDisplayRevision()}|${rowHeight}|${this.core.gridOptions.detailRowHeight}|${columnWidths}`;
   }
 
   private syncRowSizeIndex(displayed: RowNode<any>[], layout: RowLayoutState): void {
@@ -335,14 +343,65 @@ export class BodyRenderer {
   private applyRowContainerDimensions(widths: Record<PaneType, number>, totalHeight: number): void {
     const sk = this.core.skeleton;
     const viewport = sk.bodyViewports.center;
+    const logicalTop = this.scrollCoordinates.read(viewport.scrollTop);
+    const wasCompressed = this.scrollCoordinates.compressed;
+    this.scrollCoordinates.configure(totalHeight, viewport.clientHeight, this.core.gridOptions.domLayout !== "autoHeight");
     const centerAvailable = Math.max(0, viewport.clientWidth - widths.left - widths.right);
     const centerWidth = Math.max(widths.center, centerAvailable);
     for (const pane of PANES) {
       const container = sk.rowContainers[pane];
-      container.style.height = `${totalHeight}px`;
+      container.style.height = `${this.scrollCoordinates.height}px`;
+      // Buffered rows keep their real height and may extend beyond the scaled
+      // spacer near an endpoint. Their overflow must not enlarge scrollHeight.
+      container.style.overflow = this.scrollCoordinates.compressed ? "hidden" : "";
       if (pane === "center") container.style.width = `${centerWidth}px`;
     }
+    if (wasCompressed || this.scrollCoordinates.compressed) this.setLogicalScrollTop(logicalTop);
+    this.syncPinnedScroll(viewport.scrollTop);
+    if (this.wheelInstalled !== this.scrollCoordinates.compressed) {
+      this.wheelInstalled = this.scrollCoordinates.compressed;
+      if (this.wheelInstalled) viewport.addEventListener("wheel", this.onWheel, { passive: false });
+      else viewport.removeEventListener("wheel", this.onWheel);
+    }
   }
+
+  private setLogicalScrollTop(target: number): void {
+    const viewport = this.core.skeleton.bodyViewports.center;
+    viewport.scrollTop = this.scrollCoordinates.toPhysical(target);
+    this.scrollCoordinates.anchor(target, viewport.scrollTop);
+  }
+
+  private syncPinnedScroll(scrollTop: number): void {
+    // Native layout preserves the center scroller's precision; opposing large
+    // GPU transforms can round pinned rows and drop feedback differently.
+    const compressed = this.scrollCoordinates.compressed;
+    for (const pane of ["left", "right"] as const) {
+      const style = this.core.skeleton.rowContainers[pane].style;
+      style.top = compressed ? `${-scrollTop}px` : "";
+      style.transform = compressed ? "" : `translate3d(0, ${-scrollTop}px, 0)`;
+    }
+  }
+
+  private scrollByLogical(delta: number): boolean {
+    const viewport = this.core.skeleton.bodyViewports.center;
+    const before = this.scrollCoordinates.read(viewport.scrollTop);
+    this.setLogicalScrollTop(before + delta);
+    const changed = this.scrollCoordinates.read(viewport.scrollTop) !== before;
+    if (changed) this.syncScroll();
+    return changed;
+  }
+
+  private onWheel = (event: WheelEvent): void => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || !event.deltaY || !event.cancelable) return;
+    const viewport = this.core.skeleton.bodyViewports.center;
+    const unit = event.deltaMode === 1 ? this.core.gridOptions.rowHeight : event.deltaMode === 2 ? viewport.clientHeight : 1;
+    const before = this.scrollCoordinates.read(viewport.scrollTop);
+    this.setLogicalScrollTop(before + event.deltaY * unit);
+    if (this.scrollCoordinates.read(viewport.scrollTop) === before) return;
+    event.preventDefault();
+    viewport.scrollLeft += event.deltaX * unit;
+    this.onScroll();
+  };
 
   invalidateRowHeight(node: RowNode<any>): void {
     this.rowHeightCache.delete(node);
@@ -350,7 +409,7 @@ export class BodyRenderer {
   }
 
   private applyDomLayoutHeight(totalHeight: number): void {
-    this.core.skeleton.bodyEl.style.height = this.core.options.domLayout === "autoHeight" ? `${totalHeight}px` : "";
+    this.core.skeleton.bodyEl.style.height = this.core.gridOptions.domLayout === "autoHeight" ? `${totalHeight}px` : "";
   }
 
   invalidateAllRowHeights(): void {
@@ -360,14 +419,14 @@ export class BodyRenderer {
   }
 
   private resolveRowHeight(node: RowNode<any>, autoHeightCols: Column[]): number {
-    if (node.isDetail) return this.core.options.detailRowHeight;
+    if (node.isDetail) return this.core.gridOptions.detailRowHeight;
     const cached = this.rowHeightCache.get(node);
     if (cached !== undefined) return cached;
-    let height = this.core.options.rowHeight;
-    const getRowHeight = this.core.options.getRowHeight;
+    let height = this.core.gridOptions.rowHeight;
+    const getRowHeight = this.core.gridOptions.getRowHeight;
     if (getRowHeight) {
       try {
-        const requested = getRowHeight({ data: node.data, node, api: this.core.getApi() });
+        const requested = getRowHeight({ data: node.data, node, api: this.core.api });
         height = Number.isFinite(requested) ? Math.max(1, requested || height) : height;
       } catch (error) {
         this.core.reportError(error, "getRowHeight", { rowId: node.id });
@@ -380,9 +439,9 @@ export class BodyRenderer {
 
   private rowTop(index: number): number {
     const positioned = this.rowSizes.length;
-    if (positioned === 0) return Math.max(0, index) * this.core.options.rowHeight;
+    if (positioned === 0) return Math.max(0, index) * this.core.gridOptions.rowHeight;
     if (index <= positioned) return this.rowSizes.offsetAt(index);
-    return this.rowSizes.totalSize() + (index - positioned) * this.core.options.rowHeight;
+    return this.rowSizes.totalSize() + (index - positioned) * this.core.gridOptions.rowHeight;
   }
 
   private rowAtOffset(offset: number, rowCount: number): number {
@@ -390,7 +449,7 @@ export class BodyRenderer {
     const positioned = this.rowSizes.length;
     const positionedHeight = this.rowSizes.totalSize();
     if (positioned > 0 && offset < positionedHeight) return this.rowSizes.findIndex(offset);
-    const index = positioned + Math.floor(Math.max(0, offset - positionedHeight) / this.core.options.rowHeight);
+    const index = positioned + Math.floor(Math.max(0, offset - positionedHeight) / this.core.gridOptions.rowHeight);
     return Math.max(0, Math.min(index, rowCount - 1));
   }
 
@@ -435,7 +494,7 @@ export class BodyRenderer {
   }
 
   queueFlash(rowIndexes: number[], colIds: string[]): void {
-    if (!this.core.options.flashCells) return;
+    if (!this.core.gridOptions.flashCells) return;
     for (const rowIndex of rowIndexes) {
       for (const colId of colIds) this.pendingFlash.push([rowIndex, colId]);
     }
@@ -464,18 +523,18 @@ export class BodyRenderer {
   relayout(): void {
     this.applyContainerSizes();
     const viewport = this.core.skeleton.bodyViewports.center;
-    const rowHeight = this.core.options.rowHeight;
+    const rowHeight = this.core.gridOptions.rowHeight;
     let minRowHeight = rowHeight;
-    if (this.core.options.masterDetail) {
-      minRowHeight = Math.min(minRowHeight, this.core.options.detailRowHeight);
+    if (this.core.gridOptions.masterDetail) {
+      minRowHeight = Math.min(minRowHeight, this.core.gridOptions.detailRowHeight);
     }
     if (this.lastMinRowHeight > 0) {
       minRowHeight = Math.min(minRowHeight, this.lastMinRowHeight);
     }
     const visible = Math.ceil(viewport.clientHeight / Math.max(1, minRowHeight));
-    const rawNeeded = this.core.options.domLayout === "autoHeight"
+    const rawNeeded = this.core.gridOptions.domLayout === "autoHeight"
       ? this.core.rowModel.getDisplayedRowCount()
-      : visible + this.core.options.rowBuffer * 2 + 1;
+      : visible + this.core.gridOptions.rowBuffer * 2 + 1;
     // An even pool preserves striped-row parity when slots are recycled.
     const needed = rawNeeded % 2 === 0 ? rawNeeded : rawNeeded + 1;
     const colWindowChanged = this.computeColWindow();
@@ -496,7 +555,7 @@ export class BodyRenderer {
         const cols = this.core.columnModel.getPaneColumns(pane);
         if (cols.length === 0) continue;
         const row = el("div", "mach-row");
-        row.style.height = `${this.core.options.rowHeight}px`;
+        row.style.height = `${this.core.gridOptions.rowHeight}px`;
         row.setAttribute("role", "row");
         row.style.display = "none";
         sk.rowContainers[pane].appendChild(row);
@@ -505,9 +564,9 @@ export class BodyRenderer {
         slot.cellColIds[pane] = [];
         this.reconcilePaneCells(slot, pane);
       }
-      if (this.core.options.masterDetail) {
+      if (this.core.gridOptions.masterDetail) {
         const detailRow = el("div", "mach-row mach-detail-row");
-        detailRow.style.height = `${this.core.options.detailRowHeight}px`;
+        detailRow.style.height = `${this.core.gridOptions.detailRowHeight}px`;
         detailRow.setAttribute("role", "row");
         detailRow.style.display = "none";
         sk.rowContainers.center.appendChild(detailRow);
@@ -530,7 +589,7 @@ export class BodyRenderer {
     cell.setAttribute("role", "gridcell");
     if (column.hasCheckbox) {
       const input = document.createElement("input");
-      input.type = this.core.options.rowSelection === "single" ? "radio" : "checkbox";
+      input.type = this.core.gridOptions.rowSelection === "single" ? "radio" : "checkbox";
       input.className = "mach-row-checkbox";
       if (input.type === "radio") input.name = `mach-radio-${this.core.gridId}`;
       input.setAttribute("aria-label", "select row");
@@ -598,7 +657,7 @@ export class BodyRenderer {
   }
 
   private hasVariableRowHeights(): boolean {
-    return this.core.options.masterDetail || this.core.options.getRowHeight != null || this.hasAnyAutoHeight;
+    return this.core.gridOptions.masterDetail || this.core.gridOptions.getRowHeight != null || this.hasAnyAutoHeight;
   }
 
   private paneColumnLefts(pane: PaneType, columns: Column[], allPaneColumns: Column[]): number[] {
@@ -625,7 +684,7 @@ export class BodyRenderer {
       const cells = slot.cells[pane];
       const row = slot.rows[pane];
       if (!cells || !row) continue;
-      if (!variableHeights) row.style.height = `${this.core.options.rowHeight}px`;
+      if (!variableHeights) row.style.height = `${this.core.gridOptions.rowHeight}px`;
       const count = Math.min(columns.length, cells.length);
       for (let index = 0; index < count; index++) {
         const column = columns[index];
@@ -637,8 +696,8 @@ export class BodyRenderer {
   }
 
   private applyDetailRowHeight(): void {
-    if (!this.core.options.masterDetail) return;
-    const height = `${this.core.options.detailRowHeight}px`;
+    if (!this.core.gridOptions.masterDetail) return;
+    const height = `${this.core.gridOptions.detailRowHeight}px`;
     for (const slot of this.pool) slot.detailRow?.style.setProperty("--mach-detail-h", height);
   }
 
@@ -673,8 +732,11 @@ export class BodyRenderer {
 
   private updateRangeInner(force: boolean, checkColumnWindow: boolean): boolean {
     const viewport = this.core.skeleton.bodyViewports.center;
+    const offset = this.scrollCoordinates.read(viewport.scrollTop) - viewport.scrollTop;
+    const offsetChanged = offset !== this.rowOffset;
+    this.rowOffset = offset;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
-    const buffer = this.core.options.rowBuffer;
+    const buffer = this.core.gridOptions.rowBuffer;
     const colWindowChanged = checkColumnWindow ? this.computeColWindow() : false;
     this.reconcileColumnWindow(colWindowChanged);
 
@@ -685,15 +747,20 @@ export class BodyRenderer {
       return true;
     }
 
-    if (this.renderAutoHeightRange(rowCount, force)) return true;
+    if (this.renderAutoHeightRange(rowCount, force, colWindowChanged)) return true;
 
     const { first, lastExcl } = this.calculateVisibleRange(viewport, rowCount, buffer);
 
-    if (!force && first === this.first && lastExcl === this.lastExcl) return colWindowChanged;
+    if (!force && !colWindowChanged && first === this.first && lastExcl === this.lastExcl) {
+      if (offsetChanged) { this.positionVisibleRows(); this.updateFillHandle(); }
+      return colWindowChanged || offsetChanged;
+    }
     this.first = first;
     this.lastExcl = lastExcl;
     this.hideOutsideRange(first, lastExcl);
     this.renderVirtualRange(first, lastExcl, force, colWindowChanged);
+    if (offsetChanged) this.positionVisibleRows();
+    this.updateFillHandle();
     return true;
   }
 
@@ -702,8 +769,9 @@ export class BodyRenderer {
     rowCount: number,
     buffer: number
   ): { first: number; lastExcl: number } {
-    const firstVisible = this.rowAtOffset(viewport.scrollTop, rowCount);
-    const viewBottom = viewport.scrollTop + viewport.clientHeight;
+    const logicalTop = this.scrollCoordinates.read(viewport.scrollTop);
+    const firstVisible = this.rowAtOffset(logicalTop, rowCount);
+    const viewBottom = logicalTop + viewport.clientHeight;
     const lastVisible = Math.min(rowCount, this.rowAtOffset(viewBottom, rowCount) + 1);
     return {
       first: clamp(firstVisible - buffer, 0, rowCount - 1),
@@ -736,17 +804,12 @@ export class BodyRenderer {
     this.applyCellLayout();
   }
 
-  private renderAutoHeightRange(rowCount: number, force: boolean): boolean {
-    if (this.core.options.domLayout !== "autoHeight") return false;
-    if (!force && this.first === 0 && this.lastExcl === rowCount) return true;
+  private renderAutoHeightRange(rowCount: number, force: boolean, columnsChanged: boolean): boolean {
+    if (this.core.gridOptions.domLayout !== "autoHeight") return false;
+    if (!force && !columnsChanged && this.first === 0 && this.lastExcl === rowCount) return true;
     this.first = 0;
     this.lastExcl = rowCount;
-    for (let index = 0; index < rowCount; index++) {
-      const node = this.core.rowModel.getDisplayedRow(index);
-      const slot = this.pool[index];
-      if (!slot || !node) continue;
-      if (force || slot.index !== index || slot.nodeId !== node.id) this.assignSlot(slot, index);
-    }
+    this.renderVirtualRange(0, rowCount, force, columnsChanged);
     return true;
   }
 
@@ -783,14 +846,24 @@ export class BodyRenderer {
     }
     slot.index = index;
     slot.nodeId = node.id;
-    const y = this.rowTop(index);
-    const h = this.rowTop(index + 1) - y;
+    const top = this.rowTop(index);
+    const y = top - this.rowOffset;
+    const h = this.rowTop(index + 1) - top;
 
     if (node.isDetail) {
       this.assignDetailSlot(slot, node, index, y, h);
       return;
     }
     this.assignMasterSlot(slot, node, index, y, h);
+  }
+
+  private positionVisibleRows(): void {
+    for (const slot of this.pool) {
+      if (slot.index < this.first || slot.index >= this.lastExcl) continue;
+      const transform = `translateY(${this.rowTop(slot.index) - this.rowOffset}px)`;
+      for (const row of Object.values(slot.rows)) row.style.transform = transform;
+      if (slot.detailRow) slot.detailRow.style.transform = transform;
+    }
   }
 
   private assignDetailSlot(slot: RowSlot, node: RowNode<any>, index: number, y: number, h: number): void {
@@ -831,7 +904,7 @@ export class BodyRenderer {
     const isGroupRow = node.isGroup === true;
     const hasTreeChildren = isTreeRow && this.core.rowModel.hasChildren(node.id);
     const expandable = isGroupRow || hasTreeChildren ||
-      (this.core.options.masterDetail && this.core.rowModel.isRowExpandable(node));
+      (this.core.gridOptions.masterDetail && this.core.rowModel.isRowExpandable(node));
     const expanded = isGroupRow
       ? this.core.rowModel.isGroupExpanded(node.id)
       : this.core.rowModel.isRowExpanded(node.id);
@@ -856,7 +929,7 @@ export class BodyRenderer {
     row.dataset.id = node.id;
     row.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
     this.applyRowSelectionState(row, node);
-    const hovered = this.hoverIndex === index && !this.core.options.suppressRowHoverHighlight;
+    const hovered = this.hoverIndex === index && !this.core.gridOptions.suppressRowHoverHighlight;
     row.classList.toggle("mach-row--hover", hovered);
     row.classList.toggle("mach-row--odd", index % 2 === 1);
     row.classList.toggle("mach-row--drag-source", this.rowDragController.isSource(node));
@@ -923,12 +996,12 @@ export class BodyRenderer {
     if (!fn) return 1;
     try {
       const span = fn({
-        api: this.core.getApi(),
+        api: this.core.api,
         colDef: column.colDef,
         column,
         node,
         data: node.data,
-        value: this.core.getCellValue(node, column),
+        value: this.core.readCellValue(node, column),
         rowIndex
       });
       return Math.max(1, Math.min(Math.round(span) || 1, remaining));
@@ -950,9 +1023,9 @@ export class BodyRenderer {
     const master = node.masterId != null ? this.core.rowModel.getNodeById(node.masterId) : node;
     const container = el("div", "mach-detail");
     row.appendChild(container);
-    const renderer = this.core.options.detailRowRenderer;
+    const renderer = this.core.gridOptions.detailRowRenderer;
     if (renderer) {
-      const params = { data: node.data, node: master ?? node, api: this.core.getApi() };
+      const params = { data: node.data, node: master ?? node, api: this.core.api };
       let out: string | HTMLElement | { el: HTMLElement; destroy?: () => void } | null | undefined;
       try {
         out = renderer(params);
@@ -989,8 +1062,7 @@ export class BodyRenderer {
       cell.className = "mach-cell mach-cell--loading";
       cell.setAttribute("aria-readonly", "true");
       cell.setAttribute("aria-busy", "true");
-      const bar = document.createElement("span");
-      bar.className = "mach-cell-loading-bar";
+      const bar = el("span", "mach-cell-loading-bar");
       bar.style.width = `${34 + (column.id.length * 13 + node.rowIndex * 7) % 44}%`;
       cell.replaceChildren(bar);
       this.resetSpanStyle(cell);
@@ -1052,7 +1124,7 @@ export class BodyRenderer {
       if (cell.className !== "mach-cell mach-cell--drag") cell.className = "mach-cell mach-cell--drag";
       this.resetSpanStyle(cell);
     } else if (kind === "index") {
-      cell.textContent = String(this.core.rowModel.getRowSeq(node) + this.core.options.indexOffset);
+      cell.textContent = String(this.core.rowModel.getRowSeq(node) + this.core.gridOptions.indexOffset);
       const alignment = column.colDef.align === "right"
         ? " mach-cell--right"
         : column.colDef.align === "center"
@@ -1068,13 +1140,13 @@ export class BodyRenderer {
 
   private appendEditableIndicator(cell: HTMLElement, node: RowNode<any>, column: Column): void {
     if (
-      this.core.options.editType !== "cell" ||
-      this.core.options.editableIndicator === "none" ||
+      this.core.gridOptions.editType !== "cell" ||
+      this.core.gridOptions.editableIndicator === "none" ||
       !this.core.editingService.isEditable(node, column)
     ) return;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `mach-cell-edit-trigger mach-cell-edit-trigger--${this.core.options.editableIndicator}`;
+    button.className = `mach-cell-edit-trigger mach-cell-edit-trigger--${this.core.gridOptions.editableIndicator}`;
     button.tabIndex = -1;
     button.title = "Edit cell";
     button.setAttribute("aria-label", "Edit cell");
@@ -1114,8 +1186,8 @@ export class BodyRenderer {
 
   private renderTreeCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
     const expandable = this.core.rowModel.isRowExpandable(node);
-    const depth = this.getNodeDepth(node);
-    const formatted = formatCellValueWith(this.core, node, column, this.core.getCellValue(node, column));
+    const depth = this.core.rowModel.getTreeDepth(node);
+    const formatted = formatCellValueWith(this.core, node, column, this.core.readCellValue(node, column));
     const indent = el("span", "mach-tree-indent");
     indent.style.width = `${depth * 16}px`;
     const wrap = el("span", "mach-tree-cell");
@@ -1152,13 +1224,9 @@ export class BodyRenderer {
     text.textContent = formatted;
     wrap.appendChild(text);
     cell.replaceChildren(wrap);
-    if (formatted && !this.core.options.tooltipComponent) cell.title = formatted;
+    if (formatted && !this.core.gridOptions.tooltipComponent) cell.title = formatted;
     else cell.removeAttribute("title");
     applyCellClasses(this.core, cell, node, column);
-  }
-
-  private getNodeDepth(node: RowNode<any>): number {
-    return this.core.rowModel.getTreeDepth(node);
   }
 
   private resetSpanStyle(cell: HTMLElement): void {
@@ -1190,7 +1258,7 @@ export class BodyRenderer {
     if (value > 1) {
       const end = Math.min(idx + value, this.core.rowModel.getDisplayedRowCount());
       const height = this.rowTop(end) - this.rowTop(idx);
-      cell.style.height = `${height > 0 ? height : value * this.core.options.rowHeight}px`;
+      cell.style.height = `${height > 0 ? height : value * this.core.gridOptions.rowHeight}px`;
       cell.style.zIndex = "1";
       cell.setAttribute("aria-rowspan", String(value));
     } else {
@@ -1265,7 +1333,7 @@ export class BodyRenderer {
   }
 
   refreshRows(indexes: number[]): void {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     const seen = new Set<number>();
     for (const index of indexes) {
       if (index < 0 || seen.has(index)) continue;
@@ -1290,12 +1358,8 @@ export class BodyRenderer {
     this.flushFlash();
   }
 
-  refreshAllCells(): void {
-    this.refreshCells();
-  }
-
   refreshCells(params: RefreshCellsParams = {}): void {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     const rowIds = params.rowIds == null ? null : new Set(params.rowIds);
     const rowIndexes = params.rowIndexes == null ? null : new Set(params.rowIndexes);
     const columns = params.columns == null ? null : new Set(params.columns);
@@ -1362,7 +1426,7 @@ export class BodyRenderer {
   }
 
   onDataChanged(): void {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     if (this.focusedCell && this.focusedCell.rowIndex >= this.core.rowModel.getDisplayedRowCount()) {
       this.setFocusedCell(null, null);
     }
@@ -1375,7 +1439,7 @@ export class BodyRenderer {
   }
 
   refreshOverlays(): void {
-    const options = this.core.options;
+    const options = this.core.gridOptions;
     if (options.loading) {
       const template = options.overlayLoadingTemplate || this.core.buildDefaultLoadingState();
       this.core.skeleton.showOverlay("loading", template, options.allowUnsafeOverlayHtml);
@@ -1558,8 +1622,8 @@ export class BodyRenderer {
     const handle = this.ensureFillHandle();
     const range = this.normalizedRange();
     if (
-      !this.core.options.enableRangeSelection ||
-      !this.core.options.fillHandle ||
+      !this.core.gridOptions.enableRangeSelection ||
+      !this.core.gridOptions.fillHandle ||
       !range
     ) {
       handle.style.display = "none";
@@ -1575,14 +1639,21 @@ export class BodyRenderer {
     const local = range.c2 - leftCount;
     this.columnViewport.update(centerCols);
     const x = this.columnViewport.offsetAt(local + 1);
-    const bottom = this.rowTop(Math.min(range.r2 + 1, this.core.rowModel.getDisplayedRowCount()));
+    const bottom = this.rowTop(Math.min(range.r2 + 1, this.core.rowModel.getDisplayedRowCount())) - this.rowOffset;
+    const viewport = this.core.skeleton.bodyViewports.center;
+    if (this.scrollCoordinates.compressed && (bottom < viewport.scrollTop || bottom > viewport.scrollTop + viewport.clientHeight)) {
+      handle.style.display = "none";
+      return;
+    }
     handle.style.display = "";
-    handle.style.left = `${x - 4}px`;
-    handle.style.top = `${bottom - 4}px`;
+    handle.style.left = `${this.scrollCoordinates.compressed
+      ? Math.min(x - 4, parseFloat(this.core.skeleton.rowContainers.center.style.width) - 8)
+      : x - 4}px`;
+    handle.style.top = `${Math.min(bottom - 4, this.scrollCoordinates.height - 8)}px`;
   }
 
   private onFillHandleDown(e: MouseEvent): void {
-    if (this.core.isDestroyed() || e.button !== 0) return;
+    if (this.core.isDisposed() || e.button !== 0) return;
     const range = this.normalizedRange();
     if (!range) return;
     e.preventDefault();
@@ -1607,7 +1678,7 @@ export class BodyRenderer {
   private fillTargetRow(e: MouseEvent): number {
     const container = this.core.skeleton.rowContainers.center;
     const rect = container.getBoundingClientRect();
-    const y = e.clientY - rect.top;
+    const y = e.clientY - rect.top + this.rowOffset;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     const row = this.rowAtOffset(y, rowCount);
     return Math.max(this.fillDrag!.r2, Math.min(row, rowCount - 1));
@@ -1705,14 +1776,14 @@ export class BodyRenderer {
     const sources: any[] = [];
     for (let index = sourceStart; index <= sourceEnd; index++) {
       const column = columns[index];
-      sources.push(column ? this.core.getCellValue(node, column) : undefined);
+      sources.push(column ? this.core.readCellValue(node, column) : undefined);
     }
     const pattern = createFillPattern(sources);
     for (let index = sourceEnd + 1; index <= targetEnd; index++) {
       const column = columns[index];
       if (!isFillableColumn(column) || !this.core.editingService.isEditable(node, column)) continue;
       const value = fillPatternValue(pattern, index - sourceStart);
-      const oldValue = this.core.getCellValue(node, column);
+      const oldValue = this.core.readCellValue(node, column);
       changes.push({ node, column, oldValue, newValue: value });
     }
   }
@@ -1799,7 +1870,7 @@ export class BodyRenderer {
       if (!node || node.isDetail || node.isGroup) continue;
       if (!this.core.editingService.isEditable(node, column)) continue;
       const value = fillPatternValue(pattern, rowIndex - sourceStart);
-      const oldValue = this.core.getCellValue(node, column);
+      const oldValue = this.core.readCellValue(node, column);
       changes.push({ node, column, oldValue, newValue: value });
     }
   }
@@ -1808,7 +1879,7 @@ export class BodyRenderer {
     const values: any[] = [];
     for (let rowIndex = start; rowIndex <= end; rowIndex++) {
       const node = this.core.rowModel.getDisplayedRow(rowIndex);
-      values.push(node ? this.core.getCellValue(node, column) : undefined);
+      values.push(node ? this.core.readCellValue(node, column) : undefined);
     }
     return values;
   }
@@ -1870,7 +1941,7 @@ export class BodyRenderer {
     if (rowCount === 0) return;
     const index = clamp(rowIndex, 0, rowCount - 1);
     const viewportHeight = viewport.clientHeight;
-    const scrollTop = viewport.scrollTop;
+    const scrollTop = this.scrollCoordinates.read(viewport.scrollTop);
     const rowTop = this.rowTop(index);
     const rowBottom = this.rowTop(index + 1);
 
@@ -1887,7 +1958,7 @@ export class BodyRenderer {
     }
 
     const maxScroll = Math.max(0, this.rowTop(rowCount) - viewportHeight);
-    viewport.scrollTop = clamp(target, 0, maxScroll);
+    this.setLogicalScrollTop(clamp(target, 0, maxScroll));
     // Imperative navigation must release offscreen editors in this turn.
     // A queued native caret reveal can otherwise undo the scroll before RAF.
     this.syncScroll();
@@ -1927,7 +1998,7 @@ export class BodyRenderer {
   }
 
   private onBodyClick = (e: MouseEvent): void => {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     const target = e.target as HTMLElement;
     const resolved = this.resolveEventTarget(e);
     if (!resolved) return;
@@ -1937,7 +2008,7 @@ export class BodyRenderer {
       const colId = resolved.cellEl?.dataset.colId ?? "";
       if (this.core.editingService.isEditing(resolved.index, colId)) return;
       void this.core.editingService.stopAsync(false).then((stopped) => {
-        if (!stopped || this.core.isDestroyed()) return;
+        if (!stopped || this.core.isDisposed()) return;
         this.handleBodyClick(e, target, resolved);
         const column = colId ? this.core.columnModel.getColumn(colId) : undefined;
         if (
@@ -1968,7 +2039,7 @@ export class BodyRenderer {
     if (this.handleSelectionCheckboxClick(target, node, index, e)) return;
     if (!cellEl || !column) return;
     this.focusGridRoot();
-    if (!this.core.options.suppressCellFocus) this.setFocusedCell(index, colId);
+    if (!this.core.gridOptions.suppressCellFocus) this.setFocusedCell(index, colId);
     this.core.selectionService.onRowClick(node, e, false);
     this.emitCellClick(e, node, index, column);
     this.maybeStartSingleClickEdit(node, index, column);
@@ -2005,7 +2076,7 @@ export class BodyRenderer {
     const selectionCell = target.closest<HTMLElement>(".mach-cell--selection");
     if (!selectionCell) return false;
     this.focusGridRoot();
-    if (!this.core.options.suppressCellFocus) {
+    if (!this.core.gridOptions.suppressCellFocus) {
       this.setFocusedCell(index, selectionCell.dataset.colId ?? "");
     }
     this.clearRangeSelection();
@@ -2014,7 +2085,7 @@ export class BodyRenderer {
   }
 
   private emitCellClick(event: MouseEvent, node: RowNode<any>, index: number, column: Column): void {
-    const value = this.core.getCellValue(node, column);
+    const value = this.core.readCellValue(node, column);
     const cellEvent = this.core.emit("cellClicked", {
       event,
       rowNode: node,
@@ -2028,7 +2099,7 @@ export class BodyRenderer {
   }
 
   private maybeStartSingleClickEdit(node: RowNode<any>, index: number, column: Column): void {
-    const singleClick = this.core.options.singleClickEdit || column.colDef.singleClickEdit === true;
+    const singleClick = this.core.gridOptions.singleClickEdit || column.colDef.singleClickEdit === true;
     if (singleClick && this.core.editingService.isEditable(node, column)) {
       this.core.editingService.start(index, column);
     }
@@ -2045,7 +2116,7 @@ export class BodyRenderer {
   }
 
   private onBodyDblClick = (e: MouseEvent): void => {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     if ((e.target as HTMLElement).closest(".mach-cell-editor-shell, .mach-row-editor-shell")) return;
     const resolved = this.resolveEventTarget(e);
     if (!resolved) return;
@@ -2055,7 +2126,7 @@ export class BodyRenderer {
     const column = this.core.columnModel.getColumn(colId);
     if (!column) return;
 
-    const value = this.core.getCellValue(node, column);
+    const value = this.core.readCellValue(node, column);
     const event = this.core.emit("cellDoubleClicked", {
       event: e,
       rowNode: node,
@@ -2073,7 +2144,7 @@ export class BodyRenderer {
   };
 
   private onContextMenu = (e: MouseEvent): void => {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     const resolved = this.resolveEventTarget(e);
     if (!resolved || resolved.node.isDetail || resolved.node.isGroup || !resolved.cellEl) return;
     const { node, index, cellEl } = resolved;
@@ -2086,11 +2157,11 @@ export class BodyRenderer {
       rowIndex: index,
       column,
       colDef: column.colDef,
-      value: this.core.getCellValue(node, column)
+      value: this.core.readCellValue(node, column)
     });
-    if (this.core.options.contextMenu) {
+    if (this.core.gridOptions.contextMenu) {
       e.preventDefault();
-      if (this.core.options.enableRangeSelection && !this.normalizedRange()) {
+      if (this.core.gridOptions.enableRangeSelection && !this.normalizedRange()) {
         const colIdx = this.core.columnModel.getFlatIndex(colId);
         if (colIdx >= 0) this.startRange(index, colIdx, false);
       }
@@ -2100,7 +2171,7 @@ export class BodyRenderer {
 
   private onMouseDown = (e: MouseEvent): void => {
     if (this.shouldIgnoreRangeMouseDown(e)) return;
-    if (this.core.options.enableRangeSelection && e.button === 0) {
+    if (this.core.gridOptions.enableRangeSelection && e.button === 0) {
       const resolved = this.resolveEventTarget(e);
       if (
         resolved &&
@@ -2113,7 +2184,7 @@ export class BodyRenderer {
         if (colIdx >= 0) {
           this.startRange(resolved.index, colIdx, e.shiftKey);
           this.rangeDragging = true;
-          if (!e.shiftKey && !this.core.options.suppressCellFocus) {
+          if (!e.shiftKey && !this.core.gridOptions.suppressCellFocus) {
             this.setFocusedCell(resolved.index, resolved.cellEl.dataset.colId ?? "");
           }
         }
@@ -2133,7 +2204,7 @@ export class BodyRenderer {
   };
 
   private onMouseOver = (e: MouseEvent): void => {
-    if (this.core.isDestroyed()) return;
+    if (this.core.isDisposed()) return;
     const resolved = this.resolveEventTarget(e);
     if (this.rangeDragging) {
       if (resolved && !resolved.node.isDetail && !resolved.node.isGroup && resolved.cellEl) {
@@ -2144,7 +2215,7 @@ export class BodyRenderer {
         }
       }
     }
-    if (this.core.options.suppressRowHoverHighlight) return;
+    if (this.core.gridOptions.suppressRowHoverHighlight) return;
     if (!resolved || resolved.node.isDetail) return;
     this.setHoverIndex(resolved.index);
   };
@@ -2154,7 +2225,7 @@ export class BodyRenderer {
   };
 
   private onDragHandlePointerDown = (e: PointerEvent): void => {
-    if (this.core.isDestroyed() || e.button !== 0) return;
+    if (this.core.isDisposed() || e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (!target.closest(".mach-row-drag-handle")) return;
     const resolved = this.resolveEventTarget(e);
@@ -2165,17 +2236,19 @@ export class BodyRenderer {
   };
 
   private renderDragHandle(cell: HTMLElement, node: RowNode<any>): void {
-    const handle = document.createElement("button");
-    handle.className = "mach-row-drag-handle";
+    const previous = cell.querySelector<HTMLButtonElement>("button.mach-row-drag-handle");
+    // Layout keeps focus on the same business row; slot reuse must release it.
+    const handle = previous?.value === node.id ? previous : el("button", "mach-row-drag-handle");
     handle.type = "button";
+    handle.value = node.id;
     const decision = this.rowDragController.dragDecision(node);
     handle.disabled = decision !== true;
-    const label = this.core.options.locale.rowDragHandle ?? DEFAULT_LOCALE.rowDragHandle;
+    const label = this.core.gridOptions.locale.rowDragHandle ?? DEFAULT_LOCALE.rowDragHandle;
     handle.setAttribute("aria-label", label);
     handle.title = typeof decision === "string" ? decision
-      : handle.disabled ? this.core.options.locale.rowDragUnavailable ?? DEFAULT_LOCALE.rowDragUnavailable : label;
+      : handle.disabled ? this.core.gridOptions.locale.rowDragUnavailable ?? DEFAULT_LOCALE.rowDragUnavailable : label;
     handle.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
-    cell.replaceChildren(handle);
+    if (handle !== previous) cell.replaceChildren(handle);
   }
 
   private onDragHandleKeyDown = (event: KeyboardEvent): void => {

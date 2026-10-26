@@ -36,7 +36,11 @@ export type {
   CellClassRule,
   CellEditorFactory,
   CellStyleRule,
-  CellAlign
+  CellAlign,
+  ValueInputSource,
+  ValueOutputTarget,
+  ValueParserParams,
+  ValueSerializerParams
 } from "./types/colDef";
 export type {
   AdvancedFilterCondition,
@@ -217,6 +221,8 @@ export type {
   SaveChangesResult,
   SaveChangesHandler,
   ImportCsvOptions,
+  ImportMatrixOptions,
+  MatrixExportParams,
   PrintOptions
 } from "./types/api";
 export { resolveSaveConflict } from "./lib/batchSave";

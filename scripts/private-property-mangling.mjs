@@ -8,7 +8,11 @@ export function privatePropertyPattern(directory = new URL("../packages/core/src
   const privateNames = new Set();
   const reserved = new Set();
   function visit(node, allowCandidates = true) {
-    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) reserved.add(node.text);
+    // Pick<InternalService, "method"> and other erased literal types are not
+    // runtime property lookups. Public/quoted members are reserved separately;
+    // quoted runtime access and native declarations keep their original names.
+    if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
+        !ts.isLiteralTypeNode(node.parent)) reserved.add(node.text);
     const member = ts.isPropertyDeclaration(node) || ts.isMethodDeclaration(node) ||
       ts.isPropertySignature(node) || ts.isMethodSignature(node) || ts.isGetAccessor(node) ||
       ts.isSetAccessor(node) || ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node);
@@ -20,8 +24,12 @@ export function privatePropertyPattern(directory = new URL("../packages/core/src
       if (isPrivate) { if (allowCandidates) privateNames.add(node.name.text); }
       else reserved.add(node.name.text);
     }
-    // Parameter properties are never candidates, including those used in adapters.
-    if (ts.isParameter(node) && node.modifiers && ts.isIdentifier(node.name)) reserved.add(node.name.text);
+    // Constructor parameter properties are real instance fields too. Only
+    // explicitly private ones can be shortened; public/protected contracts stay.
+    if (ts.isParameter(node) && ts.isParameterPropertyDeclaration(node, node.parent) && ts.isIdentifier(node.name)) {
+      if (allowCandidates && node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.PrivateKeyword)) privateNames.add(node.name.text);
+      else reserved.add(node.name.text);
+    }
     ts.forEachChild(node, child => visit(child, allowCandidates));
   }
   function walk(folder, allowCandidates = true) {

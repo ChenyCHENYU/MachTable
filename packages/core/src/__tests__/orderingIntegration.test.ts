@@ -117,7 +117,11 @@ describe("ordering controller with real grid gestures", () => {
     const onDrop = vi.fn();
     api.on("rowDragEnd", onDrop);
     expect(visible()).toEqual(["1", "7", "13", "19", "25"]);
-    host.querySelector('.mach-row[data-id="1"] .mach-row-drag-handle')!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true }));
+    const handle = host.querySelector<HTMLButtonElement>('.mach-row[data-id="1"] .mach-row-drag-handle')!;
+    handle.focus();
+    api.view.refreshLayout();
+    expect(document.activeElement).toBe(handle);
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true }));
     for (let index = 0; index < 20; index++) await Promise.resolve();
     expect(visible()).toEqual(["7", "1", "13", "19", "25"]);
     expect(onDrop).toHaveBeenCalledWith(expect.objectContaining({ intent: expect.objectContaining({ targetId: "7", beforeId: "7", afterId: "8" }) }));
@@ -129,6 +133,20 @@ describe("ordering controller with real grid gestures", () => {
     expect(visible()).toEqual(["7", "1", "13", "19", "25"]);
     expect(model).toHaveLength(30);
     expect(new Set(model.map(row => row.id))).toEqual(new Set(original.map(row => row.id)));
+  });
+
+  it("does not transfer handle focus when a pooled cell is assigned another row", () => {
+    setup();
+    const handle = host.querySelector<HTMLButtonElement>('.mach-row[data-id="a"] .mach-row-drag-handle')!;
+    const cell = handle.parentElement;
+    handle.focus();
+    model = [...model].reverse();
+    api.rows.setData([...model]);
+    const replacement = host.querySelector<HTMLButtonElement>('.mach-row[data-id="d"] .mach-row-drag-handle')!;
+    expect(replacement.parentElement).toBe(cell);
+    expect(replacement).not.toBe(handle);
+    expect(handle.isConnected).toBe(false);
+    expect(document.activeElement).not.toBe(replacement);
   });
 
   it("skips hidden tree siblings without targeting their descendants", async () => {

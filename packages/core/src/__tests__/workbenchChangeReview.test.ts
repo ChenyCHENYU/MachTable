@@ -14,7 +14,7 @@ function setup(save?: SaveChangesHandler<Row>, count = 3) {
   document.body.append(trigger, grid, host);
   const core = new GridCore<Row>(grid, { pagination: false, columnDefs: [{ field: "amount", editable: true, cellEditor: "number" }], rowKey: (row) => row.id,
     rowData: Array.from({ length: count }, (_, index) => ({ id: String(index + 1), amount: index + 1 })) });
-  const api = core.getApi();
+  const api = core.api;
   trigger.focus();
   const review = mountChangeReview(host, { api, save });
   cleanups.push(() => { review.destroy(); api.destroy(); });
@@ -214,7 +214,7 @@ describe("change review workbench", () => {
     const core = new GridCore<Record<string, unknown>>(grid, { pagination: false, rowKey: (row) => String(row.id),
       rowData: [{ id: "1", ...Object.fromEntries(fields.map((field) => [field, 0])) }],
       columnDefs: fields.map((field) => ({ field, editable: true })) });
-    const panel = mountChangeReview(host, { api: core.getApi() });
+    const panel = mountChangeReview(host, { api: core.api });
     cleanups.push(() => { panel.destroy(); core.destroy(); });
     core.pasteText(fields.map(() => "1").join("\t"), 0, 0);
     await flush();

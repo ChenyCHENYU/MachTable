@@ -34,6 +34,26 @@ afterEach(() => {
 });
 
 describe("React adapter", () => {
+  it("forwards only changed options when config layers recreate equivalent objects", async () => {
+    const host = document.createElement("div"); document.body.append(host);
+    const root = createRoot(host), apiRef = { current: null as GridApi | null };
+    const columns = [{ field: "id" }], rows = [{ id: 1 }];
+    const config = {
+      defaults: { pagination: false, defaultColDef: { sortable: true } },
+      columnTypes: { amount: { type: "rightAligned" } }
+    };
+    const render = (stripedRows: boolean) => root.render(createElement(MachTableProvider, { config },
+      createElement(MachTable, { apiRef, columnDefs: columns, rowData: rows, stripedRows })));
+    await act(async () => render(false));
+    const grid = apiRef.current!;
+    const defaults = grid.getOption("defaultColDef"), types = grid.getOption("columnTypes");
+    await act(async () => render(true));
+    expect(grid.getOption("stripedRows")).toBe(true);
+    expect(grid.getOption("defaultColDef")).toBe(defaults);
+    expect(grid.getOption("columnTypes")).toBe(types);
+    await act(async () => root.unmount());
+  });
+
   it("replaces and clears row appearance rules through public props", async () => {
     const host = document.createElement("div");
     document.body.append(host);

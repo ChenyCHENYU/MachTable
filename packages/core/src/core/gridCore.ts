@@ -1,3 +1,4 @@
+import { el } from "../lib/dom";
 import { EventBus } from "./eventBus";
 import { resolveOptions } from "./resolveOptions";
 import { ColumnModel } from "../services/columnModel";
@@ -8,6 +9,8 @@ import { ColumnDragService } from "../services/columnDragService";
 import { KeyboardService } from "../services/keyboardService";
 import { EditingService } from "../services/editingService";
 import { InputService, type InputChange } from "../services/inputService";
+import { parseColumnValue, serializeColumnValue } from "../lib/columnValues";
+import { coerceImportedValue } from "../lib/numericText";
 import { FilterPopupService } from "../services/filterPopup";
 import { ColumnMenuService } from "../services/columnMenuService";
 import { ContextMenuService } from "../services/contextMenuService";
@@ -35,7 +38,6 @@ import { validateColumnDefs } from "../lib/validateDefs";
 import { validateGridOptions } from "../lib/validateOptions";
 import { normalizeFeatureRequirements, resolveGridFeatures } from "../lib/featureManifest";
 import { toTsv, parseTsv, writeClipboard } from "../lib/clipboard";
-import { formatCellValueWith } from "../render/cellContent";
 import { DEFAULT_LOCALE, type MachTableLocale, type MachTableLocaleKey } from "../lib/locale";
 import { version as packageVersion } from "../../package.json";
 import type { ResolvedGridOptions } from "../types/options";
@@ -72,7 +74,7 @@ let gridUid = 0;
 /** @internal Per-grid services are exposed only through the frozen GridApi facade. */
 export class GridCore<TData = any> {
   readonly gridId: number;
-  readonly options: ResolvedGridOptions<TData>;
+  readonly gridOptions: ResolvedGridOptions<TData>;
   readonly eventBus: EventBus<GridEventMap<TData>>;
   readonly skeleton: GridSkeleton;
   readonly columnModel: ColumnModel;
@@ -98,9 +100,10 @@ export class GridCore<TData = any> {
   readonly pinnedRowsRenderer: PinnedRowsRenderer;
   readonly summaryRenderer: SummaryRenderer;
   readonly statusBarService: StatusBarService;
-  readonly api: GridApi<TData>;
+  // Construction failures can occur before the facade is connected; cleanup checks it explicitly.
+  readonly api!: GridApi<TData>;
 
-  private destroyed = false;
+  private disposedState = false;
   private autoIdCounter = 0;
   private readyRafId = 0;
   private readySettled = false;
@@ -109,6 +112,9 @@ export class GridCore<TData = any> {
   private lastColumnLayoutSignature = "";
   private resources = new ResourceScope((error) => console.error("[mach-table] resource cleanup error", error));
   private activeFeatures = new Map<string, { feature: GridFeature<TData>; scope: ResourceScope }>();
+  private processorSource: GridOptions<TData>["dataProcessor"];
+  private releaseProcessor?: () => void;
+  private processorGeneration = 0;
   private featureGeneration = 0;
   private recentErrors: GridDiagnosticError[] = [];
   private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,13 +131,14 @@ export class GridCore<TData = any> {
     });
     this.resolveReady = settleReady;
     this.gridId = ++gridUid;
-    this.options = resolveOptions(options);
+    this.gridOptions = resolveOptions(options);
     this.eventBus = new EventBus<GridEventMap<TData>>((error, eventType) => {
       if (eventType === "gridError") console.error("[mach-table] error in gridError listener", error);
       else this.reportError(error, "eventBus.listener", { eventType });
     });
 
     try {
+      this.setDataProcessor(options.dataProcessor);
       this.columnModel = new ColumnModel(this);
       this.rowModel = this.resources.own(new RowModel<TData>(this));
       this.selectionService = new SelectionService(this);
@@ -160,7 +167,7 @@ export class GridCore<TData = any> {
       this.resources.add(() => this.destroyFeatures());
 
       this.changeTracker.init();
-      this.skeleton.init(container, this.options);
+      this.skeleton.init(container, this.gridOptions);
       this.watermarkService.init();
       this.bodyRenderer.init();
       this.keyboardService.init();
@@ -170,41 +177,56 @@ export class GridCore<TData = any> {
       this.statusBarService.init();
       this.pinnedRowsRenderer.init();
 
-      this.rowModel.restorePagination(this.options.paginationPage, this.options.paginationPageSize);
-      this.columnModel.setColumnDefs(this.options.columnDefs);
-      this.rowModel.setAdvancedFilterModel(this.options.advancedFilterModel);
-      this.rowModel.setQuickFilter(this.options.quickFilterText);
+      this.rowModel.restorePagination(this.gridOptions.paginationPage, this.gridOptions.paginationPageSize);
+      this.columnModel.setColumnDefs(this.gridOptions.columnDefs);
+      this.rowModel.setAdvancedFilterModel(this.gridOptions.advancedFilterModel);
+      this.rowModel.setQuickFilter(this.gridOptions.quickFilterText);
       this.refreshAriaState();
-      this.validateDefs(this.options.columnDefs);
+      this.validateDefs(this.gridOptions.columnDefs);
       this.checkWarnings(options);
       this.headerRenderer.build();
-      if (this.options.datasource) {
+      if (this.gridOptions.datasource) {
         void this.rowModel.startInfinite().catch(() => undefined);
       } else {
-        this.rowModel.setRowData(this.options.rowData);
+        this.rowModel.setRowData(this.gridOptions.rowData);
       }
-      if (this.options.initialState) this.api.state.apply(this.options.initialState, { emitEvents: false });
+      if (this.gridOptions.initialState) this.api.state.apply(this.gridOptions.initialState, { emitEvents: false });
       this.loadPersistedGridState();
       this.relayout();
-      this.pinnedRowsRenderer.setData(this.options.pinnedTopRowData, this.options.pinnedBottomRowData);
-      this.setFeatures(this.options.features);
+      this.pinnedRowsRenderer.setData(this.gridOptions.pinnedTopRowData, this.gridOptions.pinnedBottomRowData);
+      this.setFeatures(this.gridOptions.features);
 
-      if (this.destroyed) return;
+      if (this.disposedState) return;
 
       this.readyRafId = requestAnimationFrame(() => {
         this.readyRafId = 0;
-        if (!this.destroyed) this.emit("gridReady", {});
+        if (!this.disposedState) this.emit("gridReady", {});
         this.settleReady();
       });
     } catch (error) {
-      if (this.getApi()) this.reportError(error, "grid.constructor");
+      if (this.api) this.reportError(error, "grid.constructor");
       this.destroy();
       throw error;
     }
   }
 
-  getApi(): GridApi<TData> {
-    return this.api;
+
+  /** Resolve factories once per owner; publish the new owner before releasing a reentrant old one. */
+  setDataProcessor(source: GridOptions<TData>["dataProcessor"]): boolean {
+    if (source === this.processorSource) return false;
+    const generation = ++this.processorGeneration;
+    const next = typeof source === "function" ? source() : source;
+    if (this.disposedState || generation !== this.processorGeneration) {
+      next?.destroy?.();
+      return false;
+    }
+    const previous = this.releaseProcessor;
+    this.processorSource = source;
+    if (next === this.gridOptions.dataProcessor && previous) return false;
+    this.gridOptions.dataProcessor = next;
+    this.releaseProcessor = next ? this.resources.add(() => next.destroy?.()) : undefined;
+    previous?.();
+    return true;
   }
 
   whenReady(): Promise<GridApi<TData>> {
@@ -218,11 +240,11 @@ export class GridCore<TData = any> {
   }
 
   resolveCellRenderer(name: string): CellRendererFn | undefined {
-    return this.options.components?.cellRenderers?.[name] ?? BUILTIN_CELL_RENDERERS[name];
+    return this.gridOptions.components?.cellRenderers?.[name] ?? BUILTIN_CELL_RENDERERS[name];
   }
 
   resolveCellEditor(name: string): CellEditorFactory | undefined {
-    return this.options.components?.cellEditors?.[name];
+    return this.gridOptions.components?.cellEditors?.[name];
   }
 
   private inactiveFeatureDependency(feature: GridFeature<TData>): string | undefined {
@@ -234,7 +256,7 @@ export class GridCore<TData = any> {
   setFeatures(features: readonly GridFeature<TData>[] | null | undefined): void {
     const generation = this.featureGeneration + 1;
     this.destroyFeatures();
-    if (this.destroyed || this.featureGeneration !== generation) return;
+    if (this.disposedState || this.featureGeneration !== generation) return;
     const resolved = resolveGridFeatures(features ?? []);
     for (const issue of resolved.issues) {
       this.reportError(new Error(issue.message), "feature.manifest", {
@@ -245,7 +267,7 @@ export class GridCore<TData = any> {
     }
 
     for (const feature of resolved.features) {
-      if (this.destroyed || this.featureGeneration !== generation) return;
+      if (this.disposedState || this.featureGeneration !== generation) return;
       const key = feature.key.trim();
       const inactiveDependency = this.inactiveFeatureDependency(feature);
       if (inactiveDependency) {
@@ -261,7 +283,7 @@ export class GridCore<TData = any> {
       const context: GridFeatureContext<TData> = {
         api: this.api,
         root: this.skeleton.root,
-        getOptions: () => this.options,
+        getOptions: () => this.gridOptions,
         addEventListener: (type, listener) => manage(this.eventBus.on(type, listener)),
         onCleanup: (cleanup) => { manage(cleanup); },
         addManagedDomListener: (target, type, listener, listenerOptions) => {
@@ -269,8 +291,8 @@ export class GridCore<TData = any> {
           return manage(() => target.removeEventListener(type, listener, listenerOptions));
         },
         setManagedTimeout: (handler, delayMs) => {
-          const id = setTimeout(handler, Math.max(0, delayMs));
-          manage(() => clearTimeout(id));
+          const id = setTimeout(() => { release(); handler(); }, Math.max(0, delayMs));
+          const release = manage(() => clearTimeout(id));
           return id;
         },
         createAbortController: () => {
@@ -283,7 +305,7 @@ export class GridCore<TData = any> {
       try {
         const cleanup = feature.setup(context);
         if (typeof cleanup === "function") manage(cleanup);
-        if (this.destroyed || this.featureGeneration !== generation) {
+        if (this.disposedState || this.featureGeneration !== generation) {
           this.releaseFeature(key, { feature, scope });
           return;
         }
@@ -311,8 +333,8 @@ export class GridCore<TData = any> {
     }
   }
 
-  isDestroyed(): boolean {
-    return this.destroyed;
+  isDisposed(): boolean {
+    return this.disposedState;
   }
 
   /** KeepAlive closes transient interaction owners while retaining the model. */
@@ -336,7 +358,7 @@ export class GridCore<TData = any> {
     return ++this.autoIdCounter;
   }
 
-  getCellValue(node: RowNode<any>, column: Column): any {
+  readCellValue(node: RowNode<any>, column: Column): any {
     const def = column.colDef;
     if (def.valueGetter) {
       try {
@@ -357,7 +379,7 @@ export class GridCore<TData = any> {
   }
 
   getLocaleText(key: MachTableLocaleKey): string {
-    const locale: MachTableLocale = this.options.locale;
+    const locale: MachTableLocale = this.gridOptions.locale;
     return locale[key] ?? DEFAULT_LOCALE[key];
   }
 
@@ -402,13 +424,13 @@ export class GridCore<TData = any> {
   buildRangeTsv(range: { r1: number; c1: number; r2: number; c2: number }): string {
     const flat = this.columnModel.getOrderedVisible();
     const cols = flat.slice(range.c1, range.c2 + 1);
-    const rows: string[][] = [];
+    const rows: unknown[][] = [];
     for (let r = range.r1; r <= range.r2; r++) {
       const node = this.rowModel.getDisplayedRow(r);
       rows.push(
         cols.map((col) => {
           if (!node || node.isDetail || node.isGroup) return "";
-          return formatCellValueWith(this, node, col, this.getCellValue(node, col));
+          return serializeColumnValue(this, node, col, "clipboard");
         })
       );
     }
@@ -422,7 +444,7 @@ export class GridCore<TData = any> {
   }
 
   clearRangeValues(range: { r1: number; c1: number; r2: number; c2: number }): void {
-    if (this.destroyed) return;
+    if (this.disposedState) return;
     const flat = this.columnModel.getOrderedVisible();
     const changes: InputChange[] = [];
     for (let r = range.r1; r <= range.r2; r++) {
@@ -431,7 +453,7 @@ export class GridCore<TData = any> {
       for (let c = range.c1; c <= range.c2; c++) {
         const column = flat[c];
         if (!column || column.hasCheckbox || column.isDetailToggle || column.colDef.rowDrag) continue;
-        changes.push({ node, column, oldValue: this.getCellValue(node, column), newValue: null });
+        changes.push({ node, column, oldValue: this.readCellValue(node, column), newValue: null });
       }
     }
     this.applyInputChanges(changes);
@@ -439,15 +461,15 @@ export class GridCore<TData = any> {
 
   /** User input is validated here; trusted data transactions and undo replay stay separate. */
   applyInputChanges(changes: readonly InputChange[]): void {
-    this.inputService.apply(changes);
+    this.inputService.applyChanges(changes);
   }
 
   cancelPendingInput(): void {
-    this.inputService?.cancel();
+    this.inputService?.cancelPending();
   }
 
   pasteText(text: string, startRow: number, startColIdx: number): void {
-    if (this.destroyed) return;
+    if (this.disposedState) return;
     const grid = parseTsv(text);
     if (grid.length === 0) return;
     const flat = this.columnModel.getOrderedVisible();
@@ -489,15 +511,23 @@ export class GridCore<TData = any> {
     changes: InputChange[]
   ): void {
     let columnIndex = startColIdx;
+    const rowStart = changes.length;
     for (const token of line) {
       columnIndex = this.nextPasteColumn(columns, columnIndex);
       if (columnIndex >= columns.length) return;
       const column = columns[columnIndex];
-      const oldValue = this.getCellValue(node, column);
-      const numeric = (typeof oldValue === "number" || column.colDef.cellEditor === "number")
-        && token !== "" && !Number.isNaN(Number(token));
-      const newValue = token === "" ? null : numeric ? Number(token) : token;
-      changes.push({ node, column, oldValue, newValue });
+      if (!this.editingService.isEditable(node, column)) { columnIndex++; continue; }
+      const oldValue = this.readCellValue(node, column);
+      try {
+        const newValue = column.colDef.valueParser ? parseColumnValue(this, node, column, token, "clipboard", oldValue)
+          : coerceImportedValue(token, typeof oldValue === "number" || column.colDef.cellEditor === "number");
+        changes.push({ node, column, oldValue, newValue });
+      } catch (error) {
+        // One parse failure rejects the entire candidate row, before any setter runs.
+        changes.splice(rowStart);
+        this.reportError(error, "validate", { rowId: node.id, colId: column.id });
+        return;
+      }
       columnIndex++;
     }
   }
@@ -505,12 +535,12 @@ export class GridCore<TData = any> {
   pasteFromSystemClipboard(): Promise<void> {
     const start = this.bodyRenderer.getPasteStart();
     if (!start) return Promise.resolve();
-    const current = this.inputService.begin();
+    const current = this.inputService.beginIntent();
     const node = this.rowModel.getDisplayedRow(start.row);
     const column = this.columnModel.getOrderedVisible()[start.colIdx];
     if (!node || !column) return Promise.resolve();
-    const oldValue = this.getCellValue(node, column);
-    const scope = this.inputService.scope([{ node, column, oldValue, newValue: oldValue }]);
+    const oldValue = this.readCellValue(node, column);
+    const scope = this.inputService.captureScope([{ node, column, oldValue, newValue: oldValue }]);
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
         return navigator.clipboard
@@ -531,15 +561,11 @@ export class GridCore<TData = any> {
     return Promise.resolve();
   }
 
-  refreshSummary(): void {
-    this.summaryRenderer.refresh();
-  }
-
   emit<K extends GridEventType>(type: K, extra?: Partial<GridEventMap<TData>[K]>): GridEventMap<TData>[K] {
     const event = { type, api: this.api, ...extra } as GridEventMap<TData>[K];
     this.eventBus.emit(type, event);
     const handlerKey = ("on" + type.charAt(0).toUpperCase() + type.slice(1)) as keyof ResolvedGridOptions<TData>;
-    const handler = this.options[handlerKey] as
+    const handler = this.gridOptions[handlerKey] as
       | ((event: GridEventMap<TData>[K]) => void)
       | undefined;
     if (typeof handler === "function") {
@@ -561,7 +587,7 @@ export class GridCore<TData = any> {
     this.recentErrors.push({ code, source, message, timestamp: Date.now(), ...(context ? { context } : {}) });
     if (this.recentErrors.length > 50) this.recentErrors.splice(0, this.recentErrors.length - 50);
     console.error(`[mach-table] ${code} (${source})`, error);
-    if (this.destroyed) return;
+    if (this.disposedState) return;
     this.emit("gridError", { code, error, source, context });
   }
 
@@ -582,9 +608,9 @@ export class GridCore<TData = any> {
     return {
       gridId: this.gridId,
       version: packageVersion,
-      destroyed: this.destroyed,
+      destroyed: this.disposedState,
       infinite: this.rowModel.isInfinite,
-      loading: this.rowModel.isLoadingInfinite() || this.options.loading,
+      loading: this.rowModel.isLoadingInfinite() || this.gridOptions.loading,
       rowCount: this.rowModel.getDisplayTotalCount(),
       renderedRowCount: this.skeleton.bodyEl.querySelectorAll(".mach-row[data-index]").length,
       columnCount: this.columnModel.getColumns().length,
@@ -670,9 +696,9 @@ export class GridCore<TData = any> {
 
   /** Finalizes one logical resize operation and persists its state once. */
   commitColumnWidths(columns: readonly Column[]): void {
-    if (this.destroyed || columns.length === 0) return;
+    if (this.disposedState || columns.length === 0) return;
     for (const column of columns) {
-      if (this.destroyed) break;
+      if (this.disposedState) break;
       this.emitColumnResize(column, true);
     }
   }
@@ -680,7 +706,7 @@ export class GridCore<TData = any> {
   loadPersistedGridState(): void {
     const token = ++this.gridStateLoadToken;
     const mutationVersion = this.gridStateMutationVersion;
-    const persistence = this.options.persistence;
+    const persistence = this.gridOptions.persistence;
     if (!persistence) return;
     const { key, store, sections } = persistence;
     let saved: import("../types/state").GridStateInput | null | Promise<import("../types/state").GridStateInput | null>;
@@ -692,7 +718,7 @@ export class GridCore<TData = any> {
     }
     const apply = (state: import("../types/state").GridStateInput | null): void => {
       if (
-        this.destroyed || token !== this.gridStateLoadToken ||
+        this.disposedState || token !== this.gridStateLoadToken ||
         mutationVersion !== this.gridStateMutationVersion || !state
       ) return;
       this.applyingPersistedGridState = true;
@@ -710,8 +736,8 @@ export class GridCore<TData = any> {
   }
 
   scheduleGridStateSave(): void {
-    const persistence = this.options.persistence;
-    if (!persistence || this.destroyed || this.applyingPersistedGridState) return;
+    const persistence = this.gridOptions.persistence;
+    if (!persistence || this.disposedState || this.applyingPersistedGridState) return;
     this.gridStateMutationVersion++;
     if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer);
     if (persistence.debounceMs === 0) {
@@ -726,8 +752,8 @@ export class GridCore<TData = any> {
   }
 
   persistGridState(): void {
-    const persistence = this.options.persistence;
-    if (!persistence || this.destroyed) return;
+    const persistence = this.gridOptions.persistence;
+    if (!persistence || this.disposedState) return;
     const { key, store, sections } = persistence;
     const currentState = this.api.state.get();
     const state = sections ? selectGridStateSections(currentState, sections) : currentState;
@@ -760,38 +786,29 @@ export class GridCore<TData = any> {
   }
 
   buildDefaultErrorState(): HTMLElement {
-    const error = document.createElement("div");
-    error.className = "mach-empty mach-empty--error";
-    const title = document.createElement("div");
-    title.className = "mach-empty__title";
+    const error = el("div", "mach-empty mach-empty--error");
+    const title = el("div", "mach-empty__title");
     title.textContent = this.getLocaleText("requestFailed");
-    const hint = document.createElement("div");
-    hint.className = "mach-empty__hint";
+    const hint = el("div", "mach-empty__hint");
     hint.textContent = this.getLocaleText("requestFailedHint");
     error.append(title, hint);
     return error;
   }
 
   buildDefaultLoadingState(): HTMLElement {
-    const loading = document.createElement("div");
-    loading.className = "mach-loading";
+    const loading = el("div", "mach-loading");
 
-    const visual = document.createElement("div");
-    visual.className = "mach-loading__visual";
+    const visual = el("div", "mach-loading__visual");
     visual.setAttribute("aria-hidden", "true");
     for (let index = 0; index < 4; index += 1) {
-      const row = document.createElement("span");
-      row.className = "mach-loading__row";
+      const row = el("span", "mach-loading__row");
       visual.appendChild(row);
     }
 
-    const status = document.createElement("div");
-    status.className = "mach-loading__status";
-    const spinner = document.createElement("span");
-    spinner.className = "mach-spinner mach-loading__spinner";
+    const status = el("div", "mach-loading__status");
+    const spinner = el("span", "mach-spinner mach-loading__spinner");
     spinner.setAttribute("aria-hidden", "true");
-    const label = document.createElement("span");
-    label.className = "mach-loading__label";
+    const label = el("span", "mach-loading__label");
     label.textContent = this.getLocaleText("loading");
     status.append(spinner, label);
 
@@ -800,11 +817,10 @@ export class GridCore<TData = any> {
   }
 
   buildDefaultEmptyState(): HTMLElement {
-    const locale = this.options.locale ?? {};
+    const locale = this.gridOptions.locale ?? {};
     const title = locale.emptyRows ?? DEFAULT_LOCALE.emptyRows;
     const hint = locale.emptyRowsHint ?? DEFAULT_LOCALE.emptyRowsHint;
-    const empty = document.createElement("div");
-    empty.className = "mach-empty";
+    const empty = el("div", "mach-empty");
 
     const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     icon.setAttribute("class", "mach-empty__icon");
@@ -825,11 +841,9 @@ export class GridCore<TData = any> {
       '<line x1="77" y1="63" x2="86" y2="72" stroke="#8fbdf5" stroke-width="4" stroke-linecap="round"/>' +
       '<line x1="60" y1="52" x2="72" y2="52" stroke="#bcd7f8" stroke-width="2.6" stroke-linecap="round"/>';
 
-    const titleEl = document.createElement("div");
-    titleEl.className = "mach-empty__title";
+    const titleEl = el("div", "mach-empty__title");
     titleEl.textContent = title;
-    const hintEl = document.createElement("div");
-    hintEl.className = "mach-empty__hint";
+    const hintEl = el("div", "mach-empty__hint");
     hintEl.textContent = hint;
     empty.append(icon, titleEl, hintEl);
     return empty;
@@ -839,7 +853,7 @@ export class GridCore<TData = any> {
   private issuedWarningSignatures = new Set<string>();
 
   checkWarnings(inputOptions?: Partial<GridOptions<any>> | Record<string, unknown>): void {
-    if (this.options.suppressWarnings || this.destroyed) return;
+    if (this.gridOptions.suppressWarnings || this.disposedState) return;
     if (inputOptions) {
       for (const issue of validateGridOptions(inputOptions)) {
         const signature = `${issue.code}:${issue.option ?? ""}:${issue.message}`;
@@ -848,7 +862,7 @@ export class GridCore<TData = any> {
         console.warn(`[mach-table:${issue.code}] ${issue.message}`);
       }
     }
-    if (this.options.treeData) {
+    if (this.gridOptions.treeData) {
       if (this.columnModel.getRowGroupColumns().length > 0) {
         console.warn("[mach-table] treeData 与 rowGroup 不支持同时启用，行分组已被忽略");
       }
@@ -856,7 +870,7 @@ export class GridCore<TData = any> {
   }
 
   validateDefs(defs: (ColDef<any> | ColDefGroup<any>)[] | null | undefined): void {
-    if (this.options.suppressWarnings || this.destroyed) return;
+    if (this.gridOptions.suppressWarnings || this.disposedState) return;
     if (this.lastValidatedDefs === defs) return;
     this.lastValidatedDefs = defs;
     for (const issue of validateColumnDefs(defs)) {
@@ -879,7 +893,7 @@ export class GridCore<TData = any> {
   }
 
   private applyScheduledUpdate(request: GridUpdateRequest): void {
-    if (this.destroyed) return;
+    if (this.disposedState) return;
     if (request.columns) this.applyColumnsStructureChanged();
     else {
       if (request.header) this.headerRenderer.build();
@@ -908,7 +922,7 @@ export class GridCore<TData = any> {
   }
 
   relayout(): void {
-    if (this.destroyed) return;
+    if (this.disposedState) return;
     const startedAt = this.performanceMonitor.start();
     this.refreshAriaState();
     this.columnModel.computeLayout(this.skeleton.measureViewportWidth());
@@ -929,9 +943,9 @@ export class GridCore<TData = any> {
 
   refreshAriaState(): void {
     if (!this.skeleton.root) return;
-    const treeGrid = this.options.treeData || this.columnModel.getRowGroupColumns().length > 0;
+    const treeGrid = this.gridOptions.treeData || this.columnModel.getRowGroupColumns().length > 0;
     this.skeleton.root.setAttribute("role", treeGrid ? "treegrid" : "grid");
-    if (this.options.rowSelection === "multiple") {
+    if (this.gridOptions.rowSelection === "multiple") {
       this.skeleton.root.setAttribute("aria-multiselectable", "true");
     } else {
       this.skeleton.root.removeAttribute("aria-multiselectable");
@@ -942,7 +956,7 @@ export class GridCore<TData = any> {
   }
 
   relayoutColumns(invalidateRowHeights = true): void {
-    if (this.destroyed) return;
+    if (this.disposedState) return;
     this.columnModel.computeLayout(this.skeleton.measureViewportWidth());
     if (invalidateRowHeights) this.bodyRenderer.invalidateAllRowHeights();
     this.headerRenderer.applyLayout();
@@ -954,17 +968,17 @@ export class GridCore<TData = any> {
   }
 
   destroy(): void {
-    if (this.destroyed) return;
+    if (this.disposedState) return;
     if (this.stateSaveTimer) {
       clearTimeout(this.stateSaveTimer);
       this.stateSaveTimer = null;
       this.persistGridState();
     }
-    this.destroyed = true;
+    this.disposedState = true;
     this.cancelPendingInput();
     if (this.readyRafId) cancelAnimationFrame(this.readyRafId);
     this.readyRafId = 0;
-    if (this.getApi()) {
+    if (this.api) {
       this.settleReady();
       try { this.emit("gridDestroyed", {}); } catch (error) { console.error("[mach-table] grid destroy event", error); }
     }

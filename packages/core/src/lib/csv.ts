@@ -1,4 +1,5 @@
 import type { CsvExportParams } from "../types/api";
+import { NUMERIC_TEXT } from "./numericText";
 
 export function csvEscape(value: any, separator: string): string {
   const s = value == null ? "" : String(value);
@@ -10,31 +11,15 @@ export function csvEscape(value: any, separator: string): string {
 
 export function sanitizeFormulaCell(value: any): any {
   if (typeof value !== "string" || value === "") return value;
-  if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) return value;
+  if (NUMERIC_TEXT.test(value)) return value;
   if (/^[\s\u0000-\u001f]*[=+\-@]/.test(value)) return "'" + value;
   return value;
 }
 
-export interface CsvRowAccessor<T> {
-  getHeaderLabels(): string[];
-  getRowValues(): T[][];
-}
-
-export function buildCsv<T>(accessor: CsvRowAccessor<T>, params: CsvExportParams = {}): string {
+/** Headers, selection and value policies are resolved once by the matrix exporter. */
+export function buildCsv(rows: readonly (readonly unknown[])[], params: CsvExportParams = {}): string {
   const separator = params.columnSeparator ?? ",";
-  const includeHeader = params.includeHeader ?? true;
   const protectFormulas = params.protectFormulas ?? true;
-  const lines: string[] = [];
-
-  if (includeHeader) {
-    lines.push(accessor.getHeaderLabels().map((l) => csvEscape(l, separator)).join(separator));
-  }
-  for (const row of accessor.getRowValues()) {
-    lines.push(
-      row.map((v) => csvEscape(protectFormulas ? sanitizeFormulaCell(v) : v, separator)).join(separator)
-    );
-  }
-
-  const body = lines.join("\r\n");
+  const body = rows.map(row => row.map(value => csvEscape(protectFormulas ? sanitizeFormulaCell(value) : value, separator)).join(separator)).join("\r\n");
   return params.prependBOM ? "\uFEFF" + body : body;
 }

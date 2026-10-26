@@ -124,10 +124,12 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 
 | 配置 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `dataProcessor` | `GridDataProcessor<T>` | — | 将可序列化过滤/排序移入 Worker |
+| `dataProcessor` | `GridDataProcessor<T> \| (() => GridDataProcessor<T>)` | — | 单表独占的异步过滤/排序处理器，或创建该实例的零参工厂 |
 | `dataProcessorMinRows` | `number` | `5000` | 启用 Processor 的最小行数 |
 
-Processor 失败会安全回退主线程。Worker 工厂位于适配包或 Core 的 `/worker` 子入口。
+应用 `defaults` / `presets` 只接受工厂，每次须返回新实例；单表显式配置仍可传独占实例。每个 owner 只调用工厂一次，相同工厂引用的配置更新复用当前实例；切换工厂、实例或清除配置会释放旧实例，表格销毁时也会调用当前实例的 `destroy()`。不要在多张表之间复用同一个 processor。
+
+处理器实现 `process(request): Promise<{ rowIds: readonly string[] }>`，接收稳定 ID、原始记录、列字段和过滤/排序模型及 `signal`。仅达到行数阈值且需要本地过滤/排序时启用；树、分组和主从详情使用原有管线。Processor 失败会安全回退主线程；Worker helper 位于适配包或 Core 的 `/worker` 子入口，接入示例与取消约定见 [Worker 数据处理](/advanced/worker-processing)。
 
 ## 状态持久化
 

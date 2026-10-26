@@ -1,8 +1,11 @@
 import { sanitizeFormulaCell } from "./csv";
 
+/** Clipboard cells intentionally follow JavaScript text coercion after an explicit serializer. */
+export function clipboardText(value: any): string { return value == null ? "" : String(value); }
+
 function escapeCell(value: any, protectFormulas: boolean): string {
   const safe = protectFormulas ? sanitizeFormulaCell(value) : value;
-  const s = safe == null ? "" : String(safe);
+  const s = clipboardText(safe);
   if (/["\t\n\r]/.test(s)) {
     return '"' + s.replace(/"/g, '""') + '"';
   }

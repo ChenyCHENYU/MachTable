@@ -11,7 +11,7 @@ function setup() {
   document.body.append(grid, host);
   const core = new GridCore(grid, { columnDefs: [{ field: "status" }], rowData: [{ id: "1", status: "warning" }], rowKey: (row) => row.id });
   cleanups.push(() => core.destroy());
-  return { core, api: core.getApi(), host };
+  return { core, api: core.api, host };
 }
 function click(host: HTMLElement, text: string): void {
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === text)!.click();

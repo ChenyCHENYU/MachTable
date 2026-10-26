@@ -4,7 +4,7 @@ import type { PaneType } from "../services/columnModel";
 import { el } from "../lib/dom";
 
 const SIZE_CLASSES: GridSize[] = ["compact", "normal", "large"];
-type SkeletonContext = Pick<GridCore<any>, "options" | "relayout" | "reportError">;
+type SkeletonContext = Pick<GridCore<any>, "gridOptions" | "relayout" | "reportError">;
 
 /** @internal Layout ownership stays in Core; consumers receive only the root DOM element. */
 export class GridSkeleton {
@@ -159,8 +159,8 @@ export class GridSkeleton {
         const row = el("div", "mach-header-row");
         row.setAttribute("role", "row");
         row.setAttribute("aria-rowindex", String(rows.length + 1));
-        row.style.top = `${rows.length * this.core.options.headerHeight}px`;
-        row.style.height = `${this.core.options.headerHeight}px`;
+        row.style.top = `${rows.length * this.core.gridOptions.headerHeight}px`;
+        row.style.height = `${this.core.gridOptions.headerHeight}px`;
         container.appendChild(row);
         rows.push(row);
       }
@@ -176,12 +176,12 @@ export class GridSkeleton {
   }
 
   private applyHeaderHeight(): void {
-    this.headerEl.style.height = `${this.headerDepth * this.core.options.headerHeight}px`;
+    this.headerEl.style.height = `${this.headerDepth * this.core.gridOptions.headerHeight}px`;
     for (const pane of ["left", "center", "right"] as PaneType[]) {
       const rows = this.headerRows[pane];
       rows.forEach((row, i) => {
-        row.style.top = `${i * this.core.options.headerHeight}px`;
-        row.style.height = `${this.core.options.headerHeight}px`;
+        row.style.top = `${i * this.core.gridOptions.headerHeight}px`;
+        row.style.height = `${this.core.gridOptions.headerHeight}px`;
       });
     }
   }

@@ -131,7 +131,7 @@ export interface GridDataProcessorResult {
   rowIds: readonly string[];
 }
 
-/** Optional async/Worker boundary for expensive local filtering and sorting. */
+/** Optional async/Worker boundary. Each instance is owned and destroyed by exactly one grid. */
 export interface GridDataProcessor<TData = any> {
   process(request: GridDataProcessorRequest<TData>): Promise<GridDataProcessorResult>;
   destroy?(): void;
@@ -347,8 +347,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   blockPrefetch?: number;
   /** Optional initial total enables immediate scrollbar range before the first response. */
   datasourceRowCount?: number;
-  /** Opt-in async processor for large local filter/sort pipelines. */
-  dataProcessor?: GridDataProcessor<TData>;
+  /** Per-grid processor or factory. Reusable application defaults must use a factory returning a fresh instance. */
+  dataProcessor?: GridDataProcessor<TData> | (() => GridDataProcessor<TData>);
   /** Minimum local row count before dataProcessor is used. Defaults to 5,000. */
   dataProcessorMinRows?: number;
   /** Number of automatic retries after an infinite datasource request fails. */

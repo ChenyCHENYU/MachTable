@@ -1,10 +1,9 @@
 import { normalizeAdvancedFilterModel, normalizeFilterModel } from "../lib/advancedFilter";
+import { abortable, createAbortError } from "../lib/abortable";
 import type { ServerSideQuery, ServerSideResult } from "./types";
 
 export function aborted(): Error {
-  const error = new Error("[MachTable] Server-side operation cancelled or replaced.");
-  error.name = "AbortError";
-  return error;
+  return createAbortError(undefined, "[MachTable] Server-side operation cancelled or replaced.");
 }
 
 export function boundedInteger(value: number | undefined, fallback: number, maximum: number, minimum = 1): number {
@@ -76,10 +75,5 @@ export function pause(milliseconds: number, signal: AbortSignal): Promise<void> 
 
 /** A transport may ignore cancellation; the store must still release its waiter. */
 export function withAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const abort = () => reject(aborted());
-    void work.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
-    if (signal.aborted) { reject(aborted()); return; }
-    signal.addEventListener("abort", abort, { once: true });
-  });
+  return abortable(work, signal, aborted);
 }

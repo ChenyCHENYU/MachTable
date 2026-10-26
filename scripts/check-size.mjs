@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
+import { gzipBudgets } from "./bundle-budgets.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -13,33 +14,18 @@ const reactEsmFiles = (await readdir(new URL("../packages/react/dist/", import.m
   .filter((file) => file.endsWith(".js"))
   .map((file) => `packages/react/dist/${file}`);
 
-const budgets = [
-  // The full entry includes every public utility for compatibility; keep it
-  // bounded while separately enforcing the smaller real createGrid consumer.
-  // One accessible select control now replaces native popups across filtering,
-  // editing, pagination and column tooling. Keep that cross-platform behavior
-  // inside a tightly bounded allowance instead of removing safeguards. The
-  // independently bundled createGrid consumer below remains the stricter gate.
-  ["Core ESM", ["packages/core/dist/index.js"], 90 * 1024],
-  ["Optional Worker", ["packages/core/dist/worker.js"], 8 * 1024],
-  // Includes every optional Vue entry. The initial adapter and workflows retain
-  // their stricter consumer budgets below; the controller binding bridge adds
-  // less than half a KiB without entering applications that do not import it.
-  ["Vue ESM artifacts", vueEsmFiles, 11.25 * 1024],
-  ["React ESM artifacts", reactEsmFiles, 8 * 1024],
-  ["Optional XLSX bridge", ["packages/xlsx/dist/index.js"], 3 * 1024],
-  // Covers the shared listbox, skeleton and complete interaction states while
-  // retaining a small, explicit ceiling for the framework-neutral stylesheet.
-  ["Core CSS", ["packages/core/dist/mach-table.css"], 8 * 1024]
-];
-
-// New capabilities have their own ceilings; existing runtime/style/adapter
-// budgets above remain unchanged when a new optional entry is added.
-for (const [name, limit] of [["workbench", 12], ["preferences", 7], ["ordering", 9], ["server-side", 10], ["analysis", 9], ["multi-range", 4]]) {
-  budgets.push([`Optional ${name}`, [`packages/core/dist/${name}.js`], limit * 1024]);
-}
-budgets.push(["Workbench CSS", ["packages/core/dist/workbench.css"], 3 * 1024],
-  ["Server-side CSS", ["packages/core/dist/server-side.css"], 1024]);
+const artifactPaths = {
+  core: ["packages/core/dist/index.js"], worker: ["packages/core/dist/worker.js"],
+  vue: vueEsmFiles, react: reactEsmFiles, xlsx: ["packages/xlsx/dist/index.js"],
+  css: ["packages/core/dist/mach-table.css"],
+  ...Object.fromEntries(["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"]
+    .map(name => [name, [`packages/core/dist/${name}.js`]])),
+  workbenchCss: ["packages/core/dist/workbench.css"], serverCss: ["packages/core/dist/server-side.css"]
+};
+const budgets = Object.entries(artifactPaths).map(([key, paths]) => {
+  const [label, limit] = gzipBudgets[key];
+  return [label, paths, limit];
+});
 
 let failed = false;
 for (const [label, paths, limit] of budgets) {
@@ -59,10 +45,7 @@ const consumerBudgets = [
       import { createGrid } from "./packages/core/dist/index.js";
       globalThis.__machTableCreateGrid = createGrid;
     `,
-    // Responsive content measurements and persisted sizing bases add 246 bytes
-    // over the published 0.30.0 consumer (81,846 bytes). Reserve half a KiB for
-    // this capability; the full Core, adapters and CSS retain their ceilings.
-    limit: 80.5 * 1024
+    limit: gzipBudgets.coreConsumer[1]
   },
   {
     label: "Vue initial adapter",
@@ -70,9 +53,7 @@ const consumerBudgets = [
       import plugin, { MachTable, defineMachTableConfig } from "./packages/vue/dist/index.js";
       globalThis.__machTableConsumer = [plugin, MachTable, defineMachTableConfig];
     `,
-    // Native slots, async/global registration and configuration remain below
-    // 6.75 KiB while query/editing/UI stay independently tree-shakeable.
-    limit: 6.75 * 1024
+    limit: gzipBudgets.vueConsumer[1]
   },
   {
     label: "Vue B-side workflows",
@@ -80,7 +61,7 @@ const consumerBudgets = [
       import { useMachTableEditing, useMachTableQuery } from "./packages/vue/dist/workflows.js";
       globalThis.__machTableWorkflows = [useMachTableEditing, useMachTableQuery];
     `,
-    limit: 5 * 1024
+    limit: gzipBudgets.vueWorkflows[1]
   },
   {
     label: "Vue optional editors",
@@ -88,7 +69,7 @@ const consumerBudgets = [
       import { vueCellEditor, createElementPlusEditors } from "./packages/vue/dist/editors.js";
       globalThis.__machTableEditors = [vueCellEditor, createElementPlusEditors];
     `,
-    limit: 3 * 1024
+    limit: gzipBudgets.vueEditors[1]
   },
   {
     label: "Vue optional UI",
@@ -96,7 +77,7 @@ const consumerBudgets = [
       import ui, { MachTableToolbar } from "./packages/vue/dist/ui.js";
       globalThis.__machTableUi = [ui, MachTableToolbar];
     `,
-    limit: 3 * 1024
+    limit: gzipBudgets.vueUi[1]
   },
   {
     label: "React initial adapter",
@@ -104,10 +85,7 @@ const consumerBudgets = [
       import MachTable, { MachTableProvider, defineMachTableConfig } from "./packages/react/dist/index.js";
       globalThis.__machTableReact = [MachTable, MachTableProvider, defineMachTableConfig];
     `,
-    // React's adapter also includes the typed Provider/config resolver. Keep the
-    // initial path below 6.25 KiB while the optional query/editing workflows stay
-    // independently measurable through the workflows subpath.
-    limit: 6.25 * 1024
+    limit: gzipBudgets.reactConsumer[1]
   },
   {
     label: "React B-side workflows",
@@ -115,7 +93,7 @@ const consumerBudgets = [
       import { useMachTableEditing, useMachTableQuery } from "./packages/react/dist/workflows.js";
       globalThis.__machTableReactWorkflows = [useMachTableEditing, useMachTableQuery];
     `,
-    limit: 5 * 1024
+    limit: gzipBudgets.reactWorkflows[1]
   }
 ];
 
@@ -148,12 +126,12 @@ for (const [name, entry] of [["Core", "core/src/index.ts"], ["Vue", "vue/src/ind
     external: ["vue", "react", "react-dom", "@agile-team/mach-table", "@agile-team/mach-table/adapter"]
   });
   const forbidden = Object.keys(result.metafile.inputs).filter(path =>
-    /packages\/core\/src\/(?:workbench|preferences|ordering|server-side|analysis)(?:\/|\.ts$)|packages\/core\/src\/multiRange\.ts$|\.(?:css)$/.test(path));
+    /packages\/core\/src\/(?:workbench|preferences|ordering|server-side|analysis|import)(?:\/|\.ts$)|packages\/core\/src\/multiRange\.ts$|\.(?:css)$/.test(path));
   const cssOutputs = result.outputFiles.filter(file => file.path.endsWith(".css"));
   if (forbidden.length || cssOutputs.length) {
     failed = true;
     console.error(`OVER ${name} default module boundary: ${forbidden.join(", ")}`);
-  } else console.log(`OK   ${name} default graph excludes all six advanced modules and optional CSS`);
+  } else console.log(`OK   ${name} default graph excludes all seven advanced modules and optional CSS`);
 }
 
 if (failed) {

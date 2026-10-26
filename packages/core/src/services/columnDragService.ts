@@ -24,6 +24,7 @@ interface ColumnDragState {
   ghostHeight: number;
 }
 
+/** @internal Column drag state and listeners stay with the grid. */
 export class ColumnDragService {
   private pending: { column: Column; startX: number; startY: number } | null = null;
   private dragging: ColumnDragState | null = null;

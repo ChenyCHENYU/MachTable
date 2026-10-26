@@ -1,12 +1,12 @@
 import { EVENT_TYPES } from "../types/events";
 import type { GridOptions } from "../types/options";
 import {
-  GRID_OPTION_META,
+  GRID_OPTION_KINDS,
   type GridOptionKey,
   type GridOptionValueKind
 } from "./gridOptionMetadata";
 
-const EVENT_OPTION_KEYS = new Set(
+export const EVENT_OPTION_KEYS = new Set(
   EVENT_TYPES.map((type) => `on${type.charAt(0).toUpperCase()}${type.slice(1)}`)
 );
 
@@ -17,6 +17,7 @@ export function matchesGridOptionKind(value: unknown, kind: GridOptionValueKind)
     return typeof value === "boolean" || (typeof value === "object" && !Array.isArray(value));
   }
   if (kind === "object") return typeof value === "object" && !Array.isArray(value);
+  if (kind === "object-function") return typeof value === "function" || (typeof value === "object" && !Array.isArray(value));
   if (kind === "number") return typeof value === "number" && Number.isFinite(value);
   return typeof value === kind;
 }
@@ -35,8 +36,8 @@ export function sanitizeGridOptionPatch<TData>(
       if (value == null || typeof value === "function") output[key] = value;
       continue;
     }
-    const metadata = GRID_OPTION_META[key as GridOptionKey];
-    if (!metadata || !matchesGridOptionKind(value, metadata.kind)) continue;
+    const kind = GRID_OPTION_KINDS[key as GridOptionKey];
+    if (!kind || !matchesGridOptionKind(value, kind)) continue;
     output[key] = value;
   }
   return output;

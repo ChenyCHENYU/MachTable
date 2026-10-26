@@ -1,6 +1,7 @@
 type EventKey<TEvents extends object> = Extract<keyof TEvents, string>;
 type Listener<TEvent> = (event: TEvent) => void;
 
+/** @internal Feature consumers receive managed subscription functions, never this event bus. */
 export class EventBus<TEvents extends object = Record<string, any>> {
   private listeners = new Map<EventKey<TEvents>, Set<Listener<any>>>();
 

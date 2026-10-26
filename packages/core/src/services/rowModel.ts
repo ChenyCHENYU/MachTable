@@ -1,11 +1,14 @@
 import type { GridCore } from "../core/gridCore";
+import { createAbortError } from "../lib/abortable";
 import type { RowNode } from "../types/row";
 import type { FilterModel } from "../types/colDef";
 import type { AdvancedFilterModel } from "../types/advancedFilter";
 import type { RowTransaction } from "../types/api";
 import { createRowFilter } from "./filterService";
 import { sortNodes } from "./sortService";
-import { createAggResolver } from "../lib/aggregate";
+import { aggregateItems, createAggResolver } from "../lib/aggregate";
+import { buildRowGroups, migrateGroupExpansion } from "../lib/rowGrouping";
+import { captureProjectionValues, projectionFields, projectionFieldsChanged } from "../lib/projectionDependencies";
 import { defaultComparator } from "../lib/compare";
 import { normalizeAdvancedFilterModel, normalizeFilterModel } from "../lib/advancedFilter";
 import {
@@ -23,13 +26,13 @@ type RowModelContext = Pick<
   | "columnModel"
   | "editingService"
   | "emit"
-  | "getApi"
-  | "getCellValue"
+  | "api"
+  | "readCellValue"
   | "getLocaleText"
   | "headerRenderer"
-  | "isDestroyed"
+  | "isDisposed"
   | "nextId"
-  | "options"
+  | "gridOptions"
   | "performanceMonitor"
   | "relayout"
   | "reportError"
@@ -52,6 +55,8 @@ export interface RowTransactionImpact {
   updatedRowIds: readonly string[];
 }
 
+interface RowReplacement<T> { node: RowNode<T>; before: T | null; after: T }
+
 /** @internal Consumers receive plain RowNode records, not this model service. */
 export class RowModel<TData = any> {
   private all: RowNode<TData>[] = [];
@@ -72,7 +77,6 @@ export class RowModel<TData = any> {
   private infiniteLoading = false;
   private infiniteSeq = 0;
   private infiniteAbort: AbortController | null = null;
-  private infiniteRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private infinitePendingResolve: (() => void) | null = null;
   private treeDepth = new WeakMap<RowNode<TData>, number>();
   private rowSequence = new WeakMap<RowNode<TData>, number>();
@@ -80,6 +84,8 @@ export class RowModel<TData = any> {
   private treeLoadPromises = new Map<string, Promise<readonly TData[]>>();
   private displayRevision = 0;
   private dataRevision = 0;
+  /** Scalar dependencies of the last completed projection, never snapshots of application records/getters. */
+  private projectionBaseline: { fields: readonly string[]; values: WeakMap<RowNode<TData>, readonly unknown[]> } | null = null;
   private blockNodes = new Map<number, RowNode<TData>>();
   private blockPlaceholders = new Map<number, RowNode<TData>>();
   private installedBlocks = new Set<number>();
@@ -92,14 +98,14 @@ export class RowModel<TData = any> {
   private lastRequestedBlock = 0;
 
   constructor(private core: RowModelContext) {
-    this.advancedFilterModel = normalizeAdvancedFilterModel(core.options.advancedFilterModel);
+    this.advancedFilterModel = normalizeAdvancedFilterModel(core.gridOptions.advancedFilterModel);
   }
 
   resolveRowId(data: TData, index: number, fallback: string): string {
-    const resolveRowId = this.core.options.resolveRowId;
+    const resolveRowId = this.core.gridOptions.resolveRowId;
     if (!resolveRowId) return fallback;
     try {
-      const id = resolveRowId({ data, index, api: this.core.getApi() });
+      const id = resolveRowId({ data, index, api: this.core.api });
       if (typeof id === "string" && id.length > 0) return id;
       this.core.reportError(new Error("rowKey must resolve to a non-empty identifier"), "rowKey", { index });
     } catch (error) {
@@ -109,15 +115,15 @@ export class RowModel<TData = any> {
   }
 
   get isTree(): boolean {
-    return this.core.options.treeData;
+    return this.core.gridOptions.treeData;
   }
 
   get isInfinite(): boolean {
-    return this.core.options.datasource != null;
+    return this.core.gridOptions.datasource != null;
   }
 
   get isBlockDatasource(): boolean {
-    return this.isInfinite && this.core.options.datasourceMode === "block";
+    return this.isInfinite && this.core.gridOptions.datasourceMode === "block";
   }
 
   getDisplayTotalCount(): number {
@@ -144,7 +150,7 @@ export class RowModel<TData = any> {
     this.dataRevision++;
     // Reload/filter/sort replace the datasource scope, just like setRowData.
     this.core.cancelPendingInput();
-    void this.core.getApi().editing.stop({ cancel: true });
+    void this.core.api.editing.stop({ cancel: true });
     this.core.changeTracker.clear();
     this.cancelInfiniteRequest();
     this.infiniteLastRow = null;
@@ -158,17 +164,12 @@ export class RowModel<TData = any> {
     this.core.requestUpdate({ data: true });
     if (this.isBlockDatasource) {
       this.blockCache.configure(
-        this.core.options.maxBlocksInCache,
-        this.core.options.datasourceMaxConcurrentRequests
+        this.core.gridOptions.maxBlocksInCache,
+        this.core.gridOptions.datasourceMaxConcurrentRequests
       );
       return this.loadRandomBlock(0, signal);
     }
     return this.loadBlock(0, undefined, signal);
-  }
-
-  reloadInfinite(signal?: AbortSignal): Promise<void> {
-    if (!this.isInfinite) return Promise.resolve();
-    return this.startInfinite(signal);
   }
 
   private setInfiniteLoading(v: boolean): void {
@@ -179,8 +180,7 @@ export class RowModel<TData = any> {
   private loadBlock(start: number, end?: number, externalSignal?: AbortSignal): Promise<void> {
     if (!this.isInfinite || this.infiniteRequested) return Promise.resolve();
     if (this.infiniteLastRow != null && start >= this.infiniteLastRow) return Promise.resolve();
-    const datasource = this.core.options.datasource!;
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const stop = end ?? start + blockSize;
     if (stop <= start) return Promise.resolve();
     const seq = ++this.infiniteSeq;
@@ -193,7 +193,6 @@ export class RowModel<TData = any> {
 
     return new Promise<void>((resolve) => {
       let settled = false;
-      let attempt = 0;
       this.infinitePendingResolve = resolve;
       const done = (reason?: unknown) => {
         if (settled) return;
@@ -211,79 +210,30 @@ export class RowModel<TData = any> {
         resolve();
       };
 
-      const runAttempt = () => {
-        if (settled || seq !== this.infiniteSeq || controller.signal.aborted || this.core.isDestroyed()) {
+      this.runDatasourceRequest(start, stop, controller.signal, (received, lastRow) => {
+        if (seq !== this.infiniteSeq || this.core.isDisposed() || controller.signal.aborted) {
           done();
           return;
         }
-        attempt++;
-        let attemptSettled = false;
-        const failAttempt = (reason?: unknown) => {
-          if (attemptSettled || settled) return;
-          attemptSettled = true;
-          if (seq !== this.infiniteSeq || controller.signal.aborted || this.core.isDestroyed()) {
-            done();
-            return;
-          }
-          if (attempt <= this.core.options.datasourceRetryCount) {
-            const delay = this.retryDelay(attempt);
-            this.infiniteRetryTimer = setTimeout(() => {
-              this.infiniteRetryTimer = null;
-              runAttempt();
-            }, delay);
-            return;
-          }
-          done(reason ?? new Error("Datasource request failed"));
-        };
-
-        try {
-          const request = datasource.getRows({
-            startRow: start,
-            endRow: stop,
-            sortModel: this.core.columnModel.getSortModel(),
-            filterModel: this.getFilterModel(),
-            advancedFilterModel: this.getAdvancedFilterModel(),
-            quickFilterText: this.quickFilter,
-            signal: controller.signal,
-            onSuccess: (rows, lastRow) => {
-              if (attemptSettled || settled) return;
-              attemptSettled = true;
-              if (seq !== this.infiniteSeq || this.core.isDestroyed() || controller.signal.aborted) {
-                done();
-                return;
-              }
-              const received = rows ?? [];
-              if (typeof lastRow === "number" && lastRow >= 0) {
-                this.infiniteLastRow = lastRow;
-              } else if (received.length < stop - start) {
-                this.infiniteLastRow = start + received.length;
-              }
-              const wasEmpty = this.all.length === 0;
-              this.appendInfiniteRows(received);
-              done();
-              this.refreshPipeline();
-              this.core.requestUpdate({ data: true });
-              if (wasEmpty) this.core.relayout();
-              this.core.headerRenderer.refreshSelectAllCheckbox();
-            },
-            fail: failAttempt
-          });
-          if (request && typeof request.catch === "function") {
-            void request.catch(failAttempt);
-          }
-        } catch (error) {
-          failAttempt(error);
+        if (typeof lastRow === "number" && lastRow >= 0) {
+          this.infiniteLastRow = lastRow;
+        } else if (received.length < stop - start) {
+          this.infiniteLastRow = start + received.length;
         }
-      };
-
-      runAttempt();
+        const wasEmpty = this.all.length === 0;
+        this.appendInfiniteRows(received);
+        done();
+        this.refreshPipeline();
+        this.core.requestUpdate({ data: true });
+        if (wasEmpty) this.core.relayout();
+        this.core.headerRenderer.refreshSelectAllCheckbox();
+      }, reason => done(controller.signal.aborted || this.core.isDisposed()
+        ? undefined : reason ?? new Error("Datasource request failed")));
     });
   }
 
   private cancelInfiniteRequest(): void {
     this.infiniteSeq++;
-    if (this.infiniteRetryTimer != null) clearTimeout(this.infiniteRetryTimer);
-    this.infiniteRetryTimer = null;
     this.infiniteAbort?.abort();
     this.infiniteAbort = null;
     this.infiniteRequested = false;
@@ -324,7 +274,7 @@ export class RowModel<TData = any> {
   private loadRandomBlock(blockIndex: number, externalSignal?: AbortSignal, priority = 0): Promise<void> {
     if (!this.isBlockDatasource || blockIndex < 0) return Promise.resolve();
     if (externalSignal?.aborted) return Promise.reject(this.abortError(externalSignal.reason));
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const seq = this.infiniteSeq;
     const start = blockIndex * blockSize;
     if (start >= this.resolveBlockRowCount()) return Promise.resolve();
@@ -339,7 +289,7 @@ export class RowModel<TData = any> {
     );
     this.setInfiniteLoading(this.all.length === 0 && this.blockCache.snapshot().loadingBlockCount > 0);
     return request.then((result) => {
-      if (seq !== this.infiniteSeq || externalSignal?.aborted || this.core.isDestroyed() ||
+      if (seq !== this.infiniteSeq || externalSignal?.aborted || this.core.isDisposed() ||
         !this.isBlockDatasource || !this.blockCache.has(blockIndex)) return;
       if (this.installedBlocks.has(blockIndex)) return;
       this.installBlock(blockIndex, result);
@@ -348,7 +298,7 @@ export class RowModel<TData = any> {
       this.core.headerRenderer.refreshSelectAllCheckbox();
       // A small block may not fill the first viewport; seed its remaining
       // visible blocks without requiring an initial user scroll.
-      if (seq === this.infiniteSeq && !this.core.isDestroyed()) {
+      if (seq === this.infiniteSeq && !this.core.isDisposed()) {
         this.prefetchVisibleBlocks(this.core.bodyRenderer.getRenderedRowRange().lastExcl - 1);
       }
     }).catch((error) => {
@@ -368,80 +318,85 @@ export class RowModel<TData = any> {
     endRow: number,
     signal: AbortSignal
   ): Promise<RemoteBlockResult<TData>> {
-    const datasource = this.core.options.datasource!;
     return new Promise((resolve, reject) => {
-      let attempt = 0;
-      let retryTimer: ReturnType<typeof setTimeout> | null = null;
-      let settled = false;
-      const finishReject = (reason?: unknown) => {
-        if (settled) return;
-        settled = true;
-        if (retryTimer != null) clearTimeout(retryTimer);
-        signal.removeEventListener("abort", abort);
-        reject(reason instanceof Error ? reason : new Error(
-          typeof reason === "string" ? reason : "Datasource request failed"
-        ));
-      };
-      const abort = () => finishReject(this.abortError(signal.reason));
-      signal.addEventListener("abort", abort, { once: true });
-
-      const runAttempt = () => {
-        if (settled) return;
-        if (signal.aborted || this.core.isDestroyed()) {
-          abort();
-          return;
-        }
-        attempt++;
-        let attemptSettled = false;
-        const failAttempt = (reason?: unknown) => {
-          if (attemptSettled || settled) return;
-          attemptSettled = true;
-          if (signal.aborted || this.core.isDestroyed()) {
-            abort();
-            return;
-          }
-          if (attempt <= this.core.options.datasourceRetryCount) {
-            const delay = this.retryDelay(attempt);
-            retryTimer = setTimeout(() => {
-              retryTimer = null;
-              runAttempt();
-            }, delay);
-          } else {
-            finishReject(reason);
-          }
-        };
-        try {
-          const response = datasource.getRows({
-            startRow,
-            endRow,
-            sortModel: this.core.columnModel.getSortModel(),
-            filterModel: this.getFilterModel(),
-            advancedFilterModel: this.getAdvancedFilterModel(),
-            quickFilterText: this.quickFilter,
-            signal,
-            onSuccess: (rows, lastRow) => {
-              if (attemptSettled || settled) return;
-              attemptSettled = true;
-              settled = true;
-              signal.removeEventListener("abort", abort);
-              resolve({
-                rows: rows ?? [],
-                ...(typeof lastRow === "number" && lastRow >= 0 ? { lastRow } : {})
-              });
-            },
-            fail: failAttempt
-          });
-          if (response && typeof response.catch === "function") void response.catch(failAttempt);
-        } catch (error) {
-          failAttempt(error);
-        }
-      };
-      runAttempt();
+      this.runDatasourceRequest(startRow, endRow, signal, (rows, lastRow) => resolve({
+        rows,
+        ...(typeof lastRow === "number" && lastRow >= 0 ? { lastRow } : {})
+      }), reason => reject(reason instanceof Error ? reason : new Error(
+        typeof reason === "string" ? reason : "Datasource request failed"
+      )));
     });
   }
 
+  /** Callback delivery keeps sequential synchronous installation in the current stack. */
+  private runDatasourceRequest(
+    startRow: number,
+    endRow: number,
+    signal: AbortSignal,
+    onSuccess: (rows: TData[], lastRow?: number) => void,
+    onFailure: (reason?: unknown) => void
+  ): void {
+    const datasource = this.core.gridOptions.datasource!;
+    let attempt = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (retryTimer != null) clearTimeout(retryTimer);
+      signal.removeEventListener("abort", abort);
+      callback();
+    };
+    const abort = () => finish(() => onFailure(this.abortError(signal.reason)));
+    signal.addEventListener("abort", abort, { once: true });
+
+    const runAttempt = () => {
+      if (settled) return;
+      if (signal.aborted || this.core.isDisposed()) {
+        abort();
+        return;
+      }
+      attempt++;
+      let attemptSettled = false;
+      const failAttempt = (reason?: unknown) => {
+        if (attemptSettled || settled) return;
+        attemptSettled = true;
+        if (signal.aborted || this.core.isDisposed()) {
+          abort();
+          return;
+        }
+        if (attempt <= this.core.gridOptions.datasourceRetryCount) {
+          retryTimer = setTimeout(runAttempt, this.retryDelay(attempt));
+        } else {
+          finish(() => onFailure(reason));
+        }
+      };
+      try {
+        const response = datasource.getRows({
+          startRow,
+          endRow,
+          sortModel: this.core.columnModel.getSortModel(),
+          filterModel: this.getFilterModel(),
+          advancedFilterModel: this.getAdvancedFilterModel(),
+          quickFilterText: this.quickFilter,
+          signal,
+          onSuccess: (rows, lastRow) => {
+            if (attemptSettled || settled) return;
+            attemptSettled = true;
+            finish(() => onSuccess(rows ?? [], lastRow));
+          },
+          fail: failAttempt
+        });
+        if (response && typeof response.catch === "function") void response.catch(failAttempt);
+      } catch (error) {
+        failAttempt(error);
+      }
+    };
+    runAttempt();
+  }
+
   private installBlock(blockIndex: number, result: RemoteBlockResult<TData>): void {
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const start = blockIndex * blockSize;
     this.evictBlock(blockIndex);
     if (typeof result.lastRow === "number" && result.lastRow >= 0) {
@@ -480,7 +435,7 @@ export class RowModel<TData = any> {
 
   private evictBlock(blockIndex: number): void {
     this.installedBlocks.delete(blockIndex);
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const start = blockIndex * blockSize;
     let dirty: Set<string> | undefined;
     for (let index = start; index < start + blockSize; index++) {
@@ -503,11 +458,11 @@ export class RowModel<TData = any> {
 
   private resolveBlockRowCount(): number {
     if (this.infiniteLastRow != null) return this.infiniteLastRow;
-    if (this.core.options.datasourceRowCount != null) return this.core.options.datasourceRowCount;
-    if (this.blockNodes.size === 0) return this.core.options.blockSize;
+    if (this.core.gridOptions.datasourceRowCount != null) return this.core.gridOptions.datasourceRowCount;
+    if (this.blockNodes.size === 0) return this.core.gridOptions.blockSize;
     let greatest = 0;
     for (const index of this.blockNodes.keys()) greatest = Math.max(greatest, index + 1);
-    return greatest + this.core.options.blockSize;
+    return greatest + this.core.gridOptions.blockSize;
   }
 
   private blockPlaceholder(index: number): RowNode<TData> {
@@ -530,18 +485,15 @@ export class RowModel<TData = any> {
   }
 
   private abortError(reason?: unknown): Error {
-    if (reason instanceof Error) return reason;
-    const error = new Error(typeof reason === "string" ? reason : "Operation aborted");
-    error.name = "AbortError";
-    return error;
+    return createAbortError(reason, "Operation aborted");
   }
 
   private retryDelay(attempt: number): number {
     const base = Math.min(
-      this.core.options.datasourceRetryDelay * 2 ** Math.max(0, attempt - 1),
+      this.core.gridOptions.datasourceRetryDelay * 2 ** Math.max(0, attempt - 1),
       30_000
     );
-    const jitter = this.core.options.datasourceRetryJitter;
+    const jitter = this.core.gridOptions.datasourceRetryJitter;
     return Math.max(0, Math.round(base * (1 + (Math.random() * 2 - 1) * jitter)));
   }
 
@@ -553,9 +505,9 @@ export class RowModel<TData = any> {
     if (!this.isInfinite || this.infiniteRequested) return;
     const loaded = this.all.length;
     if (this.infiniteLastRow != null && loaded >= this.infiniteLastRow) return;
-    const buffer = this.core.options.infiniteBufferRows;
+    const buffer = this.core.gridOptions.infiniteBufferRows;
     if (lastVisibleIndex + buffer < loaded && lastVisibleIndex < loaded) return;
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const stop = this.infiniteLastRow == null
       ? loaded + blockSize
       : Math.min(this.infiniteLastRow, loaded + blockSize);
@@ -565,10 +517,10 @@ export class RowModel<TData = any> {
   private prefetchVisibleBlocks(lastVisibleIndex: number): void {
     if (lastVisibleIndex < 0) return;
     this.maintainBlockCache();
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const target = Math.floor(lastVisibleIndex / blockSize);
     const first = Math.floor(this.core.bodyRenderer.getRenderedRowRange().first / blockSize);
-    const radius = this.core.options.blockPrefetch;
+    const radius = this.core.gridOptions.blockPrefetch;
     const direction = target < this.lastRequestedBlock ? -1 : 1;
     this.lastRequestedBlock = target;
     for (let block = first; block < target; block++) {
@@ -586,19 +538,20 @@ export class RowModel<TData = any> {
   }
 
   onServerParamsChanged(): Promise<void> {
-    return this.reloadInfinite().catch(() => undefined);
+    return this.startInfinite().catch(() => undefined);
   }
 
   onDatasourceChanged(): Promise<void> {
     this.cancelInfiniteRequest();
     if (this.isInfinite) return this.startInfinite().catch(() => undefined);
     this.infiniteLastRow = null;
-    this.setRowData(this.core.options.rowData);
+    this.setRowData(this.core.gridOptions.rowData);
     this.core.requestUpdate({ data: true });
     return Promise.resolve();
   }
 
   destroy(): void {
+    this.projectionBaseline = null;
     this.cancelInfiniteRequest();
     this.cancelTreeLoads();
     this.cancelDataProcessor();
@@ -610,13 +563,12 @@ export class RowModel<TData = any> {
     this.expandedIds.clear();
     this.groupExpandedIds.clear();
     this.knownGroupIds = [];
-    this.core.options.dataProcessor?.destroy?.();
   }
 
   ensureRowsLoaded(startRow: number, endRow: number, signal?: AbortSignal): Promise<void> {
     if (!this.isBlockDatasource) return Promise.resolve();
     this.maintainBlockCache();
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const start = Math.max(0, Math.trunc(startRow));
     const end = Math.min(this.resolveBlockRowCount(), Math.max(start, Math.trunc(endRow)));
     const firstBlock = Math.floor(start / blockSize);
@@ -632,7 +584,7 @@ export class RowModel<TData = any> {
     if (!this.isBlockDatasource) return;
     this.dataRevision++;
     this.core.cancelPendingInput();
-    void this.core.getApi().editing.stop({ cancel: true });
+    void this.core.api.editing.stop({ cancel: true });
     this.core.changeTracker.clear();
     this.cancelInfiniteRequest();
     this.core.undoService.clear();
@@ -655,7 +607,7 @@ export class RowModel<TData = any> {
       this.retainedBlockNodes.delete(id);
       if (this.nodesById.get(id) === node) this.nodesById.delete(id);
     }
-    const blockSize = this.core.options.blockSize;
+    const blockSize = this.core.gridOptions.blockSize;
     const retained = new Set<number>();
     const { first, lastExcl } = this.core.bodyRenderer.getRenderedRowRange();
     for (let row = first; row < lastExcl; row += blockSize) retained.add(Math.floor(row / blockSize));
@@ -670,11 +622,11 @@ export class RowModel<TData = any> {
   setRowData(rows: TData[] | null | undefined): void {
     this.dataRevision++;
     this.core.cancelPendingInput();
-    void this.core.getApi().editing.stop({ cancel: true });
+    void this.core.api.editing.stop({ cancel: true });
     this.cancelTreeLoads();
     this.core.changeTracker.clear();
-    const resolveRowId = this.core.options.resolveRowId;
-    const childrenKey = this.core.options.childrenKey;
+    const resolveRowId = this.core.gridOptions.resolveRowId;
+    const childrenKey = this.core.gridOptions.childrenKey;
     const next: RowNode<TData>[] = [];
     const roots: RowNode<TData>[] = [];
     const byId = new Map<string, RowNode<TData>>();
@@ -726,7 +678,7 @@ export class RowModel<TData = any> {
     for (const id of [...this.expandedIds]) {
       if (!byId.has(id)) this.expandedIds.delete(id);
     }
-    if (this.core.options.defaultExpandAll) {
+    if (this.core.gridOptions.defaultExpandAll) {
       for (const node of next) {
         if (this.getChildrenCount(node.id) > 0) this.expandedIds.add(node.id);
       }
@@ -760,7 +712,7 @@ export class RowModel<TData = any> {
 
   loadTreeChildren(id: string, force = false): Promise<readonly TData[]> {
     const node = this.nodesById.get(id);
-    const loader = this.core.options.loadTreeChildren;
+    const loader = this.core.gridOptions.loadTreeChildren;
     if (!this.isTree || !node?.data || !loader) return Promise.resolve([]);
     if (!force && node.treeChildrenLoaded) {
       return Promise.resolve(this.getChildrenIds(id).flatMap((childId) => {
@@ -780,10 +732,10 @@ export class RowModel<TData = any> {
     const request = Promise.resolve().then(() => loader({
       data: node.data!,
       node,
-      api: this.core.getApi(),
+      api: this.core.api,
       signal: controller.signal
     })).then((children) => {
-      if (controller.signal.aborted || this.core.isDestroyed()) return [];
+      if (controller.signal.aborted || this.core.isDisposed()) return [];
       if (!Array.isArray(children)) {
         throw new TypeError("[MachTable] loadTreeChildren must resolve to an array.");
       }
@@ -835,13 +787,13 @@ export class RowModel<TData = any> {
       if (child != null) this.buildChildNodes(parent, child, depth);
     }
     this.reindexAll();
-    this.core.selectionService.onRowsRebuilt(this.core.options.resolveRowId != null);
+    this.core.selectionService.onRowsRebuilt(this.core.gridOptions.resolveRowId != null);
     this.refreshPipeline();
     this.core.requestUpdate({ data: true });
   }
 
   private validateTreeChildren(children: readonly TData[], replacedIds: ReadonlySet<string>): void {
-    const resolveRowId = this.core.options.resolveRowId;
+    const resolveRowId = this.core.gridOptions.resolveRowId;
     const reserved = resolveRowId
       ? new Set([...this.nodesById.keys()].filter((id) => !replacedIds.has(id)))
       : null;
@@ -856,21 +808,22 @@ export class RowModel<TData = any> {
         seenObjects.add(data);
       }
       if (resolveRowId && reserved) {
-        const id = resolveRowId({ data, index: index++, api: this.core.getApi() });
+        const id = resolveRowId({ data, index: index++, api: this.core.api });
         if (typeof id !== "string" || id.length === 0) {
           throw new TypeError("[MachTable] rowKey must resolve to a non-empty identifier for lazy tree children.");
         }
         if (reserved.has(id)) throw new Error(`Duplicate row id: ${id}`);
         reserved.add(id);
       }
-      const nested = readChildren(data, this.core.options.childrenKey);
+      const nested = readChildren(data, this.core.gridOptions.childrenKey);
       if (nested) stack.push(...nested as TData[]);
     }
   }
 
   applyTransaction(transaction: RowTransaction<TData>, refresh = true): RowTransactionImpact {
-    const resolveRowId = this.core.options.resolveRowId;
+    const resolveRowId = this.core.gridOptions.resolveRowId;
     const touched: RowNode<TData>[] = [];
+    const replacements: RowReplacement<TData>[] = [];
     const externallyReplacedIds: string[] = [];
 
     if (transaction.remove?.length) {
@@ -891,7 +844,7 @@ export class RowModel<TData = any> {
           while (stack.length > 0) {
             const cur = stack.pop()!;
             removeRefs.add(cur);
-            const kids = this.isTree ? readChildren(cur, this.core.options.childrenKey) : undefined;
+            const kids = this.isTree ? readChildren(cur, this.core.gridOptions.childrenKey) : undefined;
             if (kids) {
               for (const kid of kids) stack.push(kid as TData);
             }
@@ -921,6 +874,7 @@ export class RowModel<TData = any> {
           node = this.all.find((n) => n.data === data);
         }
         if (node) {
+          replacements.push({ node, before: node.data, after: data });
           node.data = data;
           externallyReplacedIds.push(node.id);
           this.core.bodyRenderer.invalidateRowHeight(node);
@@ -941,7 +895,7 @@ export class RowModel<TData = any> {
         const node: RowNode<TData> = { id, data, rowIndex: -1, selected: false };
         this.nodesById.set(id, node);
         this.treeDepth.set(node, 0);
-        const children = this.isTree ? readChildren(data, this.core.options.childrenKey) : undefined;
+        const children = this.isTree ? readChildren(data, this.core.gridOptions.childrenKey) : undefined;
         if (children) {
           for (const child of children) {
             if (child != null) this.buildChildNodes(node, child as TData, 1);
@@ -949,17 +903,21 @@ export class RowModel<TData = any> {
         }
         added.push(node);
       });
-      this.roots.splice(startIndex, 0, ...added);
+      this.roots = this.roots.slice(0, startIndex).concat(added, this.roots.slice(startIndex));
       this.reindexAll();
     }
 
-    const pipelineChanged = this.transactionNeedsPipeline(transaction);
-    if (refresh) {
-      if (pipelineChanged) this.refreshPipeline();
-      else if (touched.length > 0) this.emitIncrementalModelUpdate();
-    }
+    const impact = { pipelineChanged: this.transactionNeedsPipeline(transaction, replacements), updatedRowIds: touched.map((node) => node.id) };
+    this.refreshTransaction(impact, refresh);
     this.core.changeTracker.clearRows(externallyReplacedIds);
-    return { pipelineChanged, updatedRowIds: touched.map((node) => node.id) };
+    return impact;
+  }
+
+  private refreshTransaction(impact: RowTransactionImpact, refresh: boolean): void {
+    if (impact.pipelineChanged) this.projectionBaseline = null;
+    if (!refresh) return;
+    if (impact.pipelineChanged) this.refreshPipeline();
+    else if (impact.updatedRowIds.length) this.emitIncrementalModelUpdate();
   }
 
   applyTransactions(transactions: readonly RowTransaction<TData>[]): RowTransactionImpact {
@@ -976,17 +934,33 @@ export class RowModel<TData = any> {
     return { pipelineChanged, updatedRowIds: [...updatedRowIds] };
   }
 
-  private transactionNeedsPipeline(transaction: RowTransaction<TData>): boolean {
+  private transactionNeedsPipeline(transaction: RowTransaction<TData>, replacements: readonly RowReplacement<TData>[]): boolean {
     if (transaction.add?.length || transaction.remove?.length) return true;
-    if (!transaction.update?.length) return false;
-    if (this.isTree || this.core.options.masterDetail) return true;
-    if (this.core.columnModel.getRowGroupColumns().length > 0) return true;
-    if (!this.core.options.manualFiltering && this.isFilterPresent()) return true;
-    if (!this.core.options.manualSorting && this.core.columnModel.getSortModel().length > 0) return true;
-    if (this.core.options.getRowHeight) return true;
-    return this.core.columnModel.getOrderedVisible().some((column) =>
+    if (!replacements.length) return false;
+    const fields = this.getProjectionFields();
+    if (fields === null) return true;
+    if (!fields.length) return false;
+    const baseline = this.projectionBaseline;
+    if (!baseline || fields.length !== baseline.fields.length || fields.some((field, index) => field !== baseline.fields[index])) return true;
+    return replacements.some(({ node, before, after }) => projectionFieldsChanged(before, after, fields, baseline.values.get(node)));
+  }
+
+  private getProjectionFields(): string[] | null {
+    if (this.isTree || this.core.gridOptions.masterDetail || this.core.gridOptions.getRowHeight || this.shouldUseDataProcessor()) return null;
+    const columns = this.core.columnModel.getOrderedVisible();
+    if (columns.some((column) =>
       column.colDef.autoHeight === true || column.colDef.autoRowSpan === true || column.colDef.rowSpan != null
-    );
+    )) return null;
+    const filtering = !this.core.gridOptions.manualFiltering;
+    return projectionFields({ columns, customAggregates: this.core.gridOptions.aggFuncs,
+      sortModel: this.core.gridOptions.manualSorting ? [] : this.core.columnModel.getSortModel(),
+      filterModel: filtering ? this.filterModel : {}, advancedFilter: filtering ? this.advancedFilterModel : null,
+      quickFilter: filtering ? this.quickFilter : null });
+  }
+
+  private captureProjectionBaseline(): void {
+    const fields = this.getProjectionFields();
+    this.projectionBaseline = fields?.length ? { fields, values: captureProjectionValues(this.all, fields) } : null;
   }
 
   private emitIncrementalModelUpdate(): void {
@@ -999,7 +973,7 @@ export class RowModel<TData = any> {
       this.core.reportError(new Error(`Duplicate row id: ${id}`), "transaction.add", { rowId: id });
       return;
     }
-    const children = readChildren(data, this.core.options.childrenKey);
+    const children = readChildren(data, this.core.gridOptions.childrenKey);
     const child: RowNode<TData> = {
       id,
       data,
@@ -1035,7 +1009,9 @@ export class RowModel<TData = any> {
     const before = JSON.stringify(this.filterModel);
     const columns = new Set(this.core.columnModel.getColumns().map((column) => column.id));
     this.filterModel = normalizeFilterModel(filterModel, columns);
-    return JSON.stringify(this.filterModel) !== before;
+    const changed = JSON.stringify(this.filterModel) !== before;
+    if (changed) this.projectionBaseline = null;
+    return changed;
   }
 
   getFilterModel(): FilterModel {
@@ -1047,8 +1023,10 @@ export class RowModel<TData = any> {
     const next = normalizeAdvancedFilterModel(model, columns);
     const before = JSON.stringify(this.advancedFilterModel);
     this.advancedFilterModel = next;
-    this.core.options.advancedFilterModel = next;
-    return JSON.stringify(next) !== before;
+    this.core.gridOptions.advancedFilterModel = next;
+    const changed = JSON.stringify(next) !== before;
+    if (changed) this.projectionBaseline = null;
+    return changed;
   }
 
   getAdvancedFilterModel(): AdvancedFilterModel | null {
@@ -1059,6 +1037,7 @@ export class RowModel<TData = any> {
     const next = text != null && text.trim() !== "" ? text : null;
     if (next === this.quickFilter) return false;
     this.quickFilter = next;
+    this.projectionBaseline = null;
     return true;
   }
 
@@ -1071,9 +1050,10 @@ export class RowModel<TData = any> {
   }
 
   refreshPipeline(): void {
+    this.projectionBaseline = null;
     const startedAt = this.core.performanceMonitor.start();
     const columns = this.core.columnModel.getOrderedVisible();
-    const getCellValue = (node: RowNode<any>, column: ColumnLike) => this.core.getCellValue(node, column);
+    const getCellValue = (node: RowNode<any>, column: ColumnLike) => this.core.readCellValue(node, column);
 
     if (this.isInfinite) {
       this.refreshInfinitePipeline(startedAt);
@@ -1083,19 +1063,20 @@ export class RowModel<TData = any> {
     if (this.startDataProcessorIfNeeded(startedAt)) return;
 
     let rows: RowNode<TData>[];
+    let ambiguousExpansions: string[] = [];
 
     if (this.isTree) {
       rows = this.buildTreeDisplay(columns, getCellValue);
     } else {
       rows = this.all;
-      const filteringLocally = this.isFilterPresent() && !this.core.options.manualFiltering;
+      const filteringLocally = this.isFilterPresent() && !this.core.gridOptions.manualFiltering;
       if (filteringLocally) {
         rows = rows.filter(createRowFilter(
           columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
         ));
       }
       const sortModel = this.core.columnModel.getSortModel();
-      if (sortModel.length > 0 && !this.core.options.manualSorting) {
+      if (sortModel.length > 0 && !this.core.gridOptions.manualSorting) {
         try {
           rows = sortNodes(rows, sortModel, columns, getCellValue);
         } catch (error) {
@@ -1105,8 +1086,10 @@ export class RowModel<TData = any> {
 
       const groupCols = this.core.columnModel.getRowGroupColumns();
       if (groupCols.length > 0) {
-        rows = this.buildGrouped(rows, groupCols);
-      } else if (this.core.options.masterDetail) {
+        const grouped = this.buildGrouped(rows, groupCols);
+        rows = grouped.rows;
+        ambiguousExpansions = grouped.ambiguousExpansions;
+      } else if (this.core.gridOptions.masterDetail) {
         const withDetails: RowNode<TData>[] = [];
         for (const node of rows) {
           withDetails.push(node);
@@ -1137,10 +1120,12 @@ export class RowModel<TData = any> {
     });
     this.pipelineRows = rows;
     this.applyPagination();
+    this.captureProjectionBaseline();
 
     this.computeSpans(getCellValue);
     this.core.emit("modelUpdated", { rowCount: rows.length });
     this.core.performanceMonitor.recordModel(startedAt);
+    this.reportAmbiguousExpansions(ambiguousExpansions);
   }
 
   private refreshInfinitePipeline(startedAt: number): void {
@@ -1168,26 +1153,26 @@ export class RowModel<TData = any> {
   }
 
   private shouldUseDataProcessor(): boolean {
-    if (!this.core.options.dataProcessor || this.all.length < this.core.options.dataProcessorMinRows) return false;
-    if (this.isTree || this.core.options.masterDetail || this.core.columnModel.getRowGroupColumns().length > 0) {
+    if (!this.core.gridOptions.dataProcessor || this.all.length < this.core.gridOptions.dataProcessorMinRows) return false;
+    if (this.isTree || this.core.gridOptions.masterDetail || this.core.columnModel.getRowGroupColumns().length > 0) {
       return false;
     }
-    const hasFilter = !this.core.options.manualFiltering && this.isFilterPresent();
-    const hasSort = !this.core.options.manualSorting && this.core.columnModel.getSortModel().length > 0;
+    const hasFilter = !this.core.gridOptions.manualFiltering && this.isFilterPresent();
+    const hasSort = !this.core.gridOptions.manualSorting && this.core.columnModel.getSortModel().length > 0;
     return hasFilter || hasSort;
   }
 
   private refreshWithDataProcessor(startedAt: number): void {
     this.cancelDataProcessor();
-    const processor = this.core.options.dataProcessor;
+    const processor = this.core.gridOptions.dataProcessor;
     if (!processor) return;
     const seq = ++this.dataProcessorSeq;
     const controller = new AbortController();
     this.dataProcessorAbort = controller;
     const columns = this.core.columnModel.getOrderedVisible();
     const rows = this.all.flatMap((node) => node.data == null ? [] : [{ id: node.id, data: node.data }]);
-    const filterLocally = !this.core.options.manualFiltering;
-    const sortLocally = !this.core.options.manualSorting;
+    const filterLocally = !this.core.gridOptions.manualFiltering;
+    const sortLocally = !this.core.gridOptions.manualSorting;
     void Promise.resolve().then(() => processor.process({
       rows,
       columns: columns.map((column) => ({
@@ -1200,7 +1185,7 @@ export class RowModel<TData = any> {
       quickFilterText: filterLocally ? this.quickFilter : null,
       signal: controller.signal
     })).then((result) => {
-      if (seq !== this.dataProcessorSeq || controller.signal.aborted || this.core.isDestroyed()) return;
+      if (seq !== this.dataProcessorSeq || controller.signal.aborted || this.core.isDisposed()) return;
       const seen = new Set<string>();
       const next: RowNode<TData>[] = [];
       for (const id of result.rowIds) {
@@ -1216,13 +1201,13 @@ export class RowModel<TData = any> {
       });
       this.pipelineRows = next;
       this.applyPagination();
-      const getCellValue = (node: RowNode<any>, column: ColumnLike) => this.core.getCellValue(node, column);
+      const getCellValue = (node: RowNode<any>, column: ColumnLike) => this.core.readCellValue(node, column);
       this.computeSpans(getCellValue);
       this.core.emit("modelUpdated", { rowCount: next.length });
       this.core.performanceMonitor.recordModel(startedAt);
       this.core.requestUpdate({ data: true });
     }).catch((error) => {
-      if (seq !== this.dataProcessorSeq || controller.signal.aborted || this.core.isDestroyed()) return;
+      if (seq !== this.dataProcessorSeq || controller.signal.aborted || this.core.isDisposed()) return;
       this.core.reportError(error, "dataProcessor.process");
       this.skipDataProcessorOnce = true;
       this.refreshPipeline();
@@ -1243,7 +1228,7 @@ export class RowModel<TData = any> {
   private pageSize = 20;
 
   get paginationActive(): boolean {
-    return this.core.options.paginationEnabled && !this.isInfinite;
+    return this.core.gridOptions.paginationEnabled && !this.isInfinite;
   }
 
   private applyPagination(): void {
@@ -1256,8 +1241,8 @@ export class RowModel<TData = any> {
     const pageCount = this.getPageCount();
     if (this.page > pageCount) this.page = pageCount;
     if (this.page < 1) this.page = 1;
-    this.core.options.paginationPage = this.page;
-    if (this.core.options.paginationMode === "server") {
+    this.core.gridOptions.paginationPage = this.page;
+    if (this.core.gridOptions.paginationMode === "server") {
       this.pipelineRows.forEach((node, index) => {
         node.rowIndex = index;
       });
@@ -1275,7 +1260,7 @@ export class RowModel<TData = any> {
   }
 
   private effectivePageSize(): number {
-    this.pageSize = this.core.options.paginationPageSize;
+    this.pageSize = this.core.gridOptions.paginationPageSize;
     return Math.max(1, this.pageSize);
   }
 
@@ -1285,8 +1270,8 @@ export class RowModel<TData = any> {
 
   getTotalRowCount(): number {
     if (this.isInfinite) return this.getDisplayTotalCount();
-    if (this.paginationActive && this.core.options.paginationMode === "server") {
-      return this.core.options.paginationTotal;
+    if (this.paginationActive && this.core.gridOptions.paginationMode === "server") {
+      return this.core.gridOptions.paginationTotal;
     }
     return this.pipelineRows.length;
   }
@@ -1306,7 +1291,7 @@ export class RowModel<TData = any> {
     const next = Math.max(1, Math.min(Math.round(page) || 1, pageCount));
     if (next === this.page) return;
     this.page = next;
-    this.core.options.paginationPage = next;
+    this.core.gridOptions.paginationPage = next;
     this.applyPagination();
     this.core.requestUpdate({ data: true });
     this.core.bodyRenderer.scrollToIndex(0, "top");
@@ -1317,10 +1302,10 @@ export class RowModel<TData = any> {
     if (!this.paginationActive) return;
     const next = Math.max(1, Math.round(size) || this.effectivePageSize());
     const firstVisible = (this.page - 1) * this.effectivePageSize();
-    this.core.options.paginationPageSize = next;
+    this.core.gridOptions.paginationPageSize = next;
     this.pageSize = next;
     this.page = Math.floor(firstVisible / next) + 1;
-    this.core.options.paginationPage = this.page;
+    this.core.gridOptions.paginationPage = this.page;
     this.applyPagination();
     this.core.requestUpdate({ data: true });
     this.emitPaginationChanged();
@@ -1328,15 +1313,15 @@ export class RowModel<TData = any> {
 
   restorePagination(page: number, pageSize: number): void {
     this.pageSize = Math.max(1, Math.round(pageSize) || 1);
-    this.core.options.paginationPageSize = this.pageSize;
+    this.core.gridOptions.paginationPageSize = this.pageSize;
     this.page = Math.max(1, Math.round(page) || 1);
-    this.core.options.paginationPage = this.page;
+    this.core.gridOptions.paginationPage = this.page;
   }
 
   setPaginationEnabled(enabled: boolean): void {
-    if (this.core.options.paginationEnabled === enabled) return;
-    this.core.options.paginationEnabled = enabled && !this.isInfinite;
-    if (this.core.options.paginationEnabled) this.page = 1;
+    if (this.core.gridOptions.paginationEnabled === enabled) return;
+    this.core.gridOptions.paginationEnabled = enabled && !this.isInfinite;
+    if (this.core.gridOptions.paginationEnabled) this.page = 1;
     this.applyPagination();
     this.core.requestUpdate({ data: true });
     this.emitPaginationChanged();
@@ -1344,8 +1329,8 @@ export class RowModel<TData = any> {
 
   onPaginationOptionsChanged(): void {
     if (!this.paginationActive) return;
-    this.page = this.core.options.paginationMode === "server"
-      ? this.core.options.paginationPage
+    this.page = this.core.gridOptions.paginationMode === "server"
+      ? this.core.gridOptions.paginationPage
       : 1;
     this.applyPagination();
     this.core.requestUpdate({ data: true });
@@ -1365,9 +1350,9 @@ export class RowModel<TData = any> {
     columns: ColumnLike[],
     getCellValue: (node: RowNode<any>, column: ColumnLike) => any
   ): RowNode<TData>[] {
-    const sortModel = this.core.options.manualSorting ? [] : this.core.columnModel.getSortModel();
+    const sortModel = this.core.gridOptions.manualSorting ? [] : this.core.columnModel.getSortModel();
     const passCache = new Map<string, boolean>();
-    const filterPresent = this.isFilterPresent() && !this.core.options.manualFiltering;
+    const filterPresent = this.isFilterPresent() && !this.core.gridOptions.manualFiltering;
     const filter = createRowFilter(
       columns, this.filterModel, this.advancedFilterModel, this.quickFilter, getCellValue
     );
@@ -1423,7 +1408,7 @@ export class RowModel<TData = any> {
     if (!rowSpan) return 1;
     try {
       const requested = rowSpan({
-        api: this.core.getApi(), colDef: column.colDef, column, node,
+        api: this.core.api, colDef: column.colDef, column, node,
         data: node.data, value, rowIndex: node.rowIndex
       });
       return Math.max(1, Math.min(Math.round(requested) || 1, remaining));
@@ -1471,7 +1456,7 @@ export class RowModel<TData = any> {
 
   private computeSpans(getCellValue: (node: RowNode<any>, column: ColumnLike) => any): void {
     this.spanInfo.clear();
-    if (this.isTree || this.core.options.masterDetail) return;
+    if (this.isTree || this.core.gridOptions.masterDetail) return;
     if (this.core.columnModel.getRowGroupColumns().length > 0) return;
     const columns = this.core.columnModel.getOrderedVisible().filter(
       (column) => column.colDef.rowSpan != null || column.colDef.autoRowSpan === true
@@ -1496,8 +1481,8 @@ export class RowModel<TData = any> {
     return this.treeDepth.get(node) ?? 0;
   }
 
-  private buildGrouped(rows: RowNode<TData>[], groupCols: ColumnLike[]): RowNode<TData>[] {
-    const aggResolve = createAggResolver(this.core.options.aggFuncs);
+  private buildGrouped(rows: RowNode<TData>[], groupCols: ColumnLike[]): { rows: RowNode<TData>[]; ambiguousExpansions: string[] } {
+    const aggResolve = createAggResolver(this.core.gridOptions.aggFuncs);
     const aggCols = this.core.columnModel.getAggColumns();
     this.knownGroupIds = [];
 
@@ -1507,7 +1492,7 @@ export class RowModel<TData = any> {
         const fn = aggResolve(col.colDef.aggFunc!);
         if (!fn) continue;
         try {
-          values[col.id] = fn(leaves.map((leaf) => this.core.getCellValue(leaf, col)));
+          values[col.id] = aggregateItems(leaves, fn, (leaf) => this.core.readCellValue(leaf, col));
         } catch (error) {
           this.core.reportError(error, "aggFunc", { colId: col.id, aggFunc: col.colDef.aggFunc });
           values[col.id] = null;
@@ -1516,79 +1501,42 @@ export class RowModel<TData = any> {
       return values;
     };
 
-    const build = (
-      nodes: RowNode<TData>[],
-      level: number,
-      parentPath: string
-    ): { display: RowNode<TData>[]; leaves: RowNode<TData>[] } => {
-      if (level >= groupCols.length) {
-        return { display: nodes, leaves: nodes };
-      }
-      const col = groupCols[level];
-      const groups = new Map<string, RowNode<TData>[]>();
-      const order: string[] = [];
-      for (const node of nodes) {
-        const raw = this.core.getCellValue(node, col);
-        const key = raw == null ? "(空)" : String(raw);
-        let bucket = groups.get(key);
-        if (!bucket) {
-          bucket = [];
-          groups.set(key, bucket);
-          order.push(key);
-        }
-        bucket.push(node);
-      }
-      order.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+    const migration = migrateGroupExpansion(
+      this.groupExpandedIds, this.all, groupCols, (node, column) => this.core.readCellValue(node, column)
+    );
+    this.groupExpandedIds = migration.expanded;
+    const grouped = buildRowGroups(rows, groupCols, (node, column) => this.core.readCellValue(node, column), computeAgg, this.groupExpandedIds);
+    this.knownGroupIds = grouped.ids;
+    return { rows: grouped.rows, ambiguousExpansions: migration.ambiguous };
+  }
 
-      const display: RowNode<TData>[] = [];
-      const leaves: RowNode<TData>[] = [];
-      for (const key of order) {
-        const children = groups.get(key)!;
-        const groupId = `${parentPath}/g${level}:${key}`;
-        this.knownGroupIds.push(groupId);
-        const child = build(children, level + 1, groupId);
-        const groupNode: RowNode<TData> = {
-          id: groupId,
-          data: null,
-          rowIndex: -1,
-          selected: false,
-          isGroup: true,
-          groupLevel: level,
-          groupKey: key,
-          leafNodes: child.leaves,
-          aggValues: computeAgg(child.leaves)
-        };
-        display.push(groupNode);
-        if (this.groupExpandedIds.has(groupId)) {
-          display.push(...child.display);
-        }
-        leaves.push(...child.leaves);
-      }
-      return { display, leaves };
-    };
-
-    return build(rows, 0, "").display;
+  private reportAmbiguousExpansions(ids: readonly string[]): void {
+    // Publish the completed projection/state first: an error listener may synchronously replace data or restore state.
+    for (const groupId of ids) {
+      if (this.core.isDisposed()) return;
+      this.core.reportError(new Error(`Ambiguous legacy group expansion: ${groupId}`), "gridState.groupExpansion", { groupId });
+    }
   }
 
   isRowExpandable(node: RowNode<TData>): boolean {
     if (this.isTree) {
       if (this.hasChildren(node.id)) return true;
       if (node.treeLoading) return true;
-      if (node.treeChildrenLoaded || !node.data || !this.core.options.loadTreeChildren) return false;
-      const checkTree = this.core.options.isTreeRowExpandable;
+      if (node.treeChildrenLoaded || !node.data || !this.core.gridOptions.loadTreeChildren) return false;
+      const checkTree = this.core.gridOptions.isTreeRowExpandable;
       if (!checkTree) return false;
       try {
-        return checkTree({ data: node.data, node, api: this.core.getApi() });
+        return checkTree({ data: node.data, node, api: this.core.api });
       } catch (error) {
         this.core.reportError(error, "isTreeRowExpandable", { rowId: node.id });
         return false;
       }
     }
-    if (!this.core.options.masterDetail) return false;
-    const check = this.core.options.isRowExpandable;
+    if (!this.core.gridOptions.masterDetail) return false;
+    const check = this.core.gridOptions.isRowExpandable;
     if (check) {
       try {
-        return check({ data: node.data, node, api: this.core.getApi() });
+        return check({ data: node.data, node, api: this.core.api });
       } catch (error) {
         this.core.reportError(error, "isRowExpandable", { rowId: node.id });
         return false;
@@ -1670,10 +1618,6 @@ export class RowModel<TData = any> {
     return this.groupExpandedIds.has(groupId);
   }
 
-  getGroupNode(groupId: string): RowNode<TData> | undefined {
-    return this.displayed.find((n) => n.isGroup && n.id === groupId);
-  }
-
   expandAllGroups(): void {
     if (this.knownGroupIds.length === 0) return;
     let changed = false;
@@ -1707,8 +1651,8 @@ export class RowModel<TData = any> {
   }
 
   canReorderRows(): boolean {
-    return !this.isTree && !this.isInfinite && !this.core.options.dataProcessor &&
-      this.core.options.paginationMode !== "server" &&
+    return !this.isTree && !this.isInfinite && !this.core.gridOptions.dataProcessor &&
+      this.core.gridOptions.paginationMode !== "server" &&
       this.core.columnModel.getSortModel().length === 0 &&
       this.core.columnModel.getRowGroupColumns().length === 0;
   }

@@ -1,164 +1,123 @@
-import { describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createXlsxExtension, exportGridToXlsx, importGridFromXlsx, type XlsxEngine } from "../index";
-import type { GridApi } from "@agile-team/mach-table";
-
+import { createGrid, type GridApi } from "@agile-team/mach-table";
 function engine(): XlsxEngine {
-  return {
-    utils: {
-      book_new: () => ({ SheetNames: [], Sheets: {} }),
-      aoa_to_sheet: (rows) => rows,
-      book_append_sheet: (book, sheet, name = "Sheet1") => {
-        book.SheetNames.push(name);
-        book.Sheets[name] = sheet;
-      },
-      sheet_to_json: (sheet) => sheet as unknown[][]
-    },
-    writeFileXLSX: vi.fn(),
-    read: (data) => data as ReturnType<XlsxEngine["utils"]["book_new"]>
-  };
+  return { utils: { book_new: () => ({ SheetNames: [], Sheets: {} }), aoa_to_sheet: rows => rows,
+    book_append_sheet: (book, sheet, name = "Sheet1") => { book.SheetNames.push(name); book.Sheets[name] = sheet; }, sheet_to_json: sheet => sheet as unknown[][] },
+    writeFileXLSX: vi.fn(), read: data => data as ReturnType<XlsxEngine["utils"]["book_new"]> };
 }
-
-describe("optional XLSX extension", () => {
-  it("loads the engine on demand and exports a sanitized workbook", async () => {
-    const adapter = engine();
-    const loader = vi.fn(async () => ({ default: adapter }));
-    const api = { io: { exportCsv: () => "Name,Age\nMach,3" } } as unknown as GridApi;
-    const workbook = await exportGridToXlsx(api, loader, { fileName: "report", sheetName: "B/Data" });
-    expect(loader).toHaveBeenCalledOnce();
-    expect(workbook.SheetNames).toEqual(["B Data"]);
-    expect(adapter.writeFileXLSX).toHaveBeenCalledWith(workbook, "report.xlsx", undefined);
+function grid(matrix: unknown[][] = [["A"], [1]]) {
+  const listeners = new Map<string, Set<() => void>>(); let destroyed = false, generation = 0;
+  const exportMatrix = vi.fn(() => matrix), importMatrix = vi.fn<GridApi["io"]["importMatrix"]>(() => true);
+  const api = { io: { exportMatrix, importMatrix }, isDestroyed: () => destroyed,
+    on: (type: string, listener: () => void) => { const list = listeners.get(type) ?? new Set<() => void>(); list.add(listener); listeners.set(type, list); return () => { list.delete(listener); if (!list.size) listeners.delete(type); }; } } as unknown as GridApi;
+  Object.defineProperty(api, Symbol.for("mach-table.adapter.lifecycle.v1"), { value: { canReplaceData: () => true } });
+  Object.defineProperty(api, Symbol.for("mach-table.import.v1"), { value: { begin: () => { const serial = ++generation; return () => serial === generation && !destroyed; } } });
+  return { api, exportMatrix, importMatrix, interrupt: () => generation++, changed: (type = "modelUpdated") => listeners.get(type)?.forEach(listener => listener()), destroy: () => { destroyed = true; }, listeners };
+}
+afterEach(() => { document.body.replaceChildren(); });
+describe("typed optional XLSX extension", () => {
+  it("loads on demand and preserves typed cells without a CSV allocation", async () => {
+    const adapter = engine(), loader = vi.fn(async () => ({ default: adapter }));
+    const matrix = [["code", "amount", "date", "enabled"], ["9007199254740993", 12.5, new Date("2026-10-26"), true], ["0012", null, null, false]];
+    const { api, exportMatrix } = grid(matrix); const workbook = await exportGridToXlsx(api, loader, { fileName: "report", sheetName: "B/Data" });
+    expect(loader).toHaveBeenCalledOnce(); expect(exportMatrix).toHaveBeenCalledWith({ fileName: "report", sheetName: "B/Data", target: "xlsx" });
+    expect(workbook.Sheets["B Data"]).toBe(matrix); expect(adapter.writeFileXLSX).toHaveBeenCalledWith(workbook, "report.xlsx", undefined);
   });
-
-  it("imports a selected worksheet through the core CSV path", async () => {
-    const adapter = engine();
-    const workbook = { SheetNames: ["Data"], Sheets: { Data: [["name", "note"], ["Mach", "a,b"]] } };
-    const importCsv = vi.fn(() => true);
-    const api = { io: { importCsv } } as unknown as GridApi;
-    await expect(importGridFromXlsx(api, adapter, workbook, { mode: "append" })).resolves.toBe(true);
-    expect(importCsv).toHaveBeenCalledWith('name,note\nMach,"a,b"', { mode: "append" });
+  it("reads raw typed cells directly and enables Date decoding by default", async () => {
+    const adapter = engine(); const rows = [["code", "amount", "day", "enabled"], ["9007199254740993", 12.5, new Date("2026-10-26"), true]];
+    const workbook = { SheetNames: ["Data"], Sheets: { Data: rows } }; adapter.read = vi.fn(() => workbook); adapter.utils.sheet_to_json = vi.fn(() => rows);
+    const { api, importMatrix } = grid(); expect(await importGridFromXlsx(api, adapter, workbook, { mode: "append" })).toBe(true);
+    expect(adapter.read).toHaveBeenCalledWith(workbook, { cellDates: true }); expect(adapter.utils.sheet_to_json).toHaveBeenCalledWith(rows, { header: 1, raw: true });
+    expect(importMatrix).toHaveBeenCalledWith(rows, expect.objectContaining({ mode: "append" }));
   });
-
-  it("creates a reusable extension without loading until use", async () => {
-    const adapter = engine();
-    const loader = vi.fn(async () => adapter);
-    const extension = createXlsxExtension(loader);
-    expect(loader).not.toHaveBeenCalled();
-    await extension.export({ io: { exportCsv: () => "A\n1" } } as unknown as GridApi);
-    expect(loader).toHaveBeenCalledOnce();
+  it("uses column parsers and serializers end to end while keeping formula-injection protection", async () => {
+    const host = document.createElement("div"); document.body.append(host);
+    const api = createGrid<{ id: string; amount: number; day: Date; state: number }>(host, { rowKey: "id", pagination: false,
+      columnDefs: [{ field: "id", valueParser: ({ value }) => String(value) }, { field: "amount", valueParser: ({ value }) => Number(value) },
+        { field: "day", valueParser: ({ value }) => value instanceof Date ? value : new Date(String(value)) },
+        { field: "state", valueParser: ({ value }) => value === "Enabled" ? 1 : 0, valueSerializer: ({ value }) => value === 1 ? "Enabled" : "Disabled" }] });
+    const adapter = engine(), date = new Date("2026-10-26");
+    await importGridFromXlsx(api, adapter, { SheetNames: ["Data"], Sheets: { Data: [["id", "amount", "day", "state"], ["9007199254740993", 12.5, date, "Enabled"]] } });
+    expect(api.rows.getById("9007199254740993")?.data).toEqual({ id: "9007199254740993", amount: 12.5, day: date, state: 1 });
+    const workbook = await exportGridToXlsx(api, adapter); expect((workbook.Sheets.Data as unknown[][])[1]).toEqual(["9007199254740993", 12.5, date, "Enabled"]);
+    api.rows.setData([{ id: "=ALERT()", amount: 1, day: date, state: 0 }]);
+    expect((await exportGridToXlsx(api, adapter)).Sheets.Data).toEqual([["id", "amount", "day", "state"], ["'=ALERT()", 1, date, "Disabled"]]); api.destroy();
   });
-
-  it("supports the generic writer, cell transforms and empty sanitized names", async () => {
-    const adapter = engine();
-    const writeFile = vi.fn();
-    delete adapter.writeFileXLSX;
-    adapter.writeFile = writeFile;
-    const transformCell = vi.fn((value: string, row: number, column: number) =>
-      row === 1 && column === 0 ? Number(value) : value
-    );
-    const workbook = await exportGridToXlsx(
-      { io: { exportCsv: () => "Value\n42" } } as unknown as GridApi,
-      adapter,
-      { fileName: "report.XLSX", sheetName: "/?:*[]", transformCell, writeOptions: { compression: true } }
-    );
-    expect(workbook.SheetNames).toEqual(["Data"]);
-    expect(workbook.Sheets.Data).toEqual([["Value"], [42]]);
-    expect(transformCell).toHaveBeenCalledTimes(2);
-    expect(writeFile).toHaveBeenCalledWith(workbook, "report.XLSX", { compression: true });
+  it("keeps explicit legacy string transforms and supports generic writers", async () => {
+    const adapter = engine(), writeFile = vi.fn(); delete adapter.writeFileXLSX; adapter.writeFile = writeFile;
+    const transformCell = vi.fn((value: string, row: number) => row === 1 ? Number(value) + 1 : value);
+    const workbook = await exportGridToXlsx(grid([["Value"], [42]]).api, adapter, { fileName: "../report.XLSX", sheetName: "/?:*[]", transformCell });
+    expect(workbook.Sheets.Data).toEqual([["Value"], [43]]); expect(writeFile).toHaveBeenCalledWith(workbook, ".. report.XLSX", undefined);
+    const { api, importMatrix } = grid(); const parseValue = vi.fn(({ value }: { value: string }) => value);
+    await importGridFromXlsx(api, adapter, { SheetNames: ["Data"], Sheets: { Data: [["x"], [12]] } }, { parseValue, columns: ["x"], headerRowIndex: -1, readOptions: { cellDates: false } });
+    const options = importMatrix.mock.calls[0][1]!; expect(options.columns).toEqual(["x"]); expect(options.parseValue!({ value: 12, field: "x", rowIndex: 0, columnIndex: 0 })).toBe("12");
   });
-
-  it("sanitizes browser filenames and validates CSV bridge separators", async () => {
-    const adapter = engine();
-    const api = { io: { exportCsv: () => "A\n1" } } as unknown as GridApi;
-    await exportGridToXlsx(api, adapter, { fileName: "../unsafe:name" });
-    expect(adapter.writeFileXLSX).toHaveBeenCalledWith(expect.any(Object), ".. unsafe name.xlsx", undefined);
-    await expect(exportGridToXlsx(api, adapter, { columnSeparator: "||" })).rejects.toThrow(
-      "single non-quote separator"
-    );
+  it.each([
+    { returned: undefined, expected: "12.5" },
+    { returned: null, expected: "12.5" },
+    { returned: false, expected: false },
+    { returned: 0, expected: 0 },
+    { returned: "", expected: "" }
+  ])("preserves the legacy transform fallback for $returned", async ({ returned, expected }) => {
+    const transformCell = vi.fn((value: string, row: number) => row === 1 ? returned : value);
+    const workbook = await exportGridToXlsx(grid([["Value"], [12.5]]).api, engine(), { transformCell });
+    expect(transformCell).toHaveBeenNthCalledWith(2, "12.5", 1, 0);
+    expect(workbook.Sheets.Data).toEqual([["Value"], [expected]]);
   });
-
-  it("rejects invalid engines and engines without a writer", async () => {
-    const api = { io: { exportCsv: () => "A\n1" } } as unknown as GridApi;
-    await expect(exportGridToXlsx(api, null as unknown as XlsxEngine)).rejects.toThrow(
-      "Invalid XLSX engine adapter"
-    );
-    await expect(exportGridToXlsx(api, { default: { utils: {} } } as unknown as XlsxEngine)).rejects.toThrow(
-      "Invalid XLSX engine adapter"
-    );
-    const adapter = engine();
-    delete adapter.writeFileXLSX;
-    await expect(exportGridToXlsx(api, adapter)).rejects.toThrow("must expose writeFileXLSX or writeFile");
+  it("creates a reusable lazy extension", async () => {
+    const loader = vi.fn(async () => engine()), extension = createXlsxExtension(loader), { api } = grid(); expect(loader).not.toHaveBeenCalled();
+    await extension.export(api); await extension.import(api, { SheetNames: ["Data"], Sheets: { Data: [["A"], [1]] } }); expect(loader).toHaveBeenCalledTimes(2);
   });
-
-  it("serializes workbook cell types and forwards import options", async () => {
-    const adapter = engine();
-    const namedCell = function namedCell() { return undefined; };
-    const workbook = {
-      SheetNames: ["Skip", "Data"],
-      Sheets: {
-        Skip: [],
-        Data: [[
-          "plain",
-          "a,\"b\"",
-          "semi;colon",
-          12,
-          true,
-          3n,
-          Symbol("symbol"),
-          Symbol(),
-          namedCell,
-          { id: 1 },
-          { toJSON: () => undefined },
-          null,
-          undefined
-        ]]
-      }
-    };
-    adapter.read = vi.fn(() => workbook);
-    const importCsv = vi.fn(() => true);
-    const parseValue = vi.fn((params: { value: string }) => params.value);
-    const api = { io: { importCsv } } as unknown as GridApi;
-    await expect(importGridFromXlsx(api, adapter, new Uint8Array(), {
-      sheet: 1,
-      separator: ";",
-      mode: "replace",
-      headerRowIndex: 2,
-      coerceNumbers: false,
-      parseValue,
-      readOptions: { type: "array" }
-    })).resolves.toBe(true);
-    expect(adapter.read).toHaveBeenCalledWith(expect.any(Uint8Array), { type: "array" });
-    expect(importCsv).toHaveBeenCalledWith(
-      `plain;"a,""b""";"semi;colon";12;true;3;symbol;;${namedCell.name};"{""id"":1}";;;`,
-      { separator: ";", mode: "replace", headerRowIndex: 2, coerceNumbers: false, parseValue }
-    );
+  it.each(["modelUpdated", "cellValueChanged", "cellEditingStarted", "rowEditingStarted", "destroy"])("ignores a late engine after %s changes and releases listeners", async action => {
+    let resolve!: (value: XlsxEngine) => void; const loaded = new Promise<XlsxEngine>(done => resolve = done); const state = grid();
+    const result = importGridFromXlsx(state.api, () => loaded, {}); if (action === "destroy") state.destroy(); else state.changed(action); resolve(engine());
+    expect(await result).toBe(false); expect(state.importMatrix).not.toHaveBeenCalled(); expect(state.listeners.size).toBe(0);
   });
-
-  it("validates import capabilities and worksheet selection", async () => {
-    const api = { io: { importCsv: vi.fn() } } as unknown as GridApi;
-    const missingReader = engine();
-    delete missingReader.read;
-    await expect(importGridFromXlsx(api, missingReader, {})).rejects.toThrow(
-      "XLSX import requires engine.read and utils.sheet_to_json"
-    );
-
-    const adapter = engine();
-    const workbook = { SheetNames: ["Data"], Sheets: { Data: [] } };
-    await expect(importGridFromXlsx(api, adapter, workbook, { sheet: "Missing" })).rejects.toThrow(
-      "Worksheet not found: Missing"
-    );
-
-    adapter.read = () => null as unknown as ReturnType<NonNullable<XlsxEngine["read"]>>;
-    await expect(importGridFromXlsx(api, adapter, workbook)).rejects.toThrow("invalid workbook");
-    adapter.read = (data) => data as ReturnType<NonNullable<XlsxEngine["read"]>>;
-    adapter.utils.sheet_to_json = () => null as unknown as unknown[][];
-    await expect(importGridFromXlsx(api, adapter, workbook)).rejects.toThrow("array of rows");
-    adapter.utils.sheet_to_json = () => [];
-    await expect(importGridFromXlsx(api, adapter, workbook, { separator: "\n" })).rejects.toThrow(
-      "single non-quote separator"
-    );
-
-    const extension = createXlsxExtension(adapter);
-    await expect(extension.import(api, workbook)).resolves.toBeUndefined();
-    expect(api.io.importCsv).toHaveBeenCalledWith("", {});
+  it("cancels an older lazy import when another input or import begins", async () => {
+    let resolve!: (value: XlsxEngine) => void; const loaded = new Promise<XlsxEngine>(done => resolve = done), state = grid();
+    const workbook = { SheetNames: ["Data"], Sheets: { Data: [["A"], [1]] } };
+    const first = importGridFromXlsx(state.api, () => loaded, workbook); state.interrupt(); resolve(engine());
+    expect(await first).toBe(false); expect(state.importMatrix).not.toHaveBeenCalled();
+    let complete!: (value: XlsxEngine) => void; const waiting = new Promise<XlsxEngine>(done => complete = done);
+    const older = importGridFromXlsx(state.api, () => waiting, workbook), newer = importGridFromXlsx(state.api, engine(), workbook);
+    expect(await newer).toBe(true); complete(engine()); expect(await older).toBe(false); expect(state.importMatrix).toHaveBeenCalledTimes(1);
+  });
+  it("preserves a later pending paste and a currently active editor", async () => {
+    const host = document.createElement("div"); document.body.append(host);
+    let validate!: (value: null) => void; const check = new Promise<null>(done => validate = done);
+    const api = createGrid<{ id: string; amount: number }>(host, { rowKey: "id", pagination: false,
+      columnDefs: [{ field: "id" }, { field: "amount", editable: true, cellEditor: "text", validate: () => check }], rowData: [{ id: "a", amount: 1 }] });
+    let resolve!: (value: XlsxEngine) => void; const loaded = new Promise<XlsxEngine>(done => resolve = done);
+    const result = importGridFromXlsx(api, () => loaded, { SheetNames: ["Data"], Sheets: { Data: [["id", "amount"], ["x", 9]] } });
+    expect(api.editing.startCell({ rowIndex: 0, colId: "amount" })).toBe(true);
+    const input = host.querySelector<HTMLInputElement>("input")!; input.value = "5"; const stop = api.editing.stop(); resolve(engine());
+    expect(await result).toBe(false); validate(null); expect(await stop).toBe(true); expect(api.rows.getById("a")?.data?.amount).toBe("5"); api.destroy();
+  });
+  it("cancels on engine read reentrancy and accepts no writes from an already destroyed API", async () => {
+    const state = grid(), adapter = engine(); adapter.read = () => { state.changed("cellValueChanged"); return { SheetNames: ["Data"], Sheets: { Data: [["A"], [1]] } }; };
+    expect(await importGridFromXlsx(state.api, adapter, {})).toBe(false); expect(state.importMatrix).not.toHaveBeenCalled(); state.destroy();
+    expect(await importGridFromXlsx(state.api, adapter, {})).toBe(false);
+  });
+  it("does not replace a later paste whose async validation has not emitted value events yet", async () => {
+    const host = document.createElement("div"); document.body.append(host);
+    let validate!: (value: null) => void; const check = new Promise<null>(done => validate = done);
+    const api = createGrid<{ id: string; amount: number }>(host, { rowKey: "id", pagination: false,
+      columnDefs: [{ field: "id" }, { field: "amount", editable: true, validate: () => check }], rowData: [{ id: "a", amount: 1 }] });
+    let resolve!: (value: XlsxEngine) => void; const loaded = new Promise<XlsxEngine>(done => resolve = done);
+    const result = importGridFromXlsx(api, () => loaded, { SheetNames: ["Data"], Sheets: { Data: [["id", "amount"], ["x", 9]] } });
+    expect(api.io.importMatrix([[5]], { columns: ["amount"], mode: "paste" })).toBe(true); expect(api.editing.getDirtyRowIds()).toEqual([]);
+    const applied = new Promise<void>(done => api.on("cellValueChanged", () => done()));
+    resolve(engine()); expect(await result).toBe(false); validate(null); await applied;
+    expect(api.rows.getById("a")?.data?.amount).toBe(5); expect(api.rows.getById("x")).toBeUndefined(); api.destroy();
+  });
+  it("rejects invalid engines, workbooks, worksheets and rows", async () => {
+    const { api } = grid(); await expect(exportGridToXlsx(api, null as unknown as XlsxEngine)).rejects.toThrow("Invalid XLSX engine");
+    const adapter = engine(); delete adapter.writeFileXLSX; await expect(exportGridToXlsx(api, adapter)).rejects.toThrow("must expose");
+    delete adapter.read; await expect(importGridFromXlsx(api, adapter, {})).rejects.toThrow("requires engine.read");
+    adapter.read = () => null as any; await expect(importGridFromXlsx(api, adapter, {})).rejects.toThrow("invalid workbook");
+    adapter.read = () => ({ SheetNames: ["Data"], Sheets: { Data: [] } }); await expect(importGridFromXlsx(api, adapter, {}, { sheet: "Missing" })).rejects.toThrow("Worksheet not found");
+    adapter.utils.sheet_to_json = () => null as any; await expect(importGridFromXlsx(api, adapter, {})).rejects.toThrow("array of rows");
   });
 });

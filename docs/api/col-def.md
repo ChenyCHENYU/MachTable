@@ -44,6 +44,8 @@
 | `valueGetter` | `(p: ValueGetterParams) => TValue` | 取值（替代 field）；排序/过滤/导出一致使用 |
 | `valueFormatter` | `(p: ValueFormatterParams) => any` | 显示格式化；返回非字符串自动 String() |
 | `valueSetter` | `(p: ValueSetterParams) => boolean` | 写值（编辑/粘贴/填充/撤销统一入口）；返回是否变更 |
+| `valueParser` | `(p: ValueParserParams<TData, TValue>) => TValue` | 同步规范编辑器、交互粘贴和导入的输入值 |
+| `valueSerializer` | `(p: ValueSerializerParams<TData, TValue>) => unknown` | 同步决定剪贴板、CSV 与 typed matrix/XLSX 的输出值 |
 | `cellRenderer` | `(p) => string \| HTMLElement \| { el, destroy } \| string` | 自定义单元格；字符串查[注册表](/api/exports#注册表)（内置 `statusTag`/`progressBar`/`link`） |
 | `cellRendererParams` | `Record<string, any>` | 渲染器参数通道（→ `params.rendererParams`），见[操作列与状态列](/recipes/action-columns) |
 | `cellClass` | `string \| string[] \| (p) => …` | 附加类名 |
@@ -52,6 +54,10 @@
 | `wrapText` | `boolean` | 单元格自动换行（配合 `getRowHeight`） |
 | `type` | `string \| string[]` | 从全局 `columnTypes` 解析一个或多个语义类型；从左到右合并，当前列字段最终覆盖 |
 
+`ValueParserParams` 包含取值上下文 `api`、`data`、`node`、`column`、`colDef`，另有原始 `value: unknown`、`oldValue: TValue | undefined` 和 `source: "editor" | "clipboard" | "import"`。单次导入的 `parseValue` 优先于列 parser。可信的 `rows.setData()` / `rows.transact()`、清空、填充及 undo/redo 不重新解析；排序、过滤和聚合读取已有规范值。
+
+`ValueSerializerParams` 在格式化上下文上增加 `target: "clipboard" | "csv" | "xlsx"`。未配置时，剪贴板使用显示格式，CSV 的数值保留原值、其他值使用显示格式，typed matrix 默认使用原值。两个回调都应同步且无副作用；返回 Promise 或抛错会拒绝该输入或终止该输出。异步业务校验使用 `validate` / `rowEditValidator`。详见[列值政策](/recipes/column-values)。
+
 ## 编辑
 
 | 属性 | 类型 | 说明 |
@@ -59,7 +65,7 @@
 | `editable` | `boolean \| (p) => boolean` | 可编辑开关；粘贴/填充/Delete 只写可编辑格 |
 | `cellEditor` | `"text" \| "number" \| "date" \| "select" \| 工厂函数 \| 注册名` | 编辑器。内置按值类型自动推断；date 编辑保留原值时间部分 |
 | `cellEditorParams` | `{ values: (string \| number)[] }` | select 编辑器选项 |
-| `validate` | `(newValue, p) => string \| true \| null` | 校验：返回字符串 = 错误提示（编辑器红框、不落库、不中断后续） |
+| `validate` | `(newValue, p) => string \| true \| null \| undefined \| Promise<…>` | 校验：返回字符串时显示错误并拒绝该次写入；支持异步结果 |
 | `singleClickEdit` | `boolean` | 列级单击编辑 |
 
 ## 选择与行

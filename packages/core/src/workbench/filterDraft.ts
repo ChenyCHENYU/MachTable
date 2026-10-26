@@ -3,11 +3,7 @@ import type { ColumnFilter } from "../types/colDef";
 import { normalizeAdvancedFilterModel } from "../lib/advancedFilter";
 import type { ResolvedFilterField } from "./filterFields";
 
-export const FILTER_MATCHES = {
-  text: ["contains", "notContains", "equals", "notEquals", "startsWith", "endsWith", "blank", "notBlank"],
-  number: ["equals", "notEquals", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual", "inRange", "blank", "notBlank"],
-  date: ["equals", "notEquals", "lessThan", "greaterThan", "inRange", "blank", "notBlank"]
-} as const;
+export { FILTER_MATCHES } from "../lib/filterMatches";
 
 export const MATCH_LABELS: Record<string, string> = {
   contains: "包含", notContains: "不包含", equals: "等于", notEquals: "不等于", startsWith: "开头为", endsWith: "结尾为",

@@ -1,21 +1,22 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type { TooltipParams } from "../types/params";
-import { applyPortalTheme, el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, positionAnchoredPortal } from "../lib/dom";
 import { formatCellValue } from "../render/cellContent";
 
 type TooltipContext = Pick<
   GridCore<any>,
   | "columnModel"
-  | "getApi"
-  | "getCellValue"
-  | "isDestroyed"
-  | "options"
+  | "api"
+  | "readCellValue"
+  | "isDisposed"
+  | "gridOptions"
   | "reportError"
   | "rowModel"
   | "skeleton"
 >;
 
+/** @internal Tooltip DOM and cleanup stay with the grid. */
 export class TooltipService {
   private panel: HTMLElement | null = null;
   private showTimer = 0;
@@ -78,8 +79,8 @@ export class TooltipService {
     index: number
   ): TooltipParams<any> {
     return {
-      data: node.data, node, api: this.core.getApi(), colId: column.id,
-      value: this.core.getCellValue(node, column),
+      data: node.data, node, api: this.core.api, colId: column.id,
+      value: this.core.readCellValue(node, column),
       formatted: formatCellValue(this.core, node, column), rowIndex: index
     };
   }
@@ -96,8 +97,8 @@ export class TooltipService {
   }
 
   private onMouseOver = (e: MouseEvent): void => {
-    if (this.core.isDestroyed()) return;
-    if (!this.core.options.tooltipComponent) return;
+    if (this.core.isDisposed()) return;
+    if (!this.core.gridOptions.tooltipComponent) return;
     const target = e.target as HTMLElement;
     const cell = target.closest<HTMLElement>(".mach-cell");
     if (!cell || cell === this.currentCell) return;
@@ -112,9 +113,9 @@ export class TooltipService {
     if (!this.hasTooltipValue(params, resolved.column)) return;
 
     this.showTimer = window.setTimeout(() => {
-      if (this.core.isDestroyed() || this.currentCell !== cell) return;
+      if (this.core.isDisposed() || this.currentCell !== cell) return;
       this.showPanel(cell, params);
-    }, Math.max(0, this.core.options.tooltipShowDelay));
+    }, Math.max(0, this.core.gridOptions.tooltipShowDelay));
   };
 
   private onBodyLeave = (): void => {
@@ -123,7 +124,7 @@ export class TooltipService {
 
   private showPanel(cell: HTMLElement, params: TooltipParams<any>): void {
     this.removePanel();
-    const component = this.core.options.tooltipComponent;
+    const component = this.core.gridOptions.tooltipComponent;
     if (!component) return;
 
     const panel = el("div", "mach-tooltip");
@@ -144,14 +145,6 @@ export class TooltipService {
     applyPortalTheme(panel, this.core.skeleton.root);
     document.body.appendChild(panel);
     this.panel = panel;
-    const rect = cell.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    const left = clamp(rect.left, 8, Math.max(8, window.innerWidth - panelRect.width - 8));
-    let top = rect.bottom + 6;
-    if (top + panelRect.height > window.innerHeight - 8) {
-      top = Math.max(8, rect.top - panelRect.height - 6);
-    }
-    panel.style.left = `${left}px`;
-    panel.style.top = `${top}px`;
+    positionAnchoredPortal(panel, cell, 6);
   }
 }

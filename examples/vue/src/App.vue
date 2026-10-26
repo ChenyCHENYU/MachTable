@@ -51,16 +51,16 @@ const columns = defineVueColumns<Order>([
     max: 3,
     overflow: "drawer",
     drawerTitle: "订单操作",
-    onView: ({ data }) => window.alert(`查看 ${data.id}`),
+    onView: ({ data }) => { if (data) window.alert(`查看 ${data.id}`); },
     onSave: async ({ data }, changes) => {
-      console.info("save", data.id, changes);
+      if (data) console.info("save", data.id, changes);
     },
     onDelete: ({ data }) => {
-      rows.value = rows.value.filter((row) => row.id !== data.id);
+      if (data) rows.value = rows.value.filter((row) => row.id !== data.id);
     },
     extraActions: [
-      { icon: "copy", label: "复制订单号", onClick: ({ data }) => navigator.clipboard?.writeText(data.id) },
-      { icon: "download", label: "导出订单", onClick: ({ data }) => console.info("export", data.id) }
+      { icon: "copy", label: "复制订单号", onClick: ({ data }) => { if (data) return navigator.clipboard?.writeText(data.id); } },
+      { icon: "download", label: "导出订单", onClick: ({ data }) => { if (data) console.info("export", data.id); } }
     ]
   })
 ]);

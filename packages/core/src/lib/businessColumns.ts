@@ -1,4 +1,5 @@
 import type { ColDef, CellRendererFn } from "../types/colDef";
+import { el } from "./dom";
 
 export type BusinessColumnType =
   | "text"
@@ -346,8 +347,7 @@ export function createDictionaryRenderer<TKey extends DictionaryKey = Dictionary
     const fallback = options.fallback?.(key) ?? String(key);
     const cached = dictionary.get(key);
     if (cached !== undefined) return cached;
-    const element = document.createElement("span");
-    element.className = "mach-dictionary-value mach-dictionary-value--loading";
+    const element = el("span", "mach-dictionary-value mach-dictionary-value--loading");
     element.textContent = options.loadingText ?? fallback;
     let active = true;
     void dictionary.resolve(key).then((label) => {

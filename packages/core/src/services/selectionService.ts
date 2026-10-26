@@ -6,14 +6,15 @@ type SelectionContext = Pick<
   | "bodyRenderer"
   | "columnModel"
   | "emit"
-  | "getApi"
-  | "getCellValue"
+  | "api"
+  | "readCellValue"
   | "headerRenderer"
-  | "options"
+  | "gridOptions"
   | "reportError"
   | "rowModel"
 >;
 
+/** @internal Consumers receive selection records and facade methods only. */
 export class SelectionService {
   private selectedIds = new Set<string>();
   private anchorId: string | null = null;
@@ -36,12 +37,12 @@ export class SelectionService {
     if (!column || !check) return true;
     try {
       return check({
-        api: this.core.getApi(),
+        api: this.core.api,
         colDef: column.colDef,
         column,
         node,
         data: node.data,
-        value: this.core.getCellValue(node, column),
+        value: this.core.readCellValue(node, column),
         rowIndex: node.rowIndex
       });
     } catch (error) {
@@ -155,7 +156,7 @@ export class SelectionService {
   }
 
   onRowClick(node: RowNode<any>, event: MouseEvent, fromCheckbox: boolean): void {
-    const mode = this.core.options.rowSelection;
+    const mode = this.core.gridOptions.rowSelection;
     if (mode === "none" || !this.isSelectable(node)) return;
     if (fromCheckbox) {
       this.selectFromCheckbox(node, mode);
@@ -169,7 +170,7 @@ export class SelectionService {
   }
 
   selectAll(filteredOnly = true): void {
-    const mode = this.core.options.rowSelection;
+    const mode = this.core.gridOptions.rowSelection;
     if (mode === "none") return;
     const candidates = filteredOnly ? this.core.rowModel.getDisplayedRows() : this.core.rowModel.getAllNodes();
     const selectable = candidates.filter((n) => !n.isDetail && !n.isGroup && this.isSelectable(n));
@@ -272,7 +273,7 @@ export class SelectionService {
     clearAll = false
   ): void {
     const before = new Set(this.selectedIds);
-    const cascadeTree = this.core.rowModel.isTree && this.core.options.autoCheckedChildren;
+    const cascadeTree = this.core.rowModel.isTree && this.core.gridOptions.autoCheckedChildren;
     this.replaceSelection(changes, clearAll, cascadeTree);
     this.applySelectionChanges(changes, cascadeTree);
     const changedIds = this.changedSelectionIds(before);

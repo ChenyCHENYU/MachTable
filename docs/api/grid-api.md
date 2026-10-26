@@ -172,11 +172,27 @@ persistence: {
 | 方法 | 说明 |
 | --- | --- |
 | `exportCsv(params?)` | 生成 CSV 字符串，默认防公式注入 |
-| `importCsv(text, options?)` | 替换、追加或粘贴导入 |
+| `exportMatrix(params?: MatrixExportParams)` | 返回 `unknown[][]`，默认保留原始值类型，首行为可选表头 |
+| `importCsv(text, options?)` | 同步映射 CSV 并替换、追加或发起粘贴，返回 `boolean` |
+| `importMatrix(rows, options?: ImportMatrixOptions)` | 接收 `readonly (readonly unknown[])[]`，支持替换、追加或粘贴，返回 `boolean` |
 | `print(options?)` | 打印当前表格 |
 | `copyRange()` | 将当前范围复制到剪贴板 |
 
-XLSX 通过独立的 `@agile-team/mach-table-xlsx` 扩展提供，不进入 Core。
+`MatrixExportParams` 继承 CSV 的行选择与表头选项：`includeHeader` 默认 `true`，`headersOnly` 仅输出表头，`onlySelected` 仅输出已选行，`onlyAllDisplayed` 限于当前展示行（本地分页时为当前页）；默认使用当前过滤、排序后的管线。分组/详情行及复选框/详情开关列不导出。`target` 为 `"csv" | "xlsx"`，默认 `"xlsx"`；它选择列 `valueSerializer` 的输出策略，不创建文件。`protectFormulas` 默认 `true`，保护数据单元格中的公式文本；number、boolean、Date 等非字符串值保留类型。`columnSeparator` 和 `prependBOM` 用于 `exportCsv()` 的文本编码。
+
+`ImportMatrixOptions`：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `mode` | `"replace"` | `"replace"` 替换、`"append"` 追加、`"paste"` 写入当前展示的数据行 |
+| `headerRowIndex` | `0`；指定 `columns` 时为 `-1` | 表头索引从 0 开始；`-1` 表示无表头 |
+| `columns` | — | 按矩阵顺序指定目标列 ID/field |
+| `coerceNumbers` | `true` | 内置文本转换；前导零和超出安全整数范围的编号保留字符串 |
+| `parseValue` | — | 同步回调 `({ value, field, rowIndex, columnIndex }) => unknown`，优先于列 `valueParser`；矩阵输入的 `value` 为原始值 |
+
+导入限本地数据，每次最多 10000 数据行、含表头共 100000 单元格；空字符串默认转换为 `null`，已有 number/boolean/Date 保留。结构、映射或解析失败返回 `false`。replace/append 直接装载解析后的记录；paste 进入既有输入校验、setter 与撤销流程，其 `true` 返回值不代表后续异步校验已完成。需要可等待的预览、校验和提交结果时使用可选 [`/import` 计划](/recipes/import-preview)。CSV 使用相同装载路径，另提供 `separator`；其 `parseValue` 接收字符串，且没有 `columns` 参数。
+
+XLSX 文件读写通过独立的 `@agile-team/mach-table-xlsx` 扩展提供，不进入 Core。完整值策略见[列值政策](/recipes/column-values)。
 
 ## `api.diagnostics`
 

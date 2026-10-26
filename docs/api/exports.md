@@ -22,6 +22,8 @@ MachTable 按运行时成本和职责拆分入口。Vue/React 项目只安装对
 | 扩展治理 | `resolveGridFeatures`、`validateGridOptions`、`resolveSaveConflict` |
 | 国际化 | `DEFAULT_LOCALE`、`LOCALE_EN`、`formatText` |
 
+列值与类型化 IO 的公共类型包括 `ValueParserParams`、`ValueSerializerParams`、`ImportMatrixOptions`、`MatrixExportParams`；完整预览契约位于 `/import`。
+
 公共类型包括 `GridOptions`、`GridApi` 及全部领域 API、`ColDef`、`GridState`、`GridFeature`、`GridDatasource`、事件、编辑保存、业务列、视图和 Worker 消息契约。
 
 服务端导出辅助函数仅生成可序列化的请求快照，业务后端仍负责授权、全量查询与文件任务。示例见[服务端全量导出](/recipes/remote-export)。
@@ -42,7 +44,7 @@ import "@agile-team/mach-table/styles/mach-table.css";
 
 ## 三个表格包共用的企业能力入口
 
-以下六个后缀同时由 `@agile-team/mach-table`、`@agile-team/mach-table-vue` 和 `@agile-team/mach-table-react` 提供。使用 Vue/React 时从对应适配包导入，无需直接安装 Core。它们均支持 ESM/CJS 和独立类型声明，不由根入口加载。
+以下七个后缀同时由 `@agile-team/mach-table`、`@agile-team/mach-table-vue` 和 `@agile-team/mach-table-react` 提供。使用 Vue/React 时从对应适配包导入，无需直接安装 Core。它们均支持 ESM/CJS 和独立类型声明，不由根入口加载。
 
 | 后缀 | 主要函数与协议 | 附加样式 |
 | --- | --- | --- |
@@ -52,6 +54,7 @@ import "@agile-team/mach-table/styles/mach-table.css";
 | `/server-side` | `createServerSideStore`、`bindServerSideGrid`、`createServerSideGroupColumn`、`serverSideDataColumn` | `/styles/server-side.css` |
 | `/analysis` | 无 DOM 的 `createPivot`、`evaluateFormulas`，以及 `mountAnalysis` 面板 | 面板使用 `/styles/workbench.css` |
 | `/multi-range` | `createMultiRangeSelection`，复用 Core 选区、复制、校验与编辑撤销 | `/styles/workbench.css` |
+| `/import` | `createImportPlan`、`ImportSource` / `ImportPreview` / `ImportResult`，有界预览与共享校验 | 无 |
 
 两个附加样式同样从当前使用的包导入，不能替代基础表格样式。例如：
 

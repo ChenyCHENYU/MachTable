@@ -103,6 +103,20 @@ describe("path utils", () => {
     setByPath(target, "a.b.c", 1);
     expect(target.a.b.c).toBe(1);
   });
+  it("always reads current values and keeps accessors live after path reuse and eviction", () => {
+    let reads = 0;
+    const target = { get nested() { reads++; return { value: reads }; } };
+    expect(getByPath(target, "nested.value")).toBe(1);
+    expect(getByPath(target, "nested.value")).toBe(2);
+    for (let index = 0; index < 300; index++) expect(getByPath({ value: index }, `unused.${index}`)).toBeUndefined();
+    expect(getByPath(target, "nested.value")).toBe(3);
+    const data = { nested: { value: 1 } };
+    expect(getByPath(data, "nested.value")).toBe(1);
+    expect(setByPath(data, "nested.value", 2)).toBe(true);
+    expect(getByPath(data, "nested.value")).toBe(2);
+    expect(setByPath(data, "nested.__proto__.value", 3)).toBe(false);
+    expect(getByPath(data, "nested.__proto__.value")).toBeUndefined();
+  });
 });
 
 describe("csv", () => {
@@ -114,16 +128,13 @@ describe("csv", () => {
   });
 
   it("builds header and rows", () => {
-    const csv = buildCsv({
-      getHeaderLabels: () => ["Name", "Age"],
-      getRowValues: () => [["Tom", 31]]
-    });
+    const csv = buildCsv([["Name", "Age"], ["Tom", 31]]);
     expect(csv).toBe("Name,Age\r\nTom,31");
   });
 
   it("supports custom separator and BOM", () => {
     const csv = buildCsv(
-      { getHeaderLabels: () => [], getRowValues: () => [["a", "b"]] },
+      [["a", "b"]],
       { includeHeader: false, columnSeparator: ";", prependBOM: true }
     );
     expect(csv).toBe("\uFEFFa;b");

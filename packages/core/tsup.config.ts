@@ -5,7 +5,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts", adapter: "src/adapter.ts", worker: "src/worker.ts",
     workbench: "src/workbench.ts", preferences: "src/preferences.ts", ordering: "src/ordering.ts",
-    "server-side": "src/server-side.ts", analysis: "src/analysis.ts", "multi-range": "src/multiRange.ts"
+    "server-side": "src/server-side.ts", analysis: "src/analysis.ts", import: "src/import.ts", "multi-range": "src/multiRange.ts"
   },
   format: ["esm", "cjs"],
   splitting: false,

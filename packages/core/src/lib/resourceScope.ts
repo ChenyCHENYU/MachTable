@@ -1,4 +1,5 @@
 /** Grid-local ownership: release once, in reverse order, even if one cleanup fails. */
+/** @internal The feature context exposes managed cleanup closures rather than resource scopes. */
 export class ResourceScope {
   private cleanups = new Set<() => void>();
   private disposed = false;

@@ -119,6 +119,15 @@
       ],
       "@agile-team/mach-table-react/styles/server-side.css": [
         "../../packages/react/dist/server-side.css.d.ts"
+      ],
+      "@agile-team/mach-table/import": [
+        "../../packages/core/dist/import.d.ts"
+      ],
+      "@agile-team/mach-table-vue/import": [
+        "../../packages/vue/dist/import.d.ts"
+      ],
+      "@agile-team/mach-table-react/import": [
+        "../../packages/react/dist/import.d.ts"
       ]
     },
     "jsx": "react-jsx",

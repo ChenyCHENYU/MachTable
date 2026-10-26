@@ -119,6 +119,7 @@ test("filtered keyboard targets the next visible order while one CAS preserves a
     </script></body></html>` }));
   await page.goto(url);
   await expect(page.locator('#filteredOrderGrid .mach-row[data-id="1"] .mach-row-drag-handle')).toBeEnabled();
+  await page.evaluate(() => window.filteredOrderingFixture.api.whenReady());
   await page.evaluate(() => window.filteredOrderingFixture.api.filtering.setQuickText("matching"));
   const visible = () => page.locator("#filteredOrderGrid .mach-pane--center .mach-row[data-id]").evaluateAll(rows => rows
     .sort((a, b) => Number((a as HTMLElement).dataset.index) - Number((b as HTMLElement).dataset.index)).map(row => (row as HTMLElement).dataset.id!));
@@ -126,7 +127,10 @@ test("filtered keyboard targets the next visible order while one CAS preserves a
   const baseline = Array.from({ length: 30 }, (_, index) => String(index + 1));
   const moved = [...baseline.slice(1, 7), "1", ...baseline.slice(7)];
   expect(await visible()).toEqual(["1", "7", "13", "19", "25"]);
-  await page.locator('#filteredOrderGrid .mach-row[data-id="1"] .mach-row-drag-handle').focus();
+  const firstHandle = page.locator('#filteredOrderGrid .mach-row[data-id="1"] .mach-row-drag-handle');
+  await firstHandle.focus();
+  await page.evaluate(() => window.filteredOrderingFixture.api.view.refreshLayout());
+  await expect(firstHandle).toBeFocused();
   await page.keyboard.press("Alt+ArrowDown");
   await expect.poll(visible).toEqual(["7", "1", "13", "19", "25"]);
   await expect.poll(async () => (await snapshot()).rows).toEqual(moved);

@@ -1,6 +1,5 @@
-import { GRID_OPTION_KEYS, GRID_OPTION_META } from "../core/gridOptionMetadata";
-import { matchesGridOptionKind } from "../core/gridOptionRuntime";
-import { EVENT_TYPES } from "../types/events";
+import { GRID_OPTION_KEYS, GRID_OPTION_KINDS } from "../core/gridOptionMetadata";
+import { EVENT_OPTION_KEYS, matchesGridOptionKind } from "../core/gridOptionRuntime";
 import type { GridOptions } from "../types/options";
 
 export type GridValidationCode =
@@ -16,7 +15,6 @@ export interface GridValidationIssue {
   suggestion?: string;
 }
 
-const EVENT_OPTION_KEYS = EVENT_TYPES.map((type) => `on${type.charAt(0).toUpperCase()}${type.slice(1)}`);
 const KNOWN_OPTIONS = new Set<string>([...GRID_OPTION_KEYS, ...EVENT_OPTION_KEYS]);
 
 function editDistance(a: string, b: string): number {
@@ -130,7 +128,7 @@ function validateMetadataValues(source: Record<string, unknown>): GridValidation
   for (const key of GRID_OPTION_KEYS) {
     if (specialised.has(key) || !Object.prototype.hasOwnProperty.call(source, key)) continue;
     const value = source[key];
-    const expected = GRID_OPTION_META[key].kind;
+    const expected = GRID_OPTION_KINDS[key];
     if (matchesGridOptionKind(value, expected)) continue;
     issues.push({
       code: "INVALID_OPTION_VALUE",

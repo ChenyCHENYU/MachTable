@@ -19,7 +19,9 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 | --- | --- |
 | `pnpm commit` | 交互式生成规范提交信息 |
 | `pnpm lint` / `pnpm lint:fix` | ESLint 全量检查 / 自动修复 |
-| `pnpm typecheck` | Core、Vue、React 严格类型检查 |
+| `pnpm typecheck` / `pnpm check:examples` | 四包及全部四个示例的严格类型 / Vue SFC 检查 |
+| `pnpm test:examples` / `pnpm test:quality` | 固定种子基准数据与构建压缩边界回归 |
+| `pnpm check:budgets` | 从同一字节预算定义核对文档，防止门禁漂移 |
 | `pnpm check:complexity` | 圈复杂度全量门禁（生产函数上限 `15`） |
 | `pnpm check:complexity:update` | 仅用于确认基线仍为空；不得增加历史豁免或放宽上限 |
 | `pnpm check:api` / `pnpm check:api:update` | 校验公开 export、Grid API/Options/Event 成员签名快照 / 评审后更新快照 |
@@ -43,9 +45,9 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 
 复杂度基线曾是迁移机制，现在已经完成使命。配置更新与解析、键盘导航、状态恢复、渲染、选择、筛选、布局和框架工作流均使用同一上限；如确有不可避免的复杂算法，必须先提交 ADR、可读性证据和覆盖用例，不能直接修改基线。
 
-生产构建会压缩未与公开字段、字符串访问或原生 API 重名的 TypeScript private 成员，以及明确标注 `@internal` 且不跨包暴露的服务类成员；公开契约字段保持原名。`check-runtime-keys` 逐一核对四包生成声明的公共与 protected 成员，防止实现压缩破坏消费契约；ESM/CJS 挂载测试同时验证压缩后的真实行为。CSS 在 `styles/` 中维护可读源码，发布到 `dist/`，原有包导入路径保持不变。Core 全量 ESM、真实 createGrid 消费、初始适配器及默认 CSS 沿用原 gzip 预算。
+生产构建会压缩未与公开字段、字符串访问或原生 API 重名的 TypeScript private 成员，以及明确标注 `@internal` 且不跨包暴露的服务类成员；公开契约字段保持原名。`check-runtime-keys` 逐一核对四包生成声明的公共与 protected 成员、构造参数属性和字符串/映射类型键，且拒绝无 ESM/CJS 声明的零覆盖；防止实现压缩破坏消费契约；ESM/CJS 挂载测试同时验证压缩后的真实行为。CSS 在 `styles/` 中维护可读源码，发布到 `dist/`，原有包导入路径保持不变。Core 全量 ESM、真实 createGrid 消费、初始适配器及默认 CSS 沿用原 gzip 预算。
 
-0.32 新增六个高级子入口和两份可选 CSS，各自设独立 gzip 上限；默认源码消费图检查禁止引用这些高级模块和样式。npm 解压体积会包含可选产物，因此 `check:release-artifacts` 同时报告原入口可达图、新增可选产物和合计：原 Core 图上限仍为 1,050,000 字节，可选增量上限为 350,000 字节，不把发布包合计当作普通页面下载量。声明与运行时哈希 chunk 按真实依赖归属计算，无归属文件和 sourcemap 均失败。
+0.32 的六个高级子入口与两份可选 CSS 保留原上限；0.33 的 `/import` 单独限定 4 KiB gzip，默认源码消费图检查禁止引用这些高级模块和样式。npm 解压体积会包含可选产物，因此 `check:release-artifacts` 同时报告原入口可达图、新增可选产物和合计：原 Core 图上限仍为 1,050,000 字节，可选增量上限为 350,000 字节，不把发布包合计当作普通页面下载量。声明与运行时哈希 chunk 按真实依赖归属计算，无归属文件和 sourcemap 均失败。
 
 ## 类型与异步安全
 
