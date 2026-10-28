@@ -151,9 +151,17 @@ async function checkImport(runtime, importing) {
   } finally { plan?.destroy(); api.destroy(); element.remove(); }
 }
 async function checkOptional(runtime, framework, format) {
-  const [workbench, preferences, ordering, server, analysis, multi, importing] = await Promise.all(
-    ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"].map(entry => load(framework, entry, format))
+  const [workbench, preferences, ordering, server, analysis, multi, importing, business] = await Promise.all(
+    ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import", "business"].map(entry => load(framework, entry, format))
   );
+  assert.equal("createDictionaryColumn" in runtime, false);
+  assert.equal("summarizeRows" in runtime, false);
+  const policy = business.createDictionaryColumn({ get: key => key === "A" ? "Ready" : undefined });
+  assert.equal(policy.valueFormatter({ value: "A" }), "Ready");
+  assert.equal(policy.valueSerializer({ value: "A", target: "xlsx" }), "A");
+  assert.equal(business.summarizeRows([{ amount: 1 }, { amount: 2 }], {
+    scope: "page", metrics: [{ id: "amount", kind: "sum", value: row => row.amount }]
+  }).groups[0].values.amount, 3);
   const ranges = multi.createMultiRangeSelection();
   const element = host();
   const panels = host();

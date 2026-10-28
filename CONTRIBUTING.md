@@ -53,7 +53,7 @@ docs(guide): add enterprise integration guide
 pnpm changeset
 ```
 
-三个发布包采用 fixed 版本联动。`0.x` 阶段破坏性变化使用 minor，并必须提供升级说明。
+Core、Vue、React、XLSX 四个发布包采用 fixed 版本联动。`0.x` 阶段破坏性变化使用 minor，并必须提供升级说明。
 
 ## Pull Request 清单
 

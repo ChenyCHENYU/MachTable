@@ -118,6 +118,7 @@ const metrics = api.diagnostics.getPerformance();
 | --- | ---: |
 | Core ESM | 90 KiB (92160 bytes) |
 | Optional Worker | 8 KiB (8192 bytes) |
+| Optional business policies (Core + adapters) | 2 KiB (2048 bytes) |
 | Vue ESM artifacts | 11.25 KiB (11520 bytes) |
 | React ESM artifacts | 8 KiB (8192 bytes) |
 | Optional XLSX bridge | 3 KiB (3072 bytes) |
@@ -145,7 +146,7 @@ const metrics = api.diagnostics.getPerformance();
 | vue 原有导出依赖图 | 450000 |
 | react 原有导出依赖图 | 350000 |
 | xlsx 原有导出依赖图 | 80000 |
-| Core 七个可选能力新增依赖图 | 350000 |
+| Core 可选能力新增依赖图 | 350000 |
 <!-- bundle-budgets:end -->
 
 日常只验证运行时代码可执行 `pnpm build:runtime`，跳过耗时的声明汇总；正式包必须执行 `pnpm build:release`，保留 `.d.ts` 但不发布约占旧包 70% 解压空间的 `.map`。项目仍使用 tsup + esbuild：当前瓶颈是 TypeScript 声明汇总，不是 JS 打包，因此没有为了工具潮流迁移到 tsdown。

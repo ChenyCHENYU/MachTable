@@ -11,7 +11,7 @@ const generated = [start,
   ...Object.values(gzipBudgets).map(([name, bytes]) => `| ${name} | ${bytes / 1024} KiB (${bytes} bytes) |`),
   "", "| 解压产物图 | 字节上限 |", "| --- | ---: |",
   ...Object.entries(releaseBudgets).map(([name, bytes]) => `| ${name} 原有导出依赖图 | ${bytes} |`),
-  `| Core 七个可选能力新增依赖图 | ${optionalReleaseBudget} |`, end
+  `| Core 可选能力新增依赖图 | ${optionalReleaseBudget} |`, end
 ].join("\n");
 const pattern = /<!-- bundle-budgets:start -->[\s\S]*?<!-- bundle-budgets:end -->/;
 if (!pattern.test(content)) throw new Error("Performance documentation is missing budget markers.");

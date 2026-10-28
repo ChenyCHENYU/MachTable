@@ -2,6 +2,7 @@
 export const gzipBudgets = {
   core: ["Core ESM", 90 * 1024],
   worker: ["Optional Worker", 8 * 1024],
+  business: ["Optional business policies (Core + adapters)", 2 * 1024],
   vue: ["Vue ESM artifacts", 11.25 * 1024],
   react: ["React ESM artifacts", 8 * 1024],
   xlsx: ["Optional XLSX bridge", 3 * 1024],

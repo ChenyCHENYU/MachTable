@@ -6,7 +6,7 @@ const packages = ["core", "vue", "react", "xlsx"];
 // The original distribution graph keeps its existing allowance. New optional
 // artifacts are a separate, bounded addition; total npm unpacked size is always
 // reported too, rather than presenting it as the default application download.
-const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"];
+const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import", "business"];
 let failed = false;
 
 async function walk(directory) {

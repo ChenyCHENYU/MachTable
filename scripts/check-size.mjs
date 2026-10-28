@@ -8,16 +8,17 @@ import { gzipBudgets } from "./bundle-budgets.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const vueEsmFiles = (await readdir(new URL("../packages/vue/dist/", import.meta.url)))
-  .filter((file) => file.endsWith(".js"))
+  .filter((file) => file.endsWith(".js") && file !== "business.js")
   .map((file) => `packages/vue/dist/${file}`);
 const reactEsmFiles = (await readdir(new URL("../packages/react/dist/", import.meta.url)))
-  .filter((file) => file.endsWith(".js"))
+  .filter((file) => file.endsWith(".js") && file !== "business.js")
   .map((file) => `packages/react/dist/${file}`);
 
 const artifactPaths = {
   core: ["packages/core/dist/index.js"], worker: ["packages/core/dist/worker.js"],
   vue: vueEsmFiles, react: reactEsmFiles, xlsx: ["packages/xlsx/dist/index.js"],
   css: ["packages/core/dist/mach-table.css"],
+  business: ["packages/core/dist/business.js", "packages/vue/dist/business.js", "packages/react/dist/business.js"],
   ...Object.fromEntries(["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"]
     .map(name => [name, [`packages/core/dist/${name}.js`]])),
   workbenchCss: ["packages/core/dist/workbench.css"], serverCss: ["packages/core/dist/server-side.css"]
@@ -126,12 +127,12 @@ for (const [name, entry] of [["Core", "core/src/index.ts"], ["Vue", "vue/src/ind
     external: ["vue", "react", "react-dom", "@agile-team/mach-table", "@agile-team/mach-table/adapter"]
   });
   const forbidden = Object.keys(result.metafile.inputs).filter(path =>
-    /packages\/core\/src\/(?:workbench|preferences|ordering|server-side|analysis|import)(?:\/|\.ts$)|packages\/core\/src\/multiRange\.ts$|\.(?:css)$/.test(path));
+    /packages\/core\/src\/(?:workbench|preferences|ordering|server-side|analysis|import|business)(?:\/|\.ts$)|packages\/core\/src\/lib\/(?:dictionaryColumn|semanticSummary)\.ts$|packages\/core\/src\/multiRange\.ts$|\.(?:css)$/.test(path));
   const cssOutputs = result.outputFiles.filter(file => file.path.endsWith(".css"));
   if (forbidden.length || cssOutputs.length) {
     failed = true;
     console.error(`OVER ${name} default module boundary: ${forbidden.join(", ")}`);
-  } else console.log(`OK   ${name} default graph excludes all seven advanced modules and optional CSS`);
+  } else console.log(`OK   ${name} default graph excludes all optional modules and optional CSS`);
 }
 
 if (failed) {

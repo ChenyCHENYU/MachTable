@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { createDictionaryColumn } from "../business";
+import { GridCore } from "../core/gridCore";
 import {
   createBusinessColumnTypes,
   createCachedDictionary,
@@ -28,6 +30,40 @@ describe("business column types", () => {
 });
 
 describe("cached dictionaries", () => {
+  it("keeps dictionary display separate from explicit clipboard, CSV and XLSX policies", () => {
+    const dictionary = createCachedDictionary<string>({ load: async () => [] });
+    dictionary.prime([{ value: "A", label: "已下达" }]);
+    const renderer = createDictionaryRenderer(dictionary);
+    const host = document.createElement("div");
+    Object.defineProperties(host, { clientWidth: { value: 900 }, clientHeight: { value: 400 } });
+    document.body.appendChild(host);
+    const core = new GridCore(host, {
+      rowKey: "id",
+      columnDefs: [
+        { field: "raw", cellRenderer: renderer },
+        { field: "formatted", cellRenderer: renderer, valueFormatter: ({ value }) => dictionary.get(value) ?? value },
+        { field: "serialized", cellRenderer: renderer, valueSerializer: ({ value, target }) => `${target}:${dictionary.get(value) ?? value}` },
+        { field: "policy", ...createDictionaryColumn(dictionary, { output: { clipboard: "code-label", csv: "label", xlsx: "code" } }) }
+      ],
+      rowData: [{ id: "1", raw: "A", formatted: "A", serialized: "A", policy: "A" }]
+    });
+    const api = core.api;
+    try {
+      expect(core.buildRangeTsv({ r1: 0, r2: 0, c1: 0, c2: 3 })).toBe("A\t已下达\tclipboard:已下达\tA · 已下达");
+      expect(host.textContent).toContain("已下达");
+      for (const target of ["csv", "xlsx"] as const) {
+        expect(api.io.exportMatrix({ target, includeHeader: false })).toEqual([
+          ["A", target === "xlsx" ? "A" : "已下达", `${target}:已下达`, target === "xlsx" ? "A" : "已下达"]
+        ]);
+      }
+      expect(api.rows.getById("1")?.data).toEqual({ id: "1", raw: "A", formatted: "A", serialized: "A", policy: "A" });
+    } finally {
+      api.destroy();
+      dictionary.destroy();
+      host.remove();
+    }
+  });
+
   it("batches duplicate keys, caches results and supports invalidation", async () => {
     const load = vi.fn(async (keys: readonly number[]) => keys.map((value) => ({ value, label: `L${value}` })));
     const dictionary = createCachedDictionary<number>({ load, batchDelayMs: 0, maxSize: 2 });

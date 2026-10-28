@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-xlsx
 
-MachTable 0.33.0 的可选 XLSX 导入导出扩展。工作簿引擎由宿主动态注入，因此普通表格页面不会下载 Excel 代码。
+MachTable 0.34.0 的可选 XLSX 导入导出扩展。工作簿引擎由宿主动态注入，因此普通表格页面不会下载 Excel 代码。
 
 ```bash
 pnpm add @agile-team/mach-table-xlsx xlsx
@@ -27,7 +27,9 @@ await excel.import(api, await file.arrayBuffer(), {
 });
 ```
 
-0.33.0 与 Core/Vue/React 固定版本组同步发布。默认导出通过 `io.exportMatrix({ target: "xlsx" })`，默认导入使用原始单元格和 `cellDates: true`；数值、布尔、Date 与长标识无需格式化 CSV 往返。已有 `transformCell` / `parseValue` 字符串回调仅在显式配置时执行。需要整批业务校验和可审阅预览时，先读取矩阵并使用 Core/Vue/React 的可选 `/import` 计划。直接导入的 replace/append 同步装载经 parser 规范化的记录，不运行交互校验；paste 复用交互校验与撤销管线，boolean 不代表异步校验完成。
+0.34.0 与 Core/Vue/React 固定版本组同步发布。默认导出通过 `io.exportMatrix({ target: "xlsx" })`，默认导入使用原始单元格和 `cellDates: true`；数值、布尔、Date 与长标识无需格式化 CSV 往返。已有 `transformCell` / `parseValue` 字符串回调仅在显式配置时执行。需要整批业务校验和可审阅预览时，先读取矩阵并使用 Core/Vue/React 的可选 `/import` 计划。直接导入的 replace/append 同步装载经 parser 规范化的记录，不运行交互校验；paste 复用交互校验与撤销管线，boolean 不代表异步校验完成。
+
+0.34.0 同步消费 Core 的字典缓存边界修复，XLSX 扩展 API 不变。需要按列选择导出编码、标签或码名时，从表格适配包的 `/business` 创建 `createDictionaryColumn()` 并显式配置 `output.xlsx`；未配置仍保留原编码及类型，异步字典须在导出前由应用预热。
 
 扩展复用 Core 的选择范围、表头、公式注入防护和安全导入规则。`xlsx` 只是示例引擎，不是本包的捆绑依赖；可注入经过项目批准的兼容引擎。
 

@@ -32,6 +32,28 @@ const columns: ColDef<Item>[] = [
 
 输出时，列 serializer 优先于内置策略。未配置时，剪贴板使用显示格式，CSV 保留数值原值、其他值使用显示格式，typed matrix/XLSX 使用原始值。`target` 是 `clipboard`、`csv` 或 `xlsx`。CSV 和 matrix 默认启用已有 `protectFormulas`；只有明确需要原始公式文本时才传 `false`。
 
+## 字典输出策略
+
+`createDictionaryRenderer(dictionary)` 负责显示标签，不修改原始编码。未配置 formatter/serializer 时，复制、CSV 和 XLSX 仍按原值输出。仅配置 `valueFormatter` 时，复制和非数值 CSV 会使用标签，XLSX 继续保留原值；需要明确输出口径时使用 `valueSerializer`。
+
+```ts
+const statusColumn: ColDef<Order> = {
+  field: "status",
+  cellRenderer: createDictionaryRenderer(statusDictionary),
+  valueSerializer: ({ value, target }) => {
+    if (value == null || value === "") return "";
+    // 机器工作表保留编码，人工复制/CSV 使用标签；也可由业务统一为码名输出。
+    return target === "xlsx" ? value : statusDictionary.get(value) ?? String(value);
+  }
+};
+
+// 输出前固定查询和字典作用域，等待当前导出数据涉及的键完成加载。
+await statusDictionary.resolveMany(rowsToExport.map(row => row.status));
+const matrix = api.io.exportMatrix({ target: "xlsx" });
+```
+
+上例中的 `rowsToExport` 必须与实际输出范围一致，且准备期间不能切换查询、租户或字典版本。大量远程数据应使用[服务端导出快照](./remote-export.md)，由后端按固定口径生成文件。标签是否属于权威业务数据、缺失或加载失败时是否允许原码兜底，由应用明确选择；不要静默把导出编码全部改为中文。
+
 ## 数字、日期与空值
 
 内置文本转换把空字符串变为 `null`。启用数字转换时只接受有限数值文本；前导零编号、超出安全整数范围的整数、`Infinity`、溢出指数文本保持字符串。`coerceNumbers: false` 保留非空文本。typed matrix 的 number、boolean、Date、null 直接保留，不先转换为字符串。

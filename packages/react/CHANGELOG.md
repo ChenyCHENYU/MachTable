@@ -1,5 +1,18 @@
 # @agile-team/mach-table-react
 
+## 0.34.0
+
+### Minor Changes
+
+- Add an optional `/business` entry to Core, Vue and React for explicit dictionary display/parsing/output policies and scoped local semantic totals. Preserve raw typed codes by default, reject ambiguous labels, and keep asynchronous lookup, currency/unit grouping and exact arithmetic under application control. Keep the existing root API and default behavior unchanged; measure the new dependency-free entry separately without raising existing bundle budgets.
+
+  Harden cached dictionary request ownership: share queued and in-flight lookups, invalidate stale generations, settle superseded waiters, bound missing-key caching by TTL/LRU, and isolate cancellation and error observers. Keep all four published packages aligned; XLSX retains its existing API and typed IO behavior.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.34.0
+
 ## 0.33.0
 
 ### Minor Changes

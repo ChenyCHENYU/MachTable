@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.33.0-2563eb" alt="Source version 0.33.0" />
+  <img src="https://img.shields.io/badge/source-0.34.0-2563eb" alt="Source version 0.34.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -188,7 +188,7 @@ const options: GridOptions<Plan> = {
 
 ## 按需工作台与高级数据能力
 
-Core、Vue、React 共享下面七个子入口。Vue 项目将包名写为 `@agile-team/mach-table-vue`，React 写为 `@agile-team/mach-table-react`；仍然只安装一个适配包。普通根入口不导入这些高级实现和附加样式。
+Core、Vue、React 共享下面八个子入口。Vue 项目将包名写为 `@agile-team/mach-table-vue`，React 写为 `@agile-team/mach-table-react`；仍然只安装一个适配包。普通根入口不导入这些高级实现和附加样式。
 
 | 子入口 | 能力 | 配方 |
 | --- | --- | --- |
@@ -199,6 +199,7 @@ Core、Vue、React 共享下面七个子入口。Vue 项目将包名写为 `@agi
 | `/multi-range` | Ctrl/Cmd 追加选区、格式化复制、校验清空与单次撤销 | [多范围](./docs/recipes/multi-range.md) |
 | `/analysis` | 有界 Pivot、算术与聚合公式、柱/折线图及完整数据表回退 | [分析](./docs/recipes/analysis.md) |
 | `/import` | 有界导入预览、规范值、异步校验、结构化错误与过期保护 | [导入预览](./docs/recipes/import-preview.md) |
+| `/business` | 字典显示/解析/输出策略、本地语义合计与显式范围 | [业务列与字典](./docs/recipes/business-columns.md) |
 
 ```ts
 import { mountAdvancedFilterBuilder, mountChangeReview } from "@agile-team/mach-table-vue/workbench";
@@ -221,6 +222,38 @@ Vanilla 示例包含高级筛选、修改审阅、分析、平面/树排序及�
 在 `columnTypes` 或列上配置 `valueParser` / `valueSerializer`，编辑、粘贴与导入复用解析；CSV、剪贴板和 XLSX 复用序列化。排序与过滤读取已经规范化的记录值，可信事务与撤销不重复解析。长整型标识默认不会被不安全的数字转换舍入；精确小数与业务日期格式应由列策略显式定义。
 
 `api.io.importMatrix()` 的 replace/append 同步装载经 parser 规范化的记录，不运行交互校验；paste 复用交互校验与撤销管线，同步 boolean 不代表异步校验完成。需要整批校验、预览和问题明细时按需使用 `createImportPlan()`。XLSX 默认直接传递 number、boolean 和 Date，不经格式化 CSV 往返。详见[列值策略](./docs/recipes/column-values.md)和[导入预览](./docs/recipes/import-preview.md)。
+
+## 字典展示与合计口径显式配置
+
+`/business` 提供两个无 UI、无运行时依赖的可选辅助。`createDictionaryColumn()` 连接已有字典 Provider，通过同步 `get()` 显示标签，显式选择剪贴板、CSV、XLSX 输出编码、标签或码名；未配置的输出保留原编码及类型。输入优先保留原码，重复标签拒绝歧义；选项快照替换后更新反向索引，不在每个单元格扫描完整字典。
+
+```ts
+import { createDictionaryColumn, summarizeRows } from "@agile-team/mach-table-vue/business";
+
+// dictionaryProvider 由应用提供；异步预热后再刷新单元格或执行导出。
+const statusColumn = {
+  field: "status",
+  ...createDictionaryColumn(dictionaryProvider, {
+    options: () => statusOptions,
+    display: "label",
+    output: { clipboard: "label", csv: "code-label" }
+  })
+};
+
+const summary = summarizeRows(pageRows, {
+  scope: "page",
+  groupBy: row => JSON.stringify([row.currency, row.unit]),
+  metrics: [
+    { id: "amount", kind: "sum", value: row => row.amount },
+    { id: "count", kind: "count" },
+    { id: "completion", kind: "ratio", numerator: row => row.completed, denominator: row => row.planned }
+  ]
+});
+```
+
+合计支持 `sum`、`count`、先汇总再相除的 `ratio` 和 `none`；调用方按币种、单位等业务口径分组。`scope` 标记本页、已选或查询范围，仅处理传入记录；服务端全量仍由后端计算。默认使用安全范围内的有限 `number`，精确金额可接入已有 `numeric` 策略，不内置 Decimal 引擎。结果复用已有 `summaryMethod` 或固定行，详见[完整配方](./docs/recipes/business-columns.md)。
+
+已有 `createCachedDictionary()` 继续从根入口导入。同 key 排队与在途请求复用，失效后旧响应不能回灌；成功返回但缺失的 key 受相同 TTL/LRU 限制，失败可重试，销毁与错误观察回调不会遗留等待任务。缓存实例及字典选项的组织、语言和权限范围仍由应用管理。
 
 ## 一份清爽的应用配置
 
@@ -378,7 +411,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.33.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版完善列值解析/序列化、typed matrix 与 XLSX 类型直通、可选导入预览、有限数聚合和类型化分组身份、普通字段事务依赖跳过、按表 Worker 所有权和超大滚动坐标。Vue/React 保持一个包接入，无关属性更新不再重建等价列配置；默认入口与既有体积门槛保持独立受控。升级边界见[升级指南](./docs/guide/upgrading.md)，真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.34.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版新增显式可选 `/business` 的字典列值策略与本地语义合计，完善字典缓存请求复用、失效代次、缺失项缓存和销毁边界。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

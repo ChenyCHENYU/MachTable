@@ -2182,6 +2182,97 @@
       ],
       "hasDefault": false,
       "reexports": "@agile-team/mach-table/import"
+    },
+    "@agile-team/mach-table/business": {
+      "names": [
+        "DictionaryColumnOptions",
+        "DictionaryColumnSource",
+        "DictionaryDisplay",
+        "SemanticSummaryMetric",
+        "SemanticSummaryOptions",
+        "SemanticSummaryResult",
+        "SummaryNumericStrategy",
+        "SummaryScope",
+        "createDictionaryColumn",
+        "summarizeRows"
+      ],
+      "runtimeNames": [
+        "createDictionaryColumn",
+        "summarizeRows"
+      ],
+      "hasDefault": false,
+      "signatures": {
+        "createDictionaryColumn": [
+          "function createDictionaryColumn<TData = any, TKey extends DictionaryKey = DictionaryKey>(source: DictionaryColumnSource<TKey>, config?: DictionaryColumnOptions<TKey>): Partial<ColDef<TData>>"
+        ],
+        "DictionaryColumnOptions": [
+          "export interface DictionaryColumnOptions<TKey extends DictionaryKey = DictionaryKey> { options?: readonly DictionaryEntry<TKey>[] | (() => readonly DictionaryEntry<TKey>[]); display?: DictionaryDisplay; output?: Partial<Record<ValueOutputTarget, DictionaryDisplay>>; }"
+        ],
+        "DictionaryColumnSource": [
+          "export interface DictionaryColumnSource<TKey extends DictionaryKey = DictionaryKey> { get(key: TKey): string | undefined; }"
+        ],
+        "DictionaryDisplay": [
+          "export type DictionaryDisplay = \"code\" | \"label\" | \"code-label\";"
+        ],
+        "SemanticSummaryMetric": [
+          "export type SemanticSummaryMetric<TData> = { id: string; kind: \"sum\"; value(row: TData): unknown; } | { id: string; kind: \"count\"; } | { id: string; kind: \"ratio\"; numerator(row: TData): unknown; denominator(row: TData): unknown; } | { id: string; kind: \"none\"; };"
+        ],
+        "SemanticSummaryOptions": [
+          "export interface SemanticSummaryOptions<TData, TValue = number> { scope: SummaryScope; metrics: readonly SemanticSummaryMetric<TData>[]; groupBy?: (row: TData) => string | number; numeric?: SummaryNumericStrategy<TValue>; }"
+        ],
+        "SemanticSummaryResult": [
+          "export interface SemanticSummaryResult<TValue = number> { scope: SummaryScope; groups: Array<{ key: string | number | undefined; rowCount: number; values: Record<string, TValue | number | null>; }>; }"
+        ],
+        "summarizeRows": [
+          "function summarizeRows<TData, TValue = number>(rows: readonly TData[], options: SemanticSummaryOptions<TData, TValue>): SemanticSummaryResult<TValue>"
+        ],
+        "SummaryNumericStrategy": [
+          "export interface SummaryNumericStrategy<TValue> { zero(): TValue; add(total: TValue, value: unknown): TValue; divide(numerator: TValue, denominator: TValue): TValue | null; }"
+        ],
+        "SummaryScope": [
+          "export type SummaryScope = \"page\" | \"selected\" | \"query\";"
+        ]
+      }
+    },
+    "@agile-team/mach-table-vue/business": {
+      "names": [
+        "DictionaryColumnOptions",
+        "DictionaryColumnSource",
+        "DictionaryDisplay",
+        "SemanticSummaryMetric",
+        "SemanticSummaryOptions",
+        "SemanticSummaryResult",
+        "SummaryNumericStrategy",
+        "SummaryScope",
+        "createDictionaryColumn",
+        "summarizeRows"
+      ],
+      "runtimeNames": [
+        "createDictionaryColumn",
+        "summarizeRows"
+      ],
+      "hasDefault": false,
+      "reexports": "@agile-team/mach-table/business"
+    },
+    "@agile-team/mach-table-react/business": {
+      "names": [
+        "DictionaryColumnOptions",
+        "DictionaryColumnSource",
+        "DictionaryDisplay",
+        "SemanticSummaryMetric",
+        "SemanticSummaryOptions",
+        "SemanticSummaryResult",
+        "SummaryNumericStrategy",
+        "SummaryScope",
+        "createDictionaryColumn",
+        "summarizeRows"
+      ],
+      "runtimeNames": [
+        "createDictionaryColumn",
+        "summarizeRows"
+      ],
+      "hasDefault": false,
+      "reexports": "@agile-team/mach-table/business"
     }
   },
   "rootCapabilities": {

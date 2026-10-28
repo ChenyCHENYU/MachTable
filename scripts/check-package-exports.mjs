@@ -84,7 +84,8 @@ for (const suffix of ["", "-vue", "-react"]) {
     "server-side": ["createServerSideStore", "bindServerSideGrid", "createServerSideGroupColumn", "serverSideDataColumn", "ServerSideVersionConflictError"],
     analysis: ["createPivot", "evaluateFormulas", "mountAnalysis"],
     "multi-range": ["createMultiRangeSelection"],
-    import: ["createImportPlan"]
+    import: ["createImportPlan"],
+    business: ["createDictionaryColumn", "summarizeRows"]
   })) assertFunctions(`${packageName}/${entry}`, names);
 }
 for (const packageName of ["@agile-team/mach-table-vue", "@agile-team/mach-table-react"]) {

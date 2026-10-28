@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.33.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.34.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
 
@@ -154,7 +154,7 @@ const options: GridOptions<Plan> = {
 
 文档：[Vue 指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/vue.md) · [企业接入](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/enterprise-integration.md) · [配置中心](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/configuration.md)
 
-## 按需高级入口（0.33）
+## 按需高级入口（0.34）
 
 仍从本包导入，无需另装高级功能包。普通根入口不加载这些实现或附加 CSS。
 
@@ -166,6 +166,7 @@ const options: GridOptions<Plan> = {
 | `/server-side` | 服务端分组/聚合、route 分页、缓存/刷新/事务及层级选择 |
 | `/multi-range` | Ctrl/Cmd 追加范围、格式化复制、校验清空及撤销 |
 | `/import` | 有界数据预览、共享同步/异步校验、结构化错误与过期保护 |
+| `/business` | 显式字典显示/解析/输出策略、范围与币种/单位分组的本地语义合计 |
 | `/analysis` | Pivot、安全公式、柱/折线图和数据表回退 |
 
 ```ts
@@ -183,7 +184,30 @@ filters.destroy();
 
 Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。
 
-## 0.33 列值与运行边界
+## 0.34 字典列策略与语义合计
+
+```ts
+import { createDictionaryColumn, summarizeRows } from "@agile-team/mach-table-vue/business";
+
+const options = [{ value: "ready", label: "已就绪" }];
+const labels = new Map(options.map(entry => [entry.value, entry.label]));
+const statusColumn = {
+  field: "status",
+  ...createDictionaryColumn({ get: key => labels.get(key) }, {
+    options,
+    display: "label",
+    output: { clipboard: "label", csv: "code-label" }
+  })
+};
+```
+
+`/business` 无 UI、请求或缓存，连接已有 Provider；异步标签先预热，动态选项用新数组替换快照。原始数字/文本编码保留类型，重复标签拒绝歧义；未配置的输出通道保留原码，旧 renderer 的导出行为不变。
+
+`summarizeRows(rows, { scope, metrics, groupBy?, numeric? })` 只计算传入记录，支持 sum/count/ratio/none；ratio 先分别汇总分子分母。业务按币种、单位分组，scope 仅声明 page/selected/query，不自动获取全量。默认有限 number 仍遵循浮点语义，精确金额使用已有同步 numeric 策略；结果接入原 summaryMethod 或固定行。详见[业务列与字典](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/business-columns.md)。
+
+根入口的 `createCachedDictionary()` 现在复用同 key 在途请求，失效隔离旧响应并结束旧等待，缺失项受同一 TTL/LRU 约束。失败可重试，销毁拒绝未完成请求，错误观察回调不会阻塞清理。具体升级边界见[升级指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/upgrading.md)。
+
+## 列值与运行边界（自 0.33）
 
 `ColDef.valueParser` 统一编辑、粘贴和导入的规范值；`valueSerializer` 按 clipboard/csv/xlsx 定义输出，沿用已有 `columnTypes` 优先级。排序/过滤读取规范值，可信事务与撤销不重复解析。`api.io.importMatrix()` / `exportMatrix()` 直传类型，完整导入预览从当前包的 `/import` 导入 `createImportPlan()`，不加载到默认入口。
 

@@ -3,10 +3,21 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.33.0
+pnpm up @agile-team/mach-table-vue@^0.34.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.33.0
+pnpm up @agile-team/mach-table-react@^0.34.0
 ```
+
+## 0.33.0 → 0.34.0
+
+四包固定版本组同步升级。原有根入口 API、表格配置、列值与 XLSX 默认行为保持兼容。新增 `createDictionaryColumn()` 与 `summarizeRows()` 只从 Core/Vue/React 的 `/business` 按需导入，无 UI、附加 CSS、自动请求或额外运行时依赖。
+
+- 字典列辅助使用现有 Provider 的同步 `get()`，异步标签须由应用先预热。`display` 默认 `label`，未声明的 clipboard/csv/xlsx 输出保留原编码及类型；原有 `createDictionaryRenderer()` 继续仅负责渲染，不改变导出默认值。标签反向解析要求显式 `options`，以新数组替换不可变快照；原码优先，重复标签或码名冲突拒绝歧义，未知值由列 `validate` 决定是否允许提交。
+- `createCachedDictionary.resolve()` 复用同 key 已排队或在途的 Promise。`invalidate(keys)` 或无参数全量失效现在同时结束对应等待任务，结果为 `undefined`，并隔离旧响应；之后 `resolve()` 发起新代次。`prime()` 显式值优先并完成对应等待，`destroy()` 拒绝未完成请求，销毁后不再接受回填。依赖旧在途请求在失效后继续回填的页面须改为显式重新请求。
+- 成功响应中未返回的 key 作为缺失项进入相同 TTL/LRU，`size` 包含这些缺失项；`ttlMs: 0` 表示直到失效或 LRU 淘汰。需要立即重试缺失项时先 `invalidate()`；加载失败不缓存，后续请求可重试。错误观察回调异常不会阻止等待任务结束。
+- `summarizeRows()` 显式声明 `page` / `selected` / `query`，只汇总传入数组；`query` 不自动获取全量。币种、单位等分组由业务传入，`ratio` 分别汇总分子分母后相除。默认数值策略拒绝数值字符串、非法值和安全范围溢出，不保证精确小数；已有精确算法通过同步 `numeric` 策略接入。结果继续交给已有 `summaryMethod` 或固定行。
+
+详见[业务列与字典](/recipes/business-columns)和[列值策略](/recipes/column-values)。本轮发布与消费状态以[实施台账](/advanced/implementation-plan)为准。
 
 ## 0.32.1 → 0.33.0
 

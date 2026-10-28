@@ -44,7 +44,7 @@ import "@agile-team/mach-table/styles/mach-table.css";
 
 ## 三个表格包共用的企业能力入口
 
-以下七个后缀同时由 `@agile-team/mach-table`、`@agile-team/mach-table-vue` 和 `@agile-team/mach-table-react` 提供。使用 Vue/React 时从对应适配包导入，无需直接安装 Core。它们均支持 ESM/CJS 和独立类型声明，不由根入口加载。
+以下八个后缀同时由 `@agile-team/mach-table`、`@agile-team/mach-table-vue` 和 `@agile-team/mach-table-react` 提供。使用 Vue/React 时从对应适配包导入，无需直接安装 Core。它们均支持 ESM/CJS 和独立类型声明，不由根入口加载。
 
 | 后缀 | 主要函数与协议 | 附加样式 |
 | --- | --- | --- |
@@ -53,6 +53,7 @@ import "@agile-team/mach-table/styles/mach-table.css";
 | `/ordering` | `reorderRows`、`moveTreeNodes`、`createRowOrderController` 及排序保存/撤销/重做协议 | 沿用基础表格样式 |
 | `/server-side` | `createServerSideStore`、`bindServerSideGrid`、`createServerSideGroupColumn`、`serverSideDataColumn` | `/styles/server-side.css` |
 | `/analysis` | 无 DOM 的 `createPivot`、`evaluateFormulas`，以及 `mountAnalysis` 面板 | 面板使用 `/styles/workbench.css` |
+| `/business` | `createDictionaryColumn`、`summarizeRows`，显式字段值策略与本地语义合计；无 UI、请求或缓存 | 无 |
 | `/multi-range` | `createMultiRangeSelection`，复用 Core 选区、复制、校验与编辑撤销 | `/styles/workbench.css` |
 | `/import` | `createImportPlan`、`ImportSource` / `ImportPreview` / `ImportResult`，有界预览与共享校验 | 无 |
 

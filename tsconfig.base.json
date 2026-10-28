@@ -48,6 +48,15 @@
       ],
       "@agile-team/mach-table/import": [
         "packages/core/src/import.ts"
+      ],
+      "@agile-team/mach-table/business": [
+        "packages/core/src/business.ts"
+      ],
+      "@agile-team/mach-table-vue/business": [
+        "packages/vue/src/business.ts"
+      ],
+      "@agile-team/mach-table-react/business": [
+        "packages/react/src/business.ts"
       ]
     },
     "strict": true,

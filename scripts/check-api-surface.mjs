@@ -50,7 +50,7 @@ function declarationSignatures(file, names, prefix = "") {
 
 // Resolve module symbols rather than spelling: adapter `export *` wrappers are part
 // of the same reviewed surface, even when a source barrel contains no named exports.
-const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import"];
+const optionalEntries = ["workbench", "preferences", "ordering", "server-side", "analysis", "multi-range", "import", "business"];
 const entryFiles = {
   "@agile-team/mach-table": "packages/core/src/index.ts",
   "@agile-team/mach-table/adapter": "packages/core/src/adapter.ts",
