@@ -597,7 +597,9 @@
   position: relative;
   width: 100%;
   height: 100%;
+  /* Frozen panes are clipped views; hidden preserves layout on older engines. */
   overflow: hidden;
+  overflow: clip;
 }
 
 .mach-body-viewport--scroll {

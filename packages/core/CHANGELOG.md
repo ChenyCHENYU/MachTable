@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.34.2
+
+### Patch Changes
+
+- 修复原生焦点恢复及 scrollIntoView 让左右冻结区产生独立滚动、与正文行错位的问题；冻结区保留裁剪并由正文视口统一管理滚动。
+
 ## 0.34.1
 
 ### Patch Changes

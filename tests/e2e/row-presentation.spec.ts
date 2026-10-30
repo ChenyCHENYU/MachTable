@@ -108,3 +108,30 @@ test("keyboard moves keep handle focus and column sort disables automatic orderi
   await page.evaluate(() => window.presentationApi.sorting.setModel([]));
   await expect(handle).toBeEnabled();
 });
+
+test("native focus restoration cannot scroll pinned viewports independently", async ({ page }) => {
+  await page.evaluate(() => {
+    const button = ({ value }: { value: unknown }) => {
+      const element = document.createElement("button");
+      element.textContent = String(value);
+      return element;
+    };
+    window.presentationApi.updateOptions({ columnDefs: [
+      { field: "id", pinned: "left", width: 150, cellRenderer: button },
+      { field: "name", minWidth: 220, flex: 1 },
+      { field: "status", pinned: "right", width: 160, cellRenderer: button }
+    ] });
+  });
+  for (const pane of ["left", "right"]) {
+    const target = page.locator(`.mach-body-pane.mach-pane--${pane} .mach-row[data-id="P0005"] button`);
+    await expect(target).toBeVisible();
+    // Modal focus restoration and scrollIntoView must retain one scroll owner.
+    await target.evaluate(element => { element.scrollIntoView({ block: "start" }); element.focus(); });
+    await expect(target).toBeFocused();
+    expect(await page.locator(`.mach-body-pane.mach-pane--${pane} .mach-body-viewport`).evaluate(element => element.scrollTop)).toBe(0);
+  }
+  await expect.poll(() => page.locator('.mach-row[data-id="P0005"]').evaluateAll(rows => {
+    const tops = rows.map(row => row.getBoundingClientRect().top);
+    return Math.max(...tops) - Math.min(...tops);
+  })).toBeLessThanOrEqual(1);
+});

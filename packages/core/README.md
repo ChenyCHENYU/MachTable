@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.34.1 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版完善内置空态的表格插画、亮暗配色与两级文案；可选 `/business` 的字典列策略、本地语义合计及字典缓存隔离继续兼容；普通根入口 API 和既有默认行为保持兼容。
+MachTable 0.34.2 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版完善内置空态的表格插画、亮暗配色与两级文案；可选 `/business` 的字典列策略、本地语义合计及字典缓存隔离继续兼容；普通根入口 API 和既有默认行为保持兼容。
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -142,3 +142,5 @@ const statusColumn = {
 `ColDef.valueParser` 统一编辑、粘贴和导入的规范值；`valueSerializer` 按 clipboard/csv/xlsx 定义输出，沿用已有 `columnTypes` 优先级。排序/过滤读取规范值，可信事务与撤销不重复解析。`api.io.importMatrix()` / `exportMatrix()` 直传类型，完整导入预览从当前包的 `/import` 导入 `createImportPlan()`，不加载到默认入口。
 
 `sum` / `avg` / `min` / `max` 只聚合有限数，空数值集合返回 null，sum/avg 溢出返回 null；`count` 计全部记录，空集合为 0。自定义聚合保留原始输入。分组 ID 区分数字/文本/空值，旧展开路径仅在唯一时迁移，歧义报告错误。超大远程滚动使用有界物理坐标，API、滚轮和交互共用逻辑偏移；应用默认配置的 `dataProcessor` 使用每表工厂。完整边界与升级说明见[升级指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/upgrading.md)。
+
+冻结区由正文视口统一管理滚动，原生焦点恢复和 `scrollIntoView` 不会单独改变其滚动位置。业务定位继续使用 `api.view.scrollToRow()`，无需页面补丁。

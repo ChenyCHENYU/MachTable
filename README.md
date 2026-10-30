@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.34.1-2563eb" alt="Source version 0.34.1" />
+  <img src="https://img.shields.io/badge/source-0.34.2-2563eb" alt="Source version 0.34.2" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -413,7 +413,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.34.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版完善内置空态的表格插画、亮暗配色与两级文案；继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.34.2`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修复弹窗返回、原生焦点恢复及 `scrollIntoView` 让冻结列独立滚动的问题，左右固定区与正文保持同一行对齐；内置空态的插画和亮暗配色继续保留。继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
