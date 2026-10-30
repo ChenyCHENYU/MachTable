@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.35.2
+
+### Patch Changes
+
+- 原生单元格按钮、链接、输入控件及 contenteditable 保留自身键盘和剪贴板行为，修复 Enter/空格被表格导航拦截的问题。复制与剪切共用管道，快捷键判断及监听注册/移除统一收敛，保留已有编辑、选择和撤销语义及体积门禁。
+
 ## 0.35.1
 
 ### Patch Changes

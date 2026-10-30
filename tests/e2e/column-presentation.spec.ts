@@ -83,3 +83,40 @@ test('initial fit and restored narrow widths never truncate complete headers', a
   await verify();
   expect(await page.locator('.mach-body-viewport--scroll').evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
 });
+
+test('native cell controls retain keyboard activation and clipboard ownership', async ({ page }) => {
+  await page.evaluate(() => window.columnPresentationApi.updateOptions({ columnDefs: [{
+    field: 'id', headerName: '内嵌控件', width: 640, editable: true, cellRenderer: () => {
+      const container = document.createElement('div');
+      container.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%';
+      const button = document.createElement('button');
+      button.textContent = '打开原生详情';
+      button.onclick = () => { button.dataset.count = String(Number(button.dataset.count ?? 0) + 1); };
+      const input = document.createElement('input');
+      input.setAttribute('aria-label', '行内备注');
+      const editable = document.createElement('div');
+      editable.contentEditable = 'true';
+      editable.style.cssText = 'min-height:20px;min-width:80px';
+      editable.setAttribute('role', 'textbox');
+      editable.setAttribute('aria-label', '富文本备注');
+      container.append(button, input, editable);
+      return container;
+    }
+  }] }));
+  const button = page.getByRole('button', { name: '打开原生详情' }).first();
+  await button.focus();
+  await button.press('Enter');
+  await button.press('Space');
+  await expect(button).toHaveAttribute('data-count', '2');
+  const input = page.getByRole('textbox', { name: '行内备注', exact: true }).first();
+  await input.fill('draft');
+  expect(await input.evaluate(element => {
+    const event = new Event('cut', { bubbles: true, cancelable: true });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  })).toBe(false);
+  const editable = page.getByRole('textbox', { name: '富文本备注' }).first();
+  await editable.fill('draft');
+  await editable.press('Enter');
+  await expect(page.locator('.mach-cell-editor-shell')).toHaveCount(0);
+});

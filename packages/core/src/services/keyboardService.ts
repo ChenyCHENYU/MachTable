@@ -19,33 +19,11 @@ type KeyboardContext = Pick<
   | "undoService"
 >;
 
-const NAVIGATION_KEYS = new Set([
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "Enter",
-  "F2",
-  "Home",
-  "End",
-  "PageUp",
-  "PageDown",
-  "Tab",
-  " ",
-  "Escape",
-  "Delete",
-  "Backspace"
-]);
-
 const MOVEMENT_KEYS = new Set([
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "Home",
-  "End",
-  "PageUp",
-  "PageDown"
+  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"
+]);
+const NAVIGATION_KEYS = new Set([
+  ...MOVEMENT_KEYS, "Enter", "F2", "Tab", " ", "Escape", "Delete", "Backspace"
 ]);
 
 interface KeyboardPosition {
@@ -58,17 +36,19 @@ export class KeyboardService {
   constructor(private core: KeyboardContext) {}
 
   init(): void {
-    this.core.skeleton.root.addEventListener("keydown", this.onKeyDown);
-    this.core.skeleton.root.addEventListener("copy", this.onCopy as EventListener);
-    this.core.skeleton.root.addEventListener("cut", this.onCut as EventListener);
-    this.core.skeleton.root.addEventListener("paste", this.onPaste as EventListener);
+    this.bindEvents("addEventListener");
   }
 
   destroy(): void {
-    this.core.skeleton.root.removeEventListener("keydown", this.onKeyDown);
-    this.core.skeleton.root.removeEventListener("copy", this.onCopy as EventListener);
-    this.core.skeleton.root.removeEventListener("cut", this.onCut as EventListener);
-    this.core.skeleton.root.removeEventListener("paste", this.onPaste as EventListener);
+    this.bindEvents("removeEventListener");
+  }
+
+  private bindEvents(method: "addEventListener" | "removeEventListener"): void {
+    const root = this.core.skeleton.root;
+    root[method]("keydown", this.handleGridKey as EventListener);
+    root[method]("copy", this.handleGridCopy as EventListener);
+    root[method]("cut", this.handleGridCopy as EventListener);
+    root[method]("paste", this.handleGridPaste as EventListener);
   }
 
   nextEditable(rowIndex: number, colId: string, dir: 1 | -1): { rowIndex: number; column: Column } | null {
@@ -101,19 +81,17 @@ export class KeyboardService {
 
   private skipDetailRows(row: number, dir: 1 | -1): number {
     const rowCount = this.core.rowModel.getDisplayedRowCount();
-    let guard = 0;
+    // dir 只为 ±1，单调扫描由行边界保证终止。
     while (row >= 0 && row < rowCount) {
       const node = this.core.rowModel.getDisplayedRow(row);
       if (!node || !node.isDetail) return row;
       row += dir;
-      guard++;
-      if (guard > rowCount + 2) break;
     }
     return -1;
   }
 
-  private onCopy = (e: ClipboardEvent): void => {
-    if (this.core.gridOptions.suppressClipboard || this.core.editingService.isEditing()) return;
+  private handleGridCopy = (e: ClipboardEvent): void => {
+    if (this.shouldYieldEvent(e) || this.core.gridOptions.suppressClipboard) return;
     const range = this.core.bodyRenderer.getNormalizedRangeOrFocus();
     if (!range) return;
     const text = this.core.buildRangeTsv(range);
@@ -123,26 +101,12 @@ export class KeyboardService {
     } else {
       void writeClipboard(text);
     }
+    if (e.type === "cut") this.core.clearRangeValues(range);
     e.preventDefault();
   };
 
-  private onCut = (e: ClipboardEvent): void => {
-    if (this.core.gridOptions.suppressClipboard || this.core.editingService.isEditing()) return;
-    const range = this.core.bodyRenderer.getNormalizedRangeOrFocus();
-    if (!range) return;
-    const text = this.core.buildRangeTsv(range);
-    const dt = e.clipboardData;
-    if (dt && typeof dt.setData === "function") {
-      dt.setData("text/plain", text);
-    } else {
-      void writeClipboard(text);
-    }
-    this.core.clearRangeValues(range);
-    e.preventDefault();
-  };
-
-  private onPaste = (e: ClipboardEvent): void => {
-    if (this.core.gridOptions.suppressClipboard || this.core.editingService.isEditing()) return;
+  private handleGridPaste = (e: ClipboardEvent): void => {
+    if (this.shouldYieldEvent(e) || this.core.gridOptions.suppressClipboard) return;
     const start = this.core.bodyRenderer.getPasteStart();
     if (!start) return;
     const dt = e.clipboardData;
@@ -152,37 +116,37 @@ export class KeyboardService {
     this.core.pasteText(text, start.row, start.colIdx);
   };
 
-  private onKeyDown = (e: KeyboardEvent): void => {
-    if (this.core.isDisposed() || this.core.editingService.isEditing()) return;
-    if (this.handleSelectAll(e) || this.handleHistoryShortcut(e)) return;
+  private handleGridKey = (e: KeyboardEvent): void => {
+    if (this.shouldYieldEvent(e) || this.core.isDisposed()) return;
+    if (this.handleCommand(e)) return;
     if (!NAVIGATION_KEYS.has(e.key)) return;
     if (this.handleRangeCommand(e)) return;
     if (this.focusFirstCell(e)) return;
     this.handleFocusedKey(e);
   };
 
-  private handleSelectAll(e: KeyboardEvent): boolean {
-    const modifier = e.ctrlKey || e.metaKey;
-    if (!modifier || e.key.toLowerCase() !== "a") return false;
-    if (this.core.gridOptions.rowSelection === "multiple") {
-      e.preventDefault();
-      this.core.selectionService.selectAll(true);
-    }
-    return true;
+  /** 原生控件保留自己的键盘、选区与剪贴板语义，避免激活按钮时导航表格。 */
+  private shouldYieldEvent(e: Event): boolean {
+    const target = e.target;
+    return e.defaultPrevented || target instanceof HTMLElement &&
+      (target.isContentEditable || !!target.closest("button,a[href],input,textarea,select")) ||
+      this.core.editingService.isEditing();
   }
 
-  private handleHistoryShortcut(e: KeyboardEvent): boolean {
-    if ((!e.ctrlKey && !e.metaKey) || e.altKey) return false;
+  private handleCommand(e: KeyboardEvent): boolean {
+    if (!e.ctrlKey && !e.metaKey) return false;
     const key = e.key.toLowerCase();
-    if (key === "z") {
-      e.preventDefault();
-      if (e.shiftKey) this.core.undoService.redo();
-      else this.core.undoService.undo();
+    if (key === "a") {
+      if (this.core.gridOptions.rowSelection === "multiple") {
+        e.preventDefault();
+        this.core.selectionService.selectAll(true);
+      }
       return true;
     }
-    if (key !== "y") return false;
+    if (e.altKey || (key !== "z" && key !== "y")) return false;
     e.preventDefault();
-    this.core.undoService.redo();
+    if (key === "z" && !e.shiftKey) this.core.undoService.undo();
+    else this.core.undoService.redo();
     return true;
   }
 

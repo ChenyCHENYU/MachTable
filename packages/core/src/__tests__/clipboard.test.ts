@@ -310,3 +310,61 @@ describe("column virtualization", () => {
     api.destroy();
   });
 });
+
+describe("native cell control ownership", () => {
+  it.each(["button", "a", "input", "textarea", "select"] as const)("preserves %s keyboard activation and navigation", tag => {
+    const { api, host } = createRangeGrid({ rowSelection: "multiple" });
+    const cell = cellAt(host, 0, "name");
+    cell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    const control = document.createElement(tag);
+    if (control instanceof HTMLAnchorElement) control.href = "#details";
+    cell.append(control);
+    const range = api.selection.getRange();
+    for (const key of ["Enter", " ", "ArrowDown", "Tab", "Delete", "Escape"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      control.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(host.querySelector(".mach-cell-editor-shell")).toBeNull();
+    expect(api.selection.getRange()).toEqual(range);
+    api.destroy();
+    host.remove();
+  });
+
+  it("preserves an inline input's clipboard without clearing or replacing grid values", () => {
+    const { api, host } = createRangeGrid();
+    const cell = cellAt(host, 0, "name");
+    cell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    const input = document.createElement("input");
+    input.value = "draft";
+    cell.append(input);
+    const setData = vi.fn();
+    const getData = vi.fn(() => "replacement");
+    for (const type of ["copy", "cut", "paste"]) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: { setData, getData } });
+      input.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(setData).not.toHaveBeenCalled();
+    expect(getData).not.toHaveBeenCalled();
+    expect(api.rows.getById("0")?.data?.name).toBe("n0");
+    expect(input.value).toBe("draft");
+    api.destroy();
+    host.remove();
+  });
+
+  it("respects events already claimed by a renderer", () => {
+    const { api, host } = createRangeGrid();
+    cellAt(host, 0, "name").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    window.dispatchEvent(new MouseEvent("mouseup"));
+    const event = new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true });
+    event.preventDefault();
+    host.querySelector(".mach-root")!.dispatchEvent(event);
+    expect(api.rows.getById("0")?.data?.name).toBe("n0");
+    api.destroy();
+    host.remove();
+  });
+});
