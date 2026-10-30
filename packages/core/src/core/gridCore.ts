@@ -817,35 +817,16 @@ export class GridCore<TData = any> {
   }
 
   buildDefaultEmptyState(): HTMLElement {
-    const locale = this.gridOptions.locale ?? {};
-    const title = locale.emptyRows ?? DEFAULT_LOCALE.emptyRows;
-    const hint = locale.emptyRowsHint ?? DEFAULT_LOCALE.emptyRowsHint;
     const empty = el("div", "mach-empty");
 
-    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    icon.setAttribute("class", "mach-empty__icon");
-    icon.setAttribute("viewBox", "0 0 96 84");
-    icon.setAttribute("width", "96");
-    icon.setAttribute("height", "84");
-    icon.setAttribute("fill", "none");
-    icon.setAttribute("aria-hidden", "true");
-    // Static library-owned SVG only; user-controlled text is assigned via textContent below.
-    icon.innerHTML =
-      '<rect x="8" y="10" width="68" height="56" rx="6" fill="#eaf3fe"/>' +
-      '<rect x="8" y="10" width="68" height="12" rx="6" fill="#d5e8fd"/>' +
-      '<rect x="8" y="19" width="68" height="3" fill="#d5e8fd"/>' +
-      '<g stroke="#bcd7f8" stroke-width="2.4" stroke-linecap="round">' +
-      '<line x1="16" y1="32" x2="68" y2="32"/><line x1="16" y1="42" x2="60" y2="42"/>' +
-      '<line x1="16" y1="52" x2="64" y2="52"/></g>' +
-      '<circle cx="66" cy="52" r="15" fill="#ffffff" stroke="#8fbdf5" stroke-width="3"/>' +
-      '<line x1="77" y1="63" x2="86" y2="72" stroke="#8fbdf5" stroke-width="4" stroke-linecap="round"/>' +
-      '<line x1="60" y1="52" x2="72" y2="52" stroke="#bcd7f8" stroke-width="2.6" stroke-linecap="round"/>';
+    // Static library-owned SVG only; locale strings stay on textContent below.
+    empty.innerHTML = '<svg class="mach-empty__icon" viewBox="0 0 96 84" aria-hidden="true"><rect stroke-opacity=".3" x="8" y="6" width="76" height="66" rx="9"/><path fill="#8b98ff" opacity=".12" stroke="none" d="M17 6H75Q84 6 84 15V26H8V15Q8 6 17 6Z"/><path stroke="var(--mach-body-fg)" opacity=".06" d="M8 26h76M38 26v46M61 26v46M8 42h76M8 57h76"/><path stroke-width="5" opacity=".5" d="M19 15h12m17 0h7m15 0h7"/><path stroke="var(--mach-body-fg)" opacity=".06" stroke-width="4" d="M19 34h12m14 0h8m15 0h8M19 49h12m14 0h8m15 0h8M19 64h12m14 0h8"/><circle stroke-opacity=".3" cx="72" cy="55" r="19"/><circle cx="70" cy="53" r="9"/><path d="m77 60 6 6m-16-16 6 6m0-6-6 6"/></svg>';
 
     const titleEl = el("div", "mach-empty__title");
-    titleEl.textContent = title;
+    titleEl.textContent = this.getLocaleText("emptyRows");
     const hintEl = el("div", "mach-empty__hint");
-    hintEl.textContent = hint;
-    empty.append(icon, titleEl, hintEl);
+    hintEl.textContent = this.getLocaleText("emptyRowsHint");
+    empty.append(titleEl, hintEl);
     return empty;
   }
 

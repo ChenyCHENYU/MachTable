@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.34.0 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版新增可选 `/business` 的字典列策略与本地语义合计，完善字典缓存的请求复用、失效代次、缺失项缓存与销毁边界；普通根入口 API 和既有默认行为保持兼容。
+MachTable 0.34.1 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版完善内置空态的表格插画、亮暗配色与两级文案；可选 `/business` 的字典列策略、本地语义合计及字典缓存隔离继续兼容；普通根入口 API 和既有默认行为保持兼容。
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -47,6 +47,8 @@ api.destroy();
 编辑、粘贴、清空和填充共用已有列校验与整行校验，批量输入按行提交并合并撤销记录，异步校验不会写回已替换的数据。随机块缓存淘汰后，未保存行仍可通过编辑 API 保存或回滚；完整替换数据与重新查询会清理旧作用域的状态。
 
 `loading: true` 默认展示轻量表格骨架与本地化状态文案，空数据默认展示内置插画；需要品牌化时再通过 `overlayLoadingTemplate`、`overlayNoRowsTemplate` 覆盖，基础页面无需重复实现 loading/empty DOM。
+
+内置空态使用适配亮暗主题的淡蓝表格卡片与放大镜插画；`locale.emptyRows` 和 `locale.emptyRowsHint` 分别配置标题、说明，均按纯文本呈现。静态 SVG 不依赖远端资源或共享 id，多表并排不会互相影响。
 
 公共命令按 `rows`、`columns`、`selection`、`editing`、`filtering`、`sorting`、`pagination`、`hierarchy`、`view`、`state`、`io`、`diagnostics` 划分。完整签名见 [GridApi](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/api/grid-api.md)。
 

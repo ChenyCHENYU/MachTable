@@ -1,5 +1,12 @@
 # @agile-team/mach-table-vue
 
+## 0.34.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.34.1
+
 ## 0.34.0
 
 ### Minor Changes

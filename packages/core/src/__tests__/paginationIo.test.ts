@@ -263,8 +263,23 @@ describe("empty state", () => {
     const empty = host.querySelector(".mach-empty") as HTMLElement;
     expect(empty).toBeTruthy();
     expect(empty.querySelector("svg")).toBeTruthy();
+    expect(empty.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 96 84");
+    expect(empty.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(empty.querySelector('rect[rx="9"]')).toBeTruthy();
+    expect(empty.querySelector('circle[r="9"]')).toBeTruthy();
     expect(empty.textContent).toContain("暂无数据");
     expect(empty.textContent).toContain("没有可显示的行");
+    api.destroy();
+  });
+
+  it("keeps locale text as text and uses no SVG ids shared between grids", () => {
+    const host = createHost();
+    const api = createGrid<Row>(host, { rowData: [], locale: { emptyRows: '<img src=x onerror=alert(1)>', emptyRowsHint: '自定义说明' } });
+    const node = host.querySelector(".mach-empty")!;
+    expect(node.querySelector("img")).toBeNull();
+    expect(node.textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(node.querySelector("svg [id]")).toBeNull();
+    expect(node.textContent).toContain('自定义说明');
     api.destroy();
   });
 

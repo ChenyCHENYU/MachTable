@@ -2384,22 +2384,22 @@ input.mach-select-all {
   gap: 4px;
   padding: 32px 16px;
   min-height: 160px;
+  text-align: center;
+  color: var(--mach-body-fg);
+  font-size: 12px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
 }
 
-.mach-empty__icon {
-  margin-bottom: 6px;
-}
+.mach-empty__icon { fill: var(--mach-body-bg); margin-bottom: 6px; width: 96px; height: 84px; stroke: #8b98ff; stroke-linecap: round; }
 
 .mach-empty__title {
-  font-size: var(--mach-font-size);
-  color: var(--mach-body-fg);
+  font-size: 14px;
+  line-height: 22px;
   font-weight: 500;
 }
 
-.mach-empty__hint {
-  font-size: var(--mach-font-size-sm);
-  color: var(--mach-header-fg);
-}
+.mach-empty__hint { opacity: .45; }
 
 @media (prefers-reduced-motion: reduce) {
   .mach-spinner,

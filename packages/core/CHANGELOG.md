@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.34.1
+
+### Patch Changes
+
+- Refine the built-in no-rows state with a layered, theme-aware table illustration and clearer title/help text. Preserve locale overrides, safe text rendering and custom overlays.
+
 ## 0.34.0
 
 ### Minor Changes

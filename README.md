@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.34.0-2563eb" alt="Source version 0.34.0" />
+  <img src="https://img.shields.io/badge/source-0.34.1-2563eb" alt="Source version 0.34.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -32,6 +32,8 @@
 ## 为什么选择 MachTable
 
 MachTable 为后台管理、工业台账、订单/工单、财务报表和低代码平台提供一套可组合的数据网格能力。它不追求堆叠相似 API，而是把高频复杂场景做成稳定、类型安全且可诊断的产品能力。
+
+空数据默认显示带分层表格卡片和放大镜标记的淡蓝插画，自动适配亮暗主题；标题与辅助说明分别使用 `locale.emptyRows`、`locale.emptyRowsHint` 覆盖。插画内置于包内，无远端图标请求及全局 SVG id；已有自定义空态覆盖继续优先生效。
 
 | 维度 | 已具备的能力 |
 | --- | --- |
@@ -411,7 +413,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.34.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版新增显式可选 `/business` 的字典列值策略与本地语义合计，完善字典缓存请求复用、失效代次、缺失项缓存和销毁边界。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.34.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版完善内置空态的表格插画、亮暗配色与两级文案；继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
