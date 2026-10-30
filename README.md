@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.35.0-2563eb" alt="Source version 0.35.0" />
+  <img src="https://img.shields.io/badge/source-0.35.1-2563eb" alt="Source version 0.35.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -413,7 +413,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.35.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修复弹窗返回、原生焦点恢复及 `scrollIntoView` 让冻结列独立滚动的问题，左右固定区与正文保持同一行对齐；内置空态的插画和亮暗配色继续保留。继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.35.1`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版默认完整展示表头，统一保护初始布局、fit、列宽恢复及交互缩列，空间不足时内部横向滚动。弹窗返回、原生焦点恢复及 `scrollIntoView` 的冻结列对齐修复继续保留；内置空态的插画和亮暗配色继续保留。继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
@@ -442,4 +442,4 @@ const columns = [
 
 普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 
-交互调宽会以列头文字及排序/筛选/列工具控件的所需空间为下限，鼠标和 Alt+方向键一致，避免普通列头被压盖。异常超长列头按 360px 上限保护；复杂自定义表头请显式提供 minWidth。
+表头默认完整展示，不省略。初始布局、fit、列宽恢复、API、鼠标和 Alt+方向键统一以完整标题及排序/筛选/列工具控件为最小宽度；显式 width/minWidth/maxWidth 不能把标题压窄，空间不足时表格内部横向滚动。360px 上限仅作用于数据内容的首选宽度，不截断表头。复杂自定义表头请显式提供 minWidth。

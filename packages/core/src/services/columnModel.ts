@@ -214,13 +214,13 @@ export class ColumnModel {
     const def = c.colDef;
     return {
       width: c.manualWidth ?? c.contentWidth ?? def.width ?? undefined,
-      minWidth: c.minWidth,
+      minWidth: c.minWidth ?? def.minWidth,
       maxWidth: def.maxWidth,
       flex: c.manualWidth == null ? c.flex ?? undefined : undefined
     };
   }
 
-  setColumnWidth(column: Column, width: number): boolean {
+  setColumnWidth(column: Column, width: number | undefined): boolean {
     if (!isPositiveFiniteNumber(width)) return false;
     column.manualWidth = clampWidth(width, this.widthInputOf(column));
     column.flex = null;
@@ -315,9 +315,8 @@ export class ColumnModel {
     } else if (isPositiveFiniteNumber(state.flex)) {
       column.flex = state.flex;
       column.manualWidth = null;
-    } else if (isPositiveFiniteNumber(state.width)) {
-      column.manualWidth = clampWidth(state.width, this.widthInputOf(column));
-      column.flex = null;
+    } else {
+      this.setColumnWidth(column, state.width);
     }
     if (isPositiveFiniteNumber(state.contentWidth)) {
       column.contentWidth = clampWidth(state.contentWidth, this.widthInputOf(column));

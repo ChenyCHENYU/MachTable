@@ -434,9 +434,7 @@ export class HeaderRenderer {
     if (!event.altKey || !isHorizontalArrow(event.key)) return false;
     if (!this.canResizeColumn(column)) return true;
     const delta = event.key === "ArrowRight" ? 24 : -24;
-    const next = Math.max(column.colDef.minWidth ?? 40, column.currentWidth + delta);
-    this.core.columnSizing.prepareResize(column);
-    this.core.columnModel.setColumnWidth(column, next);
+    this.core.columnModel.setColumnWidth(column, column.currentWidth + delta);
     this.core.relayoutColumns();
     this.core.commitColumnWidths([column]);
     event.preventDefault();

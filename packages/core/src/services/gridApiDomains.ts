@@ -47,8 +47,8 @@ export function createGridColumnsApi<TData>(api: GridApiImpl<TData>): GridColumn
     move: (colId, toIndex) => api.moveColumn(colId, toIndex),
     setWidth: (colId, width) => api.setColumnWidth(colId, width),
     fit: (width) => api.sizeColumnsToFit(width),
-    autoSize: (colId, skipHeader) => api.autoSizeColumn(colId, skipHeader),
-    autoSizeAll: (skipHeader) => api.autoSizeAllColumns(skipHeader),
+    autoSize: (colId) => api.autoSizeColumn(colId),
+    autoSizeAll: () => api.autoSizeAllColumns(),
     getWorkbenchItems: () => api.getColumnWorkbenchItems(),
     openWorkbench: (anchor) => api.openColumnWorkbench(anchor),
     closeWorkbench: () => api.closeColumnWorkbench()

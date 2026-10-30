@@ -57,7 +57,7 @@ off();
 | `move(colId, toIndex)` | 调整列顺序 |
 | `setWidth(colId, width)` | 程序化调整宽度，成功返回 `true` |
 | `fit(width?)` | 按容器或指定宽度缩放列 |
-| `autoSize(colId, skipHeader?)` / `autoSizeAll(skipHeader?)` | 按内容自动宽度 |
+| `autoSize(colId, skipHeader?)` / `autoSizeAll(skipHeader?)` | 按内容自动宽度；完整表头下限始终生效，兼容参数 skipHeader 不再缩小标题 |
 | `getWorkbenchItems()` | 获取无 UI 绑定的列工作台模型 |
 | `openWorkbench(anchor?)` / `closeWorkbench()` | 打开/关闭内置列工作台 |
 

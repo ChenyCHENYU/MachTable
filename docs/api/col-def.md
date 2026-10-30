@@ -21,7 +21,7 @@
 | --- | --- | --- | --- |
 | `width` | `number` | 内容测宽 | 显式首选宽度 px；普通布局固定，显式 fit 模式按比例铺满 |
 | `autoWidth` | `boolean` | `true` | 未声明 width 时按内容抽样测宽；false 使用原默认 150px |
-| `minWidth` / `maxWidth` | `number` | `80` / 自动测宽 360 | 显式边界优先；自动默认上限不会约束手动调宽 |
+| `minWidth` / `maxWidth` | `number` | `80` / 自动测宽 360 | 边界受完整表头下限约束；自动默认上限不会约束手动调宽 |
 | `flex` | `number` | `0` | 弹性权重：容器有多余空间时按权重分配 |
 | `suppressSizeToFit` | `boolean` | `false` | 在 `columnLayout: "fit"` 下保持本列宽度；选择、序号、拖拽和操作列模板默认开启 |
 | `suppressColumnMenu` | `boolean` | `false` | 隐藏本列表头的列工具入口；全局列工作台仍可管理该列，辅助列模板默认开启 |
@@ -139,4 +139,4 @@ const columns = [
 
 普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 
-交互调宽会以列头文字及排序/筛选/列工具控件的所需空间为下限，鼠标和 Alt+方向键一致，避免普通列头被压盖。异常超长列头按 360px 上限保护；复杂自定义表头请显式提供 minWidth。
+表头默认完整展示，不省略。初始布局、fit、列宽恢复、API、鼠标和 Alt+方向键统一以完整标题及排序/筛选/列工具控件为最小宽度；显式 width/minWidth/maxWidth 不能把标题压窄，空间不足时表格内部横向滚动。360px 上限仅作用于数据内容的首选宽度，不截断表头。复杂自定义表头请显式提供 minWidth。

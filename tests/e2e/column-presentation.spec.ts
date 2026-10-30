@@ -51,3 +51,35 @@ test('pointer and keyboard shrinking keep all four header characters visible', a
   expect(await header.evaluate(element => element.getBoundingClientRect().width)).toBeCloseTo(width, 0);
   expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 });
+
+test('initial fit and restored narrow widths never truncate complete headers', async ({ page }) => {
+  await page.evaluate(() => {
+    document.getElementById('grid')!.style.width = '360px';
+    window.columnPresentationApi.updateOptions({ columnLayout: 'fit', columnDefs: [
+      { field: 'id', headerName: '生产计划', width: 40, maxWidth: 60, filter: true },
+      { field: 'note', headerName: '目标重量（吨）', width: 40, maxWidth: 60, filter: true },
+      { field: 'status', headerName: 'Production equipment information', width: 40, maxWidth: 60, filter: true }
+    ] });
+    window.columnPresentationApi.columns.setState([{ colId: 'id', width: 30 }, { colId: 'note', width: 30 }]);
+  });
+  const verify = async () => {
+    const failures = await page.locator('.mach-header-cell--leaf').evaluateAll(cells => cells.flatMap(cell => {
+      const label = cell.querySelector('.mach-header-label')!;
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const text = range.getBoundingClientRect();
+      const bounds = cell.getBoundingClientRect();
+      return text.left < bounds.left || text.right > bounds.right || getComputedStyle(label).textOverflow === 'ellipsis'
+        ? [label.textContent] : [];
+    }));
+    expect(failures).toEqual([]);
+  };
+  await verify();
+  await page.evaluate(() => {
+    window.columnPresentationApi.columns.autoSizeAll(true);
+    window.columnPresentationApi.columns.resetState();
+    window.columnPresentationApi.updateOptions({ theme: 'dark' });
+  });
+  await verify();
+  expect(await page.locator('.mach-body-viewport--scroll').evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+});

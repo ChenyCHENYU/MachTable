@@ -84,3 +84,23 @@ it("retains explicitly neutral legacy status maps even when their label suggests
   const { host } = grid({ columnDefs: [{ field: "state", cellRenderer: createStatusTagRenderer({ variantMap: { X: "neutral" }, labelMap: { X: "已完成" } }) }], rowData: [{ state: "X" }] });
   expect(host.querySelector(".mach-tag--neutral")?.textContent).toBe("已完成");
 });
+
+it("protects full headers on initial fit, explicit bounds, state restore, APIs and reset", () => {
+  const title = "生产计划目标重量（吨）";
+  const { api } = grid({ columnLayout: "fit", columnMenu: true,
+    columnDefs: [{ field: "id", headerName: title, width: 40, minWidth: 20, maxWidth: 60, filter: true }],
+    rowData: [{ id: 1 }]
+  });
+  const initial = width(api, "id");
+  expect(initial).toBeGreaterThan(200);
+  api.columns.setWidth("id", 1);
+  expect(width(api, "id")).toBe(initial);
+  api.columns.setState([{ colId: "id", width: 40 }]);
+  expect(width(api, "id")).toBe(initial);
+  api.columns.autoSizeAll(true);
+  expect(width(api, "id")).toBe(initial);
+  api.columns.resetState();
+  expect(width(api, "id")).toBe(initial);
+  api.columns.setDefinitions([{ field: "id", headerName: "完整超长标题".repeat(30), width: 40, maxWidth: 60 }]);
+  expect(width(api, "id")).toBeGreaterThan(1500);
+});

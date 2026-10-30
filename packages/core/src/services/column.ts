@@ -9,7 +9,7 @@ export class Column<TData = any> {
   pinned: PinnedDirection | null;
   manualWidth: number | null = null;
   contentWidth: number | null = null;
-  /** 交互调宽时保护表头，原始声明宽度仍保持独立。 */
+  /** 布局统一保护完整表头；原始列定义保持只读。 */
   minWidth?: number;
   flex: number | null = null;
   currentWidth = 0;
@@ -54,7 +54,6 @@ export class Column<TData = any> {
   resetWidth(): void {
     this.manualWidth = null;
     this.contentWidth = null;
-    this.minWidth = this.colDef.minWidth;
     this.flex = normalizePositive(this.colDef.flex) ?? null;
   }
 }

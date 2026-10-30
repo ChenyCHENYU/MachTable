@@ -277,28 +277,25 @@ export class GridApiImpl<TData = any> {
     this.core.commitColumnWidths(changed);
   }
 
-  autoSizeColumn(colId: string, skipHeader = false): void {
+  autoSizeColumn(colId: string): void {
     if (this.core.isDisposed()) return;
     const column = this.core.columnModel.getColumn(colId);
     if (!column) return;
 
-    if (this.autoSizeColumnInternal(column, skipHeader)) {
+    if (this.autoSizeColumnInternal(column)) {
       this.core.relayoutColumns();
       this.core.commitColumnWidths([column]);
     }
   }
 
-  private autoSizeColumnInternal(
-    column: Column<TData>,
-    skipHeader: boolean
-  ): boolean {
+  private autoSizeColumnInternal(column: Column<TData>): boolean {
     // Display/utility columns keep their configured width in responsive mode.
     if (this.core.gridOptions.columnLayout === "fit" && column.colDef.suppressSizeToFit) return false;
     if (column.hasCheckbox || column.isDetailToggle) {
       return this.core.columnModel.setColumnWidth(column, column.isDetailToggle ? 38 : 46);
     }
 
-    return this.setAutoSizeWidth(column, this.core.columnSizing.measureColumnWidth(column, skipHeader));
+    return this.setAutoSizeWidth(column, this.core.columnSizing.measureColumnWidth(column));
   }
 
   private setAutoSizeWidth(column: Column<TData>, width: number): boolean {
@@ -307,11 +304,11 @@ export class GridApiImpl<TData = any> {
       : this.core.columnModel.setColumnWidth(column, width);
   }
 
-  autoSizeAllColumns(skipHeader?: boolean): void {
+  autoSizeAllColumns(): void {
     if (this.core.isDisposed()) return;
     const changed: Column<TData>[] = [];
     for (const col of this.core.columnModel.getOrderedVisible()) {
-      if (this.autoSizeColumnInternal(col, skipHeader ?? false)) changed.push(col);
+      if (this.autoSizeColumnInternal(col)) changed.push(col);
     }
     if (changed.length > 0) {
       this.core.relayoutColumns();

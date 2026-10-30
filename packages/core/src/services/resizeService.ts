@@ -4,7 +4,6 @@ import type { Column } from "./column";
 type ResizeContext = Pick<
   GridCore<any>,
   | "columnModel"
-  | "columnSizing"
   | "commitColumnWidths"
   | "emitColumnResize"
   | "gridOptions"
@@ -19,7 +18,6 @@ interface ActiveResize {
   pointerId: number;
   startFlex: number | null;
   startManualWidth: number | null;
-  startMinWidth: number | undefined;
   startWidth: number;
   startX: number;
 }
@@ -48,12 +46,10 @@ export class ResizeService {
       pointerId: event.pointerId,
       startFlex: column.flex,
       startManualWidth: column.manualWidth,
-      startMinWidth: column.minWidth,
       startWidth,
       startX: event.clientX
     };
 
-    this.core.columnSizing.prepareResize(column);
     window.addEventListener("pointermove", this.onMove);
     // Capture phase finalizes before the browser's normal lostpointercapture event.
     window.addEventListener("pointerup", this.onUp, true);
@@ -77,7 +73,6 @@ export class ResizeService {
     this.removeListeners(active);
     if (restore) {
       active.column.manualWidth = active.startManualWidth;
-      active.column.minWidth = active.startMinWidth;
       active.column.flex = active.startFlex;
       this.core.relayoutColumns();
     }
@@ -120,7 +115,6 @@ export class ResizeService {
     if (active.didResize) {
       if (Math.abs(this.pendingWidth - active.startWidth) < 0.5) {
         active.column.manualWidth = active.startManualWidth;
-      active.column.minWidth = active.startMinWidth;
         active.column.flex = active.startFlex;
       } else {
         this.core.columnModel.setColumnWidth(active.column, this.pendingWidth);

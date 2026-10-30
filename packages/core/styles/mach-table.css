@@ -364,9 +364,7 @@
 
 .mach-header-label {
   flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: max-content;
   cursor: pointer;
 }
 

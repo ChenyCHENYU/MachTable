@@ -180,7 +180,8 @@ describe("colSpan", () => {
 
     const row0name = cellAt(host, 0, "name");
     const row0status = cellAt(host, 0, "status");
-    expect(row0name.style.width).toBe("180px");
+    const widths = api.columns.getState().map(column => column.width!);
+    expect(Number.parseFloat(row0name.style.width)).toBe(widths[0] + widths[1]);
     expect(row0status.style.display).toBe("none");
 
     const row1name = cellAt(host, 1, "name");
