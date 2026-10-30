@@ -6,6 +6,11 @@ export function normalizeFinite(value: unknown, min: number, integer = false): n
   return integer ? Math.floor(value) : value;
 }
 
+/** 严格正数用于列宽及 flex；零仍可通过 normalizeFinite 单独保留。 */
+export function normalizePositive(value: unknown): number | undefined {
+  return normalizeFinite(value, 0) || undefined;
+}
+
 export function normalizePersistence(value: GridOptions["persistence"]): ResolvedGridOptions["persistence"] {
   if (!value || typeof value.key !== "string" || !value.key.trim()) return null;
   return {

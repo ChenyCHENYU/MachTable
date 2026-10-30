@@ -1,3 +1,4 @@
+import { normalizePositive } from "../lib/optionValues";
 import type { GridCore } from "../core/gridCore";
 import { Column } from "./column";
 import { ColumnGroup } from "./columnGroup";
@@ -20,19 +21,19 @@ export const DETAIL_TOGGLE_COL_ID = "__rg_detail_toggle__";
 type ColumnModelContext = Pick<GridCore<any>, "gridOptions">;
 
 function isPositiveFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0;
+  return normalizePositive(value) !== undefined;
 }
 
 /** @internal Column objects remain public; the collection/model service does not. */
 export class ColumnModel {
-  private columns: Column[] = [];
+  private leafColumns: Column[] = [];
   private columnById = new Map<string, Column>();
   private rootChildren: (ColumnGroup<any> | Column<any>)[] = [];
-  private left: Column[] = [];
-  private center: Column[] = [];
-  private right: Column[] = [];
-  private sortModel: SortModelItem[] = [];
-  private defs: ColDefOrGroup<any>[] = [];
+  private leftPaneColumns: Column[] = [];
+  private centerPaneColumns: Column[] = [];
+  private rightPaneColumns: Column[] = [];
+  private activeSorts: SortModelItem[] = [];
+  private sourceDefinitions: ColDefOrGroup<any>[] = [];
   private headerDepth = 1;
   private flatIndexById = new Map<string, number>();
   viewportWidth = 0;
@@ -40,8 +41,8 @@ export class ColumnModel {
   constructor(private core: ColumnModelContext) {}
 
   setColumnDefs(colDefs: ColDefOrGroup<any>[] | null | undefined): void {
-    this.defs = colDefs ? [...colDefs] : [];
-    const prev = new Map(this.columns.map((c) => [c.id, c]));
+    this.sourceDefinitions = colDefs ? [...colDefs] : [];
+    const prev = new Map(this.leafColumns.map((c) => [c.id, c]));
     const defaults = this.core.gridOptions.defaultColDef;
     const usedIds = new Set<string>(
       this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn
@@ -78,7 +79,7 @@ export class ColumnModel {
         return column;
       });
 
-    this.rootChildren = build(this.defs, null, 0);
+    this.rootChildren = build(this.sourceDefinitions, null, 0);
 
     if (this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn) {
       const toggleCol = new Column(DETAIL_TOGGLE_COL_ID, {
@@ -95,17 +96,17 @@ export class ColumnModel {
       this.rootChildren.unshift(toggleCol);
     }
 
-    this.columns = this.collectLeaves(this.rootChildren);
-    this.columnById = new Map(this.columns.map(column => [column.id, column]));
-    this.headerDepth = this.columns.reduce((max, c) => Math.max(max, c.level + 1), 1);
+    this.leafColumns = this.collectLeaves(this.rootChildren);
+    this.columnById = new Map(this.leafColumns.map(column => [column.id, column]));
+    this.headerDepth = this.leafColumns.reduce((max, c) => Math.max(max, c.level + 1), 1);
 
-    this.sortModel = this.sortModel.filter((s) => this.columns.some((c) => c.id === s.colId));
-    if (this.sortModel.length === 0) {
+    this.activeSorts = this.activeSorts.filter((s) => this.leafColumns.some((c) => c.id === s.colId));
+    if (this.activeSorts.length === 0) {
       const initial: SortModelItem[] = [];
-      for (const c of this.columns) {
+      for (const c of this.leafColumns) {
         if (c.colDef.initialSort) initial.push({ colId: c.id, direction: c.colDef.initialSort });
       }
-      this.sortModel = initial;
+      this.activeSorts = initial;
     }
 
     this.regroup();
@@ -120,10 +121,10 @@ export class ColumnModel {
   }
 
   private regroup(): void {
-    const visible = this.columns.filter((c) => !c.hide);
-    this.left = visible.filter((c) => c.pinned === "left");
-    this.right = visible.filter((c) => c.pinned === "right");
-    this.center = visible.filter((c) => c.pinned === null);
+    const visible = this.leafColumns.filter((c) => !c.hide);
+    this.leftPaneColumns = visible.filter((c) => c.pinned === "left");
+    this.rightPaneColumns = visible.filter((c) => c.pinned === "right");
+    this.centerPaneColumns = visible.filter((c) => c.pinned === null);
     this.flatIndexById.clear();
     this.getOrderedVisible().forEach((c, i) => this.flatIndexById.set(c.id, i));
   }
@@ -133,11 +134,11 @@ export class ColumnModel {
   }
 
   getColumns(): Column[] {
-    return this.columns;
+    return this.leafColumns;
   }
 
   getColumnDefs(): ColDefOrGroup<any>[] {
-    return this.defs;
+    return this.sourceDefinitions;
   }
 
   getRootChildren(): (ColumnGroup<any> | Column<any>)[] {
@@ -153,11 +154,11 @@ export class ColumnModel {
   }
 
   getPaneColumns(pane: PaneType): Column[] {
-    return pane === "left" ? this.left : pane === "right" ? this.right : this.center;
+    return pane === "left" ? this.leftPaneColumns : pane === "right" ? this.rightPaneColumns : this.centerPaneColumns;
   }
 
   getOrderedVisible(): Column[] {
-    return [...this.left, ...this.center, ...this.right];
+    return [...this.leftPaneColumns, ...this.centerPaneColumns, ...this.rightPaneColumns];
   }
 
   getRowGroupColumns(): Column[] {
@@ -169,13 +170,13 @@ export class ColumnModel {
   }
 
   hasColSpan(): boolean {
-    return this.center.some((c) => c.colDef.colSpan != null);
+    return this.centerPaneColumns.some((c) => c.colDef.colSpan != null);
   }
 
   getGroupLabelColumn(): Column | undefined {
     const ordered = this.getOrderedVisible();
     return (
-      this.center.find((c) => !c.hasCheckbox && !c.isDetailToggle) ??
+      this.centerPaneColumns.find((c) => !c.hasCheckbox && !c.isDetailToggle) ??
       ordered.find((c) => !c.hasCheckbox && !c.isDetailToggle) ??
       ordered[0]
     );
@@ -188,31 +189,22 @@ export class ColumnModel {
   computeLayout(viewportWidth: number): void {
     this.viewportWidth = viewportWidth;
 
-    let pinnedTotal = 0;
-    for (const c of [...this.left, ...this.right]) {
-      c.currentWidth = clampWidth(c.manualWidth ?? c.contentWidth ?? c.colDef.width ?? DEFAULT_COLUMN_WIDTH, this.widthInputOf(c));
-      pinnedTotal += c.currentWidth;
-    }
-
-    const available = Math.max(0, viewportWidth - pinnedTotal);
+    let available = viewportWidth;
     const scalable: Column[] = [];
-    const fixed: Column[] = [];
-    for (const column of this.center) {
-      (column.colDef.suppressSizeToFit || column.manualWidth != null ? fixed : scalable).push(column);
+    const inputs: ReturnType<ColumnModel["widthInputOf"]>[] = [];
+    for (const column of this.getOrderedVisible()) {
+      const input = this.widthInputOf(column);
+      if (column.pinned != null || column.colDef.suppressSizeToFit || column.manualWidth != null) {
+        column.currentWidth = clampWidth(input.width ?? DEFAULT_COLUMN_WIDTH, input);
+        available -= column.currentWidth;
+      } else {
+        scalable.push(column);
+        inputs.push(input);
+      }
     }
-    let fixedTotal = 0;
-    for (const column of fixed) {
-      column.currentWidth = clampWidth(
-        column.manualWidth ?? column.contentWidth ?? column.colDef.width ?? DEFAULT_COLUMN_WIDTH,
-        this.widthInputOf(column)
-      );
-      fixedTotal += column.currentWidth;
-    }
-    const scalableInputs = scalable.map((column) => this.widthInputOf(column));
-    const scalableWidth = Math.max(0, available - fixedTotal);
     const widths = this.core.gridOptions.columnLayout === "fit"
-      ? fitColumnWidths(scalableInputs, scalableWidth)
-      : computeColumnWidths(scalableInputs, scalableWidth);
+      ? fitColumnWidths(inputs, Math.max(0, available))
+      : computeColumnWidths(inputs, Math.max(0, available));
     scalable.forEach((column, index) => {
       column.currentWidth = widths[index];
     });
@@ -221,8 +213,8 @@ export class ColumnModel {
   private widthInputOf(c: Column): { width?: number; minWidth?: number; maxWidth?: number; flex?: number } {
     const def = c.colDef;
     return {
-      width: c.manualWidth ?? c.contentWidth ?? def.width,
-      minWidth: def.minWidth,
+      width: c.manualWidth ?? c.contentWidth ?? def.width ?? undefined,
+      minWidth: c.minWidth,
       maxWidth: def.maxWidth,
       flex: c.manualWidth == null ? c.flex ?? undefined : undefined
     };
@@ -279,7 +271,7 @@ export class ColumnModel {
       container[slotIdx] = siblings[i];
     });
 
-    this.columns = this.collectLeaves(this.rootChildren);
+    this.leafColumns = this.collectLeaves(this.rootChildren);
     this.regroup();
     return true;
   }
@@ -292,7 +284,7 @@ export class ColumnModel {
   }
 
   getColumnState(): ColumnState[] {
-    return this.columns.map((c) => {
+    return this.leafColumns.map((c) => {
       return {
         colId: c.id,
         hide: c.hide,
@@ -307,7 +299,7 @@ export class ColumnModel {
 
   applyColumnState(states: ColumnState[]): void {
     const stateById = new Map(states.map((s) => [s.colId, s]));
-    for (const c of this.columns) {
+    for (const c of this.leafColumns) {
       const s = stateById.get(c.id);
       if (s) this.applyColumnViewState(c, s);
     }
@@ -338,41 +330,23 @@ export class ColumnModel {
   private applyStateOrder(states: ColumnState[]): void {
     const orderById = new Map<string, number>();
     states.forEach((s, i) => orderById.set(s.colId, i));
-    const paneOfCol = (c: Column) => (c.pinned === "left" ? "left" : c.pinned === "right" ? "right" : "center");
-
     for (const pane of ["left", "center", "right"] as PaneType[]) {
-      const current = this.rootChildren.filter(
-        (child): child is Column<any> =>
-          child instanceof Column && !child.hide && child.parentGroup === null && paneOfCol(child) === pane
-      );
-      if (current.length < 2) continue;
-      const movable = current.filter((column) => column.movable);
-      const sorted = movable
-        .slice()
-        .sort((a, b) => (orderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderById.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-      if (sorted.every((c, i) => c === movable[i])) continue;
-
       const slots: number[] = [];
-      this.rootChildren.forEach((child, idx) => {
-        if (
-          child instanceof Column &&
-          !child.hide &&
-          child.parentGroup === null &&
-          paneOfCol(child) === pane &&
-          child.movable
-        ) {
-          slots.push(idx);
+      const columns: Column[] = [];
+      this.rootChildren.forEach((child, index) => {
+        if (child instanceof Column && !child.hide && child.parentGroup === null && child.movable && this.paneOf(child) === pane) {
+          slots.push(index);
+          columns.push(child);
         }
       });
-      slots.forEach((slotIdx, i) => {
-        this.rootChildren[slotIdx] = sorted[i];
-      });
+      columns.sort((a, b) => (orderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderById.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+      slots.forEach((index, offset) => { this.rootChildren[index] = columns[offset]; });
     }
-    this.columns = this.collectLeaves(this.rootChildren);
+    this.leafColumns = this.collectLeaves(this.rootChildren);
   }
 
   resetColumnState(): void {
-    for (const c of this.columns) {
+    for (const c of this.leafColumns) {
       c.resetWidth();
       c.hide = c.colDef.hide ?? false;
       const p = c.colDef.pinned;
@@ -382,21 +356,21 @@ export class ColumnModel {
   }
 
   getSortModel(): SortModel {
-    return this.sortModel.map((s) => ({ ...s }));
+    return this.activeSorts.map((s) => ({ ...s }));
   }
 
   applySortModel(sortModel: SortModel | null): void {
     if (!sortModel || sortModel.length === 0) {
-      this.sortModel = [];
+      this.activeSorts = [];
       return;
     }
-    this.sortModel = sortModel
-      .filter((s) => this.columns.some((c) => c.id === s.colId) && (s.direction === "asc" || s.direction === "desc"))
+    this.activeSorts = sortModel
+      .filter((s) => this.leafColumns.some((c) => c.id === s.colId) && (s.direction === "asc" || s.direction === "desc"))
       .map((s) => ({ colId: s.colId, direction: s.direction }));
   }
 
   cycleSort(column: Column, additive: boolean): void {
-    const model = [...this.sortModel];
+    const model = [...this.activeSorts];
     const idx = model.findIndex((s) => s.colId === column.id);
     const current = idx >= 0 ? model[idx].direction : null;
     const next: SortDirection | null = current === null ? "asc" : current === "asc" ? "desc" : null;
@@ -414,6 +388,6 @@ export class ColumnModel {
       model.length = 0;
       if (next) model.push({ colId: column.id, direction: next });
     }
-    this.sortModel = model;
+    this.activeSorts = model;
   }
 }

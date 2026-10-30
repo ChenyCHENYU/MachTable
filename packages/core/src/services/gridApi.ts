@@ -109,7 +109,6 @@ function changedFinite(
 
 /** @internal Only the domain facade, never this implementation instance, crosses the package boundary. */
 export class GridApiImpl<TData = any> {
-  private measureCanvas: HTMLCanvasElement | null = null;
   private asyncTransactions: AsyncTransactionEntry<TData>[] = [];
   private asyncTransactionTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -299,30 +298,7 @@ export class GridApiImpl<TData = any> {
       return this.core.columnModel.setColumnWidth(column, column.isDetailToggle ? 38 : 46);
     }
 
-    this.measureCanvas ??= document.createElement("canvas");
-    const ctx = this.measureCanvas.getContext("2d");
-    if (!ctx) return false;
-    const style = window.getComputedStyle(this.core.skeleton.root);
-    ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-
-    let maxWidth = 0;
-    const consider = (text: string) => {
-      if (!text) return;
-      const w = ctx.measureText(text).width;
-      if (w > maxWidth) maxWidth = w;
-    };
-
-    if (!skipHeader) {
-      consider(column.colDef.headerName ?? column.colDef.field ?? column.id);
-    }
-    const nodes = this.core.rowModel.getAllNodes();
-    const cap = Math.min(nodes.length, 2000);
-    for (let i = 0; i < cap; i++) {
-      consider(formatCellValue(this.core, nodes[i], column));
-    }
-
-    const extra = (column.sortable ? 20 : 0) + (column.filterable ? 28 : 0) + (this.core.gridOptions.columnMenu ? 22 : 0) + 28;
-    return this.setAutoSizeWidth(column, Math.ceil(maxWidth) + extra);
+    return this.setAutoSizeWidth(column, this.core.columnSizing.measureColumnWidth(column, skipHeader));
   }
 
   private setAutoSizeWidth(column: Column<TData>, width: number): boolean {
@@ -880,23 +856,12 @@ export class GridApiImpl<TData = any> {
 
   private updateDimensionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.gridOptions;
-    const rowHeight = changedFinite(options.rowHeight, resolved.rowHeight, 1);
-    const headerHeight = changedFinite(options.headerHeight, resolved.headerHeight, 1);
-    const rowBuffer = changedFinite(options.rowBuffer, resolved.rowBuffer, 0, true);
-    const detailHeight = changedFinite(options.detailRowHeight, resolved.detailRowHeight, 1);
-
-    if (rowHeight !== undefined) {
-      resolved.rowHeight = rowHeight;
+    for (const key of ["rowHeight", "headerHeight", "rowBuffer"] as const) {
+      const next = changedFinite(options[key], resolved[key], key === "rowBuffer" ? 0 : 1, key === "rowBuffer");
+      if (next === undefined) continue;
+      resolved[key] = next;
       effects.needsRelayout = true;
-    }
-    if (headerHeight !== undefined) {
-      resolved.headerHeight = headerHeight;
-      effects.needsRelayout = true;
-      effects.needsHeaderRebuild = true;
-    }
-    if (rowBuffer !== undefined) {
-      resolved.rowBuffer = rowBuffer;
-      effects.needsRelayout = true;
+      if (key === "headerHeight") effects.needsHeaderRebuild = true;
     }
     if (options.columnLayout != null && options.columnLayout !== resolved.columnLayout) {
       resolved.columnLayout = options.columnLayout === "fit" ? "fit" : "normal";
@@ -908,6 +873,7 @@ export class GridApiImpl<TData = any> {
       effects.needsPoolRebuild = true;
     }
     copyOptions(options, resolved, ["multiSort"]);
+    const detailHeight = changedFinite(options.detailRowHeight, resolved.detailRowHeight, 1);
     if (detailHeight !== undefined) {
       resolved.detailRowHeight = detailHeight;
       this.core.bodyRenderer.applyContainerSizes();

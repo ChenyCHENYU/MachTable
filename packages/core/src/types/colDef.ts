@@ -1,3 +1,4 @@
+import type { ColumnStatus } from "../lib/columnStatus";
 import type {
   CellClassParams,
   CellEditorParams,
@@ -146,6 +147,8 @@ export interface ColDef<TData = any, TValue = any> {
   headerClass?: string | string[];
   headerTooltip?: string;
   headerComponent?: (params: HeaderComponentParams<TData>) => string | HTMLElement | ICellRendererResult | null | undefined;
+  /** 未声明 width 时默认按内容测宽；false 保留默认宽度。maxWidth 可覆盖自动测宽的 360px 上限。 */
+  autoWidth?: boolean;
   width?: number;
   minWidth?: number;
   maxWidth?: number;
@@ -188,6 +191,8 @@ export interface ColDef<TData = any, TValue = any> {
   /** Clipboard/file output; display formatting and sort/filter continue to use stored values. */
   valueSerializer?: (params: ValueSerializerParams<TData, TValue>) => unknown;
   valueFormatter?: (params: ValueFormatterParams<TData, TValue>) => any;
+  /** true 使用默认状态色；映射值为颜色，或 { label, color }。自定义 renderer 优先。 */
+  status?: ColumnStatus;
   cellRenderer?: CellRendererFn | string;
   cellRendererParams?: Record<string, any>;
   cellClass?: CellClassRule;

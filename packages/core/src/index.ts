@@ -285,3 +285,5 @@ export type {
 } from "./types/events";
 export { EVENT_TYPES } from "./types/events";
 export const version: string = packageVersion;
+
+export type { ColumnStatus } from "./lib/columnStatus";

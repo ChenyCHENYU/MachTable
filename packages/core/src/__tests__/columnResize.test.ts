@@ -442,3 +442,19 @@ describe("opt-in column resizing", () => {
     ]);
   });
 });
+
+it("protects four-character header text and controls when pointer or keyboard resizing reaches its lower bound", () => {
+  const host = createHost();
+  const api = createGrid(host, {
+    columnDefs: [{ field: "name", headerName: "生产计划", width: 240, minWidth: 40, filter: true }],
+    rowData: rows, pagination: false, enableColumnResize: true, columnMenu: true
+  });
+  resizeHandle(host).dispatchEvent(pointer("pointerdown", 240));
+  window.dispatchEvent(pointer("pointerup", 0));
+  const minimum = api.columns.getState()[0].width!;
+  expect(minimum).toBeGreaterThan(120);
+  const header = host.querySelector<HTMLElement>('.mach-header-cell[data-col-id="name"]')!;
+  for (let i = 0; i < 8; i++) header.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true }));
+  expect(api.columns.getState()[0].width).toBe(minimum);
+  api.destroy();
+});

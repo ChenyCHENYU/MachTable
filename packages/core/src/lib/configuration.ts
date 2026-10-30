@@ -77,7 +77,7 @@ function presetNames(selection: MachTablePresetSelection | undefined): readonly 
     .filter((name): name is string => typeof name === "string" && name.trim().length > 0);
 }
 
-const INSTANCE_ONLY_OPTIONS = new Set<string>([
+const INSTANCE_ONLY_OPTIONS = [
   "rowData",
   "columnDefs",
   "datasource",
@@ -93,7 +93,7 @@ const INSTANCE_ONLY_OPTIONS = new Set<string>([
   "stateSaveDebounceMs",
   "columnStateKey",
   "columnStateStore"
-]);
+];
 
 function sanitizeConfigLayer(
   config: MachTableRuntimeConfig,
@@ -103,7 +103,7 @@ function sanitizeConfigLayer(
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const output: Record<string, unknown> = {};
   for (const [key, optionValue] of Object.entries(value)) {
-    if (!INSTANCE_ONLY_OPTIONS.has(key) && (key !== "dataProcessor" || optionValue == null || typeof optionValue === "function")) {
+    if (!INSTANCE_ONLY_OPTIONS.includes(key) && (key !== "dataProcessor" || optionValue == null || typeof optionValue === "function")) {
       output[key] = optionValue;
       continue;
     }

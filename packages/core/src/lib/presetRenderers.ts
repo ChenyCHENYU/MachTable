@@ -1,3 +1,4 @@
+import { ownEntry, statusEntry } from "./columnStatus";
 import type { CellRendererParams } from "../types/params";
 import type { CellRendererFn } from "../types/colDef";
 import type { ActionPolicyContext } from "../types/options";
@@ -13,34 +14,42 @@ export interface StatusTagConfig {
 }
 
 const DEFAULT_STATUS_VARIANTS: Array<[RegExp, TagVariant]> = [
-  [/^(success|ok|done|complete|completed|normal|active|enabled|启用|正常|完成|已完成|运行|运行中|在线|生效)$/i, "success"],
-  [/^(warning|warn|hold|pending|standby|待机|待审核|暂停|预警|部分完成)$/i, "warning"],
+  [/^(success|ok|done|complete|completed|normal|active|enabled|启用|正常|完成|已完成|运行|运行中|在线|生效|已发运)$/i, "success"],
+  [/^(warning|warn|hold|pending|standby|待机|待审核|暂停|预警|部分完成|待下达|待复核|待发运)$/i, "warning"],
   [/^(error|fail|failed|danger|fault|offline|disabled|故障|失败|错误|异常|停用|离线|断开)$/i, "danger"],
-  [/^(info|processing|new|draft|进行中|新建|草稿|审批中|同步中)$/i, "info"]
+  [/^(info|processing|new|draft|进行中|新建|草稿|审批中|同步中|执行中|已下达|装车中)$/i, "info"],
+  [/^(neutral|default)$/i, "neutral"]
 ];
 
-export function resolveTagVariant(value: any, variantMap?: Record<string, TagVariant>): TagVariant {
+export function resolveTagVariant(value: any, variantMap?: Record<string, TagVariant>, formatted?: string): TagVariant {
   const key = String(value ?? "");
   if (variantMap) {
-    const exact = variantMap[key];
+    const exact = ownEntry(variantMap, key);
     if (exact) return exact;
-    const lower = variantMap[key.toLowerCase()];
+    const lower = ownEntry(variantMap, key.toLowerCase());
     if (lower) return lower;
   }
   for (const [pattern, variant] of DEFAULT_STATUS_VARIANTS) {
     if (pattern.test(key)) return variant;
   }
-  return "neutral";
+  return formatted == null ? "neutral" : resolveTagVariant(formatted);
 }
 
 export function createStatusTagRenderer(config: StatusTagConfig = {}): CellRendererFn {
   return (params: CellRendererParams) => {
     if (params.value == null || params.value === "") return "";
-    const variant = resolveTagVariant(params.value, config.variantMap);
-    const label = config.labelMap?.[String(params.value)] ?? (params.formatted || String(params.value));
+    const key = String(params.value);
+    const entry = statusEntry(key, params.colDef.status);
+    const label = entry?.label ?? ownEntry(config.labelMap, key) ?? (params.formatted || key);
+    const color = entry?.color;
+    const variant = resolveTagVariant(color ?? key, color ? undefined : config.variantMap, label);
     const tag = document.createElement("span");
     tag.className = `mach-tag mach-tag--${variant}`;
     tag.textContent = label;
+    if (color && variant !== color) {
+      tag.style.color = color;
+      tag.style.backgroundColor = `color-mix(in srgb, ${color} 12%, transparent)`;
+    }
     return tag;
   };
 }

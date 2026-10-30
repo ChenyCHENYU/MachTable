@@ -4,6 +4,7 @@ import type { Column } from "./column";
 type ResizeContext = Pick<
   GridCore<any>,
   | "columnModel"
+  | "columnSizing"
   | "commitColumnWidths"
   | "emitColumnResize"
   | "gridOptions"
@@ -18,13 +19,14 @@ interface ActiveResize {
   pointerId: number;
   startFlex: number | null;
   startManualWidth: number | null;
+  startMinWidth: number | undefined;
   startWidth: number;
   startX: number;
 }
 
 /** @internal Resize interaction ownership stays with Core. */
 export class ResizeService {
-  private active: ActiveResize | null = null;
+  private activeColumnResize: ActiveResize | null = null;
   private rafId = 0;
   private pendingWidth = 0;
   private guide: HTMLElement | null = null;
@@ -39,17 +41,19 @@ export class ResizeService {
     const handle = event.currentTarget as HTMLElement;
     const startWidth = column.currentWidth;
     this.pendingWidth = startWidth;
-    this.active = {
+    this.activeColumnResize = {
       column,
       didResize: false,
       handle,
       pointerId: event.pointerId,
       startFlex: column.flex,
       startManualWidth: column.manualWidth,
+      startMinWidth: column.minWidth,
       startWidth,
       startX: event.clientX
     };
 
+    this.core.columnSizing.prepareResize(column);
     window.addEventListener("pointermove", this.onMove);
     // Capture phase finalizes before the browser's normal lostpointercapture event.
     window.addEventListener("pointerup", this.onUp, true);
@@ -62,17 +66,18 @@ export class ResizeService {
     }
     this.core.skeleton.root.classList.add("mach-root--resizing");
     handle.classList.add("mach-header-resize--active");
-    this.showFeedback(this.active);
+    this.showFeedback(this.activeColumnResize);
   }
 
   cancelResize(restore = true): void {
-    const active = this.active;
+    const active = this.activeColumnResize;
     if (!active) return;
-    this.active = null;
+    this.activeColumnResize = null;
     this.clearFrame();
     this.removeListeners(active);
     if (restore) {
       active.column.manualWidth = active.startManualWidth;
+      active.column.minWidth = active.startMinWidth;
       active.column.flex = active.startFlex;
       this.core.relayoutColumns();
     }
@@ -110,11 +115,12 @@ export class ResizeService {
   };
 
   private finishResize(active: ActiveResize): void {
-    this.active = null;
+    this.activeColumnResize = null;
     this.clearFrame();
     if (active.didResize) {
       if (Math.abs(this.pendingWidth - active.startWidth) < 0.5) {
         active.column.manualWidth = active.startManualWidth;
+      active.column.minWidth = active.startMinWidth;
         active.column.flex = active.startFlex;
       } else {
         this.core.columnModel.setColumnWidth(active.column, this.pendingWidth);
@@ -133,7 +139,7 @@ export class ResizeService {
   }
 
   private applyPendingWidth(): void {
-    const active = this.active;
+    const active = this.activeColumnResize;
     if (!active || !this.core.columnModel.setColumnWidth(active.column, this.pendingWidth)) return;
     this.core.relayoutColumns();
     this.updateFeedback(active);
@@ -173,11 +179,11 @@ export class ResizeService {
 
   private widthFromPointer(active: ActiveResize, clientX: number): number {
     const pointerX = Number.isFinite(clientX) ? clientX : active.startX;
-    return active.startWidth + pointerX - active.startX;
+    return Math.max(1, active.startWidth + pointerX - active.startX);
   }
 
   private matchActivePointer(event: PointerEvent): ActiveResize | null {
-    const active = this.active;
+    const active = this.activeColumnResize;
     return active && event.pointerId === active.pointerId ? active : null;
   }
 

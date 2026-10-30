@@ -1,3 +1,4 @@
+import { normalizePositive } from "./optionValues";
 export interface WidthInput {
   width?: number;
   minWidth?: number;
@@ -8,120 +9,44 @@ export interface WidthInput {
 export const DEFAULT_COLUMN_WIDTH = 150;
 export const DEFAULT_MIN_WIDTH = 80;
 
-function positiveFinite(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function widthBounds(input: WidthInput): { min: number; max: number } {
-  const min = positiveFinite(input.minWidth, DEFAULT_MIN_WIDTH);
-  return { min, max: Math.max(min, positiveFinite(input.maxWidth, Number.MAX_SAFE_INTEGER)) };
-}
-
 export function clampWidth(w: number, input: WidthInput): number {
-  const { min, max } = widthBounds(input);
-  const width = positiveFinite(w, positiveFinite(input.width, DEFAULT_COLUMN_WIDTH));
+  const min = normalizePositive(input.minWidth) ?? DEFAULT_MIN_WIDTH;
+  const max = normalizePositive(input.maxWidth) ?? Number.MAX_SAFE_INTEGER;
+  const width = normalizePositive(w) ?? normalizePositive(input.width) ?? DEFAULT_COLUMN_WIDTH;
   return Math.max(min, Math.min(max, width));
 }
 
-export function computeColumnWidths(cols: WidthInput[], availableWidth: number): number[] {
-  const widths = cols.map((c) => clampWidth(c.width ?? DEFAULT_COLUMN_WIDTH, c));
-
-  const flexCols: number[] = [];
-  let flexTotal = 0;
-  cols.forEach((c, i) => {
-    const f = c.flex ?? 0;
-    if (f > 0) {
-      flexCols.push(i);
-      flexTotal += f;
-    }
-  });
-
-  let total = 0;
-  for (const w of widths) total += w;
-
-  if (flexTotal > 0 && availableWidth > total) {
-    let extra = availableWidth - total;
-    for (let pass = 0; pass < 4 && extra > 0.5 && flexCols.length > 0; pass++) {
-      const remainingFlex: number[] = [];
-      let remainingTotal = 0;
-      for (const i of flexCols) {
-        const f = cols[i].flex ?? 0;
-        remainingFlex.push(i);
-        remainingTotal += f;
-      }
-      const consumed: number[] = [];
-      for (let k = 0; k < remainingFlex.length; k++) {
-        const i = remainingFlex[k];
-        const f = cols[i].flex ?? 0;
-        const share = (extra * f) / remainingTotal;
-        const before = widths[i];
-        widths[i] = clampWidth(before + share, cols[i]);
-        consumed.push(widths[i] - before);
-      }
-      let used = 0;
-      for (const c of consumed) used += c;
-      extra -= used;
-      const stillFlexible = remainingFlex.filter((_index, k) => consumed[k] > 0.001);
-      if (stillFlexible.length === remainingFlex.length) break;
-      flexCols.length = 0;
-      for (const i of stillFlexible) flexCols.push(i);
-    }
+/** 同一个有界余量分配器处理 flex 与 fit，达到边界的列退出后再分配剩余空间。 */
+function distributeWidths(cols: WidthInput[], widths: number[], available: number, weights: number[]): void {
+  let active = weights.map((_weight, index) => index).filter(index => weights[index] > 0);
+  let extra = available - widths.reduce((sum, width) => sum + width, 0);
+  while (Math.abs(extra) > 0.001 && active.length) {
+    const weight = active.reduce((sum, index) => sum + weights[index], 0);
+    let used = 0;
+    active = active.filter(index => {
+      const before = widths[index];
+      widths[index] = clampWidth(before + extra * weights[index] / weight, cols[index]);
+      used += widths[index] - before;
+      return widths[index] !== before;
+    });
+    if (Math.abs(used) < 0.0001) break;
+    extra -= used;
   }
+}
 
+export function computeColumnWidths(cols: WidthInput[], availableWidth: number): number[] {
+  const widths = cols.map(column => clampWidth(column.width ?? DEFAULT_COLUMN_WIDTH, column));
+  if (availableWidth > widths.reduce((sum, width) => sum + width, 0)) {
+    distributeWidths(cols, widths, availableWidth, cols.map(column => column.flex ?? 0));
+  }
   return widths;
 }
 
-/** Fits columns into a viewport while honoring every min/max bound. */
-function distributeFittedWidths(cols: WidthInput[], widths: number[], availableWidth: number): void {
-  const active = new Set(cols.map((_column, index) => index));
-  let remainingWidth = availableWidth;
-  for (let pass = 0; pass < cols.length + 1 && active.size > 0; pass++) {
-    let weightTotal = 0;
-    for (const index of active) weightTotal += Math.max(1, widths[index]);
-    if (weightTotal <= 0) break;
-
-    let constrained = false;
-    for (const index of [...active]) {
-      const target = remainingWidth * (Math.max(1, widths[index]) / weightTotal);
-      const fitted = clampWidth(target, cols[index]);
-      const { min, max } = widthBounds(cols[index]);
-      if (target < min || target > max) {
-        widths[index] = fitted;
-        remainingWidth -= fitted;
-        active.delete(index);
-        constrained = true;
-      }
-    }
-    if (!constrained) {
-      for (const index of active) {
-        widths[index] = clampWidth(
-          remainingWidth * (Math.max(1, widths[index]) / weightTotal),
-          cols[index]
-        );
-      }
-      break;
-    }
-    remainingWidth = Math.max(0, remainingWidth);
-  }
-}
-
-function correctWidthDrift(cols: WidthInput[], widths: number[], availableWidth: number): void {
-  const drift = availableWidth - widths.reduce((sum, width) => sum + width, 0);
-  if (Math.abs(drift) <= 0.01) return;
-  for (let index = widths.length - 1; index >= 0; index--) {
-    const candidate = clampWidth(widths[index] + drift, cols[index]);
-    if (Math.abs(candidate - widths[index]) > 0.01) {
-      widths[index] = candidate;
-      return;
-    }
-  }
-}
-
-/** Fits columns into a viewport while honoring every min/max bound. */
+/** 按首选宽度比例铺满；不可满足的预算停在 min/max，不破坏任何边界。 */
 export function fitColumnWidths(cols: WidthInput[], availableWidth: number): number[] {
-  const widths = cols.map((column) => clampWidth(column.width ?? DEFAULT_COLUMN_WIDTH, column));
-  if (!Number.isFinite(availableWidth) || availableWidth <= 0 || cols.length === 0) return widths;
-  distributeFittedWidths(cols, widths, availableWidth);
-  correctWidthDrift(cols, widths, availableWidth);
+  const widths = cols.map(column => clampWidth(column.width ?? DEFAULT_COLUMN_WIDTH, column));
+  if (Number.isFinite(availableWidth) && availableWidth > 0) {
+    distributeWidths(cols, widths, availableWidth, [...widths]);
+  }
   return widths;
 }

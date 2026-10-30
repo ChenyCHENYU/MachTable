@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.34.2-2563eb" alt="Source version 0.34.2" />
+  <img src="https://img.shields.io/badge/source-0.35.0-2563eb" alt="Source version 0.35.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -413,10 +413,33 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.34.2`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修复弹窗返回、原生焦点恢复及 `scrollIntoView` 让冻结列独立滚动的问题，左右固定区与正文保持同一行对齐；内置空态的插画和亮暗配色继续保留。继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.35.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修复弹窗返回、原生焦点恢复及 `scrollIntoView` 让冻结列独立滚动的问题，左右固定区与正文保持同一行对齐；内置空态的插画和亮暗配色继续保留。继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
 MachTable 采用 [MachTable Source-Available License 1.0](./LICENSE)，不是 MIT，也不是 OSI 定义的开源软件。查看源码不代表取得使用权；安装、运行、测试、修改、集成、部署、分发或商业使用均须事先取得作者书面授权。申请流程见[授权说明](./LICENSING.md)。
 
 提交信息使用 `type(scope): subject`。问题与建议请通过 [GitHub Issues](https://github.com/ChenyCHENYU/MachTable/issues) 提交。
+
+
+## 内容列宽与状态颜色（0.35）
+
+未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化、字典及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
+
+```ts
+const columns = [
+  { field: "customer", headerName: "客户", maxWidth: 280 },
+  { field: "status", headerName: "状态", status: true },
+  { field: "planStatus", headerName: "计划状态", status: {
+    S1B: { label: "待复核", color: "danger" },
+    S1C: { label: "已完成", color: "success" },
+    special: { label: "特殊处理", color: "#8b5cf6" }
+  } }
+];
+```
+
+`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。字典/formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
+
+普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
+
+交互调宽会以列头文字及排序/筛选/列工具控件的所需空间为下限，鼠标和 Alt+方向键一致，避免普通列头被压盖。异常超长列头按 360px 上限保护；复杂自定义表头请显式提供 minWidth。

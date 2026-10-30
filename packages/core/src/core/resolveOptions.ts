@@ -305,5 +305,7 @@ export function mergeColDef<TData>(
     const definition = columnTypes[name];
     if (definition) Object.assign(typedDefaults, definition);
   }
-  return { ...defaults, ...typedDefaults, ...colDef } as ColDef<TData>;
+  const merged = { ...defaults, ...typedDefaults, ...colDef } as ColDef<TData>;
+  if (merged.status && !merged.cellRenderer) merged.cellRenderer = "statusTag";
+  return merged;
 }

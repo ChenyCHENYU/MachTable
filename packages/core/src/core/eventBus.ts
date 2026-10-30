@@ -27,14 +27,6 @@ export class EventBus<TEvents extends object = Record<string, any>> {
     return off;
   }
 
-  off<K extends EventKey<TEvents>>(type: K, listener: Listener<TEvents[K]>): void {
-    const set = this.listeners.get(type);
-    if (set) {
-      set.delete(listener as Listener<any>);
-      if (set.size === 0) this.listeners.delete(type);
-    }
-  }
-
   emit<K extends EventKey<TEvents>>(type: K, payload?: TEvents[K]): void {
     const set = this.listeners.get(type);
     if (!set) return;

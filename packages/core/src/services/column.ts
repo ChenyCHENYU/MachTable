@@ -1,3 +1,4 @@
+import { normalizePositive } from "../lib/optionValues";
 import type { ColDef, FilterType, PinnedDirection } from "../types/colDef";
 import type { ColumnGroup } from "./columnGroup";
 
@@ -8,6 +9,8 @@ export class Column<TData = any> {
   pinned: PinnedDirection | null;
   manualWidth: number | null = null;
   contentWidth: number | null = null;
+  /** 交互调宽时保护表头，原始声明宽度仍保持独立。 */
+  minWidth?: number;
   flex: number | null = null;
   currentWidth = 0;
   parentGroup: ColumnGroup<TData> | null = null;
@@ -51,8 +54,7 @@ export class Column<TData = any> {
   resetWidth(): void {
     this.manualWidth = null;
     this.contentWidth = null;
-    this.flex = typeof this.colDef.flex === "number" && Number.isFinite(this.colDef.flex) && this.colDef.flex > 0
-      ? this.colDef.flex
-      : null;
+    this.minWidth = this.colDef.minWidth;
+    this.flex = normalizePositive(this.colDef.flex) ?? null;
   }
 }

@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.34.2 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版完善内置空态的表格插画、亮暗配色与两级文案；可选 `/business` 的字典列策略、本地语义合计及字典缓存隔离继续兼容；普通根入口 API 和既有默认行为保持兼容。
+MachTable 0.35.0 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版完善内置空态的表格插画、亮暗配色与两级文案；可选 `/business` 的字典列策略、本地语义合计及字典缓存隔离继续兼容；普通根入口 API 和既有默认行为保持兼容。
 
 ```bash
 pnpm add @agile-team/mach-table
@@ -144,3 +144,26 @@ const statusColumn = {
 `sum` / `avg` / `min` / `max` 只聚合有限数，空数值集合返回 null，sum/avg 溢出返回 null；`count` 计全部记录，空集合为 0。自定义聚合保留原始输入。分组 ID 区分数字/文本/空值，旧展开路径仅在唯一时迁移，歧义报告错误。超大远程滚动使用有界物理坐标，API、滚轮和交互共用逻辑偏移；应用默认配置的 `dataProcessor` 使用每表工厂。完整边界与升级说明见[升级指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/upgrading.md)。
 
 冻结区由正文视口统一管理滚动，原生焦点恢复和 `scrollIntoView` 不会单独改变其滚动位置。业务定位继续使用 `api.view.scrollToRow()`，无需页面补丁。
+
+
+## 内容列宽与状态颜色（0.35）
+
+未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化、字典及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
+
+```ts
+const columns = [
+  { field: "customer", headerName: "客户", maxWidth: 280 },
+  { field: "status", headerName: "状态", status: true },
+  { field: "planStatus", headerName: "计划状态", status: {
+    S1B: { label: "待复核", color: "danger" },
+    S1C: { label: "已完成", color: "success" },
+    special: { label: "特殊处理", color: "#8b5cf6" }
+  } }
+];
+```
+
+`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。字典/formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
+
+普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
+
+交互调宽会以列头文字及排序/筛选/列工具控件的所需空间为下限，鼠标和 Alt+方向键一致，避免普通列头被压盖。异常超长列头按 360px 上限保护；复杂自定义表头请显式提供 minWidth。

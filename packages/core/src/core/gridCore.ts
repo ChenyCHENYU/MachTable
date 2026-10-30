@@ -1,3 +1,4 @@
+import { ColumnSizing } from "../services/columnSizing";
 import { el } from "../lib/dom";
 import { EventBus } from "./eventBus";
 import { resolveOptions } from "./resolveOptions";
@@ -102,6 +103,7 @@ export class GridCore<TData = any> {
   readonly statusBarService: StatusBarService;
   // Construction failures can occur before the facade is connected; cleanup checks it explicitly.
   readonly api!: GridApi<TData>;
+  readonly columnSizing: ColumnSizing;
 
   private disposedState = false;
   private autoIdCounter = 0;
@@ -163,6 +165,7 @@ export class GridCore<TData = any> {
       this.summaryRenderer = this.resources.own(new SummaryRenderer(this));
       this.statusBarService = this.resources.own(new StatusBarService(this));
       this.api = createGridApi(this);
+      this.columnSizing = new ColumnSizing(this);
       this.changeTracker = this.resources.own(new ChangeTrackingService<TData>(this));
       this.resources.add(() => this.destroyFeatures());
 
@@ -862,10 +865,12 @@ export class GridCore<TData = any> {
   }
 
   onColumnsStructureChanged(): void {
+    this.columnSizing.needsContentMeasure = true;
     this.updateScheduler.schedule({ columns: true });
   }
 
   requestUpdate(request: GridUpdateRequest): void {
+    if (request.data || request.cells) this.columnSizing.needsContentMeasure = true;
     this.updateScheduler.schedule(request);
   }
 
@@ -881,6 +886,7 @@ export class GridCore<TData = any> {
       if (request.pool) this.bodyRenderer.rebuildPool();
       else if (request.layout) this.relayout();
     }
+    this.refreshContentLayout(request);
     if (request.data && !request.pool && !request.columns) this.bodyRenderer.onDataChanged();
     else if (request.cells) {
       this.bodyRenderer.refreshCells(request.cells === true ? undefined : request.cells);
@@ -888,6 +894,11 @@ export class GridCore<TData = any> {
     if (request.pinned) this.pinnedRowsRenderer.refresh();
     if (request.summary) this.summaryRenderer.refresh();
     if (request.overlays) this.bodyRenderer.refreshOverlays();
+  }
+
+  private refreshContentLayout(request: GridUpdateRequest): void {
+    if (!(request.data || request.cells) || request.layout || request.columns || request.pool) return;
+    if (this.columnSizing.updateContentWidths()) this.relayoutColumns();
   }
 
   private applyColumnsStructureChanged(): void {
@@ -906,6 +917,7 @@ export class GridCore<TData = any> {
     if (this.disposedState) return;
     const startedAt = this.performanceMonitor.start();
     this.refreshAriaState();
+    this.columnSizing.updateContentWidths();
     this.columnModel.computeLayout(this.skeleton.measureViewportWidth());
     const widthSignature = this.columnModel.getOrderedVisible()
       .map((column) => `${column.id}:${column.currentWidth}`)
@@ -938,6 +950,7 @@ export class GridCore<TData = any> {
 
   relayoutColumns(invalidateRowHeights = true): void {
     if (this.disposedState) return;
+    this.columnSizing.updateContentWidths();
     this.columnModel.computeLayout(this.skeleton.measureViewportWidth());
     if (invalidateRowHeights) this.bodyRenderer.invalidateAllRowHeights();
     this.headerRenderer.applyLayout();
