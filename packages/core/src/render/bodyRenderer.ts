@@ -113,10 +113,10 @@ export interface FocusedCell {
 
 /** @internal Per-grid DOM owner; render callbacks receive public parameters only. */
 export class BodyRenderer {
-  private pool: RowSlot[] = [];
+  private rowPoolItems: RowSlot[] = [];
   private poolSize = 0;
-  private first = 0;
-  private lastExcl = -1;
+  private firstRenderedRow = 0;
+  private renderedRowEndExclusive = -1;
   private rafId = 0;
   private lastScrollLeft = 0;
   private lastScrollTop = 0;
@@ -185,7 +185,7 @@ export class BodyRenderer {
     window.removeEventListener("mouseup", this.onWindowMouseUp);
     this.cancelFillDrag();
     this.rowDragController.destroy();
-    for (const slot of this.pool) {
+    for (const slot of this.rowPoolItems) {
       if (slot.detailRow) this.cleanupDetail(slot.detailRow);
       for (const pane of PANES) {
         for (const cell of slot.cells[pane] ?? []) {
@@ -196,7 +196,7 @@ export class BodyRenderer {
     }
     this.fillHandleEl?.remove();
     this.fillDragIndicator?.remove();
-    this.pool = [];
+    this.rowPoolItems = [];
     this.poolSize = 0;
     this.pendingFlash = [];
     this.dirtyHeightNodes.clear();
@@ -241,7 +241,7 @@ export class BodyRenderer {
     }
     this.core.tooltipService.hide();
     this.updateRange(false, horizontalChanged);
-    if (verticalChanged) this.core.rowModel.checkInfiniteScroll(this.lastExcl - 1);
+    if (verticalChanged) this.core.rowModel.checkInfiniteScroll(this.renderedRowEndExclusive - 1);
   }
 
   private paneWidths(): Record<PaneType, number> {
@@ -539,7 +539,7 @@ export class BodyRenderer {
     const needed = rawNeeded % 2 === 0 ? rawNeeded : rawNeeded + 1;
     const colWindowChanged = this.computeColWindow();
     if (colWindowChanged) {
-      for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
+      for (const slot of this.rowPoolItems) this.reconcilePaneCells(slot, "center");
     }
     if (needed > this.poolSize) this.growPool(needed);
     this.applyCellLayout();
@@ -572,7 +572,7 @@ export class BodyRenderer {
         sk.rowContainers.center.appendChild(detailRow);
         slot.detailRow = detailRow;
       }
-      this.pool.push(slot);
+      this.rowPoolItems.push(slot);
       this.poolSize++;
     }
   }
@@ -630,7 +630,7 @@ export class BodyRenderer {
   rebuildPool(): void {
     this.treeColumnCache = undefined;
     this.invalidateRangeCache();
-    for (const slot of this.pool) {
+    for (const slot of this.rowPoolItems) {
       if (slot.detailRow) this.cleanupDetail(slot.detailRow);
       for (const pane of PANES) {
         for (const cell of slot.cells[pane] ?? []) cleanupCellContent(this.core, cell);
@@ -638,10 +638,10 @@ export class BodyRenderer {
       }
       slot.detailRow?.remove();
     }
-    this.pool = [];
+    this.rowPoolItems = [];
     this.poolSize = 0;
-    this.first = 0;
-    this.lastExcl = -1;
+    this.firstRenderedRow = 0;
+    this.renderedRowEndExclusive = -1;
     this.relayout();
   }
 
@@ -680,7 +680,7 @@ export class BodyRenderer {
     lefts: number[],
     variableHeights: boolean
   ): void {
-    for (const slot of this.pool) {
+    for (const slot of this.rowPoolItems) {
       const cells = slot.cells[pane];
       const row = slot.rows[pane];
       if (!cells || !row) continue;
@@ -698,7 +698,7 @@ export class BodyRenderer {
   private applyDetailRowHeight(): void {
     if (!this.core.gridOptions.masterDetail) return;
     const height = `${this.core.gridOptions.detailRowHeight}px`;
-    for (const slot of this.pool) slot.detailRow?.style.setProperty("--mach-detail-h", height);
+    for (const slot of this.rowPoolItems) slot.detailRow?.style.setProperty("--mach-detail-h", height);
   }
 
   private computeColWindow(): boolean {
@@ -717,13 +717,13 @@ export class BodyRenderer {
 
   /** The pooled row window, including its bounded virtualization buffer. */
   getRenderedRowRange(): { first: number; lastExcl: number } {
-    return { first: this.first, lastExcl: this.lastExcl };
+    return { first: this.firstRenderedRow, lastExcl: this.renderedRowEndExclusive };
   }
 
   updateRange(force = false, checkColumnWindow = true): void {
     const startedAt = this.core.performanceMonitor.start();
     if (!this.updateRangeInner(force, checkColumnWindow)) return;
-    const rows = Math.max(0, this.lastExcl - this.first);
+    const rows = Math.max(0, this.renderedRowEndExclusive - this.firstRenderedRow);
     const columns = this.core.columnModel.getPaneColumns("left").length +
       this.activePaneColumns("center").length +
       this.core.columnModel.getPaneColumns("right").length;
@@ -741,9 +741,9 @@ export class BodyRenderer {
     this.reconcileColumnWindow(colWindowChanged);
 
     if (rowCount === 0) {
-      for (const slot of this.pool) this.hideSlot(slot);
-      this.first = 0;
-      this.lastExcl = 0;
+      for (const slot of this.rowPoolItems) this.hideSlot(slot);
+      this.firstRenderedRow = 0;
+      this.renderedRowEndExclusive = 0;
       return true;
     }
 
@@ -751,12 +751,12 @@ export class BodyRenderer {
 
     const { first, lastExcl } = this.calculateVisibleRange(viewport, rowCount, buffer);
 
-    if (!force && !colWindowChanged && first === this.first && lastExcl === this.lastExcl) {
+    if (!force && !colWindowChanged && first === this.firstRenderedRow && lastExcl === this.renderedRowEndExclusive) {
       if (offsetChanged) { this.positionVisibleRows(); this.updateFillHandle(); }
       return colWindowChanged || offsetChanged;
     }
-    this.first = first;
-    this.lastExcl = lastExcl;
+    this.firstRenderedRow = first;
+    this.renderedRowEndExclusive = lastExcl;
     this.hideOutsideRange(first, lastExcl);
     this.renderVirtualRange(first, lastExcl, force, colWindowChanged);
     if (offsetChanged) this.positionVisibleRows();
@@ -780,7 +780,7 @@ export class BodyRenderer {
   }
 
   private hideOutsideRange(first: number, lastExcl: number): void {
-    for (const slot of this.pool) {
+    for (const slot of this.rowPoolItems) {
       if (slot.index !== -1 && (slot.index < first || slot.index >= lastExcl)) this.hideSlot(slot);
     }
   }
@@ -788,7 +788,7 @@ export class BodyRenderer {
   private renderVirtualRange(first: number, lastExcl: number, force: boolean, columnsChanged: boolean): void {
     for (let i = first; i < lastExcl; i++) {
       const node = this.core.rowModel.getDisplayedRow(i);
-      const slot = this.pool[i % this.poolSize];
+      const slot = this.rowPoolItems[i % this.poolSize];
       if (!slot || !node) continue;
       if (!force && slot.index === i && slot.nodeId === node.id) {
         if (columnsChanged && slot.kind === "master") this.renderPaneCells(slot, node, "center");
@@ -800,15 +800,15 @@ export class BodyRenderer {
 
   private reconcileColumnWindow(changed: boolean): void {
     if (!changed) return;
-    for (const slot of this.pool) this.reconcilePaneCells(slot, "center");
+    for (const slot of this.rowPoolItems) this.reconcilePaneCells(slot, "center");
     this.applyCellLayout();
   }
 
   private renderAutoHeightRange(rowCount: number, force: boolean, columnsChanged: boolean): boolean {
     if (this.core.gridOptions.domLayout !== "autoHeight") return false;
-    if (!force && !columnsChanged && this.first === 0 && this.lastExcl === rowCount) return true;
-    this.first = 0;
-    this.lastExcl = rowCount;
+    if (!force && !columnsChanged && this.firstRenderedRow === 0 && this.renderedRowEndExclusive === rowCount) return true;
+    this.firstRenderedRow = 0;
+    this.renderedRowEndExclusive = rowCount;
     this.renderVirtualRange(0, rowCount, force, columnsChanged);
     return true;
   }
@@ -858,8 +858,8 @@ export class BodyRenderer {
   }
 
   private positionVisibleRows(): void {
-    for (const slot of this.pool) {
-      if (slot.index < this.first || slot.index >= this.lastExcl) continue;
+    for (const slot of this.rowPoolItems) {
+      if (slot.index < this.firstRenderedRow || slot.index >= this.renderedRowEndExclusive) continue;
       const transform = `translateY(${this.rowTop(slot.index) - this.rowOffset}px)`;
       for (const row of Object.values(slot.rows)) row.style.transform = transform;
       if (slot.detailRow) slot.detailRow.style.transform = transform;
@@ -1338,7 +1338,7 @@ export class BodyRenderer {
     for (const index of indexes) {
       if (index < 0 || seen.has(index)) continue;
       seen.add(index);
-      const slot = this.pool[index % this.poolSize];
+      const slot = this.rowPoolItems[index % this.poolSize];
       if (!slot || slot.index !== index) continue;
       const node = this.core.rowModel.getDisplayedRow(index);
       if (!node) continue;
@@ -1363,7 +1363,7 @@ export class BodyRenderer {
     const rowIds = params.rowIds == null ? null : new Set(params.rowIds);
     const rowIndexes = params.rowIndexes == null ? null : new Set(params.rowIndexes);
     const columns = params.columns == null ? null : new Set(params.columns);
-    for (const slot of this.pool) {
+    for (const slot of this.rowPoolItems) {
       const node = this.core.rowModel.getDisplayedRow(slot.index);
       if (!node || !this.matchesRefreshRow(slot, node, rowIds, rowIndexes)) continue;
       this.refreshSlotCells(slot, node, columns, params.force === true);
@@ -1462,9 +1462,9 @@ export class BodyRenderer {
     const column = this.core.columnModel.getColumn(colId);
     if (!column) return null;
     const pane = this.paneForColumn(column);
-    const colIdx = this.pool[rowIndex % Math.max(1, this.poolSize)]?.cellColIds[pane]?.indexOf(column.id) ?? -1;
+    const colIdx = this.rowPoolItems[rowIndex % Math.max(1, this.poolSize)]?.cellColIds[pane]?.indexOf(column.id) ?? -1;
     if (colIdx < 0) return null;
-    const slot = this.pool[rowIndex % this.poolSize];
+    const slot = this.rowPoolItems[rowIndex % this.poolSize];
     if (!slot || slot.index !== rowIndex || slot.kind !== "master") return null;
     return slot.cells[pane]?.[colIdx] ?? null;
   }
@@ -1524,7 +1524,7 @@ export class BodyRenderer {
   private refreshRangeClasses(): void {
     // Range gestures change adornments only. Replacing content on mousedown
     // destroys native double-click targets and unnecessarily remounts renderers.
-    for (const slot of this.pool) {
+    for (const slot of this.rowPoolItems) {
       if (slot.index < 0 || slot.kind !== "master") continue;
       for (const pane of PANES) {
         const columns = this.activePaneColumns(pane);
@@ -1974,7 +1974,7 @@ export class BodyRenderer {
 
   private toggleHover(index: number, hover: boolean): void {
     if (index < 0) return;
-    const slot = this.pool[index % this.poolSize];
+    const slot = this.rowPoolItems[index % this.poolSize];
     if (!slot || slot.index !== index || slot.kind !== "master") return;
     for (const pane of PANES) {
       slot.rows[pane]?.classList.toggle("mach-row--hover", hover);

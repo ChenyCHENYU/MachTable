@@ -26,7 +26,7 @@ interface ColumnDragState {
 
 /** @internal Column drag state and listeners stay with the grid. */
 export class ColumnDragService {
-  private pending: { column: Column; startX: number; startY: number } | null = null;
+  private pendingColumnDrag: { column: Column; startX: number; startY: number } | null = null;
   private dragging: ColumnDragState | null = null;
   private suppressClick = false;
   private moveRaf = 0;
@@ -37,7 +37,7 @@ export class ColumnDragService {
   onPointerDown(e: PointerEvent, column: Column): void {
     if (e.button !== 0) return;
     if (!column.movable) return;
-    this.pending = { column, startX: e.clientX, startY: e.clientY };
+    this.pendingColumnDrag = { column, startX: e.clientX, startY: e.clientY };
     window.addEventListener("pointermove", this.onMove);
     window.addEventListener("pointerup", this.onUp);
     window.addEventListener("pointercancel", this.onUp);
@@ -54,7 +54,7 @@ export class ColumnDragService {
       this.scheduleIndicator(e);
       return;
     }
-    const pending = this.pending;
+    const pending = this.pendingColumnDrag;
     if (!pending) return;
     if (Math.abs(e.clientX - pending.startX) < DRAG_THRESHOLD && Math.abs(e.clientY - pending.startY) < DRAG_THRESHOLD) {
       return;
@@ -63,7 +63,7 @@ export class ColumnDragService {
   };
 
   private startDrag(e: PointerEvent): void {
-    const pending = this.pending;
+    const pending = this.pendingColumnDrag;
     if (!pending) return;
     const cellEl = this.findHeaderCell(pending.column);
     if (!cellEl || !cellEl.parentElement) {
@@ -149,7 +149,7 @@ export class ColumnDragService {
   }
 
   private onUp = (event: PointerEvent): void => {
-    this.pending = null;
+    this.pendingColumnDrag = null;
     if (event.type !== "pointercancel" && this.dragging) {
       this.applyIndicator(event.clientX, event.clientY);
     }
@@ -184,7 +184,7 @@ export class ColumnDragService {
   destroy(): void {
     this.cleanup();
     this.clearDrag();
-    this.pending = null;
+    this.pendingColumnDrag = null;
   }
 }
 

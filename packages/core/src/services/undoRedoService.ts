@@ -22,27 +22,27 @@ export interface UndoEntry {
 
 /** @internal The editing facade delegates history operations without exposing this service. */
 export class UndoRedoService {
-  private stack: UndoEntry[][] = [];
+  private undoStackEntries: UndoEntry[][] = [];
   private pointer = -1;
-  private pending: UndoEntry[] | null = null;
+  private pendingHistoryEntry: UndoEntry[] | null = null;
 
   constructor(private core: UndoContext) {}
 
   beginBatch(): void {
-    if (this.pending) return;
-    this.pending = [];
+    if (this.pendingHistoryEntry) return;
+    this.pendingHistoryEntry = [];
   }
 
   endBatch(): void {
-    if (!this.pending) return;
-    const batch = this.pending;
-    this.pending = null;
+    if (!this.pendingHistoryEntry) return;
+    const batch = this.pendingHistoryEntry;
+    this.pendingHistoryEntry = null;
     if (batch.length > 0) this.push(batch);
   }
 
   record(entry: UndoEntry): void {
-    if (this.pending) {
-      this.pending.push(entry);
+    if (this.pendingHistoryEntry) {
+      this.pendingHistoryEntry.push(entry);
       return;
     }
     this.push([entry]);
@@ -51,10 +51,10 @@ export class UndoRedoService {
   private push(batch: UndoEntry[]): void {
     const maxSize = Math.max(0, this.core.gridOptions.undoStackSize);
     if (maxSize === 0) return;
-    this.stack.length = this.pointer + 1;
-    this.stack.push(batch);
-    while (this.stack.length > maxSize) this.stack.shift();
-    this.pointer = this.stack.length - 1;
+    this.undoStackEntries.length = this.pointer + 1;
+    this.undoStackEntries.push(batch);
+    while (this.undoStackEntries.length > maxSize) this.undoStackEntries.shift();
+    this.pointer = this.undoStackEntries.length - 1;
   }
 
   trimToSize(): void {
@@ -63,8 +63,8 @@ export class UndoRedoService {
       this.clear();
       return;
     }
-    while (this.stack.length > maxSize) {
-      this.stack.shift();
+    while (this.undoStackEntries.length > maxSize) {
+      this.undoStackEntries.shift();
       this.pointer--;
     }
     if (this.pointer < -1) this.pointer = -1;
@@ -75,13 +75,13 @@ export class UndoRedoService {
   }
 
   canRedo(): boolean {
-    return this.pointer < this.stack.length - 1;
+    return this.pointer < this.undoStackEntries.length - 1;
   }
 
   undo(): boolean {
     this.core.cancelPendingInput();
     if (!this.canUndo()) return false;
-    this.apply(this.stack[this.pointer], false);
+    this.apply(this.undoStackEntries[this.pointer], false);
     this.pointer--;
     return true;
   }
@@ -90,7 +90,7 @@ export class UndoRedoService {
     this.core.cancelPendingInput();
     if (!this.canRedo()) return false;
     this.pointer++;
-    this.apply(this.stack[this.pointer], true);
+    this.apply(this.undoStackEntries[this.pointer], true);
     return true;
   }
 
@@ -124,8 +124,8 @@ export class UndoRedoService {
   }
 
   clear(): void {
-    this.stack = [];
+    this.undoStackEntries = [];
     this.pointer = -1;
-    this.pending = null;
+    this.pendingHistoryEntry = null;
   }
 }

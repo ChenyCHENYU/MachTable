@@ -18,7 +18,7 @@ interface SurfaceState {
 /** Shared native gesture ownership; default and optional ordering supply only their drop behavior. */
 /** @internal Each bundle owns its complete drag driver and surface hierarchy. */
 export abstract class RowDragSurface {
-  private drag: SurfaceState | null = null;
+  private activeRowDrag: SurfaceState | null = null;
   private moveRaf = 0;
   private focusRaf = 0;
   constructor(protected readonly host: RowDragSurfaceHost) {}
@@ -35,7 +35,7 @@ export abstract class RowDragSurface {
     });
     const preview = el("div", "mach-row-drag-preview");
     preview.setAttribute("role", "status"); preview.hidden = true; this.host.root.append(preview);
-    this.drag = { startY: event.clientY, clientX: event.clientX, clientY: event.clientY, pointerId: event.pointerId, indicators, preview, drop: null, active: false };
+    this.activeRowDrag = { startY: event.clientY, clientX: event.clientX, clientY: event.clientY, pointerId: event.pointerId, indicators, preview, drop: null, active: false };
     window.addEventListener("pointermove", this.onMove);
     window.addEventListener("pointerup", this.onUp);
     window.addEventListener("pointercancel", this.onCancel);
@@ -43,7 +43,7 @@ export abstract class RowDragSurface {
     window.addEventListener("blur", this.onCancel);
   }
 
-  protected draggingSource(id: string): boolean { return this.drag?.active === true && this.sourceContains(id); }
+  protected draggingSource(id: string): boolean { return this.activeRowDrag?.active === true && this.sourceContains(id); }
   protected focusHandle(id: string, canFocus = () => true): void {
     this.focusRaf = requestAnimationFrame(() => {
       this.focusRaf = 0;
@@ -52,7 +52,7 @@ export abstract class RowDragSurface {
     });
   }
   private onMove = (event: PointerEvent): void => {
-    const drag = this.drag;
+    const drag = this.activeRowDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     drag.clientX = event.clientX; drag.clientY = event.clientY;
     if (!drag.active) {
@@ -66,7 +66,7 @@ export abstract class RowDragSurface {
   private scheduleFrame(): void { if (!this.moveRaf) this.moveRaf = requestAnimationFrame(this.onFrame); }
   private onFrame = (): void => {
     this.moveRaf = 0;
-    if (!this.drag?.active) return;
+    if (!this.activeRowDrag?.active) return;
     if (!this.current()) { this.destroy(); return; }
     this.updateFeedback();
     if (this.scrollAtEdge()) this.scheduleFrame();
@@ -76,7 +76,7 @@ export abstract class RowDragSurface {
     return x >= rect.left && x <= rect.right && y >= rect.top - margin && y <= rect.bottom + margin;
   }
   private scrollAtEdge(): boolean {
-    const drag = this.drag;
+    const drag = this.activeRowDrag;
     if (!drag || !this.isInside(drag.clientX, drag.clientY, 28)) return false;
     const viewport = this.host.viewport, rect = viewport.getBoundingClientRect();
     const edge = Math.min(36, rect.height / 3);
@@ -89,7 +89,7 @@ export abstract class RowDragSurface {
     return viewport.scrollTop !== previous;
   }
   private updateFeedback(): void {
-    const drag = this.drag;
+    const drag = this.activeRowDrag;
     if (!drag?.active) return;
     const y = drag.clientY - this.host.viewport.getBoundingClientRect().top + this.host.viewport.scrollTop;
     const drop = this.describe(y);
@@ -110,7 +110,7 @@ export abstract class RowDragSurface {
     drag.preview.style.transform = `translate3d(${clamp(drag.clientX - root.left + 16, 8, Math.max(8, root.width - 224))}px, ${clamp(drag.clientY - root.top + 16, 8, Math.max(8, root.height - 48))}px, 0)`;
   }
   private onUp = (event: PointerEvent): void => {
-    const drag = this.drag;
+    const drag = this.activeRowDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     drag.clientX = event.clientX; drag.clientY = event.clientY;
     if (drag.active && this.current()) this.updateFeedback();
@@ -120,11 +120,11 @@ export abstract class RowDragSurface {
   };
   private onKeyDown = (event: KeyboardEvent): void => { if (event.key === "Escape") { event.preventDefault(); this.destroy(); } };
   private onCancel = (event: Event): void => {
-    if (event.type === "pointercancel" && (event as PointerEvent).pointerId !== this.drag?.pointerId) return;
+    if (event.type === "pointercancel" && (event as PointerEvent).pointerId !== this.activeRowDrag?.pointerId) return;
     this.destroy();
   };
   private takeState(): void {
-    const drag = this.drag; this.drag = null;
+    const drag = this.activeRowDrag; this.activeRowDrag = null;
     window.removeEventListener("pointermove", this.onMove); window.removeEventListener("pointerup", this.onUp);
     window.removeEventListener("pointercancel", this.onCancel); window.removeEventListener("keydown", this.onKeyDown); window.removeEventListener("blur", this.onCancel);
     cancelAnimationFrame(this.moveRaf); this.moveRaf = 0;

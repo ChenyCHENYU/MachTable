@@ -24,25 +24,25 @@ interface CellChange {
 
 /** @internal The editing facade exposes records and closures rather than this tracker. */
 export class ChangeTrackingService<TData = any> {
-  private changes = new Map<string, CellChange>();
+  private trackedCellChanges = new Map<string, CellChange>();
   private rollingBack = false;
-  private unsubscribe: (() => void) | null = null;
+  private disposeChangeSubscription: (() => void) | null = null;
 
   constructor(private core: ChangeTrackingContext) {}
 
   init(): void {
-    this.unsubscribe = this.core.eventBus.on("cellValueChanged", (event) => {
+    this.disposeChangeSubscription = this.core.eventBus.on("cellValueChanged", (event) => {
       if (!this.rollingBack) this.record(event as CellValueChangedEvent<TData>);
     });
   }
 
   private record(event: CellValueChangedEvent<TData>): void {
     const key = `${event.rowNode.id}\u0000${event.column.id}`;
-    const existing = this.changes.get(key);
+    const existing = this.trackedCellChanges.get(key);
     const originalValue = existing?.originalValue ?? event.oldValue;
-    if (Object.is(event.newValue, originalValue)) this.changes.delete(key);
+    if (Object.is(event.newValue, originalValue)) this.trackedCellChanges.delete(key);
     else {
-      this.changes.set(key, {
+      this.trackedCellChanges.set(key, {
         rowId: event.rowNode.id,
         colId: event.column.id,
         originalValue,
@@ -53,12 +53,12 @@ export class ChangeTrackingService<TData = any> {
   }
 
   getDirtyRowIds(): string[] {
-    return [...new Set([...this.changes.values()].map((change) => change.rowId))];
+    return [...new Set([...this.trackedCellChanges.values()].map((change) => change.rowId))];
   }
 
   getChanges(): GridChange<TData>[] {
     const byRow = new Map<string, GridChange<TData>>();
-    for (const change of this.changes.values()) {
+    for (const change of this.trackedCellChanges.values()) {
       const node = this.core.rowModel.getNodeById(change.rowId);
       if (!node?.data) continue;
       let row = byRow.get(change.rowId);
@@ -76,11 +76,11 @@ export class ChangeTrackingService<TData = any> {
   }
 
   markSaved(rowIds?: readonly string[]): void {
-    if (!rowIds) this.changes.clear();
+    if (!rowIds) this.trackedCellChanges.clear();
     else {
       const ids = new Set(rowIds);
-      for (const [key, change] of this.changes) {
-        if (ids.has(change.rowId)) this.changes.delete(key);
+      for (const [key, change] of this.trackedCellChanges) {
+        if (ids.has(change.rowId)) this.trackedCellChanges.delete(key);
       }
     }
     this.emitChanged();
@@ -90,9 +90,9 @@ export class ChangeTrackingService<TData = any> {
     for (const row of saved) {
       for (const cell of row.cells) {
         const key = `${row.rowId}\u0000${cell.colId}`;
-        const current = this.changes.get(key);
+        const current = this.trackedCellChanges.get(key);
         if (current) {
-          if (Object.is(current.value, cell.value)) this.changes.delete(key);
+          if (Object.is(current.value, cell.value)) this.trackedCellChanges.delete(key);
           else current.originalValue = cell.value;
           continue;
         }
@@ -101,7 +101,7 @@ export class ChangeTrackingService<TData = any> {
         if (!node || !column || node.data == null) continue;
         const value = this.core.readCellValue(node, column);
         if (!Object.is(value, cell.value)) {
-          this.changes.set(key, {
+          this.trackedCellChanges.set(key, {
             rowId: row.rowId,
             colId: cell.colId,
             originalValue: cell.value,
@@ -115,7 +115,7 @@ export class ChangeTrackingService<TData = any> {
 
   rollback(rowIds?: readonly string[]): boolean {
     const ids = rowIds ? new Set(rowIds) : null;
-    const targets = [...this.changes.entries()].filter(([, change]) => !ids || ids.has(change.rowId));
+    const targets = [...this.trackedCellChanges.entries()].filter(([, change]) => !ids || ids.has(change.rowId));
     if (targets.length === 0) return false;
     const refresh = new Set<number>();
     const completed = new Set<string>();
@@ -147,7 +147,7 @@ export class ChangeTrackingService<TData = any> {
     } finally {
       this.rollingBack = false;
     }
-    for (const key of completed) this.changes.delete(key);
+    for (const key of completed) this.trackedCellChanges.delete(key);
     if (refresh.size > 0) this.core.bodyRenderer.refreshRows([...refresh]);
     this.core.summaryRenderer.refresh();
     this.core.statusBarService.refresh();
@@ -158,22 +158,22 @@ export class ChangeTrackingService<TData = any> {
   clearRows(rowIds: readonly string[]): void {
     if (rowIds.length === 0) return;
     const ids = new Set(rowIds);
-    for (const [key, change] of this.changes) {
-      if (ids.has(change.rowId)) this.changes.delete(key);
+    for (const [key, change] of this.trackedCellChanges) {
+      if (ids.has(change.rowId)) this.trackedCellChanges.delete(key);
     }
     this.emitChanged();
   }
 
   clear(): void {
-    if (this.changes.size === 0) return;
-    this.changes.clear();
+    if (this.trackedCellChanges.size === 0) return;
+    this.trackedCellChanges.clear();
     this.emitChanged();
   }
 
   destroy(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
-    this.changes.clear();
+    this.disposeChangeSubscription?.();
+    this.disposeChangeSubscription = null;
+    this.trackedCellChanges.clear();
   }
 
   private emitChanged(): void {

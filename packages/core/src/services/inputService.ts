@@ -28,16 +28,16 @@ export function isPromise<T>(value: MaybeAsync<T>): value is Promise<T> {
 
 /** @internal One validation and commit boundary for editor, clipboard, clear and fill input. */
 export class InputService {
-  private generation = 0;
+  private inputGenerationId = 0;
 
   constructor(private core: InputContext) {}
 
-  cancelPending(): void { this.generation++; }
+  cancelPending(): void { this.inputGenerationId++; }
 
   /** Begins one user intent, also invalidating clipboard reads and older validations. */
   beginIntent(): () => boolean {
-    const generation = ++this.generation;
-    return () => generation === this.generation && !this.core.isDisposed();
+    const generation = ++this.inputGenerationId;
+    return () => generation === this.inputGenerationId && !this.core.isDisposed();
   }
 
   /** Reject late validation when rows/columns, data or observed values have changed. */

@@ -60,55 +60,55 @@ function mergeRequests(current: GridUpdateRequest, next: GridUpdateRequest): Gri
 /** Coalesces explicit API batches while preserving synchronous behavior outside a batch. */
 /** @internal The scheduler exposes plain diagnostic snapshots through the API. */
 export class GridUpdateScheduler {
-  private depth = 0;
-  private pending: GridUpdateRequest | null = null;
-  private flushCount = 0;
-  private requestCount = 0;
-  private coalescedRequestCount = 0;
-  private destroyed = false;
+  private updateBatchDepth = 0;
+  private scheduledRequest: GridUpdateRequest | null = null;
+  private totalUpdateFlushes = 0;
+  private totalUpdateRequests = 0;
+  private totalCoalescedRequests = 0;
+  private schedulerDisposed = false;
 
   constructor(private readonly apply: (request: GridUpdateRequest) => void) {}
 
   batch<T>(callback: () => T): T {
-    if (this.destroyed) return callback();
-    this.depth++;
+    if (this.schedulerDisposed) return callback();
+    this.updateBatchDepth++;
     try {
       return callback();
     } finally {
-      this.depth--;
-      if (this.depth === 0) this.flush();
+      this.updateBatchDepth--;
+      if (this.updateBatchDepth === 0) this.flush();
     }
   }
 
   schedule(request: GridUpdateRequest): void {
-    if (this.destroyed) return;
-    this.requestCount++;
-    if (this.pending) this.coalescedRequestCount++;
-    this.pending = mergeRequests(this.pending ?? {}, request);
-    if (this.depth === 0) this.flush();
+    if (this.schedulerDisposed) return;
+    this.totalUpdateRequests++;
+    if (this.scheduledRequest) this.totalCoalescedRequests++;
+    this.scheduledRequest = mergeRequests(this.scheduledRequest ?? {}, request);
+    if (this.updateBatchDepth === 0) this.flush();
   }
 
   flush(): void {
-    if (this.destroyed || this.depth > 0 || !this.pending) return;
-    const request = this.pending;
-    this.pending = null;
-    this.flushCount++;
+    if (this.schedulerDisposed || this.updateBatchDepth > 0 || !this.scheduledRequest) return;
+    const request = this.scheduledRequest;
+    this.scheduledRequest = null;
+    this.totalUpdateFlushes++;
     this.apply(request);
   }
 
   snapshot(): GridUpdateSchedulerSnapshot {
     return {
-      batchDepth: this.depth,
-      flushCount: this.flushCount,
-      requestCount: this.requestCount,
-      coalescedRequestCount: this.coalescedRequestCount,
-      pending: this.pending != null
+      batchDepth: this.updateBatchDepth,
+      flushCount: this.totalUpdateFlushes,
+      requestCount: this.totalUpdateRequests,
+      coalescedRequestCount: this.totalCoalescedRequests,
+      pending: this.scheduledRequest != null
     };
   }
 
   destroy(): void {
-    this.destroyed = true;
-    this.pending = null;
-    this.depth = 0;
+    this.schedulerDisposed = true;
+    this.scheduledRequest = null;
+    this.updateBatchDepth = 0;
   }
 }

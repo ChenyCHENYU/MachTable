@@ -20,7 +20,7 @@ type StatusBarContext = Pick<
 /** @internal Status consumers receive snapshots rather than the rendering service. */
 export class StatusBarService {
   private barEl: HTMLElement | null = null;
-  private items: Partial<Record<StatusBarPanel, HTMLElement>> = {};
+  private statusPanelItems: Partial<Record<StatusBarPanel, HTMLElement>> = {};
   private offs: (() => void)[] = [];
 
   constructor(private core: StatusBarContext) {}
@@ -43,7 +43,7 @@ export class StatusBarService {
   rebuild(): void {
     if (!this.barEl) return;
     this.barEl.textContent = "";
-    this.items = {};
+    this.statusPanelItems = {};
     const options = this.core.gridOptions;
     if (!options.statusBarEnabled) {
       this.barEl.style.display = "none";
@@ -52,7 +52,7 @@ export class StatusBarService {
     for (const panel of options.statusBarPanels) {
       const item = el("span", `mach-statusbar-item mach-statusbar-item--${panel}`);
       this.barEl.appendChild(item);
-      this.items[panel] = item;
+      this.statusPanelItems[panel] = item;
     }
     this.refresh();
   }
@@ -65,7 +65,7 @@ export class StatusBarService {
   }
 
   private updateItem(panel: StatusBarPanel, value: string): void {
-    const item = this.items[panel];
+    const item = this.statusPanelItems[panel];
     if (item && item.textContent !== value) item.textContent = value;
   }
 
@@ -108,12 +108,12 @@ export class StatusBarService {
     if (!options.statusBarEnabled) return;
 
     const locale: AnyLocale = { ...DEFAULT_LOCALE, ...options.locale };
-    if (this.items.rowCount) this.updateItem("rowCount", this.rowCountText(locale));
-    if (this.items.selectedRowCount) {
+    if (this.statusPanelItems.rowCount) this.updateItem("rowCount", this.rowCountText(locale));
+    if (this.statusPanelItems.selectedRowCount) {
       const count = this.core.selectionService.getSelectedNodes().length;
       this.updateItem("selectedRowCount", formatText(this.text(locale, "statusSelected"), count));
     }
-    if (this.items.rangeAggregate) this.updateItem("rangeAggregate", this.rangeAggregateText(locale));
+    if (this.statusPanelItems.rangeAggregate) this.updateItem("rangeAggregate", this.rangeAggregateText(locale));
   }
 
   destroy(): void {

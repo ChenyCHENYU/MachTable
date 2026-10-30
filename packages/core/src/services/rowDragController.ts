@@ -15,9 +15,9 @@ interface Drop extends SurfaceDrop { node: RowNode; intent?: RowDragIntent }
 /** Core owns its compact single-row behavior; optional ordering supplies an internal driver. */
 /** @internal The row drag facade exposes intents and events, not controller instances. */
 export class RowDragController extends RowDragSurface {
-  private scope: Scope | null = null;
-  private driver: RowDragDriver | undefined;
-  private factory: RowDragDriverFactory | undefined;
+  private dragResourceScope: Scope | null = null;
+  private activeDragDriver: RowDragDriver | undefined;
+  private createDragDriver: RowDragDriverFactory | undefined;
   constructor(private core: Context, getRowTop: (index: number) => number, findRowAt: (offset: number) => number, scrollBy: (delta: number) => boolean) {
     super({ get root() { return core.skeleton.root; }, get body() { return core.skeleton.bodyEl; }, get viewport() { return core.skeleton.bodyViewports.center; },
       get containers() { return Object.values(core.skeleton.rowContainers); }, getRowTop, findRowAt, scrollBy });
@@ -39,7 +39,7 @@ export class RowDragController extends RowDragSurface {
     if (driver) { driver.start(event, node); return; }
     const guard = this.attempt("getRevision", () => this.captureGuard(node), null);
     if (!guard) return;
-    this.scope = { node, from: node.rowIndex, guard };
+    this.dragResourceScope = { node, from: node.rowIndex, guard };
     this.begin(event);
   }
   moveWithKeyboard(event: KeyboardEvent, node: RowNode): void {
@@ -54,7 +54,7 @@ export class RowDragController extends RowDragSurface {
     const target = this.core.rowModel.getDisplayedRow(index);
     const guard = this.attempt("getRevision", () => this.captureGuard(node), null);
     if (!target || !guard) return;
-    this.scope = { node, from: node.rowIndex, guard };
+    this.dragResourceScope = { node, from: node.rowIndex, guard };
     try { if (this.commitDrop(this.destination(target, direction > 0))) this.focusHandle(node.id); }
     finally { this.release(); }
   }
@@ -70,17 +70,17 @@ export class RowDragController extends RowDragSurface {
   }
   private getDriver(): RowDragDriver | undefined {
     const factory = getGridRowDragFactory(this.core.api);
-    if (factory !== this.factory) {
-      this.driver?.destroy(); this.factory = factory;
-      this.driver = factory ? this.attempt("driver", () => factory({ ...this.host, api: this.core.api, capture: node => this.captureGuard(node),
+    if (factory !== this.createDragDriver) {
+      this.activeDragDriver?.destroy(); this.createDragDriver = factory;
+      this.activeDragDriver = factory ? this.attempt("driver", () => factory({ ...this.host, api: this.core.api, capture: node => this.captureGuard(node),
         emit: (node, from, boundary, targetIndex, intent) => { this.core.emit("rowDragEnd", { rowNode: node, fromIndex: from, toIndex: boundary, targetIndex, applied: false, intent }); },
         report: (error, source) => this.core.reportError(error, `rowDragPolicy.${source}`) }), undefined) : undefined;
     }
-    return this.driver;
+    return this.activeDragDriver;
   }
-  protected current(): boolean { return this.scope?.guard.current() ?? false; }
-  protected release(): void { this.scope = null; }
-  protected sourceContains(id: string): boolean { return this.scope?.node.id === id; }
+  protected current(): boolean { return this.dragResourceScope?.guard.current() ?? false; }
+  protected release(): void { this.dragResourceScope = null; }
+  protected sourceContains(id: string): boolean { return this.dragResourceScope?.node.id === id; }
   protected outsideText(): string { return this.core.gridOptions.locale.rowDragOutside ?? DEFAULT_LOCALE.rowDragOutside; }
   protected describe(y: number): Drop | null {
     const index = clamp(this.host.findRowAt(y), 0, this.core.rowModel.getDisplayedRowCount() - 1);
@@ -91,7 +91,7 @@ export class RowDragController extends RowDragSurface {
     return this.destination(node, y >= (top + bottom) / 2);
   }
   private destination(node: RowNode, after: boolean): Drop {
-    const scope = this.scope!;
+    const scope = this.dragResourceScope!;
     let boundary = node.rowIndex + Number(after);
     while (this.core.rowModel.getDisplayedRow(boundary)?.isDetail) boundary++;
     const policy = this.core.gridOptions.rowDragPolicy;
@@ -102,7 +102,7 @@ export class RowDragController extends RowDragSurface {
     return { node, intent, boundary, valid, text, position: after ? "after" : "before" };
   }
   protected commitDrop(drop: SurfaceDrop): boolean {
-    const scope = this.scope;
+    const scope = this.dragResourceScope;
     if (!scope || !this.current() || !this.canDrag(scope.node) || !this.current()) return false;
     const target = this.destination((drop as Drop).node, drop.boundary > (drop as Drop).node.rowIndex);
     if (!target.valid || !this.current()) return false;
@@ -119,5 +119,5 @@ export class RowDragController extends RowDragSurface {
     while (this.core.rowModel.getDisplayedRow(end)?.isDetail) end++;
     return boundary > from ? boundary - (end - from) : boundary;
   }
-  override destroy(): void { this.driver?.destroy(); super.destroy(); }
+  override destroy(): void { this.activeDragDriver?.destroy(); super.destroy(); }
 }

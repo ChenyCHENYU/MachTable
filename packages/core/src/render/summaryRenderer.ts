@@ -11,7 +11,7 @@ type SummaryContext = Pick<
 /** @internal Summary rendering is owned by Core and never exposed through callbacks. */
 export class SummaryRenderer {
   private footerEl: HTMLElement | null = null;
-  private rows: Record<PaneType, HTMLElement> = { left: undefined!, center: undefined!, right: undefined! };
+  private summaryPaneRows: Record<PaneType, HTMLElement> = { left: undefined!, center: undefined!, right: undefined! };
   private cellsByPane: Record<PaneType, HTMLElement[]> = { left: [], center: [], right: [] };
 
   constructor(private core: SummaryContext) {}
@@ -25,7 +25,7 @@ export class SummaryRenderer {
       const row = el("div", `mach-footer-row mach-footer-row--${pane}`);
       row.style.height = `${this.core.gridOptions.rowHeight}px`;
       this.footerEl.appendChild(row);
-      this.rows[pane] = row;
+      this.summaryPaneRows[pane] = row;
     }
   }
 
@@ -46,7 +46,7 @@ export class SummaryRenderer {
 
     for (const pane of ["left", "center", "right"] as PaneType[]) {
       const cols = this.core.columnModel.getPaneColumns(pane);
-      const row = this.rows[pane];
+      const row = this.summaryPaneRows[pane];
       if (this.cellsByPane[pane].length !== cols.length) {
         row.textContent = "";
         this.cellsByPane[pane] = cols.map(() => {

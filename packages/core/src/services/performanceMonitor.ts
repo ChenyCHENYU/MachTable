@@ -19,8 +19,8 @@ interface LongTaskSnapshot { count: number; totalMs: number }
 class LongTaskHub {
   private observer: PerformanceObserver | null = null;
   private subscribers = 0;
-  private count = 0;
-  private totalMs = 0;
+  private recordedSampleCount = 0;
+  private recordedSampleDuration = 0;
 
   acquire(): () => void {
     this.subscribers++;
@@ -36,15 +36,15 @@ class LongTaskHub {
     };
   }
 
-  snapshot(): LongTaskSnapshot { return { count: this.count, totalMs: this.totalMs }; }
+  snapshot(): LongTaskSnapshot { return { count: this.recordedSampleCount, totalMs: this.recordedSampleDuration }; }
 
   private ensureObserver(): void {
     if (this.observer || typeof PerformanceObserver === "undefined") return;
     try {
       this.observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          this.count++;
-          this.totalMs += entry.duration;
+          this.recordedSampleCount++;
+          this.recordedSampleDuration += entry.duration;
         }
       });
       this.observer.observe({ entryTypes: ["longtask"] });

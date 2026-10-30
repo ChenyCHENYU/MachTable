@@ -37,10 +37,10 @@ export class RemoteBlockCache<TData> {
   private blocks = new Map<number, RemoteBlockEntry<TData>>();
   private inflight = new Map<number, InflightBlock<TData>>();
   private clock = 0;
-  private generation = 0;
-  private hitCount = 0;
-  private missCount = 0;
-  private evictionCount = 0;
+  private cacheGenerationId = 0;
+  private cacheHits = 0;
+  private cacheMisses = 0;
+  private totalEvictions = 0;
   private activeRequests = 0;
   private retainedBlocks = new Set<number>();
 
@@ -104,17 +104,17 @@ export class RemoteBlockCache<TData> {
     if (signal?.aborted) return Promise.reject(abortError(signal));
     const existing = this.peek(blockIndex);
     if (existing) {
-      this.hitCount++;
+      this.cacheHits++;
       return Promise.resolve(existing);
     }
     const pending = this.inflight.get(blockIndex);
     if (pending) {
-      this.hitCount++;
+      this.cacheHits++;
       pending.priority = Math.max(pending.priority, priority);
       this.drainQueue();
       return this.attachConsumer(blockIndex, pending, signal);
     }
-    this.missCount++;
+    this.cacheMisses++;
     const controller = new AbortController();
     let resolveRequest!: (result: RemoteBlockResult<TData>) => void;
     let rejectRequest!: (reason: unknown) => void;
@@ -139,7 +139,7 @@ export class RemoteBlockCache<TData> {
   }
 
   purge(): void {
-    this.generation++;
+    this.cacheGenerationId++;
     this.retainedBlocks.clear();
     for (const request of this.inflight.values()) {
       request.controller.abort();
@@ -163,9 +163,9 @@ export class RemoteBlockCache<TData> {
       activeRequestCount,
       queuedRequestCount: Math.max(0, this.inflight.size - activeRequestCount),
       cachedRowCount,
-      hitCount: this.hitCount,
-      missCount: this.missCount,
-      evictionCount: this.evictionCount
+      hitCount: this.cacheHits,
+      missCount: this.cacheMisses,
+      evictionCount: this.totalEvictions
     };
   }
 
@@ -188,9 +188,9 @@ export class RemoteBlockCache<TData> {
   private startEntry(blockIndex: number, entry: InflightBlock<TData>): void {
     entry.state = "active";
     this.activeRequests++;
-    const generation = this.generation;
+    const generation = this.cacheGenerationId;
     void this.runLoader(entry).then((result) => {
-      if (generation === this.generation && !entry.controller.signal.aborted) {
+      if (generation === this.cacheGenerationId && !entry.controller.signal.aborted) {
         this.blocks.set(blockIndex, {
           rows: result.rows,
           ...(result.lastRow == null ? {} : { lastRow: result.lastRow }),
@@ -262,7 +262,7 @@ export class RemoteBlockCache<TData> {
       if (oldestIndex < 0) return;
       const evicted = this.blocks.get(oldestIndex);
       this.blocks.delete(oldestIndex);
-      this.evictionCount++;
+      this.totalEvictions++;
       if (evicted) this.onEvict?.(oldestIndex, evicted);
     }
   }

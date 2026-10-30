@@ -1,80 +1,80 @@
 /** Fenwick-tree index for incremental variable-size row offsets. */
 /** @internal The height index is internal to the row model. */
 export class VariableSizeIndex<TKey extends object> {
-  private sizes = new Float64Array(0);
-  private tree = new Float64Array(1);
+  private itemSizeValues = new Float64Array(0);
+  private prefixSizeTree = new Float64Array(1);
   private indexes = new WeakMap<TKey, number>();
   private sizeCounts = new Map<number, number>();
   private minimum = 0;
 
   reset(keys: readonly TKey[], getSize: (key: TKey, index: number) => number): void {
-    this.sizes = new Float64Array(keys.length);
-    this.tree = new Float64Array(keys.length + 1);
+    this.itemSizeValues = new Float64Array(keys.length);
+    this.prefixSizeTree = new Float64Array(keys.length + 1);
     this.indexes = new WeakMap();
     this.sizeCounts = new Map();
     this.minimum = 0;
     for (let index = 0; index < keys.length; index++) {
       this.indexes.set(keys[index], index);
       const size = Math.max(1, getSize(keys[index], index));
-      this.sizes[index] = size;
+      this.itemSizeValues[index] = size;
       this.changeSizeCount(size, 1);
       this.add(index, size);
     }
   }
 
-  get length(): number { return this.sizes.length; }
+  get length(): number { return this.itemSizeValues.length; }
 
   indexOf(key: TKey): number {
     return this.indexes.get(key) ?? -1;
   }
 
   update(index: number, size: number): boolean {
-    if (index < 0 || index >= this.sizes.length) return false;
+    if (index < 0 || index >= this.itemSizeValues.length) return false;
     const next = Math.max(1, size);
-    const delta = next - this.sizes[index];
+    const delta = next - this.itemSizeValues[index];
     if (Math.abs(delta) < 0.01) return false;
-    this.changeSizeCount(this.sizes[index], -1);
-    this.sizes[index] = next;
+    this.changeSizeCount(this.itemSizeValues[index], -1);
+    this.itemSizeValues[index] = next;
     this.changeSizeCount(next, 1);
     this.add(index, delta);
     return true;
   }
 
   offsetAt(index: number): number {
-    let cursor = Math.max(0, Math.min(Math.trunc(index), this.sizes.length));
+    let cursor = Math.max(0, Math.min(Math.trunc(index), this.itemSizeValues.length));
     let sum = 0;
     while (cursor > 0) {
-      sum += this.tree[cursor];
+      sum += this.prefixSizeTree[cursor];
       cursor -= cursor & -cursor;
     }
     return sum;
   }
 
-  totalSize(): number { return this.offsetAt(this.sizes.length); }
+  totalSize(): number { return this.offsetAt(this.itemSizeValues.length); }
 
   minimumSize(): number { return this.minimum; }
 
   findIndex(offset: number): number {
-    if (this.sizes.length === 0) return 0;
+    if (this.itemSizeValues.length === 0) return 0;
     const target = Math.max(0, offset);
     let index = 0;
     let accumulated = 0;
     let bit = 1;
-    while ((bit << 1) <= this.sizes.length) bit <<= 1;
+    while ((bit << 1) <= this.itemSizeValues.length) bit <<= 1;
     while (bit > 0) {
       const next = index + bit;
-      if (next <= this.sizes.length && accumulated + this.tree[next] <= target) {
+      if (next <= this.itemSizeValues.length && accumulated + this.prefixSizeTree[next] <= target) {
         index = next;
-        accumulated += this.tree[next];
+        accumulated += this.prefixSizeTree[next];
       }
       bit >>= 1;
     }
-    return Math.min(index, this.sizes.length - 1);
+    return Math.min(index, this.itemSizeValues.length - 1);
   }
 
   private add(index: number, delta: number): void {
-    for (let cursor = index + 1; cursor < this.tree.length; cursor += cursor & -cursor) {
-      this.tree[cursor] += delta;
+    for (let cursor = index + 1; cursor < this.prefixSizeTree.length; cursor += cursor & -cursor) {
+      this.prefixSizeTree[cursor] += delta;
     }
   }
 
