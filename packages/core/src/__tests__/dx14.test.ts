@@ -117,6 +117,30 @@ describe("0.14 progressive DX", () => {
     api.destroy();
   });
 
+  it("autoHeight releases overlay sizing after empty, loading and error states recover", () => {
+    const root = host();
+    const api = createGrid(root, {
+      columnDefs: columns, rowData: [], rowKey: "id", pagination: false,
+      domLayout: "autoHeight"
+    });
+    const grid = root.querySelector(".mach-root")!;
+    const body = root.querySelector<HTMLElement>(".mach-body")!;
+    expect(grid.classList.contains("mach-has-overlay")).toBe(true);
+    api.rows.setData(rows.slice(0, 1));
+    expect(grid.classList.contains("mach-has-overlay")).toBe(false);
+    expect(body.style.height).toBe("36px");
+    api.updateOptions({ loading: true });
+    expect(grid.classList.contains("mach-has-overlay")).toBe(true);
+    api.updateOptions({ loading: false, error: "加载失败" });
+    expect(grid.classList.contains("mach-has-overlay")).toBe(true);
+    api.updateOptions({ error: null });
+    expect(grid.classList.contains("mach-has-overlay")).toBe(false);
+    expect(body.style.height).toBe("36px");
+    api.rows.setData([]);
+    expect(grid.classList.contains("mach-has-overlay")).toBe(true);
+    api.destroy();
+  });
+
   it("persists and restores selected state sections through one persistence option", () => {
     vi.useFakeTimers();
     const first: GridApi<Row> = createGrid(host(), {

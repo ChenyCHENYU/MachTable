@@ -4,9 +4,11 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.35.2 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.35.3 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
+
+小型本地明细设置 `dom-layout="autoHeight"` 并让宿主保持自然高度即可随内容收起；空态、加载态和错误态保留必要空间，恢复数据后释放。大数据表仍应使用明确高度的虚拟视口，分页继续使用内置分页条。
 
 ```bash
 pnpm add @agile-team/mach-table-vue

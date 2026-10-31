@@ -317,7 +317,8 @@ export class GridSkeleton {
     this.overlayContent.replaceChildren();
     this.renderOverlayContent(type, this.resolveOverlayContent(content), allowUnsafeHtml);
     this.overlayWrapper.style.display = "";
-    this.applyOverlayRole(type);
+    this.root.classList.add("mach-has-overlay");
+    this.overlayWrapper.setAttribute("role", type === "error" ? "alert" : "status");
     this.root.setAttribute("aria-busy", type === "loading" ? "true" : "false");
   }
 
@@ -327,13 +328,10 @@ export class GridSkeleton {
     this.currentOverlayContent = null;
     this.currentOverlayAllowsHtml = false;
     this.overlayWrapper.style.display = "none";
+    this.root.classList.remove("mach-has-overlay");
     this.cleanupOverlayContent();
     this.overlayContent.replaceChildren();
     this.root.setAttribute("aria-busy", "false");
-  }
-
-  private applyOverlayRole(type: "loading" | "noRows" | "error"): void {
-    this.overlayWrapper.setAttribute("role", type === "error" ? "alert" : "status");
   }
 
   setInfiniteLoading(active: boolean, text: string): void {

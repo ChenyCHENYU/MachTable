@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.35.2-2563eb" alt="Source version 0.35.2" />
+  <img src="https://img.shields.io/badge/source-0.35.3-2563eb" alt="Source version 0.35.3" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -157,6 +157,8 @@ api.destroy();
 ```
 
 > 默认虚拟布局要求容器具有明确高度。小型详情表可使用 `domLayout: "autoHeight"`，大表或远程无限数据源不要使用自动高度。
+
+自动高度表格随当前页内容收起；空态、加载态和错误态保留必要空间，恢复数据后释放最小高度。表格与后续内容的间距由页面容器设置，例如 `padding-bottom: 8px`。
 
 标准列表默认把 `indexColumn()` 放在第一列；存在 `selectionColumn()` 时序号紧随其后。启用行拖拽时，可在最左侧增加 `dragColumn()` 手柄。表头和单元格内容默认居中，业务列可用 `align: "left" | "right"`、`headerAlign` 单独覆盖。
 
@@ -413,7 +415,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.35.2`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版默认完整展示表头，统一保护初始布局、fit、列宽恢复及交互缩列，空间不足时内部横向滚动。弹窗返回、原生焦点恢复及 `scrollIntoView` 的冻结列对齐修复继续保留；内置空态的插画和亮暗配色继续保留。继续提供显式可选 `/business` 的字典列值策略、本地语义合计及字典缓存隔离。Vue/React 保持一个包接入，原根入口 API、XLSX 行为与已有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，本轮验证、发布与消费状态，以及真实读屏、触屏和业务 UAT 单独列于[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.35.3`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修复自动高度表格的空态、加载态和错误态最小展示空间，恢复数据后随内容收起；默认虚拟布局与内置分页保持兼容。完整表头宽度保护、弹窗返回的原生焦点恢复及冻结列对齐修复继续保留，内置插画空态与亮暗主题也保持不变。Vue/React 保持一个包接入，原根入口 API、可选业务列能力、XLSX 行为与既有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，历史发布记录与真实读屏、触屏和业务 UAT 的待人工项目见[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

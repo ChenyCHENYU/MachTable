@@ -51,6 +51,8 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 
 默认虚拟布局的宿主必须有明确高度。`autoHeight` 会渲染全部本地行，不能与 `datasource` 混用。
 
+小型明细表设置 `domLayout: "autoHeight"` 后，宿主保持自然高度即可；行数减少或切到较短的分页时会随内容收起。空态、加载态和错误态预留 180px 的最小展示空间，可通过 `--mach-overlay-min-height` 局部覆盖，恢复数据后会释放这段高度。表格外侧留白由页面容器的 `padding-bottom` 控制，例如 `8px`；大数据表保持明确高度和默认虚拟布局。
+
 ## 列交互
 
 | 配置 | 类型 | 默认值 | 说明 |

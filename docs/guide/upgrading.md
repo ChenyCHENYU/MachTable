@@ -3,10 +3,14 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.34.0
+pnpm up @agile-team/mach-table-vue@^0.35.3
 # 或
-pnpm up @agile-team/mach-table-react@^0.34.0
+pnpm up @agile-team/mach-table-react@^0.35.3
 ```
+
+## 0.35.2 → 0.35.3
+
+API、默认虚拟布局与内置分页均保持兼容。修复 `domLayout: "autoHeight"` 的空态、加载态和错误态被压扁的问题：这些状态默认预留 180px，恢复数据后立即释放最小高度。可通过 `--mach-overlay-min-height` 局部覆盖。小明细可让宿主保持自然高度；大数据表继续使用明确高度的虚拟视口，避免将大量行一次渲染到 DOM。
 
 ## 0.33.0 → 0.34.0
 

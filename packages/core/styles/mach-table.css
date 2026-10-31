@@ -73,6 +73,11 @@
   min-height: 0;
 }
 
+/* 自动高度的空态/加载态也需要可见空间；恢复数据后立即交还内容高度。 */
+.mach-root.mach-dom-layout--auto-height.mach-has-overlay {
+  min-height: var(--mach-overlay-min-height, 180px);
+}
+
 .mach-root.mach-dom-layout--auto-height .mach-body {
   flex: none;
 }
