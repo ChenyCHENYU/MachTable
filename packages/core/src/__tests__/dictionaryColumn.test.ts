@@ -97,10 +97,88 @@ describe("explicit dictionary columns", () => {
     expect(output("unknown", "csv")).toBe("unknown");
   });
 
+  it("translates an explicitly defined empty code without changing raw output or empty-input parsing", () => {
+    const unknown = callbacks({ output: { csv: "label" } });
+    expect(unknown.format("")).toBe("");
+    expect(unknown.output("", "csv")).toBe("");
+    const source = callbacks({ output: { csv: "label" } }, { get: key => key === "" ? "未分配" : undefined });
+    expect(source.format("")).toBe("未分配");
+    expect(source.output("", "csv")).toBe("未分配");
+    expect(source.output("", "clipboard")).toBe("");
+    expect(source.parse("")).toBe("");
+    const prepared = callbacks({ options: [{ value: "", label: "默认类别" }], output: { csv: "label" } });
+    expect(prepared.format("")).toBe("默认类别");
+    expect(prepared.format([""])).toBe("默认类别");
+    expect(prepared.output("", "csv")).toBe("默认类别");
+    expect(prepared.output("", "xlsx")).toBe("");
+    expect(prepared.parse("")).toBe("");
+    expect(prepared.parse("默认类别")).toBe("");
+    expect(prepared.format(null)).toBe("");
+    expect(prepared.format(undefined)).toBe("");
+  });
+
   it("respects source values and display code without triggering remote resolution", () => {
     const { format, parse } = callbacks({ display: "code", options: [{ value: "A", label: "选项" }] }, { get: key => key === "X" ? "来源" : undefined });
     expect(format("A")).toBe("A");
     expect(parse("X")).toBe("X");
     expect(parse("选项")).toBe("A");
+  });
+
+  it("distinguishes boolean, string and numeric keys while preserving inactive historical entries", () => {
+    const options = [
+      { value: false, label: "布尔否", disabled: true },
+      { value: "false", label: "字符串否" },
+      { value: 0, label: "零" },
+      { value: "001", label: "前导零" }
+    ] as const;
+    const { format, parse, output } = callbacks({ options });
+    expect(format(false)).toBe("布尔否");
+    expect(format("false")).toBe("字符串否");
+    expect(parse(false)).toBe(false);
+    expect(parse("false")).toBe("false");
+    expect(parse("布尔否")).toBe(false);
+    expect(parse("字符串否")).toBe("false");
+    expect(parse("前导零")).toBe("001");
+    for (const target of ["clipboard", "csv", "xlsx"] as const) {
+      expect(output(false, target)).toBe(false);
+      expect(output("false", target)).toBe("false");
+      expect(output(0, target)).toBe(0);
+      expect(output("001", target)).toBe("001");
+    }
+  });
+
+  it("formats arrays and parses each input without mutating data or guessing string delimiters", () => {
+    const input = Object.freeze([0, false, "false", "001", "unknown"]);
+    const { format, parse, output } = callbacks({
+      options: [
+        { value: 0, label: "零" }, { value: false, label: "否" },
+        { value: "false", label: "文本否" }, { value: "001", label: "首项" }
+      ],
+      output: { clipboard: "label", csv: "code-label" }
+    });
+    expect(format(input)).toBe("零、否、文本否、首项、unknown");
+    expect(output(input, "clipboard")).toBe("零、否、文本否、首项、unknown");
+    expect(output(input, "csv")).toBe("0 · 零、false · 否、false · 文本否、001 · 首项、unknown");
+    expect(output(input, "xlsx")).toBe(input);
+    expect(parse(input)).toEqual(input);
+    expect(parse(input)).not.toBe(input);
+    expect(parse(["零", "否", "文本否", "首项", "unknown"])).toEqual(input);
+    expect(parse("零、否")).toBe("零、否");
+    expect(parse("零,否")).toBe("零,否");
+    expect(format([])).toBe("");
+    expect(parse([])).toEqual([]);
+    const custom = callbacks({ options: [{ value: false, label: "否" }], separator: " / " });
+    expect(custom.format([false, "unknown"])).toBe("否 / unknown");
+    expect(custom.parse("否 / unknown")).toBe("否 / unknown");
+  });
+
+  it("applies scalar ambiguity protection and immutable snapshot updates to array members", () => {
+    let options = [{ value: false, label: "旧名称" }, { value: "B", label: "同名" }, { value: "C", label: "同名" }];
+    const { format, parse } = callbacks({ options: () => options });
+    expect(parse(["旧名称", "unknown"])).toEqual([false, "unknown"]);
+    expect(() => parse(["旧名称", "同名"])).toThrow("Ambiguous dictionary value");
+    options = [{ value: false, label: "新名称" }];
+    expect(format([false])).toBe("新名称");
+    expect(parse(["旧名称", "新名称"])).toEqual(["旧名称", false]);
   });
 });

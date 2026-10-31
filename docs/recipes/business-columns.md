@@ -95,9 +95,45 @@ departments.prime(departmentOptions);
 api.view.refreshCells();
 ```
 
-`display` 支持 `code`、`label`、`code-label`（例如 `D01 · 生产部`），默认 `label`；未配置的输出通道保留原编码及类型。`valueParser` 优先识别原始编码，再识别唯一标签或码名。数字 `1` 与字符串 `"1"` 不混同，重复标签或标签与码名冲突时报告歧义错误，未知编码及 `null`、`undefined`、空字符串保留原值，是否允许提交由列 `validate` 决定。反向索引每个不可变选项快照只建立一次，单元格不会扫描整个字典。
+`display` 支持 `code`、`label`、`code-label`（例如 `D01 · 生产部`），默认 `label`；未配置的输出通道保留原编码及类型。`valueParser` 优先识别原始编码，再识别唯一标签或码名。数字 `1`、字符串 `"1"`、布尔 `false` 与字符串 `"false"` 不混同，`"001"` 保留前导零。重复标签或标签与码名冲突时报告歧义错误，未知编码及 `null`、`undefined`、空字符串保留原值，是否允许提交由列 `validate` 决定。反向索引每个不可变选项快照只建立一次，单元格不会扫描整个字典。
+
+真实数组会逐项翻译，默认用 `、` 连接，可通过 `separator` 调整屏幕与标签输出的分隔符。默认复制、CSV、XLSX 的值策略仍返回原数组或布尔值；最终文件单元格如何承载数组由对应导出器决定。数组输入会逐项解析并保留成员类型，不修改原数组；字符串不按逗号或显示分隔符隐式拆分，避免标签本身含分隔符时误写数据。显式导出为多值标签文本后，不承诺能自动粘贴还原为数组。
+
+这一扩展只作用于显式配置的 `/business` 字典列；原单值编码的匹配、歧义拒绝和默认原码输出保持兼容。根入口 `createCachedDictionary()` 的键范围仍为字符串与数字，布尔字典通过结构化 Provider 接入，不改变旧缓存与 renderer 的行为。
 
 Provider 或选项快照负责历史停用码、组织和语言的范围。只提供 `get` 而不提供 `options` 时，原码仍可输入，但不进行标签反向匹配；大型客户或物料应使用分页 Lookup。异步标签先通过现有 Provider 预热，再刷新或导出；这些列回调同步执行，不发请求。页面仍可覆盖返回的任意列回调。
+
+### 连接应用统一字典
+
+应用已有命名字典服务时，直接取同一个字典对象。结构只要求 `get(key)` 和可选的不可变 `getOptions()` 快照，选项上的 `disabled` 等元数据不会阻断历史值翻译；是否允许新选择或提交仍由业务校验决定。MachTable 不依赖下例的服务包，也不为它增加缓存。
+
+```ts
+import { createDictionaryStore } from "@robot-admin/dictionary";
+import { useDictionaryRefresh } from "@robot-admin/dictionary/vue";
+import { createDictionaryColumn } from "@agile-team/mach-table-vue/business";
+
+// 服务实例由应用持有；静态枚举或接口加载字典均可提供同一结构。
+const dictionaries = createDictionaryStore({
+  planStatus: [
+    { value: false, label: "未下达" },
+    { value: true, label: "已下达" }
+  ]
+});
+const statusSource = dictionaries.getDictionary("planStatus");
+const statusColumn = {
+  field: "released",
+  headerName: "下达状态",
+  ...createDictionaryColumn(statusSource, {
+    options: statusSource.getOptions
+  })
+};
+
+// 在页面 setup 中订阅当前字典，异步加载/刷新后只调用公开刷新 API。
+// table 为已有 useMachTable() 的返回值；订阅随 Vue 作用域释放。
+useDictionaryRefresh([statusSource], () => table.api.value?.view.refreshCells());
+```
+
+远程字典的请求、加载/空/失败状态与显式重试由应用字典服务负责；单元格渲染始终同步纯读。多个表格和下拉可共享同一个命名字典，租户、组织或语言切换时由应用隔离服务实例或数据源上下文。
 
 ## 显式语义合计
 

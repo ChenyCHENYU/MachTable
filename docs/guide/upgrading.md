@@ -3,10 +3,14 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.35.3
+pnpm up @agile-team/mach-table-vue@^0.36.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.35.3
+pnpm up @agile-team/mach-table-react@^0.36.0
 ```
+
+## 0.35.3 → 0.36.0
+
+根入口与默认行为保持兼容。可选 `/business` 的 `createDictionaryColumn()` 增加 boolean 编码和数组多值支持，严格区分 `false`、`"false"`、`0` 与前导零编码。数组默认用 `、` 展示，可通过 `separator` 配置；不自动拆分字符串。复制、CSV 和 XLSX 默认仍使用原始值，显式配置标签输出才翻译。可直接消费结构兼容的共享字典源 `get()` 与 `getOptions()`，异步完成后的刷新见[业务列示例](../recipes/business-columns.md)。
 
 ## 0.35.2 → 0.35.3
 

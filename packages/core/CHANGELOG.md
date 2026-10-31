@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.36.0
+
+### Minor Changes
+
+- 完善可选 business 字典列的布尔与多值翻译，保持严格编码、未知历史值回显和默认导入导出原码；通过公开结构协议衔接共享字典源，不增加缓存、请求或 UI 依赖。
+
 ## 0.35.3
 
 ### Patch Changes

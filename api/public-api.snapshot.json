@@ -2206,13 +2206,13 @@
       "hasDefault": false,
       "signatures": {
         "createDictionaryColumn": [
-          "function createDictionaryColumn<TData = any, TKey extends DictionaryKey = DictionaryKey>(source: DictionaryColumnSource<TKey>, config?: DictionaryColumnOptions<TKey>): Partial<ColDef<TData>>"
+          "function createDictionaryColumn<TData = any, TKey extends ColumnKey = ColumnKey>(source: DictionaryColumnSource<TKey>, config?: DictionaryColumnOptions<TKey>): Partial<ColDef<TData>>"
         ],
         "DictionaryColumnOptions": [
-          "export interface DictionaryColumnOptions<TKey extends DictionaryKey = DictionaryKey> { options?: readonly DictionaryEntry<TKey>[] | (() => readonly DictionaryEntry<TKey>[]); display?: DictionaryDisplay; output?: Partial<Record<ValueOutputTarget, DictionaryDisplay>>; }"
+          "export interface DictionaryColumnOptions<TKey extends ColumnKey = ColumnKey> { options?: readonly ColumnEntry<TKey>[] | (() => readonly ColumnEntry<TKey>[]); display?: DictionaryDisplay; separator?: string; output?: Partial<Record<ValueOutputTarget, DictionaryDisplay>>; }"
         ],
         "DictionaryColumnSource": [
-          "export interface DictionaryColumnSource<TKey extends DictionaryKey = DictionaryKey> { get(key: TKey): string | undefined; }"
+          "export interface DictionaryColumnSource<TKey extends ColumnKey = ColumnKey> { get(key: TKey): string | undefined; }"
         ],
         "DictionaryDisplay": [
           "export type DictionaryDisplay = \"code\" | \"label\" | \"code-label\";"

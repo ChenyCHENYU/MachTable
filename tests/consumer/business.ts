@@ -18,5 +18,17 @@ export const result: core.SemanticSummaryResult = core.summarizeRows(rows, {
 });
 export const vueColumn = vue.createDictionaryColumn<Row, string>(source);
 export const reactColumn = react.createDictionaryColumn<Row, string>(source);
+const valueOptions = [
+  { value: false, label: "否", disabled: true },
+  { value: "001", label: "前导零" },
+  { value: 0, label: "零" }
+] as const;
+const valueSource = {
+  get: (key: string | number | boolean) => valueOptions.find(option => option.value === key)?.label,
+  getOptions: () => valueOptions
+};
+export const multiValueColumns = [core, vue, react].map(business => business.createDictionaryColumn(valueSource, {
+  options: valueSource.getOptions, separator: " / ", output: { clipboard: "label" }
+}));
 export const vueResult: vue.SemanticSummaryResult = vue.summarizeRows(rows, { scope: "selected", metrics: [{ id: "count", kind: "count" }] });
 export const reactResult: react.SemanticSummaryResult = react.summarizeRows(rows, { scope: "query", metrics: [{ id: "count", kind: "count" }] });

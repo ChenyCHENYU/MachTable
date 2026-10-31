@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.35.3-2563eb" alt="Source version 0.35.3" />
+  <img src="https://img.shields.io/badge/source-0.36.0-2563eb" alt="Source version 0.36.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -229,7 +229,7 @@ Vanilla 示例包含高级筛选、修改审阅、分析、平面/树排序及�
 
 ## 字典展示与合计口径显式配置
 
-`/business` 提供两个无 UI、无运行时依赖的可选辅助。`createDictionaryColumn()` 连接已有字典 Provider，通过同步 `get()` 显示标签，显式选择剪贴板、CSV、XLSX 输出编码、标签或码名；未配置的输出保留原编码及类型。输入优先保留原码，重复标签拒绝歧义；选项快照替换后更新反向索引，不在每个单元格扫描完整字典。
+`/business` 提供两个无 UI、无运行时依赖的可选辅助。`createDictionaryColumn()` 连接已有字典 Provider，通过同步 `get()` 显示标签，显式选择剪贴板、CSV、XLSX 输出编码、标签或码名；未配置的输出保留原编码及类型。支持布尔键与数组多值，显示分隔符可配置，输入字符串不会隐式拆分。输入优先保留原码，重复标签拒绝歧义；选项快照替换后更新反向索引，不在每个单元格扫描完整字典。
 
 ```ts
 import { createDictionaryColumn, summarizeRows } from "@agile-team/mach-table-vue/business";
@@ -415,7 +415,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.35.3`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版修复自动高度表格的空态、加载态和错误态最小展示空间，恢复数据后随内容收起；默认虚拟布局与内置分页保持兼容。完整表头宽度保护、弹窗返回的原生焦点恢复及冻结列对齐修复继续保留，内置插画空态与亮暗主题也保持不变。Vue/React 保持一个包接入，原根入口 API、可选业务列能力、XLSX 行为与既有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，历史发布记录与真实读屏、触屏和业务 UAT 的待人工项目见[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.36.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版完善可选 business 字典列的布尔与数组多值翻译，支持共享选项源，默认导入导出仍保留原码。自动高度的空态展示与恢复、默认虚拟布局和内置分页保持兼容。完整表头宽度保护、弹窗返回的原生焦点恢复及冻结列对齐修复继续保留，内置插画空态与亮暗主题也保持不变。Vue/React 保持一个包接入，原根入口 API、可选业务列能力、XLSX 行为与既有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，历史发布记录与真实读屏、触屏和业务 UAT 的待人工项目见[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
