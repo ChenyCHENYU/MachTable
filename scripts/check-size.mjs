@@ -127,7 +127,7 @@ for (const [name, entry] of [["Core", "core/src/index.ts"], ["Vue", "vue/src/ind
     external: ["vue", "react", "react-dom", "@agile-team/mach-table", "@agile-team/mach-table/adapter"]
   });
   const forbidden = Object.keys(result.metafile.inputs).filter(path =>
-    /packages\/core\/src\/(?:workbench|preferences|ordering|server-side|analysis|import|business)(?:\/|\.ts$)|packages\/core\/src\/lib\/(?:dictionaryColumn|semanticSummary)\.ts$|packages\/core\/src\/multiRange\.ts$|\.(?:css)$/.test(path));
+    /packages\/core\/src\/(?:workbench|preferences|ordering|server-side|analysis|import|business)(?:\/|\.ts$)|packages\/core\/src\/lib\/semanticSummary\.ts$|packages\/core\/src\/multiRange\.ts$|\.(?:css)$/.test(path));
   const cssOutputs = result.outputFiles.filter(file => file.path.endsWith(".css"));
   if (forbidden.length || cssOutputs.length) {
     failed = true;

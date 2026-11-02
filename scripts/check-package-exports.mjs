@@ -85,7 +85,7 @@ for (const suffix of ["", "-vue", "-react"]) {
     analysis: ["createPivot", "evaluateFormulas", "mountAnalysis"],
     "multi-range": ["createMultiRangeSelection"],
     import: ["createImportPlan"],
-    business: ["createDictionaryColumn", "summarizeRows"]
+    business: ["summarizeRows"]
   })) assertFunctions(`${packageName}/${entry}`, names);
 }
 for (const packageName of ["@agile-team/mach-table-vue", "@agile-team/mach-table-react"]) {

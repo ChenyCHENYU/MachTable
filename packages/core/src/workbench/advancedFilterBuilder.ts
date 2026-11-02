@@ -206,7 +206,7 @@ class FilterBuilder<TData> implements AdvancedFilterBuilder {
     for (const value of filter.values) {
       if (!choices.some((choice) => Object.is(choice.value, value))) choices.push({ value, label: `${String(value ?? "空值")}（当前字典外）` });
     }
-    const control = element("select", "mach-workbench__input mach-workbench__dictionary");
+    const control = element("select", "mach-workbench__input mach-workbench__select-options");
     control.multiple = true;
     control.setAttribute("aria-label", "字典选项（支持多选）");
     choices.forEach((choice, index) => {

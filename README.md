@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.36.0-2563eb" alt="Source version 0.36.0" />
+  <img src="https://img.shields.io/badge/source-0.37.0-2563eb" alt="Source version 0.37.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -203,7 +203,7 @@ Core、Vue、React 共享下面八个子入口。Vue 项目将包名写为 `@agi
 | `/multi-range` | Ctrl/Cmd 追加选区、格式化复制、校验清空与单次撤销 | [多范围](./docs/recipes/multi-range.md) |
 | `/analysis` | 有界 Pivot、算术与聚合公式、柱/折线图及完整数据表回退 | [分析](./docs/recipes/analysis.md) |
 | `/import` | 有界导入预览、规范值、异步校验、结构化错误与过期保护 | [导入预览](./docs/recipes/import-preview.md) |
-| `/business` | 字典显示/解析/输出策略、本地语义合计与显式范围 | [业务列与字典](./docs/recipes/business-columns.md) |
+| `/business` | 本地语义合计与显式范围 | [业务列与合计](./docs/recipes/business-columns.md) |
 
 ```ts
 import { mountAdvancedFilterBuilder, mountChangeReview } from "@agile-team/mach-table-vue/workbench";
@@ -227,24 +227,22 @@ Vanilla 示例包含高级筛选、修改审阅、分析、平面/树排序及�
 
 `api.io.importMatrix()` 的 replace/append 同步装载经 parser 规范化的记录，不运行交互校验；paste 复用交互校验与撤销管线，同步 boolean 不代表异步校验完成。需要整批校验、预览和问题明细时按需使用 `createImportPlan()`。XLSX 默认直接传递 number、boolean 和 Date，不经格式化 CSV 往返。详见[列值策略](./docs/recipes/column-values.md)和[导入预览](./docs/recipes/import-preview.md)。
 
-## 字典展示与合计口径显式配置
+## 显示策略与本地合计
 
-`/business` 提供两个无 UI、无运行时依赖的可选辅助。`createDictionaryColumn()` 连接已有字典 Provider，通过同步 `get()` 显示标签，显式选择剪贴板、CSV、XLSX 输出编码、标签或码名；未配置的输出保留原编码及类型。支持布尔键与数组多值，显示分隔符可配置，输入字符串不会隐式拆分。输入优先保留原码，重复标签拒绝歧义；选项快照替换后更新反向索引，不在每个单元格扫描完整字典。
+页面把已准备好的标签与普通格式化函数组合到列上。MachTable 只接收同步函数与普通选项，不持有字典实例、加载服务或订阅协议。异步数据准备与刷新由项目管理。
 
 ```ts
-import { createDictionaryColumn, summarizeRows } from "@agile-team/mach-table-vue/business";
+import { summarizeRows } from "@agile-team/mach-table-vue/business";
 
-// dictionaryProvider 由应用提供；异步预热后再刷新单元格或执行导出。
+const labels = new Map([["ready", "已就绪"]]);
 const statusColumn = {
   field: "status",
-  ...createDictionaryColumn(dictionaryProvider, {
-    options: () => statusOptions,
-    display: "label",
-    output: { clipboard: "label", csv: "code-label" }
-  })
+  valueFormatter: ({ value }) => labels.get(String(value)) ?? String(value ?? ""),
+  valueSerializer: ({ value, target }) =>
+    target === "clipboard" ? labels.get(String(value)) ?? value : value
 };
-
-const summary = summarizeRows(pageRows, {
+const rows = [{ currency: "CNY", unit: "t", amount: 120, completed: 2, planned: 4 }];
+const summary = summarizeRows(rows, {
   scope: "page",
   groupBy: row => JSON.stringify([row.currency, row.unit]),
   metrics: [
@@ -255,9 +253,7 @@ const summary = summarizeRows(pageRows, {
 });
 ```
 
-合计支持 `sum`、`count`、先汇总再相除的 `ratio` 和 `none`；调用方按币种、单位等业务口径分组。`scope` 标记本页、已选或查询范围，仅处理传入记录；服务端全量仍由后端计算。默认使用安全范围内的有限 `number`，精确金额可接入已有 `numeric` 策略，不内置 Decimal 引擎。结果复用已有 `summaryMethod` 或固定行，详见[完整配方](./docs/recipes/business-columns.md)。
-
-已有 `createCachedDictionary()` 继续从根入口导入。同 key 排队与在途请求复用，失效后旧响应不能回灌；成功返回但缺失的 key 受相同 TTL/LRU 限制，失败可重试，销毁与错误观察回调不会遗留等待任务。缓存实例及字典选项的组织、语言和权限范围仍由应用管理。
+`/business` 只提供本地语义合计；scope 声明 page/selected/query，实际只处理传入记录。ratio 先汇总分子分母，精确金额可注入 numeric 策略；服务端全量由后端计算。详情见[业务列与合计](./docs/recipes/business-columns.md)。
 
 ## 一份清爽的应用配置
 
@@ -415,7 +411,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.36.0`，仍处于 0.x 真实项目验证期，尚未冻结 1.0 API。本版完善可选 business 字典列的布尔与数组多值翻译，支持共享选项源，默认导入导出仍保留原码。自动高度的空态展示与恢复、默认虚拟布局和内置分页保持兼容。完整表头宽度保护、弹窗返回的原生焦点恢复及冻结列对齐修复继续保留，内置插画空态与亮暗主题也保持不变。Vue/React 保持一个包接入，原根入口 API、可选业务列能力、XLSX 行为与既有体积预算保持兼容。升级边界见[升级指南](./docs/guide/upgrading.md)，历史发布记录与真实读屏、触屏和业务 UAT 的待人工项目见[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.37.0`，仍处于 0.x 真实项目验证期。本版移除内置字典缓存、字典渲染器与专用列协议，数据插件统一由项目组合，表格只接收普通选项、valueFormatter/valueParser/valueSerializer 和刷新调用。`/business` 保留本地语义合计；完整表头、内容列宽、主题空态、内置分页与通用编辑/导入导出能力继续保留。删除项和迁移见[升级指南](./docs/guide/upgrading.md)，待人工验收项见[实施台账](./docs/advanced/implementation-plan.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
@@ -426,7 +422,7 @@ MachTable 采用 [MachTable Source-Available License 1.0](./LICENSE)，不是 MI
 
 ## 内容列宽与状态颜色（0.35）
 
-未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化、字典及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
+未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化文本及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
 
 ```ts
 const columns = [
@@ -440,7 +436,7 @@ const columns = [
 ];
 ```
 
-`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。字典/formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
+`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
 
 普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 

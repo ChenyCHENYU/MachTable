@@ -1,8 +1,4 @@
-import type { ColDef, CellRendererFn } from "../types/colDef";
-import { el } from "./dom";
-import type { CachedDictionary, DictionaryKey } from "./cachedDictionary";
-export { createCachedDictionary } from "./cachedDictionary";
-export type { CachedDictionary, CachedDictionaryOptions, DictionaryEntry, DictionaryKey } from "./cachedDictionary";
+import type { ColDef } from "../types/colDef";
 
 export type BusinessColumnType =
   | "text"
@@ -177,38 +173,4 @@ export function createBusinessColumnTypes<TData = any>(
     status: { filter: "set", cellRenderer: "statusTag" },
     link: { filter: "text", cellRenderer: "link" }
   });
-}
-
-export interface DictionaryRendererOptions {
-  loadingText?: string;
-  emptyText?: string;
-  fallback?: (value: DictionaryKey) => string;
-}
-
-/** Async-safe renderer backed by createCachedDictionary; stale pooled cells are not mutated. */
-export function createDictionaryRenderer<TKey extends DictionaryKey = DictionaryKey>(
-  dictionary: CachedDictionary<TKey>,
-  options: DictionaryRendererOptions = {}
-): CellRendererFn {
-  return (params) => {
-    if (!present(params.value)) return options.emptyText ?? "";
-    const key = params.value as TKey;
-    const fallback = options.fallback?.(key) ?? String(key);
-    const cached = dictionary.get(key);
-    if (cached !== undefined) return cached;
-    const element = el("span", "mach-dictionary-value mach-dictionary-value--loading");
-    element.textContent = options.loadingText ?? fallback;
-    let active = true;
-    void dictionary.resolve(key).then((label) => {
-      if (!active || !element.isConnected) return;
-      element.textContent = label ?? fallback;
-      element.classList.remove("mach-dictionary-value--loading");
-    }).catch(() => {
-      if (!active || !element.isConnected) return;
-      element.textContent = fallback;
-      element.classList.remove("mach-dictionary-value--loading");
-      element.classList.add("mach-dictionary-value--error");
-    });
-    return { el: element, destroy: () => { active = false; } };
-  };
 }

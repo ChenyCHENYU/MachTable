@@ -68,7 +68,7 @@
 .mach-workbench__group > .mach-workbench__button { margin-right: 8px; }
 .mach-workbench__condition { display: flex; flex-wrap: wrap; align-items: start; gap: 8px; margin: 12px 0; padding: 12px; background: var(--wb-soft); border: 1px solid var(--wb-border); border-radius: 6px; }
 .mach-workbench__values { flex: 1 1 100%; }
-.mach-workbench__dictionary { flex: 1 1 100%; min-height: 96px; }
+.mach-workbench__select-options { flex: 1 1 100%; min-height: 96px; }
 .mach-workbench__check { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
 .mach-workbench__hint { flex: 1 1 100%; color: var(--wb-muted); }
 .mach-workbench__status { min-height: 24px; margin: 0; color: var(--wb-muted); }

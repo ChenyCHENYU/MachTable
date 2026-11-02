@@ -49,8 +49,6 @@
         "BuiltInActionIcon",
         "BusinessColumnType",
         "BusinessColumnTypeOptions",
-        "CachedDictionary",
-        "CachedDictionaryOptions",
         "CellAlign",
         "CellClassParams",
         "CellClassRule",
@@ -87,9 +85,6 @@
         "DateFilterMatch",
         "DetailRowRendererParams",
         "DetailToggledEvent",
-        "DictionaryEntry",
-        "DictionaryKey",
-        "DictionaryRendererOptions",
         "DirtyStateChangedEvent",
         "DomLayoutMode",
         "EVENT_TYPES",
@@ -270,9 +265,7 @@
         "createActionButtonsRenderer",
         "createAggResolver",
         "createBusinessColumnTypes",
-        "createCachedDictionary",
         "createColumnHelper",
-        "createDictionaryRenderer",
         "createEnterprisePreset",
         "createGrid",
         "createGridViewManager",
@@ -337,9 +330,7 @@
         "createActionButtonsRenderer",
         "createAggResolver",
         "createBusinessColumnTypes",
-        "createCachedDictionary",
         "createColumnHelper",
-        "createDictionaryRenderer",
         "createEnterprisePreset",
         "createGrid",
         "createGridViewManager",
@@ -479,8 +470,6 @@
         "BuiltInActionIcon",
         "BusinessColumnType",
         "BusinessColumnTypeOptions",
-        "CachedDictionary",
-        "CachedDictionaryOptions",
         "CellAlign",
         "CellClassParams",
         "CellClassRule",
@@ -517,9 +506,6 @@
         "DateFilterMatch",
         "DetailRowRendererParams",
         "DetailToggledEvent",
-        "DictionaryEntry",
-        "DictionaryKey",
-        "DictionaryRendererOptions",
         "DirtyStateChangedEvent",
         "DomLayoutMode",
         "EVENT_TYPES",
@@ -713,9 +699,7 @@
         "createActionButtonsRenderer",
         "createAggResolver",
         "createBusinessColumnTypes",
-        "createCachedDictionary",
         "createColumnHelper",
-        "createDictionaryRenderer",
         "createEnterprisePreset",
         "createGrid",
         "createGridViewManager",
@@ -788,9 +772,7 @@
         "createActionButtonsRenderer",
         "createAggResolver",
         "createBusinessColumnTypes",
-        "createCachedDictionary",
         "createColumnHelper",
-        "createDictionaryRenderer",
         "createEnterprisePreset",
         "createGrid",
         "createGridViewManager",
@@ -992,8 +974,6 @@
         "BuiltInActionIcon",
         "BusinessColumnType",
         "BusinessColumnTypeOptions",
-        "CachedDictionary",
-        "CachedDictionaryOptions",
         "CellAlign",
         "CellClassParams",
         "CellClassRule",
@@ -1030,9 +1010,6 @@
         "DateFilterMatch",
         "DetailRowRendererParams",
         "DetailToggledEvent",
-        "DictionaryEntry",
-        "DictionaryKey",
-        "DictionaryRendererOptions",
         "DirtyStateChangedEvent",
         "DomLayoutMode",
         "EVENT_TYPES",
@@ -1218,9 +1195,7 @@
         "createActionButtonsRenderer",
         "createAggResolver",
         "createBusinessColumnTypes",
-        "createCachedDictionary",
         "createColumnHelper",
-        "createDictionaryRenderer",
         "createEnterprisePreset",
         "createGrid",
         "createGridViewManager",
@@ -1289,9 +1264,7 @@
         "createActionButtonsRenderer",
         "createAggResolver",
         "createBusinessColumnTypes",
-        "createCachedDictionary",
         "createColumnHelper",
-        "createDictionaryRenderer",
         "createEnterprisePreset",
         "createGrid",
         "createGridViewManager",
@@ -2188,35 +2161,18 @@
     },
     "@agile-team/mach-table/business": {
       "names": [
-        "DictionaryColumnOptions",
-        "DictionaryColumnSource",
-        "DictionaryDisplay",
         "SemanticSummaryMetric",
         "SemanticSummaryOptions",
         "SemanticSummaryResult",
         "SummaryNumericStrategy",
         "SummaryScope",
-        "createDictionaryColumn",
         "summarizeRows"
       ],
       "runtimeNames": [
-        "createDictionaryColumn",
         "summarizeRows"
       ],
       "hasDefault": false,
       "signatures": {
-        "createDictionaryColumn": [
-          "function createDictionaryColumn<TData = any, TKey extends ColumnKey = ColumnKey>(source: DictionaryColumnSource<TKey>, config?: DictionaryColumnOptions<TKey>): Partial<ColDef<TData>>"
-        ],
-        "DictionaryColumnOptions": [
-          "export interface DictionaryColumnOptions<TKey extends ColumnKey = ColumnKey> { options?: readonly ColumnEntry<TKey>[] | (() => readonly ColumnEntry<TKey>[]); display?: DictionaryDisplay; separator?: string; output?: Partial<Record<ValueOutputTarget, DictionaryDisplay>>; }"
-        ],
-        "DictionaryColumnSource": [
-          "export interface DictionaryColumnSource<TKey extends ColumnKey = ColumnKey> { get(key: TKey): string | undefined; }"
-        ],
-        "DictionaryDisplay": [
-          "export type DictionaryDisplay = \"code\" | \"label\" | \"code-label\";"
-        ],
         "SemanticSummaryMetric": [
           "export type SemanticSummaryMetric<TData> = { id: string; kind: \"sum\"; value(row: TData): unknown; } | { id: string; kind: \"count\"; } | { id: string; kind: \"ratio\"; numerator(row: TData): unknown; denominator(row: TData): unknown; } | { id: string; kind: \"none\"; };"
         ],
@@ -2239,19 +2195,14 @@
     },
     "@agile-team/mach-table-vue/business": {
       "names": [
-        "DictionaryColumnOptions",
-        "DictionaryColumnSource",
-        "DictionaryDisplay",
         "SemanticSummaryMetric",
         "SemanticSummaryOptions",
         "SemanticSummaryResult",
         "SummaryNumericStrategy",
         "SummaryScope",
-        "createDictionaryColumn",
         "summarizeRows"
       ],
       "runtimeNames": [
-        "createDictionaryColumn",
         "summarizeRows"
       ],
       "hasDefault": false,
@@ -2259,19 +2210,14 @@
     },
     "@agile-team/mach-table-react/business": {
       "names": [
-        "DictionaryColumnOptions",
-        "DictionaryColumnSource",
-        "DictionaryDisplay",
         "SemanticSummaryMetric",
         "SemanticSummaryOptions",
         "SemanticSummaryResult",
         "SummaryNumericStrategy",
         "SummaryScope",
-        "createDictionaryColumn",
         "summarizeRows"
       ],
       "runtimeNames": [
-        "createDictionaryColumn",
         "summarizeRows"
       ],
       "hasDefault": false,

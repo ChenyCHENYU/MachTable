@@ -1,5 +1,16 @@
 # @agile-team/mach-table-xlsx
 
+## 0.37.0
+
+### Minor Changes
+
+- 移除内置字典缓存、字典渲染器、专用列适配及对应公共协议。字典等数据插件完全由项目安装和组合，表格只消费普通选项、同步 valueFormatter/valueParser/valueSerializer 和刷新调用；business 入口保留本地语义合计。删除 createCachedDictionary、createDictionaryRenderer、createDictionaryColumn，升级需按指南改为项目层普通列配置。
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.37.0
+
 ## 0.36.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
-# 业务字段、字典与权限操作
+# 业务字段与权限操作
 
-MachTable 把项目里最容易复制粘贴的金额、日期、字典和操作权限统一放到应用配置。页面只描述业务含义，不再重复 formatter、缓存、确认框和错误处理。
+MachTable 提供金额、日期等语义列和统一操作策略。外部选项的请求、翻译和缓存由项目插件持有，表格只消费普通列配置和同步值回调，不识别业务服务或注入协议。
 
 ## 一次配置语义列
 
@@ -37,103 +37,32 @@ const columns: ColDef<Order>[] = [
 
 内置类型包括 `text`、`number`、`integer`、`money`、`percent`、`percentage`、`date`、`datetime`、`boolean`、`status` 和 `link`。它们使用 `Intl`，不会在页面里固化币种和时区；具体列仍可覆盖任何属性。
 
-## 异步字典只请求一次
+## 由项目组合外部选项
+
+外部服务由应用统一安装。页面通过项目自己的组合函数取得已准备的标签、选项和状态，再交给表格的通用列能力；MachTable 不注册数据服务，不读取 Provider，不创建缓存或在单元格内请求接口。
 
 ```ts
-import {
-  createCachedDictionary,
-  createDictionaryRenderer
-} from "@agile-team/mach-table-vue";
+import type { ColDef } from "@agile-team/mach-table-vue";
 
-const departments = createCachedDictionary<string>({
-  // 同一渲染批次的 key 会合并；排队及加载中的同一 key 复用请求。
-  load: (keys, signal) => dictionaryApi.labels("department", keys, { signal }),
-  ttlMs: 10 * 60_000,
-  maxSize: 2_000,
-  onError: (error, keys) => telemetry.captureException(error, { keys })
-});
-
+// 示例数据由项目持有；实际项目可复用任何插件或接口的响应式快照。
+const options = [{ value: "D01", label: "生产部" }];
+const labels = new Map(options.map(option => [option.value, option.label]));
+const label = (value: unknown) => labels.get(String(value)) ?? String(value ?? "");
 const columns: ColDef<Employee>[] = [{
   field: "departmentId",
   headerName: "部门",
-  cellRenderer: createDictionaryRenderer(departments, { loadingText: "加载中…" })
+  valueFormatter: ({ value }) => label(value),
+  valueSerializer: ({ value, target }) => target === "xlsx" ? value : label(value),
+  cellEditor: "select",
+  cellEditorParams: { options },
+  filter: "set",
+  filterOptions: options
 }];
 ```
 
-解析器具备批处理、在途去重、TTL、LRU、主动失效和销毁取消能力。`1` 与 `"1"` 是不同的键，标签可以是空字符串。加载器只需返回当前请求键的标签；未返回的键会按相同 TTL 缓存“缺失”，避免未知编码在每次渲染时重复请求。标签与缺失记录共用 `maxSize` 的 LRU 容量，`size` 包含两者；`ttlMs: 0` 表示直到主动失效或 LRU 淘汰才重新加载。请求失败不会缓存，可由下一次 `resolve()` 重试。
+`valueFormatter` 只负责显示，`valueParser` 负责输入转换，`valueSerializer` 明确复制/CSV/XLSX 的输出口径。项目层处理原码类型、歧义输入与历史停用项；列回调同步纯读，不把标签写回原始模型。详见[列值策略](./column-values.md)。
 
-字典更新后执行 `departments.invalidate(keys)`，不传键则全部失效。命中的排队/在途查询立即以 `undefined` 收敛；之后调用 `resolve()` 会重新加载。旧响应不会回填失效键或覆盖新请求的结果；同批次其他键继续完成。整批等待均已失效时会中断其 `AbortSignal`，即使加载器忽略取消，其迟到响应也不会回写。加载器额外返回的未请求键不进入缓存；批量预置标签使用 `prime(entries)`。
-
-`prime(entries)` 是显式更新：同时满足这些键的等待者，旧请求不再覆盖新标签。应用销毁时调用 `destroy()`，所有未完成查询以销毁错误拒绝，后续 `resolve()` 也拒绝，`prime()` 不会复活实例。`onError` 是观察回调；其同步抛错或 Promise 拒绝不会替换原请求错误，也不会阻止等待者收敛。
-
-缓存实例应由应用按组织、租户和语言作用域持有。切换作用域时先失效旧请求，再接入新作用域的加载上下文；不要让两个同时活动的租户共用一个可变全局加载器。平台已有统一字典缓存时直接适配现有数据源，避免再叠一层缓存。
-
-字典 renderer 只负责单元格展示，不会替业务选择复制、CSV 和 XLSX 的输出口径。编码、标签或码名输出由 `valueSerializer` 显式声明；远程标签在输出前准备好，同步 serializer 中不发请求。详见[字典输出策略](./column-values.md#字典输出策略)。
-
-## 显式字典列策略
-
-同一编码需要在屏幕、复制和文件中采用不同形式时，从可选 `/business` 入口使用 `createDictionaryColumn`。Core、Vue、React 包均提供同名子路径；默认入口不加载这些值策略。它只要求数据源提供同步 `get(key)`，可以直接消费上述解析器或平台已有 Provider，不加载远程数据，也不创建第二份缓存。
-
-```ts
-import { createDictionaryColumn } from "@agile-team/mach-table-vue/business";
-import type { DictionaryEntry } from "@agile-team/mach-table-vue";
-
-let departmentOptions: readonly DictionaryEntry<string>[] = [];
-const departmentColumn: ColDef<Employee> = {
-  field: "departmentId",
-  headerName: "部门",
-  ...createDictionaryColumn(departments, {
-    options: () => departmentOptions,
-    display: "label",
-    output: { clipboard: "label", csv: "code-label", xlsx: "code" }
-  })
-};
-
-// 以同一作用域的新快照替换数组，反向解析索引随引用变化更新；不要原地修改旧数组。
-departmentOptions = nextDepartmentOptions;
-departments.prime(departmentOptions);
-api.view.refreshCells();
-```
-
-`display` 支持 `code`、`label`、`code-label`（例如 `D01 · 生产部`），默认 `label`；未配置的输出通道保留原编码及类型。`valueParser` 优先识别原始编码，再识别唯一标签或码名。数字 `1`、字符串 `"1"`、布尔 `false` 与字符串 `"false"` 不混同，`"001"` 保留前导零。重复标签或标签与码名冲突时报告歧义错误，未知编码及 `null`、`undefined`、空字符串保留原值，是否允许提交由列 `validate` 决定。反向索引每个不可变选项快照只建立一次，单元格不会扫描整个字典。
-
-真实数组会逐项翻译，默认用 `、` 连接，可通过 `separator` 调整屏幕与标签输出的分隔符。默认复制、CSV、XLSX 的值策略仍返回原数组或布尔值；最终文件单元格如何承载数组由对应导出器决定。数组输入会逐项解析并保留成员类型，不修改原数组；字符串不按逗号或显示分隔符隐式拆分，避免标签本身含分隔符时误写数据。显式导出为多值标签文本后，不承诺能自动粘贴还原为数组。
-
-这一扩展只作用于显式配置的 `/business` 字典列；原单值编码的匹配、歧义拒绝和默认原码输出保持兼容。根入口 `createCachedDictionary()` 的键范围仍为字符串与数字，布尔字典通过结构化 Provider 接入，不改变旧缓存与 renderer 的行为。
-
-Provider 或选项快照负责历史停用码、组织和语言的范围。只提供 `get` 而不提供 `options` 时，原码仍可输入，但不进行标签反向匹配；大型客户或物料应使用分页 Lookup。异步标签先通过现有 Provider 预热，再刷新或导出；这些列回调同步执行，不发请求。页面仍可覆盖返回的任意列回调。
-
-### 连接应用统一字典
-
-应用已有命名字典服务时，直接取同一个字典对象。结构只要求 `get(key)` 和可选的不可变 `getOptions()` 快照，选项上的 `disabled` 等元数据不会阻断历史值翻译；是否允许新选择或提交仍由业务校验决定。MachTable 不依赖下例的服务包，也不为它增加缓存。
-
-```ts
-import { createDictionaryStore } from "@robot-admin/dictionary";
-import { useDictionaryRefresh } from "@robot-admin/dictionary/vue";
-import { createDictionaryColumn } from "@agile-team/mach-table-vue/business";
-
-// 服务实例由应用持有；静态枚举或接口加载字典均可提供同一结构。
-const dictionaries = createDictionaryStore({
-  planStatus: [
-    { value: false, label: "未下达" },
-    { value: true, label: "已下达" }
-  ]
-});
-const statusSource = dictionaries.getDictionary("planStatus");
-const statusColumn = {
-  field: "released",
-  headerName: "下达状态",
-  ...createDictionaryColumn(statusSource, {
-    options: statusSource.getOptions
-  })
-};
-
-// 在页面 setup 中订阅当前字典，异步加载/刷新后只调用公开刷新 API。
-// table 为已有 useMachTable() 的返回值；订阅随 Vue 作用域释放。
-useDictionaryRefresh([statusSource], () => table.api.value?.view.refreshCells());
-```
-
-远程字典的请求、加载/空/失败状态与显式重试由应用字典服务负责；单元格渲染始终同步纯读。多个表格和下拉可共享同一个命名字典，租户、组织或语言切换时由应用隔离服务实例或数据源上下文。
+外部标签更新后，由项目订阅调用 `api.view.refreshCells()`；选项或编辑参数变化时替换普通列配置。需要重新测量文字宽度时调用 `api.columns.autoSize(["departmentId"])`。加载、失败与重试通过页面现有状态区展示；导出前由项目等待同一查询和身份快照所需的数据准备完成。
 
 ## 显式语义合计
 

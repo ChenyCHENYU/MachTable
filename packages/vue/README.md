@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.36.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.37.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
 
@@ -168,7 +168,7 @@ const options: GridOptions<Plan> = {
 | `/server-side` | 服务端分组/聚合、route 分页、缓存/刷新/事务及层级选择 |
 | `/multi-range` | Ctrl/Cmd 追加范围、格式化复制、校验清空及撤销 |
 | `/import` | 有界数据预览、共享同步/异步校验、结构化错误与过期保护 |
-| `/business` | 显式字典显示/解析/输出策略、范围与币种/单位分组的本地语义合计 |
+| `/business` | 范围与币种/单位分组的本地语义合计 |
 | `/analysis` | Pivot、安全公式、柱/折线图和数据表回退 |
 
 ```ts
@@ -186,28 +186,33 @@ filters.destroy();
 
 Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。
 
-## 0.34 字典列策略与语义合计
+## 显示策略与本地合计
+
+页面把已准备好的标签与普通格式化函数组合到列上。MachTable 只接收同步函数与普通选项，不持有字典实例、加载服务或订阅协议。异步数据准备与刷新由项目管理。
 
 ```ts
-import { createDictionaryColumn, summarizeRows } from "@agile-team/mach-table-vue/business";
+import { summarizeRows } from "@agile-team/mach-table-vue/business";
 
-const options = [{ value: "ready", label: "已就绪" }];
-const labels = new Map(options.map(entry => [entry.value, entry.label]));
+const labels = new Map([["ready", "已就绪"]]);
 const statusColumn = {
   field: "status",
-  ...createDictionaryColumn({ get: key => labels.get(key) }, {
-    options,
-    display: "label",
-    output: { clipboard: "label", csv: "code-label" }
-  })
+  valueFormatter: ({ value }) => labels.get(String(value)) ?? String(value ?? ""),
+  valueSerializer: ({ value, target }) =>
+    target === "clipboard" ? labels.get(String(value)) ?? value : value
 };
+const rows = [{ currency: "CNY", unit: "t", amount: 120, completed: 2, planned: 4 }];
+const summary = summarizeRows(rows, {
+  scope: "page",
+  groupBy: row => JSON.stringify([row.currency, row.unit]),
+  metrics: [
+    { id: "amount", kind: "sum", value: row => row.amount },
+    { id: "count", kind: "count" },
+    { id: "completion", kind: "ratio", numerator: row => row.completed, denominator: row => row.planned }
+  ]
+});
 ```
 
-`/business` 无 UI、请求或缓存，连接已有 Provider；异步标签先预热，动态选项用新数组替换快照。原始数字/文本编码保留类型，重复标签拒绝歧义；未配置的输出通道保留原码，旧 renderer 的导出行为不变。
-
-`summarizeRows(rows, { scope, metrics, groupBy?, numeric? })` 只计算传入记录，支持 sum/count/ratio/none；ratio 先分别汇总分子分母。业务按币种、单位分组，scope 仅声明 page/selected/query，不自动获取全量。默认有限 number 仍遵循浮点语义，精确金额使用已有同步 numeric 策略；结果接入原 summaryMethod 或固定行。详见[业务列与字典](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/business-columns.md)。
-
-根入口的 `createCachedDictionary()` 现在复用同 key 在途请求，失效隔离旧响应并结束旧等待，缺失项受同一 TTL/LRU 约束。失败可重试，销毁拒绝未完成请求，错误观察回调不会阻塞清理。具体升级边界见[升级指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/upgrading.md)。
+`/business` 只提供本地语义合计；scope 声明 page/selected/query，实际只处理传入记录。ratio 先汇总分子分母，精确金额可注入 numeric 策略；服务端全量由后端计算。详情见[业务列与合计](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/business-columns.md)。
 
 ## 列值与运行边界（自 0.33）
 
@@ -218,7 +223,7 @@ const statusColumn = {
 
 ## 内容列宽与状态颜色（0.35）
 
-未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化、字典及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
+未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化文本及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
 
 ```ts
 const columns = [
@@ -232,7 +237,7 @@ const columns = [
 ];
 ```
 
-`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。字典/formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
+`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
 
 普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 

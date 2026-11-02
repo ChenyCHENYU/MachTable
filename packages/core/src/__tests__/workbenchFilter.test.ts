@@ -121,7 +121,7 @@ describe("advanced filter workbench", () => {
     expect(builder.getDraft()?.root).toMatchObject({ colId: "amount" });
   });
 
-  it("uses dictionary labels while preserving number/null values and unknown selections", () => {
+  it("uses explicit option labels while preserving number/null values and unknown selections", () => {
     const { host, api, builder } = setup();
     builder.setDraft({ version: 1, root: { kind: "condition", colId: "status", filter: { type: "set", values: [1, null] } } });
     expect(host.textContent).toContain("已完成");
@@ -130,7 +130,7 @@ describe("advanced filter workbench", () => {
     expect(api.filtering.getAdvancedModel()?.root).toMatchObject({ filter: { type: "set", values: [1, null] } });
   });
 
-  it("infers a bounded set dictionary from current rows when explicit values are omitted", () => {
+  it("infers a bounded option set from current rows when explicit values are omitted", () => {
     const { host, api, builder } = setup();
     api.columns.setDefinitions([{ field: "name", filter: "set" }]);
     builder.refresh();

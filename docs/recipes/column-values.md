@@ -32,27 +32,24 @@ const columns: ColDef<Item>[] = [
 
 输出时，列 serializer 优先于内置策略。未配置时，剪贴板使用显示格式，CSV 保留数值原值、其他值使用显示格式，typed matrix/XLSX 使用原始值。`target` 是 `clipboard`、`csv` 或 `xlsx`。CSV 和 matrix 默认启用已有 `protectFormulas`；只有明确需要原始公式文本时才传 `false`。
 
-## 字典输出策略
+## 外部标签与输出策略
 
-`createDictionaryRenderer(dictionary)` 负责显示标签，不修改原始编码。未配置 formatter/serializer 时，复制、CSV 和 XLSX 仍按原值输出。仅配置 `valueFormatter` 时，复制和非数值 CSV 会使用标签，XLSX 继续保留原值；需要明确输出口径时使用 `valueSerializer`。
+标签读取函数由项目持有，可来自任何插件、接口或静态映射。表格只调用同步的显示和输出回调，不识别服务对象或数据来源。
 
 ```ts
+const labels = new Map([["A", "已下达"]]);
+const label = (value: unknown) => labels.get(String(value)) ?? String(value ?? "");
 const statusColumn: ColDef<Order> = {
   field: "status",
-  cellRenderer: createDictionaryRenderer(statusDictionary),
-  valueSerializer: ({ value, target }) => {
-    if (value == null || value === "") return "";
-    // 机器工作表保留编码，人工复制/CSV 使用标签；也可由业务统一为码名输出。
-    return target === "xlsx" ? value : statusDictionary.get(value) ?? String(value);
-  }
+  valueFormatter: ({ value }) => label(value),
+  valueSerializer: ({ value, target }) => target === "xlsx" ? value : label(value)
 };
 
-// 输出前固定查询和字典作用域，等待当前导出数据涉及的键完成加载。
-await statusDictionary.resolveMany(rowsToExport.map(row => row.status));
+// 项目先准备好同一查询/身份快照需要的标签，再调用同步输出。
 const matrix = api.io.exportMatrix({ target: "xlsx" });
 ```
 
-上例中的 `rowsToExport` 必须与实际输出范围一致，且准备期间不能切换查询、租户或字典版本。大量远程数据应使用[服务端导出快照](./remote-export.md)，由后端按固定口径生成文件。标签是否属于权威业务数据、缺失或加载失败时是否允许原码兜底，由应用明确选择；不要静默把导出编码全部改为中文。
+仅配置 `valueFormatter` 时，复制和非数值 CSV 使用显示格式，XLSX 保留原值。需要原码、标签或码名等不同输出时，使用项目定义的 `valueSerializer` 明确选择。缺失或加载失败时是否允许原码兜底也由项目决定；不要静默把导出编码全部改为中文。大量远程数据使用[服务端导出快照](./remote-export.md)，由后端按固定口径生成文件。
 
 ## 数字、日期与空值
 

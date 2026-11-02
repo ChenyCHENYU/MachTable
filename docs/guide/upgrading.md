@@ -3,10 +3,18 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.36.0
+pnpm up @agile-team/mach-table-vue@^0.37.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.36.0
+pnpm up @agile-team/mach-table-react@^0.37.0
 ```
+
+## 0.36 → 0.37：移除表格内置字典服务
+
+表格仅提供通用值回调和选项配置。原根入口的 `createCachedDictionary`、`createDictionaryRenderer` 及相关类型，以及 `/business` 的 `createDictionaryColumn`、`DictionaryColumnSource`、`DictionaryColumnOptions`、`DictionaryDisplay` 已移除；`/business` 继续提供 `summarizeRows`。
+
+字典或枚举插件只由项目安装并管理接口、缓存、身份与错误。项目把已取得的标签和选项映射为普通 `ColDef`：显示使用 `valueFormatter`，输入使用 `valueParser`，输出使用 `valueSerializer`，下拉使用 `cellEditorParams.options`，筛选使用 `filterOptions`。异步更新由项目订阅并调用公开刷新 API；表格包内不再保留特定数据源协议或额外缓存。示例见[业务字段](../recipes/business-columns.md#由项目组合外部选项)与[列值策略](../recipes/column-values.md#外部标签与输出策略)。
+
+以下旧版本记录用于理解历史行为，不代表当前仍导出已移除服务。
 
 ## 0.35.3 → 0.36.0
 

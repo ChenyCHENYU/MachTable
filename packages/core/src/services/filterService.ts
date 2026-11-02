@@ -152,7 +152,7 @@ function compileAdvancedFilter(
 
 /**
  * A filter plan belongs to one refresh. Compile metadata and search tokens once,
- * but keep getters live so external dictionaries/context never become stale.
+ * but keep getters live so external context never become stale.
  */
 export function createRowFilter(
   columns: readonly Column[],

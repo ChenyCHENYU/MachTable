@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.36.0 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版统一完整表头宽度下限，覆盖初始布局、fit、状态恢复及交互缩列，内置插画空态与亮暗主题继续保留；可选 `/business` 的字典列策略、本地语义合计及字典缓存隔离继续兼容；普通根入口 API 和既有默认行为保持兼容。
+MachTable 0.37.0 的框架无关 TypeScript Core：零运行时依赖，提供行列双虚拟化、领域化 API、单元格/整行编辑、树与分组、随机访问远程数据、区段隔离状态持久化和可诊断扩展系统。本版统一完整表头宽度下限，覆盖初始布局、fit、状态恢复及交互缩列，内置插画空态与亮暗主题继续保留；本版移除内置字典服务与专用列适配，页面通过通用格式化、选项和刷新 API 组合独立数据插件；`/business` 保留本地语义合计。删除的 API 与迁移见升级指南。
 
 小型本地明细可使用 `domLayout: "autoHeight"` 随当前页内容收起；本版为该模式的空态、加载态和错误态预留必要展示空间，恢复数据后释放最小高度。可通过 `--mach-overlay-min-height` 局部调整。大数据表继续使用有明确高度的默认虚拟布局。
 
@@ -98,7 +98,7 @@ const options: GridOptions<Plan> = {
 | `/server-side` | 服务端分组/聚合、route 分页、缓存/刷新/事务及层级选择 |
 | `/multi-range` | Ctrl/Cmd 追加范围、格式化复制、校验清空及撤销 |
 | `/import` | 有界数据预览、共享同步/异步校验、结构化错误与过期保护 |
-| `/business` | 显式字典显示/解析/输出策略、范围与币种/单位分组的本地语义合计 |
+| `/business` | 范围与币种/单位分组的本地语义合计 |
 | `/analysis` | Pivot、安全公式、柱/折线图和数据表回退 |
 
 ```ts
@@ -116,28 +116,33 @@ filters.destroy();
 
 Source-available © ChenyCHENYU (Agile Team). 任何使用均须事先取得书面授权。详见 [LICENSE](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSE) 与[授权流程](https://github.com/ChenyCHENYU/MachTable/blob/main/LICENSING.md)。
 
-## 0.34 字典列策略与语义合计
+## 显示策略与本地合计
+
+页面把已准备好的标签与普通格式化函数组合到列上。MachTable 只接收同步函数与普通选项，不持有字典实例、加载服务或订阅协议。异步数据准备与刷新由项目管理。
 
 ```ts
-import { createDictionaryColumn, summarizeRows } from "@agile-team/mach-table/business";
+import { summarizeRows } from "@agile-team/mach-table/business";
 
-const options = [{ value: "ready", label: "已就绪" }];
-const labels = new Map(options.map(entry => [entry.value, entry.label]));
+const labels = new Map([["ready", "已就绪"]]);
 const statusColumn = {
   field: "status",
-  ...createDictionaryColumn({ get: key => labels.get(key) }, {
-    options,
-    display: "label",
-    output: { clipboard: "label", csv: "code-label" }
-  })
+  valueFormatter: ({ value }) => labels.get(String(value)) ?? String(value ?? ""),
+  valueSerializer: ({ value, target }) =>
+    target === "clipboard" ? labels.get(String(value)) ?? value : value
 };
+const rows = [{ currency: "CNY", unit: "t", amount: 120, completed: 2, planned: 4 }];
+const summary = summarizeRows(rows, {
+  scope: "page",
+  groupBy: row => JSON.stringify([row.currency, row.unit]),
+  metrics: [
+    { id: "amount", kind: "sum", value: row => row.amount },
+    { id: "count", kind: "count" },
+    { id: "completion", kind: "ratio", numerator: row => row.completed, denominator: row => row.planned }
+  ]
+});
 ```
 
-`/business` 无 UI、请求或缓存，连接已有 Provider；异步标签先预热，动态选项用新数组替换快照。原始数字/文本编码保留类型，重复标签拒绝歧义；未配置的输出通道保留原码，旧 renderer 的导出行为不变。
-
-`summarizeRows(rows, { scope, metrics, groupBy?, numeric? })` 只计算传入记录，支持 sum/count/ratio/none；ratio 先分别汇总分子分母。业务按币种、单位分组，scope 仅声明 page/selected/query，不自动获取全量。默认有限 number 仍遵循浮点语义，精确金额使用已有同步 numeric 策略；结果接入原 summaryMethod 或固定行。详见[业务列与字典](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/business-columns.md)。
-
-根入口的 `createCachedDictionary()` 现在复用同 key 在途请求，失效隔离旧响应并结束旧等待，缺失项受同一 TTL/LRU 约束。失败可重试，销毁拒绝未完成请求，错误观察回调不会阻塞清理。具体升级边界见[升级指南](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/upgrading.md)。
+`/business` 只提供本地语义合计；scope 声明 page/selected/query，实际只处理传入记录。ratio 先汇总分子分母，精确金额可注入 numeric 策略；服务端全量由后端计算。详情见[业务列与合计](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/business-columns.md)。
 
 ## 列值与运行边界（自 0.33）
 
@@ -150,7 +155,7 @@ const statusColumn = {
 
 ## 内容列宽与状态颜色（0.35）
 
-未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化、字典及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
+未声明 `width` 的列默认按表头和已加载数据的显示文本测宽：每列均匀抽样最多 100 行，默认 80–360px，`minWidth/maxWidth` 可覆盖。长内容在单元格内省略，表格保留内部横向滚动；不为测宽请求远程数据或执行自定义渲染器。格式化文本及状态标签文字都参与测量。图形/操作等特殊列请指定宽度。
 
 ```ts
 const columns = [
@@ -164,7 +169,7 @@ const columns = [
 ];
 ```
 
-`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。字典/formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
+`status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
 
 普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 

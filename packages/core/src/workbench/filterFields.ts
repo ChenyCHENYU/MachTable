@@ -30,7 +30,7 @@ export function resolveFilterFields<TData>(api: GridApi<TData>, configured?: rea
 }
 
 function resolveField<TData>(column: ColDef<TData>, colId: string, api: GridApi<TData>): ResolvedFilterField {
-  const options = dictionaryOptions(column) ?? sampledOptions(column, api);
+  const options = explicitOptions(column) ?? sampledOptions(column, api);
   const value = column.field ? getByPath(api.rows.getAt(0)?.data, column.field) : undefined;
   const inferred = column.cellEditor === "number" || typeof value === "number" ? "number" : "text";
   const type = typeof column.filter === "string" ? column.filter
@@ -38,12 +38,12 @@ function resolveField<TData>(column: ColDef<TData>, colId: string, api: GridApi<
   return { colId, label: column.headerName ?? colId, type, ...(options ? { options } : {}) };
 }
 
-function dictionaryOptions<TData>(column: ColDef<TData>): FilterField["options"] {
+function explicitOptions<TData>(column: ColDef<TData>): FilterField["options"] {
   return column.cellEditorParams?.options
     ?? (column.filterParams?.values ?? column.cellEditorParams?.values)?.map((value) => ({ label: String(value ?? "空值"), value }));
 }
 
-/** Set fields without an explicit dictionary use a bounded sample of the current view. */
+/** Set fields without explicit options use a bounded sample of the current view. */
 function sampledOptions<TData>(column: ColDef<TData>, api: GridApi<TData>): FilterField["options"] {
   if (column.filter !== "set" || !column.field) return undefined;
   const values = new Map<string, { label: string; value: string | number | null }>();

@@ -121,7 +121,7 @@ export interface SelectEditorOption {
 export interface SelectEditorParams {
   /** Primitive options kept for concise same-label/same-value selects. */
   values?: readonly (string | number)[];
-  /** Label/value options for dictionary fields whose stored value differs from its display text. */
+  /** Label/value options when the stored value differs from its display text. */
   options?: readonly SelectEditorOption[];
 }
 

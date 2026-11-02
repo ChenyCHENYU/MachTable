@@ -13,7 +13,7 @@ MachTable 按运行时成本和职责拆分入口。Vue/React 项目只安装对
 | 创建 | `createGrid`、`version` |
 | 列定义 | `defineColumns`、`createColumnHelper`、`selectionColumn`、`indexColumn`、`dragColumn`、`actionsColumn`、`rowActionsColumn` |
 | 配置 | `defineGridOptions`、`defineMachTableConfig`、`defineMachTablePreset`、`createMachTablePreset`、`createEnterprisePreset` |
-| 业务列 | `createBusinessColumnTypes`、`createCachedDictionary`、`createDictionaryRenderer` |
+| 业务列 | `createBusinessColumnTypes` |
 | 状态/视图 | `normalizeGridState`、`saveGridState`、`loadGridState`、`clearGridState`、`createLocalGridStateStore`、`createGridViewManager` |
 | 过滤 | `advancedFilterCondition`、`advancedFilterGroup`、`normalizeAdvancedFilterModel`、`normalizeFilterModel` |
 | 操作与渲染 | `createMachTableCommands`、`createActionButtonsRenderer`、`createRowActionsRenderer`、`createStatusTagRenderer`、`createProgressBarRenderer` |
@@ -53,7 +53,7 @@ import "@agile-team/mach-table/styles/mach-table.css";
 | `/ordering` | `reorderRows`、`moveTreeNodes`、`createRowOrderController` 及排序保存/撤销/重做协议 | 沿用基础表格样式 |
 | `/server-side` | `createServerSideStore`、`bindServerSideGrid`、`createServerSideGroupColumn`、`serverSideDataColumn` | `/styles/server-side.css` |
 | `/analysis` | 无 DOM 的 `createPivot`、`evaluateFormulas`，以及 `mountAnalysis` 面板 | 面板使用 `/styles/workbench.css` |
-| `/business` | `createDictionaryColumn`、`summarizeRows`，显式字段值策略与本地语义合计；无 UI、请求或缓存 | 无 |
+| `/business` | `summarizeRows`，显式本地语义合计；无 UI、请求或缓存 | 无 |
 | `/multi-range` | `createMultiRangeSelection`，复用 Core 选区、复制、校验与编辑撤销 | `/styles/workbench.css` |
 | `/import` | `createImportPlan`、`ImportSource` / `ImportPreview` / `ImportResult`，有界预览与共享校验 | 无 |
 

@@ -174,20 +174,8 @@ export type {
   MachTableRuntimeConfig,
   ResolvedMachTableConfig
 } from "./lib/configuration";
-export {
-  createBusinessColumnTypes,
-  createCachedDictionary,
-  createDictionaryRenderer
-} from "./lib/businessColumns";
-export type {
-  BusinessColumnType,
-  BusinessColumnTypeOptions,
-  CachedDictionary,
-  CachedDictionaryOptions,
-  DictionaryEntry,
-  DictionaryKey,
-  DictionaryRendererOptions
-} from "./lib/businessColumns";
+export { createBusinessColumnTypes } from "./lib/businessColumns";
+export type { BusinessColumnType, BusinessColumnTypeOptions } from "./lib/businessColumns";
 export type { TooltipParams, ContextMenuParams, ContextMenuItem } from "./types/params";
 export type {
   GridApi,
