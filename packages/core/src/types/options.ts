@@ -312,6 +312,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   loadTreeChildren?: (params: TreeDataLoadParams<TData>) => Promise<readonly TData[]>;
   autoCheckedChildren?: boolean;
   defaultExpandAll?: boolean;
+  /** Add a row-number column when no index column is declared. Enabled by default by the Vue and React components. */
+  rowNumber?: boolean;
   indexOffset?: number;
   /** Apply flat local row moves automatically (default true). False emits intent for server-controlled ordering. */
   applyRowDrag?: boolean;
@@ -431,6 +433,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   loadTreeChildren?: (params: TreeDataLoadParams<TData>) => Promise<readonly TData[]>;
   autoCheckedChildren: boolean;
   defaultExpandAll: boolean;
+  rowNumber: boolean;
   indexOffset: number;
   applyRowDrag: boolean;
   rowDragPolicy?: RowDragPolicy<TData>;

@@ -78,6 +78,7 @@ export const GRID_OPTION_KINDS = {
   loadTreeChildren: "function",
   autoCheckedChildren: "boolean",
   defaultExpandAll: "boolean",
+  rowNumber: "boolean",
   indexOffset: "number",
   applyRowDrag: "boolean",
   rowDragPolicy: "object",

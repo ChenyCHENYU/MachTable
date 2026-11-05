@@ -1,6 +1,37 @@
 # Schema 驱动渲染
 
-设计器 / 低代码平台的页面描述 JSON 直接生成列配置——表格"由数据渲染"。
+报表接口可以一起返回列和行。列定义已经是 `{ field, headerName }` 时，直接传给 `columnDefs`。接口使用 `field / title / type` 描述字段时，用 `buildColDefsFromSchema()` 转换。
+
+## Vue 接入报表接口
+
+假设项目的 `getReportApi()` 返回 `{ schema: GridSchema, rows: ReportRow[] }`，每行含有稳定、唯一的 `id`。
+
+```vue
+<script setup lang="ts">
+import { computed, onMounted, shallowRef } from "vue";
+import { MachTable, buildColDefsFromSchema } from "@agile-team/mach-table-vue";
+import { getReportApi } from "@/api/report";
+
+const report = shallowRef<Awaited<ReturnType<typeof getReportApi>>>();
+const schema = computed(() => report.value?.schema);
+const columns = computed(() => schema.value ? buildColDefsFromSchema(schema.value) : []);
+const rows = computed(() => report.value?.rows ?? []);
+
+async function loadReport() {
+  report.value = await getReportApi();
+}
+
+onMounted(loadReport);
+</script>
+
+<template>
+  <MachTable :column-defs="columns" :row-data="rows" row-key="id" />
+</template>
+```
+
+一次替换响应即可更新列和行。只刷新数据或翻页时，复用同一份 `schema`，避免重新生成列定义。跨查询保持字段标识稳定，表头名称可以随接口更新。
+
+同一个报表新增或删减字段时，表格按稳定列 ID 延续现有列偏好。切换到独立报表时，Vue 用 `:key="reportId"` 区分实例。启用列状态持久化的页面也应为每个报表分配独立的 `persistence.key`。
 
 ## Schema 结构
 
@@ -32,7 +63,7 @@ const api = createGrid(host, {
 | `type` | 生成行为 |
 | --- | --- |
 | `"string"`（默认） | 文本过滤器 |
-| `"number"` | 右对齐 + tabular-nums + 数字过滤器 |
+| `"number"` | 默认居中 + 等宽数字 + 数字过滤器 |
 | `"date"` | `format: "date" \| "datetime"` 格式化（ISO → 日期/日期时间）+ 日期过滤器 |
 | `"select"` | options 字典翻译显示（`value → label`）+ set 过滤器；`editable` 时生成 select 下拉编辑器（值为原始 value） |
 | `"boolean"` | `是 / 否` 格式化 + set 过滤器 |
@@ -72,11 +103,3 @@ defs[2].cellRenderer = "statusBadge";   // 或在 fields 元数据中约定 rend
 ```
 
 把 `components` 放进 `defineMachTableConfig({ components })` 可供全应用复用；也可以只传给当前表格。Schema 只保存稳定注册名，不保存函数。
-
-## 动态 Schema（设计器联动）
-
-```ts
-watch(schema, (next) => {
-  api.columns.setDefinitions(buildColDefsFromSchema(next));   // 列状态（宽/序/显隐）按 colId 保留
-});
-```

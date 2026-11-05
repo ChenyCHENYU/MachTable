@@ -51,7 +51,7 @@ describe("buildColDefsFromSchema", () => {
     const name = defs[0] as ColDef<Row>;
     expect(name.filter).toBe("text");
     const score = defs[1] as ColDef<Row>;
-    expect(score.type).toBe("rightAligned");
+    expect(score.type).toBeUndefined();
     expect(score.filter).toBe("number");
     const id = defs[2] as ColDef<Row>;
     expect(id.cellEditor).toBe("select");

@@ -14,7 +14,7 @@ import type { GridApi } from "../types/api";
 import type { GridOptions } from "../types/options";
 import type { ApplyGridStateOptions, GridState, GridStateInput, GridStateSection } from "../types/state";
 import type { AdvancedFilterModel } from "../types/advancedFilter";
-import type { Column } from "./column";
+import { isValueColumn, type Column } from "./column";
 import { EVENT_TYPES } from "../types/events";
 import type { ColDefOrGroup, ColumnState, FilterModel, SortModel } from "../types/colDef";
 import { DEFAULT_COL_DEF, GRID_SIZE_PRESETS, VALUE_DEFAULTS, resolveWatermark, rowIdFromKey } from "../core/resolveOptions";
@@ -46,17 +46,18 @@ import {
 } from "./gridApiDomains";
 
 interface OptionUpdateEffects {
-  datasourceChanged: boolean;
-  filterChanged: boolean;
-  needsCellRefresh: boolean;
-  needsColumnRebuild: boolean;
-  needsHeaderRebuild: boolean;
-  needsPoolRebuild: boolean;
-  needsRelayout: boolean;
-  needsRowRebuild: boolean;
-  needsStateLoad: boolean;
-  needsSummaryRefresh: boolean;
-  needsFeatureReload: boolean;
+  columnDefsChanged?: boolean;
+  datasourceChanged?: boolean;
+  filterChanged?: boolean;
+  needsCellRefresh?: boolean;
+  needsColumnRebuild?: boolean;
+  needsHeaderRebuild?: boolean;
+  needsPoolRebuild?: boolean;
+  needsRelayout?: boolean;
+  needsRowRebuild?: boolean;
+  needsStateLoad?: boolean;
+  needsSummaryRefresh?: boolean;
+  needsFeatureReload?: boolean;
   stateToApply?: GridStateInput;
 }
 
@@ -75,22 +76,6 @@ function abortError(signal?: AbortSignal): Error {
 
 function withAbort<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
   return abortable(task, signal, () => abortError(signal));
-}
-
-function createOptionUpdateEffects(): OptionUpdateEffects {
-  return {
-    datasourceChanged: false,
-    filterChanged: false,
-    needsCellRefresh: false,
-    needsColumnRebuild: false,
-    needsHeaderRebuild: false,
-    needsPoolRebuild: false,
-    needsRelayout: false,
-    needsRowRebuild: false,
-    needsStateLoad: false,
-    needsSummaryRefresh: false,
-    needsFeatureReload: false
-  };
 }
 
 function hasOwnOption<T extends object>(options: T, key: PropertyKey): boolean {
@@ -202,16 +187,7 @@ export class GridApiImpl<TData = any> {
   }
 
   setColumnDefs(colDefs: ColDefOrGroup<TData>[] | null | undefined): void {
-    if (this.core.isDisposed()) return;
-    this.core.gridOptions.columnDefs = colDefs ?? [];
-    this.core.columnModel.setColumnDefs(colDefs);
-    this.core.loadPersistedGridState();
-    this.core.onColumnsStructureChanged();
-    if (this.core.rowModel.isInfinite) void this.core.rowModel.onServerParamsChanged();
-    else {
-      this.core.rowModel.refreshPipeline();
-      this.core.requestUpdate({ data: true });
-    }
+    this.updateOptions({ columnDefs: [...(colDefs ?? [])] });
   }
 
   getColumnState(): ColumnState[] {
@@ -222,12 +198,14 @@ export class GridApiImpl<TData = any> {
     if (this.core.isDisposed()) return;
     this.core.columnModel.applyColumnState(state);
     this.core.onColumnsStructureChanged();
+    this.core.scheduleGridStateSave();
   }
 
   resetColumnState(): void {
     if (this.core.isDisposed()) return;
     this.core.columnModel.resetColumnState();
     this.core.onColumnsStructureChanged();
+    this.core.scheduleGridStateSave();
   }
 
   setColumnVisibility(colId: string, visible: boolean): void {
@@ -246,6 +224,7 @@ export class GridApiImpl<TData = any> {
     if (this.core.isDisposed()) return;
     this.core.columnModel.setColumnPinned(colId, pinned);
     this.core.onColumnsStructureChanged();
+    this.core.scheduleGridStateSave();
   }
 
   setColumnWidth(colId: string, width: number): boolean {
@@ -358,11 +337,11 @@ export class GridApiImpl<TData = any> {
     this.core.requestUpdate({ data: true });
   }
 
-  private emitFilterChanged(): void {
+  private emitFilterChanged(persist = true): void {
     this.core.emit("filterChanged", {
       filterModel: this.core.rowModel.getFilterModel(),
       advancedFilterModel: this.core.rowModel.getAdvancedFilterModel()
-    });
+    }, persist);
   }
 
   isColumnFilterPresent(colId: string): boolean {
@@ -733,7 +712,7 @@ export class GridApiImpl<TData = any> {
       if (!win) return false;
       const cols = this.core.columnModel
         .getOrderedVisible()
-        .filter((c) => !c.hasCheckbox && !c.isDetailToggle && !c.colDef.rowDrag);
+        .filter(column => isValueColumn(column) && !column.colDef.rowDrag);
       const nodes = this.core.rowModel.getPipelineRows().filter((n) => !n.isDetail && !n.isGroup);
       const includeHeader = options.includeHeader !== false;
       const headerCells = includeHeader
@@ -809,7 +788,7 @@ export class GridApiImpl<TData = any> {
     options = sanitizeGridOptionPatch(options);
     if (Object.keys(options).length === 0) return;
     this.core.batchUpdates(() => {
-      const effects = createOptionUpdateEffects();
+      const effects: OptionUpdateEffects = {};
       const previousColumnMenu = this.core.gridOptions.columnMenu;
 
       this.updateSourceOptions(options, effects);
@@ -831,8 +810,9 @@ export class GridApiImpl<TData = any> {
     if (hasOwnOption(options, "columnDefs") && options.columnDefs !== resolved.columnDefs) {
       resolved.columnDefs = Array.isArray(options.columnDefs) ? options.columnDefs : [];
       effects.needsColumnRebuild = true;
-      effects.needsRowRebuild = true;
+      effects.columnDefsChanged = true;
     }
+    if (copyOptions(options, resolved, ["rowNumber"])) effects.needsColumnRebuild = true;
     if (hasOwnOption(options, "rowData") && options.rowData !== resolved.rowData) {
       resolved.rowData = Array.isArray(options.rowData) ? options.rowData : [];
       effects.needsRowRebuild = true;
@@ -960,7 +940,7 @@ export class GridApiImpl<TData = any> {
   }
 
   private updatePaginationOptions(options: Partial<GridOptions<TData>>): void {
-    if (options.pagination === undefined) return;
+    if (!hasOwnOption(options, "pagination")) return;
     const resolved = this.core.gridOptions;
     const config = options.pagination;
     const enabled = config !== false && resolved.datasource == null;
@@ -1086,9 +1066,6 @@ export class GridApiImpl<TData = any> {
     if (options.defaultExpandAll != null && options.defaultExpandAll !== resolved.defaultExpandAll) {
       resolved.defaultExpandAll = options.defaultExpandAll;
       effects.needsRowRebuild = true;
-    }
-    if (hasOwnOption(options, "advancedFilterModel")) {
-      effects.filterChanged = this.core.rowModel.setAdvancedFilterModel(options.advancedFilterModel) || effects.filterChanged;
     }
     if (options.applyRowDrag != null) {
       resolved.applyRowDrag = options.applyRowDrag;
@@ -1258,27 +1235,13 @@ export class GridApiImpl<TData = any> {
   ): void {
     const resolved = this.core.gridOptions;
     if (effects.needsColumnRebuild) {
-      this.core.columnModel.setColumnDefs(resolved.columnDefs);
-      this.core.onColumnsStructureChanged();
-      effects.needsHeaderRebuild = false;
-      effects.needsPoolRebuild = false;
-    }
-    if (effects.needsStateLoad) {
-      this.core.loadPersistedGridState();
-      this.core.onColumnsStructureChanged();
+      this.rebuildColumns(options, effects);
+    } else if (hasOwnOption(options, "advancedFilterModel")) {
+      effects.filterChanged = this.core.rowModel.setAdvancedFilterModel(options.advancedFilterModel);
     }
     if (effects.needsFeatureReload) this.core.setFeatures(resolved.features);
-    this.applyRowUpdateEffect(effects);
-    if (effects.filterChanged) {
-      this.emitFilterChanged();
-      if (!effects.datasourceChanged && !effects.needsRowRebuild) {
-        if (this.core.rowModel.isInfinite) void this.core.rowModel.onServerParamsChanged();
-        else {
-          this.core.rowModel.refreshPipeline();
-          this.core.requestUpdate({ data: true });
-        }
-      }
-    }
+    this.applyRowsAndState(effects);
+    if (effects.filterChanged) this.emitFilterChanged(!effects.needsColumnRebuild);
     if (effects.needsRelayout) {
       this.core.skeleton.updateHeights(resolved.rowHeight, resolved.headerHeight);
     }
@@ -1296,17 +1259,42 @@ export class GridApiImpl<TData = any> {
     });
   }
 
-  private applyRowUpdateEffect(effects: OptionUpdateEffects): void {
+  private rebuildColumns(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
+    if (effects.columnDefsChanged && !effects.needsRowRebuild) {
+      this.core.cancelPendingInput();
+      this.core.editingService.stop(true);
+    }
+    const sortChanged = this.core.columnModel.setColumnDefs(this.core.gridOptions.columnDefs);
+    effects.filterChanged = this.core.rowModel.reconcileColumnFilters(
+      hasOwnOption(options, "advancedFilterModel") ? options.advancedFilterModel ?? null : undefined
+    );
+    if (sortChanged) this.core.emit("sortChanged", { sortModel: this.getSortModel() }, false);
+    this.core.onColumnsStructureChanged();
+    effects.needsHeaderRebuild = false;
+    effects.needsPoolRebuild = false;
+  }
+
+  private applyRowsAndState(effects: OptionUpdateEffects): void {
+    const restore = effects.needsStateLoad || effects.needsColumnRebuild;
+    const refreshRows = effects.needsRowRebuild || effects.columnDefsChanged || effects.filterChanged;
+    const reloadDatasource = this.core.rowModel.isInfinite && (effects.datasourceChanged || refreshRows);
+    if (restore && reloadDatasource) this.core.loadPersistedGridState(!effects.needsStateLoad, true);
+    this.applyRowUpdateEffect(effects, refreshRows);
+    if (restore && !reloadDatasource) this.core.loadPersistedGridState(!effects.needsStateLoad);
+  }
+
+  private applyRowUpdateEffect(effects: OptionUpdateEffects, refreshRows?: boolean): void {
     if (effects.datasourceChanged) {
       void this.core.rowModel.onDatasourceChanged();
       return;
     }
-    if (!effects.needsRowRebuild) return;
+    if (!refreshRows) return;
     if (this.core.rowModel.isInfinite) {
       void this.core.rowModel.onServerParamsChanged();
       return;
     }
-    this.core.rowModel.setRowData(this.core.gridOptions.rowData);
+    if (effects.needsRowRebuild) this.core.rowModel.setRowData(this.core.gridOptions.rowData);
+    else this.core.rowModel.refreshPipeline();
     this.core.requestUpdate({ data: true });
   }
 
@@ -1316,7 +1304,7 @@ export class GridApiImpl<TData = any> {
   }
 
   getDataAsMatrix(params: MatrixExportParams = {}): unknown[][] {
-    const cols = this.core.columnModel.getOrderedVisible().filter(column => !column.hasCheckbox && !column.isDetailToggle);
+    const cols = this.core.columnModel.getOrderedVisible().filter(isValueColumn);
     const header = params.includeHeader === false ? [] : [cols.map(column => column.colDef.headerName ?? column.colDef.field ?? column.id)];
     if (params.headersOnly) return header;
     const nodes = params.onlySelected ? this.core.selectionService.getSelectedNodes().slice().sort((left, right) => left.rowIndex - right.rowIndex)
@@ -1330,7 +1318,7 @@ export class GridApiImpl<TData = any> {
   getState(): GridState {
     return {
       version: 2,
-      columns: this.getColumnState(),
+      columns: this.core.columnModel.getColumnState(false),
       sortModel: this.getSortModel(),
       filterModel: this.getFilterModel(),
       advancedFilterModel: this.getAdvancedFilterModel(),
@@ -1360,6 +1348,7 @@ export class GridApiImpl<TData = any> {
     this.restoreStateSections(state, sections);
     this.refreshAfterStateRestore(state, sections);
     if (options.emitEvents !== false) this.emitStateEvents(sections);
+    if (sections.has("columns")) this.core.scheduleGridStateSave();
   }
 
   private restoreStateSections(state: GridState, sections: ReadonlySet<GridStateSection>): void {
@@ -1385,7 +1374,9 @@ export class GridApiImpl<TData = any> {
   private refreshAfterStateRestore(state: GridState, sections: ReadonlySet<GridStateSection>): void {
     if (sections.has("columns")) this.core.onColumnsStructureChanged();
     if (this.core.rowModel.isInfinite) {
-      void this.core.rowModel.onServerParamsChanged();
+      if (!this.core.isRestoringBeforeDatasource() && (sections.has("sort") || sections.has("filter"))) {
+        void this.core.rowModel.onServerParamsChanged();
+      }
     } else {
       this.core.rowModel.refreshPipeline();
       this.core.requestUpdate({ data: true });

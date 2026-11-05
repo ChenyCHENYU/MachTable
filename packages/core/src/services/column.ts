@@ -16,6 +16,8 @@ export class Column<TData = any> {
   parentGroup: ColumnGroup<TData> | null = null;
   level = 0;
   isDetailToggle = false;
+  /** Generated UI column excluded from the business export schema. */
+  declare isAutoRowNumber?: true;
 
   constructor(id: string, colDef: ColDef<TData>) {
     this.id = id;
@@ -56,4 +58,9 @@ export class Column<TData = any> {
     this.contentWidth = null;
     this.flex = normalizePositive(this.colDef.flex) ?? null;
   }
+}
+
+/** Columns owned by the caller keep their existing IO and presentation behavior. */
+export function isValueColumn(column: Column): boolean {
+  return !column.hasCheckbox && !column.isDetailToggle && !column.isAutoRowNumber;
 }

@@ -18,6 +18,7 @@ const options = defineGridOptions<Order>({
 | `columnDefs` | `(ColDef<T> \| ColDefGroup<T>)[] \| null` | `[]` | 列与分组表头定义 |
 | `rowData` | `T[] \| null` | `[]` | 本地行数据；与 `datasource` 不同时使用 |
 | `rowKey` | `FieldPath<T> \| (row: T) => string \| number` | 自动 ID | 稳定业务主键。编辑、选择保持、事务、树和远程数据强烈建议提供 |
+| `rowNumber` | `boolean` | Vue/React `true`，Core `false` | 列加载后自动显示序号。关闭自动序号不影响显式声明的 `indexColumn()` |
 | `defaultColDef` | `Partial<ColDef<T>>` | 内置默认列 | 全列默认值 |
 | `columnTypes` | `Record<string, Partial<ColDef<T>>>` | `{}` | 通过 `colDef.type` 复用的语义列类型 |
 | `initialState` | `GridState` | — | 列与首批数据就绪后原子恢复的 v2 状态 |
@@ -106,7 +107,7 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 
 | 配置 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `pagination` | `boolean \| PaginationConfig` | `true` | 客户端或受控服务端分页 |
+| `pagination` | `boolean \| PaginationConfig` | `true` | 默认客户端分页，每页 20 条。`false` 关闭，`datasource` 无限模式自动关闭 |
 | `datasource` | `GridDatasource<T>` | — | 无限/随机访问数据源 |
 | `datasourceMode` | `"sequential" \| "block"` | `"sequential"` | 顺序追加或随机块模型 |
 | `blockSize` | `number` | `100` | 每块行数 |

@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.37.0 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.38.0 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 小型本地明细设置 `domLayout="autoHeight"` 并让宿主保持自然高度即可随内容收起；空态、加载态和错误态保留必要空间，恢复数据后释放。大数据表仍应使用明确高度的虚拟视口，分页继续使用内置分页条。
 
@@ -22,14 +22,14 @@ import "@agile-team/mach-table-react/styles.css";
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, indexColumn, useMachTable, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
 
 interface Row { id: string; name: string }
 
 export function Customers({ rows }: { rows: Row[] }) {
   const table = useMachTable<Row>();
   const columns = useMemo<ColDef<Row>[]>(
-    () => [indexColumn({ headerName: "序号" }), { field: "name", flex: 1, editable: true }],
+    () => [{ field: "name", flex: 1, editable: true }],
     []
   );
 
@@ -49,6 +49,8 @@ export function Customers({ rows }: { rows: Row[] }) {
 ```
 
 对象型列和配置建议用 `useMemo` 保持引用稳定。`useMachTable()` 同时提供 `apiRef`、响应式 `api` 与 `ready`。
+
+默认显示序号和内置分页，可通过 `rowNumber={false}`、`pagination={false}` 分别关闭。需要定制序号时直接声明 `indexColumn()`。
 
 ## 应用配置
 

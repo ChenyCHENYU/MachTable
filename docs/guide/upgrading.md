@@ -3,10 +3,16 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.37.0
+pnpm up @agile-team/mach-table-vue@^0.38.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.37.0
+pnpm up @agile-team/mach-table-react@^0.38.0
 ```
+
+## 0.37 → 0.38
+
+Vue 和 React 表格默认增加序号。已有 `indexColumn()` 会优先使用，自定义业务序号字段可设置 `rowNumber: false` 关闭自动序号。直接调用 Core `createGrid()` 时可用 `rowNumber: true` 启用。自动序号只用于界面，CSV、XLSX 和远端导出继续使用业务列。
+
+动态表头的 `number` 字段继承默认居中，保留数字筛选。列上显式设置的 `align` 和业务列类型继续生效。
 
 ## 0.36 → 0.37：移除表格内置字典服务
 

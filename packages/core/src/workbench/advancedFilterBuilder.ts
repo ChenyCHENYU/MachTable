@@ -50,9 +50,13 @@ class FilterBuilder<TData> implements AdvancedFilterBuilder {
       options.api.on("gridDestroyed", () => this.destroy()),
       options.api.on("displayedColumnsChanged", () => this.refresh()),
       options.api.on("filterChanged", () => {
-        if (this.changed) this.external = true;
+        if (!this.alive()) return;
+        // Keep removed fields visible in an open draft even when the active
+        // filter was reconciled against a newer schema.
+        const fields = resolveFilterFields(options.api, options.fields);
+        if (this.changed || inspectFilterDraft(this.draft, fields).length) this.external = true;
         else this.draft = cloneFilterDraft(options.api.filtering.getAdvancedModel());
-        this.refresh();
+        this.refreshWithFields(fields);
       })
     ];
     this.refresh();
@@ -95,7 +99,11 @@ class FilterBuilder<TData> implements AdvancedFilterBuilder {
 
   refresh(): void {
     if (!this.alive()) return;
-    this.fields = resolveFilterFields(this.options.api, this.options.fields);
+    this.refreshWithFields(resolveFilterFields(this.options.api, this.options.fields));
+  }
+
+  private refreshWithFields(fields: ResolvedFilterField[]): void {
+    this.fields = fields;
     this.panel.syncTheme();
     this.controls.clear();
     this.nodeCount = this.draft ? countFilterNodes(this.draft.root) : 0;

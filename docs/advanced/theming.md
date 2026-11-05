@@ -156,4 +156,4 @@ createGrid(host, { className: "brand-grid" });
 
 ## 数字对齐
 
-数值列自动右对齐 + `font-variant-numeric: tabular-nums`；列 `type: "rightAligned"` 可强制。
+数值和其他单元格默认居中，数字采用等宽数字样式 `font-variant-numeric: tabular-nums`。需调整单列时可声明 `align: "right"` 或使用 `type: "rightAligned"`，也可通过 `headerAlign` 单独设置表头。

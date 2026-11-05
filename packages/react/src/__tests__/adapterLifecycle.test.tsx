@@ -59,6 +59,28 @@ afterEach(async () => {
 });
 
 describe("React adapter lifecycle matrix", () => {
+  it("enables row numbers and pagination until the component explicitly disables them", async () => {
+    const { root } = mount();
+    const apiRef = { current: null as GridApi | null };
+    const columnDefs = [{ field: "id" }];
+    const rowData = [{ id: 1 }];
+    const render = (show?: boolean) => root.render(createElement(MachTable, {
+      apiRef, columnDefs, rowData, rowNumber: show, pagination: show
+    }));
+    await act(async () => render());
+    const api = apiRef.current!;
+    const ids = () => api.columns.getState().map(column => column.colId);
+    expect(ids()).toEqual(["idx", "id"]);
+    expect(api.pagination.isEnabled()).toBe(true);
+    await act(async () => render(false));
+    expect(ids()).toEqual(["id"]);
+    expect(api.pagination.isEnabled()).toBe(false);
+    await act(async () => render());
+    expect(apiRef.current).toBe(api);
+    expect(ids()).toEqual(["idx", "id"]);
+    expect(api.pagination.isEnabled()).toBe(true);
+  });
+
   it("ignores StrictMode and keyed readiness from destroyed grids before the first frame", async () => {
     const { root, host } = mount();
     const ready = vi.fn();

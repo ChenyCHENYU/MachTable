@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.37.0-2563eb" alt="Source version 0.37.0" />
+  <img src="https://img.shields.io/badge/source-0.38.0-2563eb" alt="Source version 0.38.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -72,7 +72,7 @@ pnpm add @agile-team/mach-table
 ```vue
 <script setup lang="ts">
 import { h, ref } from "vue";
-import { MachTable, defineVueColumns, indexColumn, selectionColumn, useMachTable, type MachTableVueProps } from "@agile-team/mach-table-vue";
+import { MachTable, defineVueColumns, selectionColumn, useMachTable, type MachTableVueProps } from "@agile-team/mach-table-vue";
 import "@agile-team/mach-table-vue/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
@@ -81,7 +81,6 @@ const table = useMachTable<Order>();
 const rows = ref<Order[]>([{ id: "SO-001", customer: "Acme", amount: 12800 }]);
 const columns = defineVueColumns<Order>([
   selectionColumn(),
-  indexColumn({ headerName: "序号" }),
   { field: "id", headerName: "订单号", width: 130, pinned: "left" },
   { field: "customer", headerName: "客户", flex: 1, editable: true, filter: "text" },
   { field: "amount", headerName: "金额", width: 140, filter: "number", render: (row) => h("strong", `¥${row.amount}`) }
@@ -111,7 +110,7 @@ const tableConfig = {
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, indexColumn, useMachTable, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
 import "@agile-team/mach-table-react/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
@@ -119,7 +118,6 @@ interface Order { id: string; customer: string; amount: number }
 export function OrdersPage({ rows }: { rows: Order[] }) {
   const table = useMachTable<Order>();
   const columns = useMemo<ColDef<Order>[]>(() => [
-    indexColumn({ headerName: "序号" }),
     { field: "id", headerName: "订单号", width: 130, pinned: "left" },
     { field: "customer", headerName: "客户", flex: 1, editable: true },
     { field: "amount", headerName: "金额", width: 140, filter: "number" }
@@ -143,11 +141,12 @@ export function OrdersPage({ rows }: { rows: Order[] }) {
 ### 原生 TypeScript
 
 ```ts
-import { createGrid, indexColumn } from "@agile-team/mach-table";
+import { createGrid } from "@agile-team/mach-table";
 import "@agile-team/mach-table/styles/mach-table.css";
 
 const api = createGrid(document.querySelector("#grid")!, {
-  columnDefs: [indexColumn({ headerName: "序号" }), { field: "name", headerName: "名称", flex: 1 }],
+  columnDefs: [{ field: "name", headerName: "名称", flex: 1 }],
+  rowNumber: true,
   rowData: [{ id: "1", name: "MachTable" }],
   rowKey: "id"
 });
@@ -160,7 +159,7 @@ api.destroy();
 
 自动高度表格随当前页内容收起；空态、加载态和错误态保留必要空间，恢复数据后释放最小高度。表格与后续内容的间距由页面容器设置，例如 `padding-bottom: 8px`。
 
-标准列表默认把 `indexColumn()` 放在第一列；存在 `selectionColumn()` 时序号紧随其后。启用行拖拽时，可在最左侧增加 `dragColumn()` 手柄。表头和单元格内容默认居中，业务列可用 `align: "left" | "right"`、`headerAlign` 单独覆盖。
+Vue 和 React 的 `MachTable` 默认显示序号与内置分页。Vue 可分别用 `:row-number="false"`、`:pagination="false"` 关闭，React 使用 `rowNumber={false}`、`pagination={false}`。已有 `indexColumn()` 可继续定制序号列。表头和单元格默认居中，包括数值列。可在业务列上单独覆盖 `align` 或 `headerAlign`。
 
 ## 行拖拽与条件整行颜色
 
@@ -411,7 +410,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.37.0`，仍处于 0.x 真实项目验证期。本版移除内置字典缓存、字典渲染器与专用列协议，数据插件统一由项目组合，表格只接收普通选项、valueFormatter/valueParser/valueSerializer 和刷新调用。`/business` 保留本地语义合计；完整表头、内容列宽、主题空态、内置分页与通用编辑/导入导出能力继续保留。删除项和迁移见[升级指南](./docs/guide/upgrading.md)，待人工验收项见[实施台账](./docs/advanced/implementation-plan.md)。
+当前源码版本为 `0.38.0`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

@@ -13,7 +13,7 @@ import { VariableSizeIndex } from "../services/variableSizeIndex";
 import { VirtualScrollCoordinates } from "./virtualScrollCoordinates";
 import { el, clamp } from "../lib/dom";
 import { DEFAULT_LOCALE } from "../lib/locale";
-import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
+import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle, cellAlignmentClass, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
 import {
   getCellRuntimeState,
   setDetailDestroyer,
@@ -1125,12 +1125,7 @@ export class BodyRenderer {
       this.resetSpanStyle(cell);
     } else if (kind === "index") {
       cell.textContent = String(this.core.rowModel.getRowSeq(node) + this.core.gridOptions.indexOffset);
-      const alignment = column.colDef.align === "right"
-        ? " mach-cell--right"
-        : column.colDef.align === "center"
-          ? " mach-cell--center"
-          : "";
-      const className = `mach-cell mach-cell--index${alignment}`;
+      const className = `mach-cell mach-cell--index ${cellAlignmentClass(column)}`;
       if (cell.className !== className) cell.className = className;
       this.applyCellSpanStyle(cell, node, column);
     } else {
@@ -1323,7 +1318,8 @@ export class BodyRenderer {
     cell.textContent = column.colDef.valueFormatter != null
       ? formatCellValueWith(this.core, node, column, value)
       : defaultFormat(value);
-    if (cell.className !== "mach-cell mach-cell--num") cell.className = "mach-cell mach-cell--num";
+    const className = `mach-cell ${cellAlignmentClass(column)}`;
+    if (cell.className !== className) cell.className = className;
     return true;
   }
 

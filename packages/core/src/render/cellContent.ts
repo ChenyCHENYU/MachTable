@@ -1,7 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import type { RowNode } from "../types/row";
 import type { Column } from "../services/column";
-import { hasColumnType } from "../core/resolveOptions";
 import type { CellClassParams, CellRendererParams } from "../types/params";
 import { getCellRuntimeState, peekCellRuntimeState } from "./runtimeState";
 
@@ -213,19 +212,10 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
   updateCellTooltip(core, cell, node, column, value, formatted);
 }
 
-function appendAlignmentClass(classes: string[], column: Column, value: any): void {
-  const align = column.colDef.align;
-  if (align === "center") {
-    classes.push("mach-cell--center");
-    return;
-  }
-  if (align === "right") {
-    classes.push("mach-cell--right");
-    return;
-  }
-  const numeric = hasColumnType(column.colDef, "rightAligned") ||
-    hasColumnType(column.colDef, "numericColumn") || typeof value === "number";
-  if (numeric) classes.push("mach-cell--num");
+export function cellAlignmentClass(column: Column): string {
+  const { align } = column.colDef;
+  if (align === "left") return "mach-cell--left";
+  return align === "right" ? "mach-cell--right" : "mach-cell--center";
 }
 
 function appendConfiguredClasses(
@@ -266,8 +256,7 @@ function appendRuntimeClasses(classes: string[], cell: HTMLElement, column: Colu
 
 export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
   const value = core.readCellValue(node, column);
-  const classes = ["mach-cell"];
-  appendAlignmentClass(classes, column, value);
+  const classes = ["mach-cell", cellAlignmentClass(column)];
   appendConfiguredClasses(core, classes, node, column, value);
   appendRuntimeClasses(classes, cell, column);
   const className = classes.join(" ");

@@ -67,10 +67,6 @@ function filterForField(field: GridSchemaField, type: GridSchemaFieldType): ColD
 }
 
 function applyFieldType(colDef: ColDef<any>, field: GridSchemaField, type: GridSchemaFieldType): void {
-  if (type === "number") {
-    colDef.type = "rightAligned";
-    return;
-  }
   if (type === "date") {
     colDef.valueFormatter = dateFormatter(field.format);
     return;

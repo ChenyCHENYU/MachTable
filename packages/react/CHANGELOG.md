@@ -1,5 +1,12 @@
 # @agile-team/mach-table-react
 
+## 0.38.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.38.0
+
 ## 0.37.0
 
 ### Minor Changes

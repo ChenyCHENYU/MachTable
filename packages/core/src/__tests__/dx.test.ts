@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { createGrid, validateGridOptions } from "../index";
+import { buildColDefsFromSchema, createGrid, indexColumn, selectionColumn, validateGridOptions } from "../index";
 import type { GridApi, ColDef } from "../index";
 
 interface Row {
@@ -73,6 +73,23 @@ describe("align / headerAlign", () => {
     api.destroy();
   });
 
+  it("centers schema numbers and respects explicit left alignment and rightAligned", () => {
+    const host = createHost();
+    const api = createGrid<Row>(host, {
+      columnDefs: [
+        ...buildColDefsFromSchema<Row>({ fields: [{ field: "score", type: "number" }] }),
+        { field: "score", colId: "left", align: "left" },
+        { field: "score", colId: "right", type: "rightAligned" }
+      ],
+      rowData: rows
+    });
+    expect(cellAt(host, 0, "score").classList.contains("mach-cell--center")).toBe(true);
+    expect(cellAt(host, 0, "left").classList.contains("mach-cell--right")).toBe(false);
+    expect(cellAt(host, 0, "left").classList.contains("mach-cell--center")).toBe(false);
+    expect(cellAt(host, 0, "right").classList.contains("mach-cell--right")).toBe(true);
+    api.destroy();
+  });
+
   it("headerAlign overrides cell align for the header", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {
@@ -84,6 +101,53 @@ describe("align / headerAlign", () => {
     const header = host.querySelector('.mach-header-cell[data-col-id="name"]') as HTMLElement;
     expect(header.classList.contains("mach-header-cell--center")).toBe(true);
     expect(cellAt(host, 0, "name").classList.contains("mach-cell--center")).toBe(false);
+    api.destroy();
+  });
+});
+
+describe("row numbers and pagination defaults", () => {
+  it("keeps pagination on and supports opting into a UI-only number across pages", () => {
+    const host = createHost();
+    const rowData = Array.from({ length: 22 }, (_, index) => ({ id: String(index + 1) }));
+    const api = createGrid(host, {
+      columnDefs: [selectionColumn(), { field: "id", headerName: "编号" }],
+      rowData,
+      rowKey: "id"
+    });
+    expect(api.columns.getState().map(column => column.colId)).toEqual(["sel", "id"]);
+    api.updateOptions({ rowNumber: true });
+    expect(api.columns.getState().map(column => column.colId)).toEqual(["sel", "idx", "id"]);
+    expect(api.state.get().columns.map(column => column.colId)).toEqual(["sel", "id"]);
+    expect(api.columns.getDefinitions()).toHaveLength(2);
+    expect(api.io.exportMatrix({ headersOnly: true })).toEqual([["编号"]]);
+    expect(api.pagination.isEnabled()).toBe(true);
+    expect(api.pagination.getPageSize()).toBe(20);
+    expect(cellAt(host, 0, "idx").textContent).toBe("1");
+    api.pagination.setPage(2);
+    expect(cellAt(host, 0, "idx").textContent).toBe("21");
+    api.updateOptions({ rowNumber: false, pagination: false });
+    expect(api.columns.getState().map(column => column.colId)).toEqual(["sel", "id"]);
+    expect(api.pagination.isEnabled()).toBe(false);
+    api.destroy();
+  });
+
+  it("keeps explicit index definitions and business IDs independent of auto numbering", () => {
+    const host = createHost();
+    const api = createGrid(host, {
+      columnDefs: [{ field: "idx" }],
+      rowData: [{ idx: "Business ID" }],
+      rowNumber: true
+    });
+    expect(cellAt(host, 0, "idx").textContent).toBe("Business ID");
+    expect(cellAt(host, 0, "idx_2").textContent).toBe("1");
+    api.updateOptions({
+      rowNumber: false,
+      columnDefs: [{ headerName: "订单", children: [indexColumn({ colId: "explicit" }), { field: "idx" }] }]
+    });
+    expect(api.columns.getState().map(column => column.colId)).toEqual(["explicit", "idx"]);
+    expect(cellAt(host, 0, "explicit").textContent).toBe("1");
+    api.updateOptions({ rowNumber: true });
+    expect(api.columns.getState().map(column => column.colId)).toEqual(["explicit", "idx"]);
     api.destroy();
   });
 });

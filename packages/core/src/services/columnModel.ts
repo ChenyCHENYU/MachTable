@@ -1,6 +1,6 @@
 import { normalizePositive } from "../lib/optionValues";
 import type { GridCore } from "../core/gridCore";
-import { Column } from "./column";
+import { Column, isValueColumn } from "./column";
 import { ColumnGroup } from "./columnGroup";
 import type {
   ColDef,
@@ -12,35 +12,56 @@ import type {
   PinnedDirection
 } from "../types/colDef";
 import { isColDefGroup } from "../types/colDef";
-import { mergeColDef } from "../core/resolveOptions";
+import { hasColumnType, mergeColDef } from "../core/resolveOptions";
 import { computeColumnWidths, fitColumnWidths, clampWidth, DEFAULT_COLUMN_WIDTH } from "../lib/layout";
+import { indexColumn } from "../lib/presetColumns";
 
 export type PaneType = "left" | "center" | "right";
 
 export const DETAIL_TOGGLE_COL_ID = "__rg_detail_toggle__";
 type ColumnModelContext = Pick<GridCore<any>, "gridOptions">;
+type ColumnTree = (ColumnGroup<any> | Column<any>)[];
 
 function isPositiveFiniteNumber(value: unknown): value is number {
   return normalizePositive(value) !== undefined;
+}
+
+function definitionPin(pinned: ColDef["pinned"]): PinnedDirection | null {
+  return pinned === true ? "left" : pinned || null;
+}
+
+function carryColumnViewState(column: Column, previous: Column): void {
+  const before = previous.colDef;
+  const after = column.colDef;
+  column.manualWidth = previous.manualWidth;
+  // An automatic measurement must not mask a newly declared width.
+  if ((before.width === after.width && before.autoWidth === after.autoWidth) ||
+    before.width != null || before.autoWidth === false) {
+    column.contentWidth = previous.contentWidth;
+  }
+  if (previous.manualWidth != null || previous.flex !== (normalizePositive(before.flex) ?? null)) column.flex = previous.flex;
+  if (previous.hide !== (before.hide ?? false)) column.hide = previous.hide;
+  if (previous.pinned !== definitionPin(before.pinned)) column.pinned = previous.pinned;
 }
 
 /** @internal Column objects remain public; the collection/model service does not. */
 export class ColumnModel {
   private leafColumns: Column[] = [];
   private columnById = new Map<string, Column>();
-  private rootChildren: (ColumnGroup<any> | Column<any>)[] = [];
+  private rootChildren: ColumnTree = [];
   private leftPaneColumns: Column[] = [];
   private centerPaneColumns: Column[] = [];
   private rightPaneColumns: Column[] = [];
   private activeSorts: SortModelItem[] = [];
   private sourceDefinitions: ColDefOrGroup<any>[] = [];
+  private preferredOrders = new Map<string, string[]>();
   private headerDepth = 1;
   private flatIndexById = new Map<string, number>();
   viewportWidth = 0;
 
   constructor(private core: ColumnModelContext) {}
 
-  setColumnDefs(colDefs: ColDefOrGroup<any>[] | null | undefined): void {
+  setColumnDefs(colDefs: ColDefOrGroup<any>[] | null | undefined): boolean {
     this.sourceDefinitions = colDefs ? [...colDefs] : [];
     const prev = new Map(this.leafColumns.map((c) => [c.id, c]));
     const defaults = this.core.gridOptions.defaultColDef;
@@ -69,17 +90,12 @@ export class ColumnModel {
         column.parentGroup = parent;
         column.level = level;
         const p = prev.get(uniqueId);
-        if (p) {
-          column.manualWidth = p.manualWidth;
-          column.contentWidth = p.contentWidth;
-          column.flex = p.flex;
-          column.hide = p.hide;
-          column.pinned = p.pinned;
-        }
+        if (p && !p.isAutoRowNumber) carryColumnViewState(column, p);
         return column;
       });
 
     this.rootChildren = build(this.sourceDefinitions, null, 0);
+    if (this.core.gridOptions.rowNumber) this.addDefaultRowNumber(usedIds, prev);
 
     if (this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn) {
       const toggleCol = new Column(DETAIL_TOGGLE_COL_ID, {
@@ -96,11 +112,14 @@ export class ColumnModel {
       this.rootChildren.unshift(toggleCol);
     }
 
+    if (this.preferredOrders.size) this.reconcileColumnOrder();
     this.leafColumns = this.collectLeaves(this.rootChildren);
     this.columnById = new Map(this.leafColumns.map(column => [column.id, column]));
     this.headerDepth = this.leafColumns.reduce((max, c) => Math.max(max, c.level + 1), 1);
 
-    this.activeSorts = this.activeSorts.filter((s) => this.leafColumns.some((c) => c.id === s.colId));
+    const previousSortCount = this.activeSorts.length;
+    this.activeSorts = this.activeSorts.filter((s) => this.columnById.has(s.colId));
+    const sortChanged = this.activeSorts.length !== previousSortCount;
     if (this.activeSorts.length === 0) {
       const initial: SortModelItem[] = [];
       for (const c of this.leafColumns) {
@@ -110,6 +129,26 @@ export class ColumnModel {
     }
 
     this.regroup();
+    return sortChanged;
+  }
+
+  private addDefaultRowNumber(usedIds: ReadonlySet<string>, previous: ReadonlyMap<string, Column>): void {
+    const leaves = this.collectLeaves(this.rootChildren);
+    if (!leaves.length || leaves.some(column => hasColumnType(column.colDef, "index"))) return;
+    let colId = "idx";
+    let suffix = 2;
+    while (usedIds.has(colId)) colId = `idx_${suffix++}`;
+
+    const column = new Column(colId, indexColumn({ colId, headerName: "序号" }));
+    column.isAutoRowNumber = true;
+    const prior = previous.get(colId);
+    if (prior?.isAutoRowNumber) column.hide = prior.hide;
+
+    // Keep the default number after leading selection and drag handles.
+    const insertion = this.rootChildren.findIndex(child =>
+      !(child instanceof Column && (child.hasCheckbox || child.colDef.rowDrag))
+    );
+    this.rootChildren.splice(insertion === -1 ? this.rootChildren.length : insertion, 0, column);
   }
 
   private collectLeaves(children: (ColumnGroup<any> | Column<any>)[], out: Column<any>[] = []): Column<any>[] {
@@ -175,11 +214,7 @@ export class ColumnModel {
 
   getGroupLabelColumn(): Column | undefined {
     const ordered = this.getOrderedVisible();
-    return (
-      this.centerPaneColumns.find((c) => !c.hasCheckbox && !c.isDetailToggle) ??
-      ordered.find((c) => !c.hasCheckbox && !c.isDetailToggle) ??
-      ordered[0]
-    );
+    return this.centerPaneColumns.find(isValueColumn) ?? ordered.find(isValueColumn) ?? ordered[0];
   }
 
   paneOf(column: Column): PaneType {
@@ -270,6 +305,9 @@ export class ColumnModel {
     leafSlots.forEach((slotIdx, i) => {
       container[slotIdx] = siblings[i];
     });
+    if (from !== target) {
+      this.preferredOrders.set(this.orderScope(column), siblings.filter(sibling => sibling.movable).map(sibling => sibling.id));
+    }
 
     this.leafColumns = this.collectLeaves(this.rootChildren);
     this.regroup();
@@ -283,8 +321,9 @@ export class ColumnModel {
     this.regroup();
   }
 
-  getColumnState(): ColumnState[] {
-    return this.leafColumns.map((c) => {
+  getColumnState(includeRowNumber = true): ColumnState[] {
+    const columns = includeRowNumber ? this.leafColumns : this.leafColumns.filter(column => !column.isAutoRowNumber);
+    return columns.map((c) => {
       return {
         colId: c.id,
         hide: c.hide,
@@ -327,29 +366,71 @@ export class ColumnModel {
   }
 
   private applyStateOrder(states: ColumnState[]): void {
-    const orderById = new Map<string, number>();
-    states.forEach((s, i) => orderById.set(s.colId, i));
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
-      const slots: number[] = [];
-      const columns: Column[] = [];
-      this.rootChildren.forEach((child, index) => {
-        if (child instanceof Column && !child.hide && child.parentGroup === null && child.movable && this.paneOf(child) === pane) {
-          slots.push(index);
-          columns.push(child);
-        }
-      });
-      columns.sort((a, b) => (orderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderById.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-      slots.forEach((index, offset) => { this.rootChildren[index] = columns[offset]; });
-    }
+    const orderById = new Map(states.map((state, index) => [state.colId, index]));
+    this.reorderSiblings(column => !column.hide && column.movable && orderById.has(column.id), (columns, scope) => {
+      const original = [...columns];
+      columns.sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!);
+      if (columns.some((column, index) => column !== original[index])) {
+        this.preferredOrders.set(scope, columns.map(column => column.id));
+      }
+    });
     this.leafColumns = this.collectLeaves(this.rootChildren);
+  }
+
+  private orderScope(column: Column): string {
+    if (!column.parentGroup) return this.paneOf(column);
+    const path: string[] = [];
+    for (let group: ColumnGroup | null = column.parentGroup; group; group = group.parent) path.push(group.groupId);
+    return JSON.stringify(path);
+  }
+
+  private reconcileColumnOrder(): void {
+    const retained = new Map<string, string[]>();
+    this.reorderSiblings(column => column.movable, (columns, scope) => {
+      const previous = this.preferredOrders.get(scope);
+      if (!previous) return;
+      const byId = new Map(columns.map(column => [column.id, column]));
+      const surviving = previous.filter(id => byId.has(id));
+      if (surviving.length < 2) return;
+      // Unchanged siblings keep their slots and do not acquire an order preference.
+      const known = new Set(surviving);
+      let offset = 0;
+      columns.forEach((column, index) => {
+        if (known.has(column.id)) columns[index] = byId.get(surviving[offset++])!;
+      });
+      retained.set(scope, surviving);
+    });
+    this.preferredOrders = retained;
+  }
+
+  private reorderSiblings(
+    include: (column: Column) => boolean,
+    reorder: (columns: Column[], scope: string) => void,
+    children = this.rootChildren
+  ): void {
+    const slotsByScope = new Map<PaneType, number[]>();
+    children.forEach((child, index) => {
+      if (child instanceof ColumnGroup) this.reorderSiblings(include, reorder, child.children);
+      else if (include(child)) {
+        const scope = child.parentGroup ? "center" : this.paneOf(child);
+        const slots = slotsByScope.get(scope) ?? [];
+        slots.push(index);
+        slotsByScope.set(scope, slots);
+      }
+    });
+    for (const slots of slotsByScope.values()) {
+      if (slots.length < 2) continue;
+      const columns = slots.map(index => children[index] as Column);
+      reorder(columns, this.orderScope(columns[0]));
+      slots.forEach((index, offset) => { children[index] = columns[offset]; });
+    }
   }
 
   resetColumnState(): void {
     for (const c of this.leafColumns) {
       c.resetWidth();
       c.hide = c.colDef.hide ?? false;
-      const p = c.colDef.pinned;
-      c.pinned = p === true ? "left" : p === false || p == null ? null : p;
+      c.pinned = definitionPin(c.colDef.pinned);
     }
     this.regroup();
   }

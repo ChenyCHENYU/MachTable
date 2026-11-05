@@ -44,8 +44,8 @@ import { version as packageVersion } from "../../package.json";
 import type { ResolvedGridOptions } from "../types/options";
 import type { GridApi, GridDiagnosticError, GridDiagnostics } from "../types/api";
 import type { GridFeature, GridFeatureContext, GridOptions, GridStateStore } from "../types/options";
-import type { GridState } from "../types/state";
-import type { Column } from "../services/column";
+import type { GridState, GridStateInput } from "../types/state";
+import { isValueColumn, type Column } from "../services/column";
 import type { RowNode } from "../types/row";
 import type { GridErrorCode, GridEventMap, GridEventType } from "../types/events";
 import type {
@@ -65,7 +65,6 @@ const GRID_STATE_CHANGE_EVENTS = new Set<GridEventType>([
   "filterChanged",
   "columnMoved",
   "columnVisibilityChanged",
-  "displayedColumnsChanged",
   "paginationChanged",
   "detailToggled"
 ]);
@@ -121,8 +120,9 @@ export class GridCore<TData = any> {
   private recentErrors: GridDiagnosticError[] = [];
   private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private gridStateLoadToken = 0;
+  private deferredGridStateVersion: number | null = null;
   private gridStateMutationVersion = 0;
-  private applyingPersistedGridState = false;
+  private restoringGridState: "normal" | "beforeDatasource" | null = null;
   private stateSaveInFlight = false;
   private pendingStateSave: { key: string; store?: GridStateStore; state: GridState } | null = null;
 
@@ -426,7 +426,7 @@ export class GridCore<TData = any> {
 
   buildRangeTsv(range: { r1: number; c1: number; r2: number; c2: number }): string {
     const flat = this.columnModel.getOrderedVisible();
-    const cols = flat.slice(range.c1, range.c2 + 1);
+    const cols = flat.slice(range.c1, range.c2 + 1).filter(column => !column.isAutoRowNumber);
     const rows: unknown[][] = [];
     for (let r = range.r1; r <= range.r2; r++) {
       const node = this.rowModel.getDisplayedRow(r);
@@ -455,7 +455,7 @@ export class GridCore<TData = any> {
       if (!node || node.isDetail || node.isGroup) continue;
       for (let c = range.c1; c <= range.c2; c++) {
         const column = flat[c];
-        if (!column || column.hasCheckbox || column.isDetailToggle || column.colDef.rowDrag) continue;
+        if (!column || !isValueColumn(column) || column.colDef.rowDrag) continue;
         changes.push({ node, column, oldValue: this.readCellValue(node, column), newValue: null });
       }
     }
@@ -500,7 +500,7 @@ export class GridCore<TData = any> {
     let index = start;
     while (index < columns.length) {
       const column = columns[index];
-      if (!column.hasCheckbox && !column.isDetailToggle && !column.colDef.rowDrag) break;
+      if (isValueColumn(column) && !column.colDef.rowDrag) break;
       index++;
     }
     return index;
@@ -564,7 +564,7 @@ export class GridCore<TData = any> {
     return Promise.resolve();
   }
 
-  emit<K extends GridEventType>(type: K, extra?: Partial<GridEventMap<TData>[K]>): GridEventMap<TData>[K] {
+  emit<K extends GridEventType>(type: K, extra?: Partial<GridEventMap<TData>[K]>, persist = true): GridEventMap<TData>[K] {
     const event = { type, api: this.api, ...extra } as GridEventMap<TData>[K];
     this.eventBus.emit(type, event);
     const handlerKey = ("on" + type.charAt(0).toUpperCase() + type.slice(1)) as keyof ResolvedGridOptions<TData>;
@@ -580,7 +580,7 @@ export class GridCore<TData = any> {
       }
     }
     const finishedResize = type === "columnResized" && Boolean((event as { finished?: boolean }).finished);
-    if (finishedResize || GRID_STATE_CHANGE_EVENTS.has(type)) this.scheduleGridStateSave();
+    if (persist && (finishedResize || GRID_STATE_CHANGE_EVENTS.has(type))) this.scheduleGridStateSave();
     return event;
   }
 
@@ -706,42 +706,66 @@ export class GridCore<TData = any> {
     }
   }
 
-  loadPersistedGridState(): void {
-    const token = ++this.gridStateLoadToken;
+  loadPersistedGridState(deferredOnly = false, beforeDatasource = false): void {
     const mutationVersion = this.gridStateMutationVersion;
+    const deferredVersion = this.deferredGridStateVersion;
+    const hasDefinitions = this.columnModel.getColumnDefs().length > 0;
+    if (deferredOnly) {
+      if (deferredVersion == null || !hasDefinitions) return;
+      if (deferredVersion !== mutationVersion) {
+        // Keep changes the user made while the schema was loading.
+        this.deferredGridStateVersion = null;
+        this.scheduleGridStateSave();
+        return;
+      }
+    }
+    this.deferredGridStateVersion = null;
+    const token = ++this.gridStateLoadToken;
     const persistence = this.gridOptions.persistence;
     if (!persistence) return;
     const { key, store, sections } = persistence;
-    let saved: import("../types/state").GridStateInput | null | Promise<import("../types/state").GridStateInput | null>;
+    // Column-dependent preferences cannot be restored before an async schema arrives.
+    if (!hasDefinitions &&
+      (!sections || sections.some(section => section === "columns" || section === "sort" || section === "filter"))) {
+      this.deferredGridStateVersion = mutationVersion;
+      return;
+    }
+    let saved: GridStateInput | null | Promise<GridStateInput | null>;
     try {
       saved = store ? store.load(key) : loadGridState(key);
     } catch (error) {
       this.reportError(error, "gridState.load");
       return;
     }
-    const apply = (state: import("../types/state").GridStateInput | null): void => {
+    const apply = (state: GridStateInput | null, beforeReload = false): void => {
       if (
         this.disposedState || token !== this.gridStateLoadToken ||
         mutationVersion !== this.gridStateMutationVersion || !state
       ) return;
-      this.applyingPersistedGridState = true;
+      const previous = this.restoringGridState;
+      this.restoringGridState = beforeReload ? "beforeDatasource" : "normal";
       try {
-        this.api.state.apply(state, { emitEvents: false, ...(sections ? { sections } : {}) });
+        this.api.state.apply(state, { emitEvents: false, sections });
       } finally {
-        this.applyingPersistedGridState = false;
+        this.restoringGridState = previous;
       }
     };
     if (saved && typeof (saved as Promise<unknown>).then === "function") {
       void Promise.resolve(saved).then(apply).catch((error) => this.reportError(error, "gridState.load"));
     } else {
-      apply(saved as import("../types/state").GridStateInput | null);
+      apply(saved as GridStateInput | null, beforeDatasource);
     }
+  }
+
+  isRestoringBeforeDatasource(): boolean {
+    return this.restoringGridState === "beforeDatasource";
   }
 
   scheduleGridStateSave(): void {
     const persistence = this.gridOptions.persistence;
-    if (!persistence || this.disposedState || this.applyingPersistedGridState) return;
+    if (!persistence || this.disposedState || this.restoringGridState) return;
     this.gridStateMutationVersion++;
+    if (this.deferredGridStateVersion != null) return;
     if (this.stateSaveTimer) clearTimeout(this.stateSaveTimer);
     if (persistence.debounceMs === 0) {
       this.stateSaveTimer = null;

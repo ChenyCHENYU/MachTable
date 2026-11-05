@@ -42,6 +42,44 @@ afterEach(() => {
 });
 
 describe("Vue adapter lifecycle matrix", () => {
+  it("adds numbering when an asynchronous schema arrives and restores omitted presentation defaults", async () => {
+    const snapshot = shallowRef<{ fields: "id"[]; rows: { id: number }[] }>({ fields: [], rows: [] });
+    const defaults = ref<boolean>();
+    let table!: UseMachTableReturn<{ id: number }>;
+    mount(defineComponent({
+      setup() {
+        table = useMachTable();
+        return () => h(MachTable, {
+          ref: table.ref,
+          columnDefs: snapshot.value.fields.map(field => ({ field })),
+          rowData: snapshot.value.rows,
+          loading: snapshot.value.fields.length === 0,
+          rowNumber: defaults.value,
+          pagination: defaults.value,
+          persistence: { key: "dynamic-presentation", sections: ["columns"] }
+        });
+      }
+    }));
+    await vi.waitFor(() => expect(table.ready.value).toBe(true));
+    const api = table.api.value!;
+    const ids = () => api.columns.getState().map(column => column.colId);
+    expect(ids()).toEqual([]);
+    snapshot.value = { fields: ["id"], rows: [{ id: 10 }] };
+    await nextTick();
+    expect(ids()).toEqual(["idx", "id"]);
+    expect(api.pagination.isEnabled()).toBe(true);
+    expect(api.rows.getAt(0)?.data?.id).toBe(10);
+    defaults.value = false;
+    await nextTick();
+    expect(ids()).toEqual(["id"]);
+    expect(api.pagination.isEnabled()).toBe(false);
+    defaults.value = undefined;
+    await nextTick();
+    expect(table.api.value).toBe(api);
+    expect(ids()).toEqual(["idx", "id"]);
+    expect(api.pagination.isEnabled()).toBe(true);
+  });
+
   it("recreates a conditional table with a current API and releases the previous observers", async () => {
     const visible = ref(true);
     let table!: UseMachTableReturn<{ id: string }>;
@@ -81,7 +119,7 @@ describe("Vue adapter lifecycle matrix", () => {
         table = useMachTable();
         return () => h(MachTable, {
           ref: table.ref, rowKey: "id", rowData: rows,
-          columnDefs: [{ field: "name", editable: true, flex: 1 }],
+          columnDefs: [{ field: "name", editable: true, flex: 1 }], rowNumber: false,
           rowSelection: "multiple", columnLayout: "fit", pagination: false
         });
       }

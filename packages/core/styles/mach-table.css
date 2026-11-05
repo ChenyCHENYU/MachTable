@@ -712,10 +712,6 @@
   .mach-cell-loading-bar { animation: none; }
 }
 
-.mach-cell--num {
-  justify-content: flex-end;
-}
-
 .mach-cell--selection {
   justify-content: center;
   padding: 0;

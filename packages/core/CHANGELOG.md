@@ -1,5 +1,13 @@
 # @agile-team/mach-table
 
+## 0.38.0
+
+### Minor Changes
+
+- Vue 和 React 组件默认显示序号并保留内置分页。使用 `rowNumber: false` 关闭自动序号，已声明的序号列保留原配置。Core `createGrid()` 可通过 `rowNumber: true` 启用自动序号。数字列默认居中，显式对齐设置继续生效。
+
+  动态更新列时保留同一报表的用户列偏好，清理已删除列的筛选，并在异步表头就绪后恢复持久化状态。新增接口同时返回列和行的 Vue 接入示例。
+
 ## 0.37.0
 
 ### Minor Changes

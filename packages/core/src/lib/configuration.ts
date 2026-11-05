@@ -191,7 +191,7 @@ export function resolveMachTableGridOptions<TData>(
     layers.push({ name: `preset:${name}`, options: preset as Partial<GridOptions<TData>> });
   }
   layers.push({ name: "table props", options: explicit });
-  const options = createMachTablePreset(...layers.map((layer) => layer.options));
+  const options = { rowNumber: true, ...createMachTablePreset(...layers.map((layer) => layer.options)) };
 
   return {
     options,

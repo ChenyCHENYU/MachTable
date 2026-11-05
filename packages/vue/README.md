@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.37.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.38.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
 
@@ -29,7 +29,6 @@ import {
   MachTable,
   defineVueColumns,
   defineVueTableConfig,
-  indexColumn,
   useMachTable,
 } from "@agile-team/mach-table-vue";
 
@@ -37,7 +36,6 @@ interface Row { id: string; name: string; status: "enabled" | "disabled" }
 const table = useMachTable<Row>();
 const rows = ref<Row[]>([{ id: "1", name: "MachTable", status: "enabled" }]);
 const columns = defineVueColumns<Row>([
-  indexColumn({ headerName: "序号" }),
   { field: "name", flex: 1, editable: true },
   {
     field: "status",
@@ -64,6 +62,8 @@ const tableConfig = defineVueTableConfig<Row>({
   </div>
 </template>
 ```
+
+默认显示序号和内置分页，可通过 `:row-number="false"`、`:pagination="false"` 分别关闭。需要定制序号时直接声明 `indexColumn()`。
 
 业务列优先用 `defineVueColumns()` 的 `render(row, index, params)` 返回 VNode；它保留 Vue 应用上下文、支持原位刷新，并遵循全局、表格和单列对齐配置。复杂页面编排仍可使用 `#cell-*` 具名插槽，具名插槽会显式覆盖同列 `render`。多个稳定表格参数推荐放进页面 `data.ts` 或共享配置模块，模板通过一次 `v-bind="tableConfig"` 注入；`rowData`、`columnDefs` 和实例 `ref` 保持显式，便于看清数据来源。
 

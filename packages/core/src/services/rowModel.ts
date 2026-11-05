@@ -1018,6 +1018,12 @@ export class RowModel<TData = any> {
     return { ...this.activeColumnFilters };
   }
 
+  reconcileColumnFilters(advanced = this.activeAdvancedFilters): boolean {
+    const ordinaryChanged = Object.keys(this.activeColumnFilters).length > 0 && this.setFilterModel(this.activeColumnFilters);
+    const advancedChanged = (advanced != null || this.activeAdvancedFilters != null) && this.setAdvancedFilterModel(advanced);
+    return ordinaryChanged || advancedChanged;
+  }
+
   setAdvancedFilterModel(model: AdvancedFilterModel | null | undefined): boolean {
     const columns = new Set(this.core.columnModel.getColumns().map((column) => column.id));
     const next = normalizeAdvancedFilterModel(model, columns);

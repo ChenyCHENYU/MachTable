@@ -43,6 +43,7 @@ export const VALUE_DEFAULTS = {
   manualSorting: false,
   manualFiltering: false,
   showSummary: false,
+  rowNumber: false,
   indexOffset: 0,
   applyRowDrag: true,
   masterDetail: false,
@@ -302,10 +303,12 @@ export function mergeColDef<TData>(
 ): ColDef<TData> {
   const typedDefaults: Partial<ColDef<TData>> = {};
   for (const name of columnTypeNames(colDef.type)) {
+    if (name === "rightAligned") typedDefaults.align = "right";
     const definition = columnTypes[name];
     if (definition) Object.assign(typedDefaults, definition);
   }
   const merged = { ...defaults, ...typedDefaults, ...colDef } as ColDef<TData>;
+  merged.align ??= defaults.align ?? "center";
   if (merged.status && !merged.cellRenderer) merged.cellRenderer = "statusTag";
   return merged;
 }
