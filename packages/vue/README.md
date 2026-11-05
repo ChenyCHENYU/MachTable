@@ -65,6 +65,8 @@ const tableConfig = defineVueTableConfig<Row>({
 
 默认显示序号和内置分页，可通过 `:row-number="false"`、`:pagination="false"` 分别关闭。需要定制序号时直接声明 `indexColumn()`。
 
+后端同时返回列定义和数据时，绑定 `column-defs` 与 `row-data`，一次替换查询结果。只刷新数据时复用列定义，搜索、表单和弹窗可用项目已有的组件，查询、选中和保存由页面控制器统一组织。动态字段与分组表头见[报表接口示例](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/schema-driven.md)。
+
 业务列优先用 `defineVueColumns()` 的 `render(row, index, params)` 返回 VNode；它保留 Vue 应用上下文、支持原位刷新，并遵循全局、表格和单列对齐配置。复杂页面编排仍可使用 `#cell-*` 具名插槽，具名插槽会显式覆盖同列 `render`。多个稳定表格参数推荐放进页面 `data.ts` 或共享配置模块，模板通过一次 `v-bind="tableConfig"` 注入；`rowData`、`columnDefs` 和实例 `ref` 保持显式，便于看清数据来源。
 
 未声明 `#loading` / `#empty` 时会直接使用 Core 的紧凑骨架加载态与插画空态；只有产品确实需要品牌化呈现时才提供 slot，避免每个页面重复维护同类状态组件。

@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { applyPortalTheme, el, positionAnchoredPortal } from "../lib/dom";
+import { applyPortalTheme, el, positionAnchoredPortal, textButton } from "../lib/dom";
+import type { MachTableLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type ColumnMenuContext = Pick<
@@ -19,12 +20,9 @@ export class ColumnMenuService {
   constructor(private core: ColumnMenuContext) {}
 
   toggle(column: Column, anchor: HTMLElement): void {
-    if (this.openColId === column.id) {
-      this.close();
-      return;
-    }
+    const wasOpen = this.openColId === column.id;
     this.close();
-    this.open(column, anchor);
+    if (!wasOpen) this.open(column, anchor);
   }
 
   openStandalone(anchor?: HTMLElement): void {
@@ -71,8 +69,8 @@ export class ColumnMenuService {
 
   private docKeyDown = (e: KeyboardEvent): void => {
     if (e.key !== "Escape") return;
-    const openSelect = [...this.selectControls].find((control) => control.isOpen());
-    if (openSelect?.close(true)) {
+    for (const control of this.selectControls) {
+      if (!control.close(true)) continue;
       e.preventDefault();
       e.stopImmediatePropagation();
       return;
@@ -95,57 +93,34 @@ export class ColumnMenuService {
       : this.core.getLocaleText("columnSettings");
     panel.appendChild(title);
 
-    if (column && column.sortable) {
-      const sortRow = el("div", "mach-column-panel-actions");
-      const makeSortBtn = (labelKey: "sortAsc" | "sortDesc" | "clearSort", dir: "asc" | "desc" | null) => {
-        const btn = el("button", "mach-column-panel-btn");
-        btn.type = "button";
-        btn.textContent = this.core.getLocaleText(labelKey);
-        btn.addEventListener("click", () => {
-          api.sorting.setModel(dir ? [{ colId: column.id, direction: dir }] : []);
-          this.close();
-        });
-        return btn;
-      };
-      sortRow.append(makeSortBtn("sortAsc", "asc"), makeSortBtn("sortDesc", "desc"), makeSortBtn("clearSort", null));
-      panel.appendChild(sortRow);
-    }
-
-    const pinRow = el("div", "mach-column-panel-actions");
-    const makePinBtn = (labelKey: "pinLeft" | "pinRight" | "clearPin", pinned: "left" | "right" | null) => {
-      const btn = el("button", "mach-column-panel-btn");
-      btn.type = "button";
-      btn.textContent = this.core.getLocaleText(labelKey);
-      btn.addEventListener("click", () => {
-        if (column) api.columns.setPinned(column.id, pinned);
+    const action = (label: MachTableLocaleKey, run: () => void, className = "mach-column-panel-btn") =>
+      textButton(className, this.core.getLocaleText(label), () => {
+        run();
         this.close();
       });
-      return btn;
-    };
     if (column) {
-      pinRow.append(makePinBtn("pinLeft", "left"), makePinBtn("pinRight", "right"), makePinBtn("clearPin", null));
-      panel.appendChild(pinRow);
-    }
-
-    const toolRow = el("div", "mach-column-panel-actions");
-    const fitBtn = el("button", "mach-column-panel-btn");
-    fitBtn.type = "button";
-    fitBtn.textContent = this.core.getLocaleText("autoSize");
-    fitBtn.addEventListener("click", () => {
-      if (column) api.columns.autoSize(column.id);
-      else api.columns.autoSizeAll();
-      this.close();
-    });
-    const hideBtn = el("button", "mach-column-panel-btn");
-    hideBtn.type = "button";
-    hideBtn.textContent = this.core.getLocaleText("hideColumn");
-    hideBtn.addEventListener("click", () => {
-      if (column) api.columns.setVisible(column.id, false);
-      this.close();
-    });
-    if (column) {
-      toolRow.append(fitBtn, hideBtn);
-      panel.appendChild(toolRow);
+      const colId = column.id;
+      const appendActions = (...buttons: HTMLButtonElement[]) => {
+        const row = el("div", "mach-column-panel-actions");
+        row.append(...buttons);
+        panel.appendChild(row);
+      };
+      if (column.sortable) {
+        appendActions(
+          action("sortAsc", () => api.sorting.setModel([{ colId, direction: "asc" }])),
+          action("sortDesc", () => api.sorting.setModel([{ colId, direction: "desc" }])),
+          action("clearSort", () => api.sorting.setModel([]))
+        );
+      }
+      appendActions(
+        action("pinLeft", () => api.columns.setPinned(colId, "left")),
+        action("pinRight", () => api.columns.setPinned(colId, "right")),
+        action("clearPin", () => api.columns.setPinned(colId, null))
+      );
+      appendActions(
+        action("autoSize", () => api.columns.autoSize(colId)),
+        action("hideColumn", () => api.columns.setVisible(colId, false))
+      );
     }
 
     const divider = el("div", "mach-column-panel-divider");
@@ -174,21 +149,10 @@ export class ColumnMenuService {
     panel.appendChild(list);
 
     const footer = el("div", "mach-filter-footer");
-    const resetBtn = el("button", "mach-filter-btn-reset");
-    resetBtn.type = "button";
-    resetBtn.textContent = this.core.getLocaleText("resetAll");
-    resetBtn.addEventListener("click", () => {
-      api.columns.resetState();
-      this.close();
-    });
-    const allFitBtn = el("button", "mach-filter-btn-apply");
-    allFitBtn.type = "button";
-    allFitBtn.textContent = this.core.getLocaleText("autoSizeAll");
-    allFitBtn.addEventListener("click", () => {
-      api.columns.autoSizeAll();
-      this.close();
-    });
-    footer.append(resetBtn, allFitBtn);
+    footer.append(
+      action("resetAll", () => api.columns.resetState(), "mach-filter-btn-reset"),
+      action("autoSizeAll", () => api.columns.autoSizeAll(), "mach-filter-btn-apply")
+    );
     panel.appendChild(footer);
 
     applyPortalTheme(panel, this.core.skeleton.root);
@@ -266,14 +230,11 @@ export class ColumnMenuService {
         );
         const position = siblings.indexOf(col);
         const move = (caption: string, next: number, disabled: boolean) => {
-          const button = el("button", "mach-column-workbench-move");
-          button.type = "button";
-          button.textContent = caption;
-          button.disabled = disabled || col.hide || !col.movable;
-          button.addEventListener("click", () => {
+          const button = textButton("mach-column-workbench-move", caption, () => {
             api.columns.move(col.id, next);
             this.rebuildListStates();
           });
+          button.disabled = disabled || col.hide || !col.movable;
           return button;
         };
         row.append(move("↑", position - 1, position <= 0), move("↓", position + 1, position < 0 || position >= siblings.length - 1));
@@ -283,11 +244,12 @@ export class ColumnMenuService {
   }
 
   private containsSelectTarget(target: Node): boolean {
-    return [...this.selectControls].some((control) => control.contains(target));
+    for (const control of this.selectControls) if (control.contains(target)) return true;
+    return false;
   }
 
   private destroySelectControls(container?: HTMLElement): void {
-    for (const control of [...this.selectControls]) {
+    for (const control of this.selectControls) {
       if (container && !container.contains(control.el)) continue;
       control.destroy();
       this.selectControls.delete(control);

@@ -30,6 +30,13 @@ function definitionPin(pinned: ColDef["pinned"]): PinnedDirection | null {
   return pinned === true ? "left" : pinned || null;
 }
 
+function allocateColumnId(usedIds: Set<string>, id: string): string {
+  let next = id;
+  for (let suffix = 2; usedIds.has(next); suffix++) next = `${id}_${suffix}`;
+  usedIds.add(next);
+  return next;
+}
+
 function carryColumnViewState(column: Column, previous: Column): void {
   const before = previous.colDef;
   const after = column.colDef;
@@ -65,11 +72,9 @@ export class ColumnModel {
     this.sourceDefinitions = colDefs ? [...colDefs] : [];
     const prev = new Map(this.leafColumns.map((c) => [c.id, c]));
     const defaults = this.core.gridOptions.defaultColDef;
-    const usedIds = new Set<string>(
-      this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn
-        ? [DETAIL_TOGGLE_COL_ID]
-        : []
-    );
+    const detailToggle = this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn;
+    const usedIds = new Set(detailToggle ? [DETAIL_TOGGLE_COL_ID] : []);
+    let numberRows = this.core.gridOptions.rowNumber;
 
     const build = (list: ColDefOrGroup<any>[], parent: ColumnGroup<any> | null, level: number): (ColumnGroup<any> | Column<any>)[] =>
       list.map((def, i) => {
@@ -81,12 +86,9 @@ export class ColumnModel {
           return group;
         }
         const colDef = def as ColDef<any>;
-        const id = colDef.colId ?? colDef.field ?? `col_${i}`;
-        let uniqueId = id;
-        let suffix = 2;
-        while (usedIds.has(uniqueId)) uniqueId = `${id}_${suffix++}`;
-        usedIds.add(uniqueId);
+        const uniqueId = allocateColumnId(usedIds, colDef.colId ?? colDef.field ?? `col_${i}`);
         const column = new Column(uniqueId, mergeColDef(colDef, defaults, this.core.gridOptions.columnTypes));
+        numberRows &&= !hasColumnType(column.colDef, "index");
         column.parentGroup = parent;
         column.level = level;
         const p = prev.get(uniqueId);
@@ -95,9 +97,11 @@ export class ColumnModel {
       });
 
     this.rootChildren = build(this.sourceDefinitions, null, 0);
-    if (this.core.gridOptions.rowNumber) this.addDefaultRowNumber(usedIds, prev);
+    if (numberRows && usedIds.size > Number(detailToggle)) {
+      this.addDefaultRowNumber(allocateColumnId(usedIds, "idx"), prev);
+    }
 
-    if (this.core.gridOptions.masterDetail && this.core.gridOptions.detailToggleColumn) {
+    if (detailToggle) {
       const toggleCol = new Column(DETAIL_TOGGLE_COL_ID, {
         colId: DETAIL_TOGGLE_COL_ID,
         headerName: "",
@@ -132,13 +136,7 @@ export class ColumnModel {
     return sortChanged;
   }
 
-  private addDefaultRowNumber(usedIds: ReadonlySet<string>, previous: ReadonlyMap<string, Column>): void {
-    const leaves = this.collectLeaves(this.rootChildren);
-    if (!leaves.length || leaves.some(column => hasColumnType(column.colDef, "index"))) return;
-    let colId = "idx";
-    let suffix = 2;
-    while (usedIds.has(colId)) colId = `idx_${suffix++}`;
-
+  private addDefaultRowNumber(colId: string, previous: ReadonlyMap<string, Column>): void {
     const column = new Column(colId, indexColumn({ colId, headerName: "序号" }));
     column.isAutoRowNumber = true;
     const prior = previous.get(colId);

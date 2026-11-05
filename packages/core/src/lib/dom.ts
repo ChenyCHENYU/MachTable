@@ -17,6 +17,14 @@ export function setStyles(e: HTMLElement, styles: Partial<CSSStyleDeclaration>):
   Object.assign(e.style, styles);
 }
 
+export function textButton(className: string, label: string, action: () => void): HTMLButtonElement {
+  const button = el("button", className);
+  button.type = "button";
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
+}
+
 /** Keeps body-mounted overlays visually scoped to their owning grid instance. */
 export function applyPortalTheme(portal: HTMLElement, source: HTMLElement | null): void {
   portal.classList.add("mach-portal");

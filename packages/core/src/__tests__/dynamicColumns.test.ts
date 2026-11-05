@@ -103,6 +103,20 @@ const saved: GridStateInput = {
   expandedGroupIds: []
 };
 
+it("restores synchronous layout preferences in the first projection of deferred columns and rows", () => {
+  const onModelUpdated = vi.fn();
+  const store = { load: vi.fn(() => saved), save: vi.fn() };
+  const api = create({ onModelUpdated, persistence: { key: "report", store, sections: ["columns"] } });
+  onModelUpdated.mockClear();
+
+  api.updateOptions({ columnDefs: fields("a", "b"), rowData: [{ id: "1", a: "data" }] });
+
+  expect(onModelUpdated).toHaveBeenCalledOnce();
+  expect(fieldOrder(api)).toEqual(["b", "a"]);
+  expect(api.columns.getState().find(column => column.colId === "b")?.width).toBe(250);
+  expect(api.rows.getAt(0)?.data).toEqual({ id: "1", a: "data" });
+});
+
 it.each([false, true])("restores late grouped column preferences with an async store (%s)", async asynchronous => {
   const store = { load: vi.fn(() => asynchronous ? Promise.resolve(saved) : saved), save: vi.fn() };
   const api = create({ persistence: { key: "report", store, sections: ["columns"], debounceMs: 0 } });

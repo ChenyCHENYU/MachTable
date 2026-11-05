@@ -12,81 +12,89 @@ import type {
   GridStateApi,
   GridViewApi
 } from "../types/api";
+import type { GridCore } from "../core/gridCore";
 import type { GridApiImpl } from "./gridApi";
 
 /** Domain facades are the only public command surface. They own no duplicate state. */
-export function createGridRowsApi<TData>(api: GridApiImpl<TData>): GridRowsApi<TData> {
+export function createGridRowsApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridRowsApi<TData> {
   return {
     setData: (rows) => api.setRowData(rows),
     transact: (transaction) => api.applyTransaction(transaction),
     transactAsync: (transaction, options) => api.applyTransactionAsync(transaction, options),
     flushTransactions: () => api.flushAsyncTransactions(),
-    getCount: () => api.getDisplayedRowCount(),
-    getAt: (index) => api.getRowNode(index),
-    getById: (id) => api.getNodeById(id),
-    forEach: (callback) => api.forEachNode(callback),
-    forEachDisplayed: (callback) => api.forEachNodeAfterFilterAndSort(callback),
-    reorder: (fromIndex, toIndex) => api.reorderRows(fromIndex, toIndex),
-    isRemote: () => api.isInfinite(),
+    getCount: () => core.rowModel.getDisplayedRowCount(),
+    getAt: (index) => core.rowModel.getDisplayedRow(index),
+    getById: (id) => core.rowModel.getNodeById(id),
+    forEach: (callback) => core.rowModel.forEachNode(callback),
+    forEachDisplayed: (callback) => core.rowModel.forEachNodeAfterFilterAndSort(callback),
+    reorder: (fromIndex, toIndex) =>
+      !core.isDisposed() && !core.editingService.isEditing() && core.rowModel.reorderRowsByDisplayed(fromIndex, toIndex),
+    isRemote: () => core.rowModel.isInfinite,
     reload: (options) => api.reload(options),
     ensureLoaded: (startRow, endRow, options) => api.ensureRowsLoaded(startRow, endRow, options),
-    purgeCache: () => api.purgeDatasourceCache(),
-    getCacheSnapshot: () => api.getDatasourceCacheSnapshot()
+    purgeCache: () => {
+      if (!core.isDisposed()) core.rowModel.purgeDatasourceCache();
+    },
+    getCacheSnapshot: () => core.rowModel.getDatasourceCacheSnapshot()
   };
 }
 
-export function createGridColumnsApi<TData>(api: GridApiImpl<TData>): GridColumnsApi<TData> {
+export function createGridColumnsApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridColumnsApi<TData> {
   return {
-    getDefinitions: () => api.getColumnDefs(),
+    getDefinitions: () => core.columnModel.getColumnDefs(),
     setDefinitions: (definitions) => api.setColumnDefs(definitions),
-    getState: () => api.getColumnState(),
+    getState: () => core.columnModel.getColumnState(),
     setState: (state) => api.setColumnState(state),
     resetState: () => api.resetColumnState(),
     setVisible: (colId, visible) => api.setColumnVisibility(colId, visible),
     setPinned: (colId, pinned) => api.setColumnPinned(colId, pinned),
-    move: (colId, toIndex) => api.moveColumn(colId, toIndex),
+    move: (colId, toIndex) => {
+      if (!core.isDisposed()) core.moveColumn(colId, toIndex);
+    },
     setWidth: (colId, width) => api.setColumnWidth(colId, width),
     fit: (width) => api.sizeColumnsToFit(width),
     autoSize: (colId) => api.autoSizeColumn(colId),
     autoSizeAll: () => api.autoSizeAllColumns(),
     getWorkbenchItems: () => api.getColumnWorkbenchItems(),
-    openWorkbench: (anchor) => api.openColumnWorkbench(anchor),
-    closeWorkbench: () => api.closeColumnWorkbench()
+    openWorkbench: (anchor) => {
+      if (!core.isDisposed()) core.columnMenu.openStandalone(anchor);
+    },
+    closeWorkbench: () => core.columnMenu.close()
   };
 }
 
-export function createGridSelectionApi<TData>(api: GridApiImpl<TData>): GridSelectionApi<TData> {
+export function createGridSelectionApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridSelectionApi<TData> {
   return {
-    getRows: () => api.getSelectedRows(),
+    getRows: () => core.selectionService.getSelectedRows(),
     getVisibleRows: () => api.getVisibleSelection(),
-    getNodes: () => api.getSelectedNodes(),
-    getIds: () => api.getSelectedIds(),
+    getNodes: () => core.selectionService.getSelectedNodes(),
+    getIds: () => core.selectionService.getSelectedIds(),
     setRows: (rows, clearOthers) => api.setSelection(rows, clearOthers),
     setById: (nodeId, selected, clearOthers) => api.selectNodeById(nodeId, selected, clearOthers),
     selectAll: (filteredOnly) => api.selectAll(filteredOnly),
     clear: () => api.deselectAll(),
-    getMode: () => api.getRowSelection(),
+    getMode: () => core.gridOptions.rowSelection,
     setMode: (mode) => api.setRowSelection(mode),
-    getRange: () => api.getRangeSelection(),
+    getRange: () => core.bodyRenderer.getRangeSelection(),
     clearRange: () => api.clearRangeSelection()
   };
 }
 
-export function createGridEditingApi<TData>(api: GridApiImpl<TData>): GridEditingApi<TData> {
+export function createGridEditingApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridEditingApi<TData> {
   return {
     startCell: (params) => api.startEditingCell(params),
-    startRow: (rowIndex) => api.startEditingRow(rowIndex),
-    isRowActive: (rowIndex) => api.isRowEditing(rowIndex),
-    stop: (options) => api.stopEditing(options?.cancel === true),
-    getChanges: () => api.getChanges(),
-    getDirtyRowIds: () => api.getDirtyRowIds(),
-    markSaved: (rowIds) => api.markChangesSaved(rowIds),
-    rollback: (rowIds) => api.rollbackChanges(rowIds),
+    startRow: (rowIndex) => core.editingService.startRow(rowIndex),
+    isRowActive: (rowIndex) => core.editingService.isRowEditing(rowIndex),
+    stop: (options) => core.editingService.stopAsync(options?.cancel === true),
+    getChanges: () => core.changeTracker.getChanges(),
+    getDirtyRowIds: () => core.changeTracker.getDirtyRowIds(),
+    markSaved: (rowIds) => core.changeTracker.markSaved(rowIds),
+    rollback: (rowIds) => core.changeTracker.rollback(rowIds),
     save: (handler, rowIds) => api.saveEditingChanges(handler, rowIds),
-    undo: () => api.undo(),
-    redo: () => api.redo(),
-    canUndo: () => api.canUndo(),
-    canRedo: () => api.canRedo()
+    undo: () => !core.isDisposed() && core.undoService.undo(),
+    redo: () => !core.isDisposed() && core.undoService.redo(),
+    canUndo: () => core.undoService.canUndo(),
+    canRedo: () => core.undoService.canRedo()
   };
 }
 
@@ -94,87 +102,101 @@ export function createGridStateApi<TData>(api: GridApiImpl<TData>): GridStateApi
   return { get: () => api.getState(), apply: (state, options) => api.applyState(state, options) };
 }
 
-export function createGridDiagnosticsApi<TData>(api: GridApiImpl<TData>): GridDiagnosticsApi {
+export function createGridDiagnosticsApi<TData>(_api: GridApiImpl<TData>, core: GridCore<TData>): GridDiagnosticsApi {
   return {
-    get: () => api.getDiagnostics(),
-    getPerformance: () => api.getPerformanceSnapshot(),
-    resetPerformance: () => api.resetPerformanceMetrics()
+    get: () => core.getDiagnostics(),
+    getPerformance: () => core.performanceMonitor.snapshot(),
+    resetPerformance: () => core.performanceMonitor.reset()
   };
 }
 
-export function createGridFilteringApi<TData>(api: GridApiImpl<TData>): GridFilteringApi {
+export function createGridFilteringApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridFilteringApi {
   return {
-    getModel: () => api.getFilterModel(),
+    getModel: () => core.rowModel.getFilterModel(),
     setModel: (model) => api.setFilterModel(model),
-    getAdvancedModel: () => api.getAdvancedFilterModel(),
+    getAdvancedModel: () => core.rowModel.getAdvancedFilterModel(),
     setAdvancedModel: (model) => api.setAdvancedFilterModel(model),
-    getQuickText: () => api.getQuickFilter(),
+    getQuickText: () => core.rowModel.getQuickFilter(),
     setQuickText: (text) => api.setQuickFilter(text),
     isPresent: (colId) => colId == null
-      ? Object.keys(api.getFilterModel()).length > 0 || api.getAdvancedFilterModel() != null || api.getQuickFilter() != null
-      : api.isColumnFilterPresent(colId)
+      ? core.rowModel.isFilterPresent()
+      : Object.prototype.hasOwnProperty.call(core.rowModel.getFilterModel(), colId)
   };
 }
 
-export function createGridSortingApi<TData>(api: GridApiImpl<TData>): GridSortingApi {
-  return { getModel: () => api.getSortModel(), setModel: (model) => api.setSortModel(model) };
+export function createGridSortingApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridSortingApi {
+  return { getModel: () => core.columnModel.getSortModel(), setModel: (model) => api.setSortModel(model) };
 }
 
-export function createGridPaginationApi<TData>(api: GridApiImpl<TData>): GridPaginationApi {
+export function createGridPaginationApi<TData>(_api: GridApiImpl<TData>, core: GridCore<TData>): GridPaginationApi {
   return {
-    isEnabled: () => api.paginationEnabled(),
-    setEnabled: (enabled) => api.setPaginationEnabled(enabled),
-    getPage: () => api.getPage(),
-    setPage: (page) => api.setPage(page),
-    getPageSize: () => api.getPageSize(),
-    setPageSize: (size) => api.setPageSize(size),
-    getPageCount: () => api.getPageCount(),
-    getTotalRowCount: () => api.getTotalRowCount()
+    isEnabled: () => core.rowModel.paginationActive,
+    setEnabled: (enabled) => {
+      if (!core.isDisposed()) core.rowModel.setPaginationEnabled(enabled);
+    },
+    getPage: () => core.rowModel.getCurrentPage(),
+    setPage: (page) => {
+      if (!core.isDisposed()) core.rowModel.setPage(page);
+    },
+    getPageSize: () => core.gridOptions.paginationPageSize,
+    setPageSize: (size) => {
+      if (!core.isDisposed()) core.rowModel.setPageSize(size);
+    },
+    getPageCount: () => core.rowModel.getPageCount(),
+    getTotalRowCount: () => core.rowModel.getTotalRowCount()
   };
 }
 
-export function createGridHierarchyApi<TData>(api: GridApiImpl<TData>): GridHierarchyApi<TData> {
+export function createGridHierarchyApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridHierarchyApi<TData> {
   return {
-    isRowExpanded: (rowId) => api.isRowExpanded(rowId),
+    isRowExpanded: (rowId) => core.rowModel.isRowExpanded(rowId),
     setRowExpanded: (rowId, expanded) => {
-      if (api.isRowExpanded(rowId) === expanded) return false;
-      if (expanded) api.expandRow(rowId);
-      else api.collapseRow(rowId);
-      return api.isRowExpanded(rowId) === expanded;
+      if (core.isDisposed() || core.rowModel.isRowExpanded(rowId) === expanded) return false;
+      if (expanded) core.rowModel.expandRow(rowId);
+      else core.rowModel.collapseRow(rowId);
+      return core.rowModel.isRowExpanded(rowId) === expanded;
     },
     isTreeRowLoading: (rowId) => api.isTreeRowLoading(rowId),
     loadTreeChildren: (rowId, options) => api.loadTreeChildren(rowId, options),
-    isGroupExpanded: (groupId) => api.isGroupExpanded(groupId),
+    isGroupExpanded: (groupId) => core.rowModel.isGroupExpanded(groupId),
     setGroupExpanded: (groupId, expanded) => {
-      if (api.isGroupExpanded(groupId) === expanded) return false;
-      api.toggleRowGroup(groupId);
-      return api.isGroupExpanded(groupId) === expanded;
+      if (core.isDisposed() || core.rowModel.isGroupExpanded(groupId) === expanded) return false;
+      core.rowModel.toggleGroup(groupId);
+      return core.rowModel.isGroupExpanded(groupId) === expanded;
     },
-    setAllGroupsExpanded: (expanded) => expanded ? api.expandAllGroups() : api.collapseAllGroups(),
-    setAllDetailsExpanded: (expanded) => expanded ? api.expandAllDetails() : api.collapseAllDetails()
+    setAllGroupsExpanded: (expanded) => {
+      if (core.isDisposed()) return;
+      if (expanded) core.rowModel.expandAllGroups();
+      else core.rowModel.collapseAllGroups();
+    },
+    setAllDetailsExpanded: (expanded) => {
+      if (core.isDisposed()) return;
+      if (expanded) core.rowModel.expandAllDetails();
+      else core.rowModel.collapseAllDetails();
+    }
   };
 }
 
-export function createGridViewApi<TData>(api: GridApiImpl<TData>): GridViewApi<TData> {
+export function createGridViewApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridViewApi<TData> {
   return {
-    getRoot: () => api.getRootElement(),
+    getRoot: () => core.isDisposed() ? null : core.skeleton.root,
     scrollToRow: (index, position) => api.scrollToIndex(index, position),
     refreshCells: (params) => api.refreshCells(params),
     refreshLayout: () => api.refreshLayout(),
-    flush: () => api.flushUpdates(),
+    flush: () => core.updateScheduler.flush(),
     setOverlay: (type) => api.setOverlay(type),
-    getPinnedRows: (position) => api.getPinnedRows(position),
+    getPinnedRows: (position) => core.pinnedRowsRenderer.getRows(position),
     setPinnedRows: (position, rows) => api.setPinnedRows(position, rows)
   };
 }
 
-export function createGridIoApi<TData>(api: GridApiImpl<TData>): GridIoApi {
+export function createGridIoApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridIoApi {
   return {
     exportCsv: (params) => api.getDataAsCsv(params),
     importCsv: (value, options) => api.importCsv(value, options),
     exportMatrix: (params) => api.getDataAsMatrix(params),
     importMatrix: (rows, options) => api.importMatrix(rows, options),
     print: (options) => api.print(options),
-    copyRange: () => api.copyRangeToClipboard()
+    copyRange: () => core.isDisposed() ? Promise.resolve(false) : core.copyActiveRange()
   };
 }

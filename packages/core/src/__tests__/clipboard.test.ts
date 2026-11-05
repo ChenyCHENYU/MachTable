@@ -281,6 +281,14 @@ describe("column virtualization", () => {
     expect(cells.length).toBeLessThan(30);
     expect(cells.every((c) => c.style.display !== "none")).toBe(true);
 
+    const leaving = cellAt(host, 0, "c0");
+    const retained = [cellAt(host, 0, "c5"), cellAt(host, 1, "c5")];
+    viewport.scrollLeft = 480;
+    api.view.refreshLayout();
+    expect(leaving.isConnected).toBe(false);
+    expect(cellAt(host, 0, "c5")).toBe(retained[0]);
+    expect(cellAt(host, 1, "c5")).toBe(retained[1]);
+
     Object.defineProperty(viewport, "scrollLeft", { value: 3600, configurable: true });
     api.view.refreshLayout();
     const row0b = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;

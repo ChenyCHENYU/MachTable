@@ -13,14 +13,14 @@ import { VariableSizeIndex } from "../services/variableSizeIndex";
 import { VirtualScrollCoordinates } from "./virtualScrollCoordinates";
 import { el, clamp } from "../lib/dom";
 import { DEFAULT_LOCALE } from "../lib/locale";
-import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle, cellAlignmentClass, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
+import { PANES, showGridOverlay } from "./skeleton";
+import { renderDataCell, cleanupCellContent, applyCellClasses, cellAlignmentClass, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
 import {
   getCellRuntimeState,
   setDetailDestroyer,
   takeDetailDestroyer
 } from "./runtimeState";
 
-const PANES: PaneType[] = ["left", "center", "right"];
 type BodyContext = Pick<
   GridCore<any>,
   | "buildDefaultLoadingState"
@@ -55,7 +55,6 @@ interface RowSlot {
   kind: "master" | "detail";
   rows: Partial<Record<PaneType, HTMLElement>>;
   cells: Partial<Record<PaneType, HTMLElement[]>>;
-  cellColIds: Partial<Record<PaneType, string[]>>;
   detailRow?: HTMLElement;
 }
 
@@ -129,8 +128,9 @@ export class BodyRenderer {
   private columnViewport = new ColumnViewportIndex();
   private rangeSelection = new RangeSelectionModel();
   private rangeDragging = false;
-  private colFirst = 0;
-  private colLastExcl = Number.MAX_SAFE_INTEGER;
+  private centerSource?: Column[];
+  private centerColumns: Column[] = [];
+  private centerFirst = 0;
   focusedCell: FocusedCell | null = null;
   private rowDragController: RowDragController;
 
@@ -148,16 +148,24 @@ export class BodyRenderer {
     this.lastScrollLeft = viewport.scrollLeft;
     this.lastScrollTop = viewport.scrollTop;
     viewport.addEventListener("scroll", this.onScroll, { passive: true });
-    const body = this.core.skeleton.bodyEl;
-    body.addEventListener("click", this.onBodyClick);
-    body.addEventListener("dblclick", this.onBodyDblClick);
-    body.addEventListener("contextmenu", this.onContextMenu);
-    body.addEventListener("mousedown", this.onMouseDown);
-    body.addEventListener("mouseover", this.onMouseOver);
-    body.addEventListener("mouseleave", this.onMouseLeave);
-    body.addEventListener("pointerdown", this.onDragHandlePointerDown);
-    body.addEventListener("keydown", this.onDragHandleKeyDown);
+    this.bindBodyEvents(true);
     window.addEventListener("mouseup", this.onWindowMouseUp);
+  }
+
+  private bindBodyEvents(active: boolean): void {
+    const body = this.core.skeleton.bodyEl;
+    const method = active ? "addEventListener" : "removeEventListener";
+    const handlers = {
+      click: this.onBodyClick,
+      dblclick: this.onBodyDblClick,
+      contextmenu: this.onContextMenu,
+      mousedown: this.onMouseDown,
+      mouseover: this.onMouseOver,
+      mouseleave: this.onMouseLeave,
+      pointerdown: this.onDragHandlePointerDown,
+      keydown: this.onDragHandleKeyDown
+    };
+    for (const [event, handler] of Object.entries(handlers)) body[method](event, handler as EventListener);
   }
 
   suspend(): void {
@@ -173,31 +181,12 @@ export class BodyRenderer {
     const viewport = this.core.skeleton.bodyViewports.center;
     viewport.removeEventListener("scroll", this.onScroll);
     viewport.removeEventListener("wheel", this.onWheel);
-    const body = this.core.skeleton.bodyEl;
-    body.removeEventListener("click", this.onBodyClick);
-    body.removeEventListener("dblclick", this.onBodyDblClick);
-    body.removeEventListener("contextmenu", this.onContextMenu);
-    body.removeEventListener("mousedown", this.onMouseDown);
-    body.removeEventListener("mouseover", this.onMouseOver);
-    body.removeEventListener("mouseleave", this.onMouseLeave);
-    body.removeEventListener("pointerdown", this.onDragHandlePointerDown);
-    body.removeEventListener("keydown", this.onDragHandleKeyDown);
+    this.bindBodyEvents(false);
     window.removeEventListener("mouseup", this.onWindowMouseUp);
     this.cancelFillDrag();
     this.rowDragController.destroy();
-    for (const slot of this.rowPoolItems) {
-      if (slot.detailRow) this.cleanupDetail(slot.detailRow);
-      for (const pane of PANES) {
-        for (const cell of slot.cells[pane] ?? []) {
-          if (slot.index >= 0) this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
-          cleanupCellContent(this.core, cell);
-        }
-      }
-    }
+    this.clearPool(false);
     this.fillHandleEl?.remove();
-    this.fillDragIndicator?.remove();
-    this.rowPoolItems = [];
-    this.poolSize = 0;
     this.pendingFlash = [];
     this.dirtyHeightNodes.clear();
     this.rowSizes.reset([], () => this.core.gridOptions.rowHeight);
@@ -206,7 +195,7 @@ export class BodyRenderer {
   }
 
   paneForColumn(column: Column): PaneType {
-    return column.pinned === "left" ? "left" : column.pinned === "right" ? "right" : "center";
+    return this.core.columnModel.paneOf(column);
   }
 
   private onScroll = (): void => {
@@ -537,10 +526,7 @@ export class BodyRenderer {
       : visible + this.core.gridOptions.rowBuffer * 2 + 1;
     // An even pool preserves striped-row parity when slots are recycled.
     const needed = rawNeeded % 2 === 0 ? rawNeeded : rawNeeded + 1;
-    const colWindowChanged = this.computeColWindow();
-    if (colWindowChanged) {
-      for (const slot of this.rowPoolItems) this.reconcilePaneCells(slot, "center");
-    }
+    this.updateCenterWindow();
     if (needed > this.poolSize) this.growPool(needed);
     this.applyCellLayout();
     this.updateRange(true, false);
@@ -549,7 +535,7 @@ export class BodyRenderer {
 
   private growPool(needed: number): void {
     while (this.poolSize < needed) {
-      const slot: RowSlot = { index: -1, nodeId: "", kind: "master", rows: {}, cells: {}, cellColIds: {} };
+      const slot: RowSlot = { index: -1, nodeId: "", kind: "master", rows: {}, cells: {} };
       const sk = this.core.skeleton;
       for (const pane of PANES) {
         const cols = this.core.columnModel.getPaneColumns(pane);
@@ -560,9 +546,7 @@ export class BodyRenderer {
         row.style.display = "none";
         sk.rowContainers[pane].appendChild(row);
         slot.rows[pane] = row;
-        slot.cells[pane] = [];
-        slot.cellColIds[pane] = [];
-        this.reconcilePaneCells(slot, pane);
+        slot.cells[pane] = this.activePaneColumns(pane).map(column => row.appendChild(this.createCell(column)));
       }
       if (this.core.gridOptions.masterDetail) {
         const detailRow = el("div", "mach-row mach-detail-row");
@@ -578,9 +562,7 @@ export class BodyRenderer {
   }
 
   private activePaneColumns(pane: PaneType): Column[] {
-    const cols = this.core.columnModel.getPaneColumns(pane);
-    if (pane !== "center" || cols.length <= 20 || this.core.columnModel.hasColSpan()) return cols;
-    return cols.slice(this.colFirst, this.colLastExcl);
+    return pane === "center" ? this.centerColumns : this.core.columnModel.getPaneColumns(pane);
   }
 
   private createCell(column: Column): HTMLElement {
@@ -599,50 +581,57 @@ export class BodyRenderer {
     return cell;
   }
 
-  private reconcilePaneCells(slot: RowSlot, pane: PaneType): void {
-    const row = slot.rows[pane];
-    if (!row) return;
-    const columns = this.activePaneColumns(pane);
-    const existingCells = slot.cells[pane] ?? [];
-    const existingIds = slot.cellColIds[pane] ?? [];
-    if (existingIds.length === columns.length && existingIds.every((id, index) => id === columns[index].id)) return;
-
-    const byId = new Map<string, HTMLElement>();
-    existingIds.forEach((id, index) => byId.set(id, existingCells[index]));
-    const nextCells: HTMLElement[] = [];
-    const nextIds: string[] = [];
-    for (const column of columns) {
-      const cell = byId.get(column.id) ?? this.createCell(column);
-      byId.delete(column.id);
-      row.appendChild(cell);
-      nextCells.push(cell);
-      nextIds.push(column.id);
+  private reconcileCenterCells(columns: Column[]): void {
+    // Every pooled row shares the same center window. Compute reuse and removal once.
+    const previous = new Map(this.centerColumns.map((column, index) => [column.id, index]));
+    const positions = columns.map(column => {
+      const index = previous.get(column.id);
+      previous.delete(column.id);
+      return index;
+    });
+    for (const slot of this.rowPoolItems) {
+      const row = slot.rows.center;
+      const cells = slot.cells.center;
+      if (!row || !cells) continue;
+      const next = columns.map((column, index) => {
+        const oldIndex = positions[index];
+        return row.appendChild(oldIndex === undefined ? this.createCell(column) : cells[oldIndex]);
+      });
+      for (const index of previous.values()) {
+        const cell = cells[index];
+        if (slot.index >= 0) this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
+        cleanupCellContent(this.core, cell);
+        cell.remove();
+      }
+      slot.cells.center = next;
     }
-    for (const cell of byId.values()) {
-      if (slot.index >= 0) this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
-      cleanupCellContent(this.core, cell);
-      cell.remove();
-    }
-    slot.cells[pane] = nextCells;
-    slot.cellColIds[pane] = nextIds;
   }
 
   rebuildPool(): void {
     this.treeColumnCache = undefined;
     this.invalidateRangeCache();
-    for (const slot of this.rowPoolItems) {
-      if (slot.detailRow) this.cleanupDetail(slot.detailRow);
-      for (const pane of PANES) {
-        for (const cell of slot.cells[pane] ?? []) cleanupCellContent(this.core, cell);
-        slot.rows[pane]?.remove();
-      }
-      slot.detailRow?.remove();
-    }
-    this.rowPoolItems = [];
-    this.poolSize = 0;
+    this.clearPool(true);
     this.firstRenderedRow = 0;
     this.renderedRowEndExclusive = -1;
     this.relayout();
+  }
+
+  private clearPool(removeRows: boolean): void {
+    for (const slot of this.rowPoolItems) {
+      if (slot.detailRow) this.cleanupDetail(slot.detailRow);
+      for (const pane of PANES) {
+        for (const cell of slot.cells[pane] ?? []) {
+          if (!removeRows && slot.index >= 0) this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
+          cleanupCellContent(this.core, cell);
+        }
+        if (removeRows) slot.rows[pane]?.remove();
+      }
+      if (removeRows) slot.detailRow?.remove();
+    }
+    this.rowPoolItems = [];
+    this.poolSize = 0;
+    this.centerSource = undefined;
+    this.centerColumns = [];
   }
 
   applyCellLayout(): void {
@@ -701,18 +690,21 @@ export class BodyRenderer {
     for (const slot of this.rowPoolItems) slot.detailRow?.style.setProperty("--mach-detail-h", height);
   }
 
-  private computeColWindow(): boolean {
+  private updateCenterWindow(): boolean {
     const viewport = this.core.skeleton.bodyViewports.center;
     const cols = this.core.columnModel.getPaneColumns("center");
-    const prevFirst = this.colFirst;
-    const prevLast = this.colLastExcl;
     this.columnViewport.update(cols);
-    const range = cols.length > 20
+    const virtual = cols.length > 20 && !this.core.columnModel.hasColSpan();
+    const { first, lastExcl } = virtual
       ? this.columnViewport.visibleRange(viewport.scrollLeft, viewport.clientWidth, 2)
       : { first: 0, lastExcl: cols.length };
-    this.colFirst = range.first;
-    this.colLastExcl = range.lastExcl;
-    return range.first !== prevFirst || range.lastExcl !== prevLast;
+    if (cols === this.centerSource && first === this.centerFirst && lastExcl - first === this.centerColumns.length) return false;
+    const next = virtual ? cols.slice(first, lastExcl) : cols;
+    if (this.rowPoolItems.length > 0) this.reconcileCenterCells(next);
+    this.centerSource = cols;
+    this.centerColumns = next;
+    this.centerFirst = first;
+    return true;
   }
 
   /** The pooled row window, including its bounded virtualization buffer. */
@@ -737,8 +729,8 @@ export class BodyRenderer {
     this.rowOffset = offset;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     const buffer = this.core.gridOptions.rowBuffer;
-    const colWindowChanged = checkColumnWindow ? this.computeColWindow() : false;
-    this.reconcileColumnWindow(colWindowChanged);
+    const colWindowChanged = checkColumnWindow && this.updateCenterWindow();
+    if (colWindowChanged) this.applyCellLayout();
 
     if (rowCount === 0) {
       for (const slot of this.rowPoolItems) this.hideSlot(slot);
@@ -796,12 +788,6 @@ export class BodyRenderer {
       }
       this.assignSlot(slot, i);
     }
-  }
-
-  private reconcileColumnWindow(changed: boolean): void {
-    if (!changed) return;
-    for (const slot of this.rowPoolItems) this.reconcilePaneCells(slot, "center");
-    this.applyCellLayout();
   }
 
   private renderAutoHeightRange(rowCount: number, force: boolean, columnsChanged: boolean): boolean {
@@ -874,11 +860,7 @@ export class BodyRenderer {
     }
     const detailRow = slot.detailRow;
     if (!detailRow) return;
-    detailRow.style.display = "";
-    detailRow.style.transform = `translateY(${y}px)`;
-    detailRow.style.height = `${h}px`;
-    detailRow.dataset.index = String(index);
-    detailRow.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
+    this.positionRow(detailRow, index, y, h);
     this.renderDetailContent(detailRow, node);
   }
 
@@ -922,18 +904,22 @@ export class BodyRenderer {
     h: number,
     state: MasterRowState
   ): void {
-    row.style.display = "";
-    row.style.transform = `translateY(${y}px)`;
-    row.style.height = `${h}px`;
-    row.dataset.index = String(index);
-    row.dataset.id = node.id;
-    row.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
+    this.positionRow(row, index, y, h, node.id);
     this.applyRowSelectionState(row, node);
     const hovered = this.hoverIndex === index && !this.core.gridOptions.suppressRowHoverHighlight;
     row.classList.toggle("mach-row--hover", hovered);
     row.classList.toggle("mach-row--odd", index % 2 === 1);
     row.classList.toggle("mach-row--drag-source", this.rowDragController.isSource(node));
     this.applyExpandableRowState(row, state);
+  }
+
+  private positionRow(row: HTMLElement, index: number, y: number, height: number, id?: string): void {
+    row.style.display = "";
+    row.style.transform = `translateY(${y}px)`;
+    row.style.height = `${height}px`;
+    row.dataset.index = String(index);
+    if (id !== undefined) row.dataset.id = id;
+    row.setAttribute("aria-rowindex", String(index + this.core.skeleton.getHeaderRowCount() + 1));
   }
 
   private applyRowSelectionState(row: HTMLElement, node: RowNode<any>): void {
@@ -1078,9 +1064,7 @@ export class BodyRenderer {
       this.renderStructuralCell(kind, cell, node, column);
       return;
     }
-    renderCellContent(this.core, cell, node, column);
-    applyCellClasses(this.core, cell, node, column);
-    applyCellStyle(this.core, cell, node, column);
+    renderDataCell(this.core, cell, node, column);
     this.applyCellSpanStyle(cell, node, column);
     this.appendEditableIndicator(cell, node, column);
   }
@@ -1436,29 +1420,16 @@ export class BodyRenderer {
 
   refreshOverlays(): void {
     const options = this.core.gridOptions;
-    if (options.loading) {
-      const template = options.overlayLoadingTemplate || this.core.buildDefaultLoadingState();
-      this.core.skeleton.showOverlay("loading", template, options.allowUnsafeOverlayHtml);
-      return;
-    }
-    if (options.error != null) {
-      const template = options.overlayErrorTemplate || this.core.buildDefaultErrorState();
-      this.core.skeleton.showOverlay("error", template, options.allowUnsafeOverlayHtml);
-      return;
-    }
-    if (this.core.rowModel.getDisplayedRowCount() === 0 && !options.suppressNoRowsOverlay) {
-      const template = options.overlayNoRowsTemplate || this.core.buildDefaultEmptyState();
-      this.core.skeleton.showOverlay("noRows", template, options.allowUnsafeOverlayHtml);
-      return;
-    }
-    this.core.skeleton.hideOverlay();
+    const overlay = options.loading ? "loading" : options.error != null ? "error"
+      : this.core.rowModel.getDisplayedRowCount() === 0 && !options.suppressNoRowsOverlay ? "noRows" : null;
+    showGridOverlay(this.core, overlay);
   }
 
   getCellElement(rowIndex: number, colId: string): HTMLElement | null {
     const column = this.core.columnModel.getColumn(colId);
     if (!column) return null;
     const pane = this.paneForColumn(column);
-    const colIdx = this.rowPoolItems[rowIndex % Math.max(1, this.poolSize)]?.cellColIds[pane]?.indexOf(column.id) ?? -1;
+    const colIdx = this.activePaneColumns(pane).indexOf(column);
     if (colIdx < 0) return null;
     const slot = this.rowPoolItems[rowIndex % this.poolSize];
     if (!slot || slot.index !== rowIndex || slot.kind !== "master") return null;
@@ -1664,11 +1635,7 @@ export class BodyRenderer {
       axis: null,
       active: false
     };
-    window.addEventListener("pointermove", this.onFillMove);
-    window.addEventListener("mousemove", this.onFillMove);
-    window.addEventListener("pointerup", this.onFillUp);
-    window.addEventListener("mouseup", this.onFillUp);
-    window.addEventListener("pointercancel", this.onFillUp);
+    this.bindFillEvents(true);
   }
 
   private fillTargetRow(e: MouseEvent): number {
@@ -1696,16 +1663,16 @@ export class BodyRenderer {
     return leftCount + centerCols.length - 1;
   }
 
-  private fillDragIndicator: HTMLElement | null = null;
+  private bindFillEvents(active: boolean): void {
+    const method = active ? "addEventListener" : "removeEventListener";
+    for (const event of ["pointermove", "mousemove"]) window[method](event, this.onFillMove);
+    for (const event of ["pointerup", "mouseup", "pointercancel"]) window[method](event, this.onFillUp);
+  }
 
   private cancelFillDrag(): void {
     this.fillDrag = null;
     this.fillFromPointer = false;
-    window.removeEventListener("pointermove", this.onFillMove);
-    window.removeEventListener("mousemove", this.onFillMove);
-    window.removeEventListener("pointerup", this.onFillUp);
-    window.removeEventListener("mouseup", this.onFillUp);
-    window.removeEventListener("pointercancel", this.onFillUp);
+    this.bindFillEvents(false);
     this.core.skeleton.root.classList.remove("mach-root--filling");
   }
 
@@ -1724,37 +1691,32 @@ export class BodyRenderer {
       this.core.skeleton.root.classList.add("mach-root--filling");
     }
 
-    if (drag.axis === "v") {
-      const target = this.fillTargetRow(me);
-      const end = this.rangeSelection.getEnd();
-      if (end && end.row !== target) {
-        this.rangeSelection.setEnd({ row: target, colIdx: end.colIdx });
-        this.refreshRangeClasses();
-        this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
-      }
-      return;
-    }
-
-    const targetCol = Math.max(drag.c2 + 1, this.fillTargetCol(me));
-    const end = this.rangeSelection.getEnd();
-    if (end && end.colIdx !== targetCol) {
-      this.rangeSelection.setEnd({ row: end.row, colIdx: targetCol });
-      this.refreshRangeClasses();
-      this.updateFillHandle();
-      this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
-    }
+    const horizontal = drag.axis !== "v";
+    this.setFillRangeEnd(horizontal, horizontal ? Math.max(drag.c2 + 1, this.fillTargetCol(me)) : this.fillTargetRow(me), true);
   };
 
-  private fillHorizontal(
-    r1: number,
-    r2: number,
-    c1: number,
-    c2: number,
-    targetEnd: number
-  ): void {
+  private setFillRangeEnd(horizontal: boolean, target: number, preview: boolean): void {
+    const end = this.rangeSelection.getEnd();
+    if (!end || target === (horizontal ? end.colIdx : end.row)) return;
+    this.rangeSelection.setEnd(horizontal ? { row: end.row, colIdx: target } : { row: target, colIdx: end.colIdx });
+    this.refreshRangeClasses();
+    if (preview) {
+      if (horizontal) this.updateFillHandle();
+      this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
+    }
+  }
+
+  private fillRange({ r1, r2, c1, c2 }: NormalizedRange, targetEnd: number, horizontal: boolean): void {
     const flat = this.core.columnModel.getOrderedVisible();
     const changes: InputChange[] = [];
-    for (let r = r1; r <= r2; r++) this.fillHorizontalRow(r, c1, c2, targetEnd, flat, changes);
+    if (horizontal) {
+      for (let r = r1; r <= r2; r++) this.fillHorizontalRow(r, c1, c2, targetEnd, flat, changes);
+    } else {
+      for (let c = c1; c <= c2; c++) {
+        const column = flat[c];
+        if (isFillableColumn(column)) this.fillColumnDown(column, r1, r2, targetEnd, changes);
+      }
+    }
     this.core.applyInputChanges(changes);
     this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
   }
@@ -1789,67 +1751,24 @@ export class BodyRenderer {
     if (!drag) return;
     const me = e as MouseEvent;
 
-    const finish = (): void => {
-      this.cancelFillDrag();
-    };
-
     if (!drag.active) {
-      finish();
+      this.cancelFillDrag();
       return;
     }
 
-    if (drag.axis === "h") {
-      const targetCol =
-        typeof me.clientX === "number" ? Math.max(drag.c2 + 1, this.fillTargetCol(me)) : drag.c2 + 1;
-      finish();
-      if (targetCol > drag.c2) {
-        this.fillHorizontal(drag.r1, drag.r2, drag.c1, drag.c2, targetCol);
-        this.updateFillHandle();
-      } else {
-        const end = this.rangeSelection.getEnd();
-        if (!end || end.colIdx === drag.c2) return;
-        this.rangeSelection.setEnd({ row: end.row, colIdx: drag.c2 });
-        this.refreshRangeClasses();
-      }
-      return;
-    }
-
-    const targetRow = typeof me.clientY === "number" ? this.fillTargetRow(me) : drag.r2;
-    finish();
-    if (targetRow > drag.r2) {
-      this.fillValues(drag.r1, drag.r2, drag.c1, drag.c2, targetRow);
+    const horizontal = drag.axis === "h";
+    const edge = horizontal ? drag.c2 : drag.r2;
+    let target = edge;
+    if (horizontal) target = Math.max(edge + 1, typeof me.clientX === "number" ? this.fillTargetCol(me) : edge + 1);
+    else if (typeof me.clientY === "number") target = this.fillTargetRow(me);
+    this.cancelFillDrag();
+    if (target > edge) {
+      this.fillRange(drag, target, horizontal);
       this.updateFillHandle();
     } else {
-      const end = this.rangeSelection.getEnd();
-      if (!end || end.row === drag.r2) return;
-      this.rangeSelection.setEnd({ row: drag.r2, colIdx: end.colIdx });
-      this.refreshRangeClasses();
+      this.setFillRangeEnd(horizontal, edge, false);
     }
   };
-
-  private fillValues(r1: number, r2: number, c1: number, c2: number, targetEnd: number): void {
-    const flat = this.core.columnModel.getOrderedVisible();
-    const changes: InputChange[] = [];
-    this.fillValuesInner(r1, r2, c1, c2, targetEnd, flat, changes);
-    this.core.applyInputChanges(changes);
-    this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
-  }
-
-  private fillValuesInner(
-    r1: number,
-    r2: number,
-    c1: number,
-    c2: number,
-    targetEnd: number,
-    flat: Column[],
-    changes: InputChange[]
-  ): void {
-    for (let c = c1; c <= c2; c++) {
-      const col = flat[c];
-      if (!isFillableColumn(col)) continue;
-      this.fillColumnDown(col, r1, r2, targetEnd, changes);
-    }
-  }
 
   private fillColumnDown(
     column: Column,
@@ -1858,7 +1777,11 @@ export class BodyRenderer {
     targetEnd: number,
     changes: InputChange[]
   ): void {
-    const values = this.verticalSourceValues(column, sourceStart, sourceEnd);
+    const values: any[] = [];
+    for (let rowIndex = sourceStart; rowIndex <= sourceEnd; rowIndex++) {
+      const node = this.core.rowModel.getDisplayedRow(rowIndex);
+      values.push(node ? this.core.readCellValue(node, column) : undefined);
+    }
     if (values.length === 1 && values[0] === undefined) return;
     const pattern = createFillPattern(values);
     for (let rowIndex = sourceEnd + 1; rowIndex <= targetEnd; rowIndex++) {
@@ -1869,15 +1792,6 @@ export class BodyRenderer {
       const oldValue = this.core.readCellValue(node, column);
       changes.push({ node, column, oldValue, newValue: value });
     }
-  }
-
-  private verticalSourceValues(column: Column, start: number, end: number): any[] {
-    const values: any[] = [];
-    for (let rowIndex = start; rowIndex <= end; rowIndex++) {
-      const node = this.core.rowModel.getDisplayedRow(rowIndex);
-      values.push(node ? this.core.readCellValue(node, column) : undefined);
-    }
-    return values;
   }
 
   setFocusedCell(rowIndex: number | null, colId: string | null): void {

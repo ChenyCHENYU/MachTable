@@ -2,7 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type { ContextMenuItem } from "../types/params";
 import type { RowNode } from "../types/row";
-import { applyPortalTheme, el, clamp } from "../lib/dom";
+import { applyPortalTheme, el, clamp, textButton } from "../lib/dom";
 
 type ContextMenuContext = Pick<
   GridCore<any>,
@@ -88,29 +88,20 @@ export class ContextMenuService {
     }
   }
 
-  private appendDefaultButton(panel: HTMLElement, label: string, action: () => void): void {
-    const button = el("button", "mach-context-menu-item");
-    button.type = "button";
-    button.textContent = label;
-    button.addEventListener("click", action);
-    panel.appendChild(button);
-  }
-
   private populateDefaultPanel(panel: HTMLElement): void {
     const core = this.core;
-    this.appendDefaultButton(panel, core.getLocaleText("menuCopy"), () => {
-      void core.copyActiveRange();
-      this.close();
-    });
+    const appendAction = (label: "menuCopy" | "menuPaste" | "menuClearContents", action: () => void) => {
+      panel.append(textButton("mach-context-menu-item", core.getLocaleText(label), () => {
+        action();
+        this.close();
+      }));
+    };
+    appendAction("menuCopy", () => void core.copyActiveRange());
     if (core.gridOptions.suppressClipboard) return;
-    this.appendDefaultButton(panel, core.getLocaleText("menuPaste"), () => {
-      void core.pasteFromSystemClipboard();
-      this.close();
-    });
-    this.appendDefaultButton(panel, core.getLocaleText("menuClearContents"), () => {
+    appendAction("menuPaste", () => void core.pasteFromSystemClipboard());
+    appendAction("menuClearContents", () => {
       const active = core.bodyRenderer.getNormalizedRangeOrFocus();
       if (active) core.clearRangeValues(active);
-      this.close();
     });
   }
 

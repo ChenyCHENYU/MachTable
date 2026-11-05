@@ -122,7 +122,7 @@ export class GridCore<TData = any> {
   private gridStateLoadToken = 0;
   private deferredGridStateVersion: number | null = null;
   private gridStateMutationVersion = 0;
-  private restoringGridState: "normal" | "beforeDatasource" | null = null;
+  private restoringGridState: "normal" | "beforeRows" | null = null;
   private stateSaveInFlight = false;
   private pendingStateSave: { key: string; store?: GridStateStore; state: GridState } | null = null;
 
@@ -706,7 +706,7 @@ export class GridCore<TData = any> {
     }
   }
 
-  loadPersistedGridState(deferredOnly = false, beforeDatasource = false): void {
+  loadPersistedGridState(deferredOnly = false, beforeRows = false): void {
     const mutationVersion = this.gridStateMutationVersion;
     const deferredVersion = this.deferredGridStateVersion;
     const hasDefinitions = this.columnModel.getColumnDefs().length > 0;
@@ -743,7 +743,7 @@ export class GridCore<TData = any> {
         mutationVersion !== this.gridStateMutationVersion || !state
       ) return;
       const previous = this.restoringGridState;
-      this.restoringGridState = beforeReload ? "beforeDatasource" : "normal";
+      this.restoringGridState = beforeReload ? "beforeRows" : "normal";
       try {
         this.api.state.apply(state, { emitEvents: false, sections });
       } finally {
@@ -753,12 +753,12 @@ export class GridCore<TData = any> {
     if (saved && typeof (saved as Promise<unknown>).then === "function") {
       void Promise.resolve(saved).then(apply).catch((error) => this.reportError(error, "gridState.load"));
     } else {
-      apply(saved as GridStateInput | null, beforeDatasource);
+      apply(saved as GridStateInput | null, beforeRows);
     }
   }
 
-  isRestoringBeforeDatasource(): boolean {
-    return this.restoringGridState === "beforeDatasource";
+  isRestoringBeforeRows(): boolean {
+    return this.restoringGridState === "beforeRows";
   }
 
   scheduleGridStateSave(): void {

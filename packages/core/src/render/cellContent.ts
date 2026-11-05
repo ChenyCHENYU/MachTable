@@ -262,3 +262,9 @@ export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node
   const className = classes.join(" ");
   if (cell.className !== className) cell.className = className;
 }
+
+export function renderDataCell(core: CellRenderContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
+  renderCellContent(core, cell, node, column);
+  applyCellClasses(core, cell, node, column);
+  applyCellStyle(core, cell, node, column);
+}

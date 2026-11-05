@@ -94,24 +94,17 @@ function classNames(base: string, extra?: string): string {
   return extra ? `${base} ${extra}` : base;
 }
 
-function enabledIndexes(options: readonly SelectControlOption[]): number[] {
-  const indexes: number[] = [];
-  options.forEach((option, index) => {
-    if (!option.disabled) indexes.push(index);
-  });
-  return indexes;
-}
-
 function nextEnabledIndex(
   options: readonly SelectControlOption[],
   current: number,
   direction: 1 | -1
 ): number {
-  const enabled = enabledIndexes(options);
-  if (enabled.length === 0) return -1;
-  const position = enabled.indexOf(current);
-  if (position < 0) return direction > 0 ? enabled[0] : enabled[enabled.length - 1];
-  return enabled[Math.max(0, Math.min(enabled.length - 1, position + direction))];
+  const hasCurrent = options[current] && !options[current].disabled;
+  const start = hasCurrent ? current + direction : direction > 0 ? 0 : options.length - 1;
+  for (let index = start; index >= 0 && index < options.length; index += direction) {
+    if (!options[index].disabled) return index;
+  }
+  return hasCurrent ? current : -1;
 }
 
 function selectedIndex(options: readonly SelectControlOption[], value: string): number {
@@ -150,6 +143,8 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
 
   const currentThemeSource = (): HTMLElement | null =>
     config.themeSource ?? root.closest<HTMLElement>(".mach-root") ?? root;
+  const contains = (target: Node): boolean => root.contains(target) || listbox.contains(target);
+  const isOpen = (): boolean => listbox.classList.contains("mach-select-listbox--open");
 
   const sync = (): void => {
     const option = options.find((candidate) => candidate.value === native.value);
@@ -180,7 +175,7 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
   };
 
   const close = (restoreFocus = false): boolean => {
-    if (!listbox.classList.contains("mach-select-listbox--open")) return false;
+    if (!isOpen()) return false;
     listbox.classList.remove("mach-select-listbox--open", "mach-select-listbox--above");
     listbox.setAttribute("aria-hidden", "true");
     trigger.setAttribute("aria-expanded", "false");
@@ -199,16 +194,17 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
   };
 
   const open = (): void => {
-    if (destroyed || trigger.disabled || listbox.classList.contains("mach-select-listbox--open")) return;
+    if (destroyed || trigger.disabled || isOpen()) return;
+    const owner = currentThemeSource();
     activateSelect({
-      owner: currentThemeSource(),
+      owner,
       close,
-      contains: (target) => root.contains(target) || listbox.contains(target),
+      contains,
       reposition: positionListbox
     });
     activeIndex = selectedIndex(options, native.value);
-    if (activeIndex < 0) activeIndex = enabledIndexes(options)[0] ?? -1;
-    applyPortalTheme(listbox, currentThemeSource());
+    if (activeIndex < 0) activeIndex = nextEnabledIndex(options, -1, 1);
+    applyPortalTheme(listbox, owner);
     document.body.appendChild(listbox);
     listbox.classList.add("mach-select-listbox--open");
     listbox.setAttribute("aria-hidden", "false");
@@ -272,22 +268,19 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       event.stopPropagation();
-      if (!listbox.classList.contains("mach-select-listbox--open")) open();
+      if (!isOpen()) open();
       else choose(activeIndex);
       return;
     }
     let next = activeIndex;
     if (event.key === "ArrowDown") next = nextEnabledIndex(options, activeIndex, 1);
     else if (event.key === "ArrowUp") next = nextEnabledIndex(options, activeIndex, -1);
-    else if (event.key === "Home") next = enabledIndexes(options)[0] ?? -1;
-    else if (event.key === "End") {
-      const enabled = enabledIndexes(options);
-      next = enabled[enabled.length - 1] ?? -1;
-    }
+    else if (event.key === "Home") next = nextEnabledIndex(options, -1, 1);
+    else if (event.key === "End") next = nextEnabledIndex(options, -1, -1);
     else return;
     event.preventDefault();
     event.stopPropagation();
-    if (!listbox.classList.contains("mach-select-listbox--open")) open();
+    if (!isOpen()) open();
     setActive(next);
   };
 
@@ -309,8 +302,8 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
     native,
     trigger,
     listbox,
-    contains: (target) => root.contains(target) || listbox.contains(target),
-    isOpen: () => listbox.classList.contains("mach-select-listbox--open"),
+    contains,
+    isOpen,
     open,
     close,
     focus: () => trigger.focus({ preventScroll: true }),

@@ -3,7 +3,8 @@ import type { PaneType } from "../services/columnModel";
 import type { RowNode } from "../types/row";
 import { el } from "../lib/dom";
 import { applyRowAppearance, resolveRowAppearance } from "./rowAppearance";
-import { renderCellContent, cleanupCellContent, applyCellClasses, applyCellStyle } from "./cellContent";
+import { renderDataCell, cleanupCellContent } from "./cellContent";
+import { PANES } from "./skeleton";
 
 type PinnedRowsContext = Pick<
   GridCore<any>,
@@ -17,8 +18,6 @@ type PinnedRowsContext = Pick<
   | "resolveCellRenderer"
   | "skeleton"
 >;
-
-const PANES: PaneType[] = ["left", "center", "right"];
 
 interface SideState {
   root: HTMLElement;
@@ -65,8 +64,7 @@ export class PinnedRowsRenderer {
     if (this.core.isDisposed() || !this.top || !this.bottom) return;
     this.top.data = top ?? [];
     this.bottom.data = bottom ?? [];
-    this.rebuild();
-    this.applyLayout();
+    this.refresh();
     this.core.relayout();
   }
 
@@ -90,16 +88,11 @@ export class PinnedRowsRenderer {
   }
 
   private rebuildSide(side: SideState, sideName: "top" | "bottom"): void {
-    for (const row of side.cells) {
-      for (const pane of PANES) {
-        for (const cell of row[pane]) cleanupCellContent(this.core, cell);
-      }
-    }
+    this.clearCells(side);
     for (const pane of PANES) {
       for (const wrapper of side.rowWrappers[pane]) wrapper.remove();
       side.rowWrappers[pane] = [];
     }
-    side.cells = [];
     side.root.style.display = side.data.length > 0 ? "" : "none";
     if (side.data.length === 0) return;
 
@@ -128,9 +121,7 @@ export class PinnedRowsRenderer {
           if (col.hasCheckbox) cell.classList.add("mach-cell--selection");
           if (!col.hasCheckbox && !col.isDetailToggle && !col.colDef.rowDrag && col.colDef.type !== "index") {
             try {
-              renderCellContent(this.core, cell, node, col);
-              applyCellClasses(this.core, cell, node, col);
-              applyCellStyle(this.core, cell, node, col);
+              renderDataCell(this.core, cell, node, col);
             } catch (err) {
               this.core.reportError(err, "pinnedRow.render", { colId: col.id, side: sideName, rowIndex: i });
             }
@@ -192,15 +183,18 @@ export class PinnedRowsRenderer {
   }
 
   destroy(): void {
-    for (const side of [this.top, this.bottom]) {
-      if (!side) continue;
-      for (const row of side.cells) {
-        for (const pane of PANES) {
-          for (const cell of row[pane]) cleanupCellContent(this.core, cell);
-        }
-      }
-    }
+    if (this.top) this.clearCells(this.top);
+    if (this.bottom) this.clearCells(this.bottom);
     this.top = null;
     this.bottom = null;
+  }
+
+  private clearCells(side: SideState): void {
+    for (const row of side.cells) {
+      for (const pane of PANES) {
+        for (const cell of row[pane]) cleanupCellContent(this.core, cell);
+      }
+    }
+    side.cells = [];
   }
 }

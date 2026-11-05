@@ -109,19 +109,18 @@ export function buildColDefsFromSchema<TData = any>(
   schema: GridSchema
 ): (ColDef<TData> | ColDefGroup<TData>)[] {
   const byField = new Map(schema.fields.map((f) => [f.field, f]));
+  const groups = schema.groups ?? [];
+  const groupedFields = new Set(groups.flatMap((group) => group.fields));
   const used = new Set<string>();
   const result: (ColDef<TData> | ColDefGroup<TData>)[] = [];
 
   for (const field of schema.fields) {
-    if (used.has(field.field)) continue;
-    const grouped = (schema.groups ?? []).some((g) => g.fields.includes(field.field));
-    if (!grouped) {
-      result.push(fieldToColDef(field));
-      used.add(field.field);
-    }
+    if (used.has(field.field) || groupedFields.has(field.field)) continue;
+    result.push(fieldToColDef(field));
+    used.add(field.field);
   }
 
-  for (const group of schema.groups ?? []) {
+  for (const group of groups) {
     const children: ColDef<TData>[] = [];
     for (const fieldName of group.fields) {
       const field = byField.get(fieldName);

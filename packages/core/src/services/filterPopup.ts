@@ -3,11 +3,12 @@ import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type {
   ColumnFilter,
+  DateFilterCondition,
   DateFilterMatch,
   NumberFilterMatch,
   TextFilterMatch
 } from "../types/colDef";
-import { applyPortalTheme, el, positionAnchoredPortal } from "../lib/dom";
+import { applyPortalTheme, el, positionAnchoredPortal, textButton } from "../lib/dom";
 import { matchLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
@@ -18,16 +19,11 @@ type FilterPopupContext = Pick<
 
 type ConditionFilterType = "text" | "number" | "date";
 type ConditionMatch = TextFilterMatch | NumberFilterMatch | DateFilterMatch;
-interface ConditionSelectElements {
-  root: HTMLElement;
-  select: HTMLSelectElement;
-}
+type ReadFilter = () => ColumnFilter | null;
 
 function isBlankMatch(match: string): boolean {
   return match === "blank" || match === "notBlank";
 }
-
-
 function setValueKey(value: string | number | null): string {
   if (value === null) return "null:";
   return `${typeof value}:${String(value)}`;
@@ -80,26 +76,19 @@ export class FilterPopupService {
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-label", `${column.id} filter`);
 
-    if (type === "set") this.buildSetBody(panel, column, filter);
-    else this.buildConditionBody(panel, column, type, filter);
-
-    const footer = el("div", "mach-filter-footer");
-    const resetBtn = el("button", "mach-filter-btn-reset");
-    resetBtn.type = "button";
-    resetBtn.textContent = this.core.getLocaleText("reset");
-    resetBtn.addEventListener("click", () => {
-      this.core.applyColumnFilter(column, null);
-      this.close();
-    });
-    const applyBtn = el("button", "mach-filter-btn-apply");
-    applyBtn.type = "button";
-    applyBtn.textContent = this.core.getLocaleText("apply");
-    applyBtn.addEventListener("click", () => {
-      const next = this.readFilter(panel);
+    const apply = (next: ColumnFilter | null) => {
       this.core.applyColumnFilter(column, next);
       this.close();
-    });
-    footer.append(resetBtn, applyBtn);
+    };
+    const readFilter = type === "set"
+      ? this.buildSetBody(panel, column, filter)
+      : this.buildConditionBody(panel, type, filter, apply);
+
+    const footer = el("div", "mach-filter-footer");
+    footer.append(
+      textButton("mach-filter-btn-reset", this.core.getLocaleText("reset"), () => apply(null)),
+      textButton("mach-filter-btn-apply", this.core.getLocaleText("apply"), () => apply(readFilter()))
+    );
     panel.appendChild(footer);
 
     applyPortalTheme(panel, this.core.skeleton.root);
@@ -132,15 +121,15 @@ export class FilterPopupService {
 
   private buildConditionBody(
     panel: HTMLElement,
-    column: Column,
     type: ConditionFilterType,
-    filter: ColumnFilter | null
-  ): void {
+    filter: ColumnFilter | null,
+    apply: (filter: ColumnFilter | null) => void
+  ): ReadFilter {
     const existing =
       filter && filter.type !== "set" && filter.conditions.length > 0 ? filter.conditions[0] : null;
     const currentMatch: ConditionMatch =
       existing?.match ?? (type === "text" ? "contains" : "equals");
-    const { root: selectControl, select } = this.createConditionSelect(type, currentMatch);
+    const { el: selectControl, native: select } = this.createConditionSelect(type, currentMatch);
     const valueInput = this.createConditionInput(type);
     const value2Input = this.createConditionInput(type, true);
     this.populateConditionInputs(type, currentMatch, existing, valueInput, value2Input);
@@ -148,15 +137,20 @@ export class FilterPopupService {
     select.addEventListener("change", () => {
       this.updateConditionInputVisibility(select.value, valueInput, value2Input);
     });
-    this.attachEnterApply(column, panel, valueInput, value2Input);
 
     const body = el("div", "mach-filter-body");
     body.append(selectControl, valueInput, value2Input);
     panel.appendChild(body);
-    panel.dataset.filterType = type;
+    const readFilter = () => this.readConditionFilter(type, select.value, valueInput.value, value2Input.value);
+    const applyOnEnter = (event: KeyboardEvent) => {
+      if (event.key === "Enter") apply(readFilter());
+    };
+    valueInput.addEventListener("keydown", applyOnEnter);
+    value2Input.addEventListener("keydown", applyOnEnter);
+    return readFilter;
   }
 
-  private createConditionSelect(type: ConditionFilterType, current: ConditionMatch): ConditionSelectElements {
+  private createConditionSelect(type: ConditionFilterType, current: ConditionMatch): SelectControl {
     const control = createSelectControl({
       ariaLabel: "Filter condition",
       options: FILTER_MATCHES[type].map((match) => ({
@@ -176,7 +170,7 @@ export class FilterPopupService {
       themeSource: this.core.skeleton.root
     });
     this.conditionSelect = control;
-    return { root: control.el, select: control.native };
+    return control;
   }
 
   private closeConditionListbox(restoreFocus = false): boolean {
@@ -215,22 +209,7 @@ export class FilterPopupService {
     value2Input.style.display = match === "inRange" ? "" : "none";
   }
 
-  private attachEnterApply(
-    column: Column,
-    panel: HTMLElement,
-    valueInput: HTMLInputElement,
-    value2Input: HTMLInputElement
-  ): void {
-    const enterApply = (e: KeyboardEvent) => {
-      if (e.key !== "Enter") return;
-      this.core.applyColumnFilter(column, this.readFilter(panel));
-      this.close();
-    };
-    valueInput.addEventListener("keydown", enterApply);
-    value2Input.addEventListener("keydown", enterApply);
-  }
-
-  private buildSetBody(panel: HTMLElement, column: Column, filter: ColumnFilter | null): void {
+  private buildSetBody(panel: HTMLElement, column: Column, filter: ColumnFilter | null): ReadFilter {
     const def = column.colDef;
     const params = def.filterParams;
     let values: (string | number | null)[];
@@ -260,18 +239,15 @@ export class FilterPopupService {
     search.placeholder = this.core.getLocaleText("search");
 
     const list = el("div", "mach-filter-set-list");
-    const checkboxes: HTMLInputElement[] = [];
-    const valueByKey = new Map<string, string | number | null>();
+    const valueByKey = new Map(values.map((value) => [setValueKey(value), value ?? null]));
 
     const renderList = (query: string) => {
       list.textContent = "";
-      checkboxes.length = 0;
       const q = query.trim().toLowerCase();
       for (const v of values) {
         const text = v == null ? this.core.getLocaleText("emptySetLabel") : String(v);
         if (q && !text.toLowerCase().includes(q)) continue;
         const key = setValueKey(v);
-        valueByKey.set(key, v);
         const label = el("label", "mach-filter-set-item");
         const cb = document.createElement("input");
         cb.type = "checkbox";
@@ -279,96 +255,52 @@ export class FilterPopupService {
         cb.addEventListener("change", () => {
           if (cb.checked) selected.add(key);
           else selected.delete(key);
-          panel.dataset.setSelected = JSON.stringify([...selected]);
         });
         const span = el("span");
         span.textContent = text;
         label.append(cb, span);
         list.appendChild(label);
-        checkboxes.push(cb);
       }
     };
 
     search.addEventListener("input", () => renderList(search.value));
     renderList("");
-    panel.dataset.filterType = "set";
-    panel.dataset.setValues = JSON.stringify([...valueByKey.entries()]);
-    panel.dataset.setSelected = JSON.stringify([...selected]);
-
-    const updateSetValues = () => {
-      const entries = [...valueByKey.entries()];
-      panel.dataset.setValues = JSON.stringify(entries);
-    };
-    updateSetValues();
 
     const body = el("div", "mach-filter-body mach-filter-body--set");
     body.append(search, list);
     panel.appendChild(body);
+    // Selection belongs to the popup, including values hidden by the search.
+    return () => {
+      const picked = [];
+      for (const [key, value] of valueByKey) if (selected.has(key)) picked.push(value);
+      return picked.length && picked.length < valueByKey.size ? { type: "set", values: picked } : null;
+    };
   }
 
-  private readFilter(panel: HTMLElement): ColumnFilter | null {
-    const type = panel.dataset.filterType;
-    if (type === "set") return this.readSetFilter(panel);
-    if (type !== "text" && type !== "number" && type !== "date") return null;
-
-    const select = panel.querySelector<HTMLSelectElement>(".mach-filter-select");
-    const inputs = panel.querySelectorAll<HTMLInputElement>(".mach-filter-input");
-    const valueInput = inputs[0];
-    const value2Input = inputs[1];
-    if (!select || !valueInput) return null;
-
-    const match = select.value;
+  private readConditionFilter(type: ConditionFilterType, match: string, raw: string, end: string): ColumnFilter | null {
     if (isBlankMatch(match)) {
       return { type, conditions: [{ match: match }] } as ColumnFilter;
     }
-    const raw = valueInput.value;
-    if (raw === "" && !(match === "inRange")) return null;
-    if (type === "number") return this.readNumberFilter(match, raw, value2Input);
-    if (type === "date") return this.readDateFilter(match, raw, value2Input);
+    if (raw === "" && match !== "inRange") return null;
+    if (type === "number") return this.readNumberFilter(match, raw, end);
+    if (type === "date") {
+      const condition: DateFilterCondition = match === "inRange"
+        ? { match, value: raw, value2: end || raw }
+        : { match: match as DateFilterMatch, value: raw };
+      return { type, conditions: [condition] };
+    }
     return { type: "text", conditions: [{ match: match as TextFilterMatch, value: raw }] };
   }
 
-  private readSetFilter(panel: HTMLElement): ColumnFilter | null {
-    let entries: [string, string | number | null][] = [];
-    let selectedKeys: string[] = [];
-    try {
-      entries = JSON.parse(panel.dataset.setValues ?? "[]");
-      selectedKeys = JSON.parse(panel.dataset.setSelected ?? "[]");
-    } catch {
-      return null;
-    }
-    const selected = new Set(selectedKeys);
-    const picked = entries.filter(([key]) => selected.has(key)).map(([, value]) => value);
-    if (picked.length === entries.length || picked.length === 0) return null;
-    return { type: "set", values: picked };
-  }
-
-  private readNumberFilter(
-    match: string,
-    raw: string,
-    value2Input: HTMLInputElement | undefined
-  ): ColumnFilter | null {
+  private readNumberFilter(match: string, raw: string, end: string): ColumnFilter | null {
     const value = Number(raw);
     if (Number.isNaN(value)) return null;
     if (match !== "inRange") {
       return { type: "number", conditions: [{ match: match as NumberFilterMatch, value }] };
     }
-    const value2 = value2Input?.value ? Number(value2Input.value) : value;
+    const value2 = end ? Number(end) : value;
     if (Number.isNaN(value2)) return null;
     return { type: "number", conditions: [{ match: "inRange", value, value2 }] };
   }
 
-  private readDateFilter(
-    match: string,
-    value: string,
-    value2Input: HTMLInputElement | undefined
-  ): ColumnFilter {
-    if (match !== "inRange") {
-      return { type: "date", conditions: [{ match: match as DateFilterMatch, value }] };
-    }
-    return {
-      type: "date",
-      conditions: [{ match: "inRange", value, value2: value2Input?.value || value }]
-    };
-  }
 }

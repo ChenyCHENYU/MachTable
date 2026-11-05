@@ -4,7 +4,24 @@ import type { PaneType } from "../services/columnModel";
 import { el } from "../lib/dom";
 
 const SIZE_CLASSES: GridSize[] = ["compact", "normal", "large"];
+export const PANES = ["left", "center", "right"] as const;
 type SkeletonContext = Pick<GridCore<any>, "gridOptions" | "relayout" | "reportError">;
+type OverlayContext = Pick<GridCore<any>,
+  "gridOptions" | "skeleton" | "buildDefaultLoadingState" | "buildDefaultEmptyState" | "buildDefaultErrorState"
+>;
+
+export function showGridOverlay(core: OverlayContext, type: "loading" | "noRows" | "error" | null): void {
+  const options = core.gridOptions;
+  let content: OverlayTemplate;
+  if (type === "loading") content = options.overlayLoadingTemplate || core.buildDefaultLoadingState();
+  else if (type === "noRows") content = options.overlayNoRowsTemplate || core.buildDefaultEmptyState();
+  else if (type === "error") content = options.overlayErrorTemplate || core.buildDefaultErrorState();
+  else {
+    core.skeleton.hideOverlay();
+    return;
+  }
+  core.skeleton.showOverlay(type, content, options.allowUnsafeOverlayHtml);
+}
 
 /** @internal Layout ownership stays in Core; consumers receive only the root DOM element. */
 export class GridSkeleton {
@@ -13,8 +30,8 @@ export class GridSkeleton {
   bodyEl!: HTMLElement;
   pinnedTopEl!: HTMLElement;
   pinnedBottomEl!: HTMLElement;
-  headerRows: Record<PaneType, HTMLElement[]> = { left: [], center: [], right: [] };
-  headerRowContainers: Record<PaneType, HTMLElement> = {} as Record<PaneType, HTMLElement>;
+  headerRows!: Record<PaneType, HTMLElement[]>;
+  headerRowContainers!: Record<PaneType, HTMLElement>;
   bodyViewports!: Record<PaneType, HTMLElement>;
   rowContainers!: Record<PaneType, HTMLElement>;
 
@@ -56,7 +73,7 @@ export class GridSkeleton {
     this.headerPanes = {} as Record<PaneType, HTMLElement>;
     this.headerRowContainers = {} as Record<PaneType, HTMLElement>;
 
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    for (const pane of PANES) {
       const paneEl = el("div", `mach-pane mach-pane--${pane} mach-header-pane`);
       const rowsContainer = el("div", "mach-header-rows");
       if (pane === "center") {
@@ -82,7 +99,7 @@ export class GridSkeleton {
     this.rowContainers = {} as Record<PaneType, HTMLElement>;
     this.bodyPanes = {} as Record<PaneType, HTMLElement>;
 
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    for (const pane of PANES) {
       const paneEl = el("div", `mach-pane mach-pane--${pane} mach-body-pane`);
       const viewport = el("div", `mach-body-viewport${pane === "center" ? " mach-body-viewport--scroll" : ""}`);
       const container = el("div", "mach-row-container");
@@ -152,15 +169,13 @@ export class GridSkeleton {
 
   setHeaderRowCount(depth: number): void {
     this.headerDepth = depth;
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    for (const pane of PANES) {
       const container = this.headerRowContainers[pane];
       const rows = this.headerRows[pane];
       while (rows.length < depth) {
         const row = el("div", "mach-header-row");
         row.setAttribute("role", "row");
         row.setAttribute("aria-rowindex", String(rows.length + 1));
-        row.style.top = `${rows.length * this.core.gridOptions.headerHeight}px`;
-        row.style.height = `${this.core.gridOptions.headerHeight}px`;
         container.appendChild(row);
         rows.push(row);
       }
@@ -177,7 +192,7 @@ export class GridSkeleton {
 
   private applyHeaderHeight(): void {
     this.headerEl.style.height = `${this.headerDepth * this.core.gridOptions.headerHeight}px`;
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    for (const pane of PANES) {
       const rows = this.headerRows[pane];
       rows.forEach((row, i) => {
         row.style.top = `${i * this.core.gridOptions.headerHeight}px`;

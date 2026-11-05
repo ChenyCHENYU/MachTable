@@ -6,6 +6,7 @@ import { COLUMN_TOOLS_ICON, el, FILTER_ICON, SORT_ASC_ICON, SORT_DESC_ICON } fro
 import { describeFilter } from "../lib/filterSummary";
 import { setHeaderDestroyer, takeHeaderDestroyer } from "./runtimeState";
 import { ColumnViewportIndex } from "../services/columnViewportIndex";
+import { PANES } from "./skeleton";
 
 type HeaderContext = Pick<
   GridCore<any>,
@@ -63,11 +64,15 @@ function isHorizontalArrow(key: string): boolean {
   return key === "ArrowLeft" || key === "ArrowRight";
 }
 
+function applyHeaderClass(cell: HTMLElement, headerClass: string | string[] | undefined): void {
+  if (typeof headerClass === "string") cell.classList.add(headerClass);
+  else if (Array.isArray(headerClass)) cell.classList.add(...headerClass);
+}
+
 /** @internal Header callbacks receive public parameters, never the rendering service. */
 export class HeaderRenderer {
   private leafCells: HeaderCell[] = [];
   private groupCells: GroupCell[] = [];
-  private paneTrees: Record<PaneType, PaneTree[]> = { left: [], center: [], right: [] };
   private columnViewport = new ColumnViewportIndex();
   private centerFirst = 0;
   private centerLastExcl = Number.MAX_SAFE_INTEGER;
@@ -77,24 +82,12 @@ export class HeaderRenderer {
   build(): void {
     this.updateColumnWindowState();
     this.core.resizeService.cancelResize();
-    for (const cell of this.leafCells) {
-      const destroy = takeHeaderDestroyer(cell.el);
-      if (destroy) {
-        try {
-          destroy();
-        } catch (error) {
-          this.core.reportError(error, "headerComponent.destroy", { colId: cell.column.id });
-        }
-      }
-    }
-    this.leafCells = [];
-    this.groupCells = [];
-    const depth = this.core.columnModel.getHeaderDepth();
+    this.clearCells(false);
+    const model = this.core.columnModel;
+    const depth = model.getHeaderDepth();
     this.core.skeleton.setHeaderRowCount(depth);
 
-    const paneOf = (col: Column): PaneType =>
-      col.pinned === "left" ? "left" : col.pinned === "right" ? "right" : "center";
-
+    const activeCenter = new Set(model.getPaneColumns("center").slice(this.centerFirst, this.centerLastExcl));
     const buildTree = (
       children: (ColumnGroup<any> | Column<any>)[],
       level: number,
@@ -105,27 +98,18 @@ export class HeaderRenderer {
         if (child instanceof ColumnGroup) {
           const subtree = buildTree(child.children, level + 1, pane);
           if (subtree.length > 0) out.push({ group: child, level, children: subtree });
-        } else {
-          if (!child.hide && paneOf(child) === pane) {
-            out.push({ column: child, level, children: [] });
-          }
+        } else if (!child.hide && model.paneOf(child) === pane && (pane !== "center" || activeCenter.has(child))) {
+          out.push({ column: child, level, children: [] });
         }
       }
       return out;
     };
 
-    const roots = this.core.columnModel.getRootChildren();
-    const centerColumns = this.core.columnModel.getPaneColumns("center");
-    const activeCenter = new Set(centerColumns.slice(this.centerFirst, this.centerLastExcl));
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
-      const trees = buildTree(roots, 0, pane);
-      this.paneTrees[pane] = pane === "center"
-        ? this.filterTreeColumns(trees, activeCenter)
-        : trees;
-    }
+    const roots = model.getRootChildren();
+    const paneTrees = PANES.map(pane => buildTree(roots, 0, pane));
 
     const perRowHeight = this.core.gridOptions.headerHeight;
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    PANES.forEach((pane, paneIndex) => {
       const rows = this.core.skeleton.headerRows[pane];
       for (const row of rows) row.textContent = "";
       const appendCell = (tree: PaneTree) => {
@@ -141,8 +125,8 @@ export class HeaderRenderer {
         }
         for (const child of tree.children) appendCell(child);
       };
-      for (const tree of this.paneTrees[pane]) appendCell(tree);
-    }
+      for (const tree of paneTrees[paneIndex]) appendCell(tree);
+    });
 
     if (!this.core.gridOptions.suppressHeaderFocus) {
       this.leafCells.forEach((cell, index) => {
@@ -174,19 +158,6 @@ export class HeaderRenderer {
     this.centerLastExcl = range.lastExcl;
   }
 
-  private filterTreeColumns(trees: PaneTree[], active: ReadonlySet<Column>): PaneTree[] {
-    const output: PaneTree[] = [];
-    for (const tree of trees) {
-      if (tree.column) {
-        if (active.has(tree.column)) output.push(tree);
-        continue;
-      }
-      const children = this.filterTreeColumns(tree.children, active);
-      if (children.length > 0) output.push({ ...tree, children });
-    }
-    return output;
-  }
-
   private createLeafCell(column: Column, rowSpan: number, perRowHeight: number): HeaderCell {
     const cellEl = el("div", "mach-header-cell mach-header-cell--leaf");
     if (column.hasCheckbox) cellEl.classList.add("mach-header-cell--selection");
@@ -209,8 +180,7 @@ export class HeaderRenderer {
 
   private applyLeafPresentation(cellEl: HTMLElement, column: Column): void {
     const colDef = column.colDef;
-    if (typeof colDef.headerClass === "string") cellEl.classList.add(colDef.headerClass);
-    else if (Array.isArray(colDef.headerClass)) cellEl.classList.add(...colDef.headerClass);
+    applyHeaderClass(cellEl, colDef.headerClass);
     if (colDef.headerTooltip) cellEl.setAttribute("title", colDef.headerTooltip);
     const headerAlign = colDef.headerAlign ?? colDef.align;
     if (headerAlign === "center") cellEl.classList.add("mach-header-cell--center");
@@ -360,9 +330,7 @@ export class HeaderRenderer {
     const cellEl = el("div", "mach-header-cell mach-header-cell--group");
     if (group.groupId) cellEl.dataset.groupId = group.groupId;
     cellEl.setAttribute("role", "columnheader");
-    const def = group.def;
-    if (typeof def.headerClass === "string") cellEl.classList.add(def.headerClass);
-    else if (Array.isArray(def.headerClass)) cellEl.classList.add(...def.headerClass);
+    applyHeaderClass(cellEl, group.def.headerClass);
     const labelEl = el("span", "mach-header-label mach-header-label--group");
     labelEl.textContent = group.headerName;
     cellEl.appendChild(labelEl);
@@ -372,7 +340,7 @@ export class HeaderRenderer {
   applyLayout(): void {
     const widths: Record<PaneType, number> = { left: 0, center: 0, right: 0 };
 
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    for (const pane of PANES) {
       const rows = this.core.skeleton.headerRows[pane];
       let x = 0;
       const leafLefts = new Map<string, number>();
@@ -551,13 +519,18 @@ export class HeaderRenderer {
   }
 
   destroy(): void {
+    this.clearCells(true);
+  }
+
+  private clearCells(destroying: boolean): void {
     for (const cell of this.leafCells) {
       const destroy = takeHeaderDestroyer(cell.el);
       if (!destroy) continue;
       try {
         destroy();
       } catch (error) {
-        console.error("[mach-table] headerComponent destroy error", error);
+        if (destroying) console.error("[mach-table] headerComponent destroy error", error);
+        else this.core.reportError(error, "headerComponent.destroy", { colId: cell.column.id });
       }
     }
     this.leafCells = [];

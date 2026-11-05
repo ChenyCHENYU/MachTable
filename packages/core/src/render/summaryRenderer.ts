@@ -2,6 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { PaneType } from "../services/columnModel";
 import { el } from "../lib/dom";
 import { DEFAULT_LOCALE, formatText } from "../lib/locale";
+import { PANES } from "./skeleton";
 
 type SummaryContext = Pick<
   GridCore<any>,
@@ -21,7 +22,7 @@ export class SummaryRenderer {
     this.footerEl.style.display = "none";
     this.footerEl.setAttribute("role", "row");
     this.core.skeleton.root.appendChild(this.footerEl);
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    for (const pane of PANES) {
       const row = el("div", `mach-footer-row mach-footer-row--${pane}`);
       row.style.height = `${this.core.gridOptions.rowHeight}px`;
       this.footerEl.appendChild(row);
@@ -44,7 +45,7 @@ export class SummaryRenderer {
     const masterRows = this.core.rowModel.getDisplayedRows().filter((n) => !n.isDetail && !n.isGroup);
     const locale = { ...DEFAULT_LOCALE, ...this.core.gridOptions.locale };
 
-    for (const pane of ["left", "center", "right"] as PaneType[]) {
+    for (const pane of PANES) {
       const cols = this.core.columnModel.getPaneColumns(pane);
       const row = this.summaryPaneRows[pane];
       if (this.cellsByPane[pane].length !== cols.length) {
