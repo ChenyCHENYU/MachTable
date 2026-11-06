@@ -32,12 +32,12 @@ type EditingContext = Pick<
 interface MountedEditor {
   editor: ICellEditor;
   cell: HTMLElement;
-  shell: HTMLElement;
   keydown: (event: KeyboardEvent) => void;
   input?: (event: Event) => void;
 }
 
 interface CellEditingState extends MountedEditor {
+  shell: HTMLElement;
   node: RowNode<any>;
   column: Column;
   rowIndex: number;
@@ -155,16 +155,11 @@ export class EditingService {
     const editor = this.createCellEditor(node, column, rowIndex, oldValue, keyPress);
     if (!editor) return false;
 
-    cleanupCellContent(this.core, cell);
-    const shell = el("div", "mach-cell-editor-shell");
     const controls = el("div", "mach-cell-editor-controls");
     const confirmButton = createEditButton("confirm", "Confirm edit");
     const cancelButton = createEditButton("cancel", "Cancel edit");
     controls.append(confirmButton, cancelButton);
-    shell.append(editor.el, controls);
-    cell.replaceChildren(shell);
-    cell.classList.add("mach-cell--editing");
-    cell.removeAttribute("title");
+    const shell = this.mountEditor(editor, cell, controls);
 
     const keydown = this.onCellEditorKeyDown;
     editor.el.addEventListener("keydown", keydown);
@@ -231,7 +226,7 @@ export class EditingService {
     const draft = row.drafts.get(column.id);
     if (!draft) return false;
     if (draft.mounted?.cell !== cell) {
-      if (draft.mounted) this.unmountRowDraft(draft);
+      this.unmountRowDraft(draft);
       if (!this.mountRowDraft(rowIndex, row, draft, cell)) {
         row.drafts.delete(column.id);
         return false;
@@ -273,26 +268,22 @@ export class EditingService {
     if (this.stopPromise) return this.stopPromise;
 
     let newValue: any;
+    let source = "cellEditor.getValue";
     try {
       newValue = editing.editor.getValue();
-    } catch (error) {
-      this.core.reportError(error, "cellEditor.getValue", { colId: editing.column.id, rowId: editing.node.id });
-      return Promise.resolve(this.finishCellStop(editing, true, editing.oldValue));
-    }
-    try {
-      if (!Object.is(newValue, editing.oldValue)) newValue = parseColumnValue(this.core, editing.node, editing.column, newValue, "editor", editing.oldValue);
-    } catch (error) {
-      this.core.reportError(error, "valueParser", { colId: editing.column.id, rowId: editing.node.id });
-      this.showError(editing.editor, error instanceof Error ? error.message : String(error));
-      return Promise.resolve(false);
-    }
-    try {
+      if (!Object.is(newValue, editing.oldValue)) {
+        source = "valueParser";
+        newValue = parseColumnValue(this.core, editing.node, editing.column, newValue, "editor", editing.oldValue);
+      }
+      source = "cellEditor.isCancelAfterEnd";
       if (editing.editor.isCancelAfterEnd?.(newValue)) {
         return Promise.resolve(this.finishCellStop(editing, true, editing.oldValue));
       }
     } catch (error) {
-      this.core.reportError(error, "cellEditor.isCancelAfterEnd", { colId: editing.column.id, rowId: editing.node.id });
-      return Promise.resolve(this.finishCellStop(editing, true, editing.oldValue));
+      this.core.reportError(error, source, { colId: editing.column.id, rowId: editing.node.id });
+      if (source !== "valueParser") return Promise.resolve(this.finishCellStop(editing, true, editing.oldValue));
+      this.showError(editing.editor, error instanceof Error ? error.message : String(error));
+      return Promise.resolve(false);
     }
 
     const changes = [{ node: editing.node, column: editing.column, oldValue: editing.oldValue, newValue }];
@@ -311,14 +302,7 @@ export class EditingService {
       }
       return this.finishCellStop(editing, false, newValue);
     };
-    const validation = this.core.inputService.validateChanges(changes, current);
-    if (!isPromise(validation)) return Promise.resolve(finish(validation));
-    this.setCellBusy(editing, true);
-    const task = validation.then(finish).finally(() => {
-      if (this.stopPromise === task) this.stopPromise = null;
-    });
-    this.stopPromise = task;
-    return task;
+    return this.validateStop(changes, current, finish, () => this.setCellBusy(editing, true));
   }
 
   stopRowAsync(cancel = false): Promise<boolean> {
@@ -367,10 +351,21 @@ export class EditingService {
       }
       return this.finishRowStop(row, false, changes);
     };
+    return this.validateStop(changes, current, finish, () => {
+      row.validating = true;
+      this.setRowBusy(row, true);
+    });
+  }
+
+  private validateStop(
+    changes: readonly InputChange[],
+    current: () => boolean,
+    finish: (errors: Array<{ colId: string; message: string }>) => boolean,
+    beginBusy: () => void
+  ): Promise<boolean> {
     const validation = this.core.inputService.validateChanges(changes, current);
     if (!isPromise(validation)) return Promise.resolve(finish(validation));
-    row.validating = true;
-    this.setRowBusy(row, true);
+    beginBusy();
     const task = validation.then(finish).finally(() => {
       if (this.stopPromise === task) this.stopPromise = null;
     });
@@ -392,7 +387,7 @@ export class EditingService {
     }
     this.cellEditing = null;
     if (changed) this.core.notifyCellValueChanged(editing.node, editing.column, editing.oldValue, newValue);
-    this.destroyMountedEditor(editing, true);
+    this.destroyMountedEditor(editing);
 
     if (this.core.isDisposed()) return true;
 
@@ -403,9 +398,7 @@ export class EditingService {
       oldValue: editing.oldValue,
       newValue: changed ? newValue : editing.oldValue
     });
-    if (editing.node.rowIndex >= 0) this.core.bodyRenderer.refreshRows([editing.node.rowIndex]);
-    this.core.summaryRenderer.refresh();
-    this.core.statusBarService.refresh();
+    this.refreshEditRow(editing.node.rowIndex);
     return true;
   }
 
@@ -415,7 +408,7 @@ export class EditingService {
     if (changes == null) return false;
     for (const draft of row.drafts.values()) {
       // Canonical changes were validated separately; raw drafts may have been remounted meanwhile.
-      if (draft.mounted) this.destroyMountedEditor(draft.mounted, true);
+      if (draft.mounted) this.destroyMountedEditor(draft.mounted);
       draft.mounted = null;
     }
     this.rowEditing = null;
@@ -430,10 +423,14 @@ export class EditingService {
       cancelled,
       changes
     });
+    this.refreshEditRow(rowIndex);
+    return true;
+  }
+
+  private refreshEditRow(rowIndex: number): void {
     if (rowIndex >= 0) this.core.bodyRenderer.refreshRows([rowIndex]);
     this.core.summaryRenderer.refresh();
     this.core.statusBarService.refresh();
-    return true;
   }
 
   private commitRowDrafts(
@@ -459,12 +456,7 @@ export class EditingService {
   private mountRowDraft(rowIndex: number, row: RowEditingState, draft: RowDraft, cell: HTMLElement): boolean {
     const editor = this.createCellEditor(row.node, draft.column, rowIndex, draft.value, null);
     if (!editor) return false;
-    cleanupCellContent(this.core, cell);
-    const shell = el("div", "mach-row-editor-shell");
-    shell.appendChild(editor.el);
-    cell.replaceChildren(shell);
-    cell.classList.add("mach-cell--editing", "mach-cell--row-editing");
-    cell.removeAttribute("title");
+    this.mountEditor(editor, cell);
 
     const keydown = (event: KeyboardEvent) => this.onRowEditorKeyDown(event, row, draft);
     const input = () => {
@@ -477,20 +469,28 @@ export class EditingService {
     };
     editor.el.addEventListener("keydown", keydown);
     editor.el.addEventListener("input", input);
-    draft.mounted = { editor, cell, shell, keydown, input };
+    draft.mounted = { editor, cell, keydown, input };
     if (draft.error) this.showError(editor, draft.error);
-    if (row.validating) {
-      editor.el.classList.add("mach-editor-validating");
-      editor.el.setAttribute("aria-busy", "true");
-      editor.el.inert = true;
-    }
+    if (row.validating) this.setEditorBusy(editor.el, true);
     return true;
+  }
+
+  private mountEditor(editor: ICellEditor, cell: HTMLElement, controls?: HTMLElement): HTMLElement {
+    cleanupCellContent(this.core, cell);
+    const shell = el("div", controls ? "mach-cell-editor-shell" : "mach-row-editor-shell");
+    shell.appendChild(editor.el);
+    if (controls) shell.appendChild(controls);
+    cell.replaceChildren(shell);
+    cell.classList.add("mach-cell--editing");
+    if (!controls) cell.classList.add("mach-cell--row-editing");
+    cell.removeAttribute("title");
+    return shell;
   }
 
   private unmountRowDraft(draft: RowDraft): void {
     if (!draft.mounted) return;
     this.captureRowDraft(draft);
-    this.destroyMountedEditor(draft.mounted, true);
+    this.destroyMountedEditor(draft.mounted);
     draft.mounted = null;
   }
 
@@ -573,9 +573,7 @@ export class EditingService {
     editorEl.classList.add("mach-editor-invalid");
     editorEl.setAttribute("title", message);
     editorEl.setAttribute("aria-invalid", "true");
-    editorEl.classList.remove("mach-editor-validating");
-    editorEl.removeAttribute("aria-busy");
-    editorEl.inert = false;
+    this.setEditorBusy(editorEl, false);
     const input = editorEl.querySelector(
       ".mach-select-trigger, input:not([type='hidden']), select:not([hidden]), textarea"
     ) ?? editorEl;
@@ -589,10 +587,7 @@ export class EditingService {
   }
 
   private setCellBusy(editing: CellEditingState, busy: boolean): void {
-    editing.editor.el.classList.toggle("mach-editor-validating", busy);
-    if (busy) editing.editor.el.setAttribute("aria-busy", "true");
-    else editing.editor.el.removeAttribute("aria-busy");
-    editing.editor.el.inert = busy;
+    this.setEditorBusy(editing.editor.el, busy);
     editing.confirmButton.disabled = busy;
     editing.cancelButton.disabled = false;
     editing.shell.classList.toggle("mach-editor-shell--busy", busy);
@@ -601,12 +596,15 @@ export class EditingService {
   private setRowBusy(row: RowEditingState, busy: boolean): void {
     for (const draft of row.drafts.values()) {
       const editorEl = draft.mounted?.editor.el;
-      if (!editorEl) continue;
-      editorEl.classList.toggle("mach-editor-validating", busy);
-      if (busy) editorEl.setAttribute("aria-busy", "true");
-      else editorEl.removeAttribute("aria-busy");
-      editorEl.inert = busy;
+      if (editorEl) this.setEditorBusy(editorEl, busy);
     }
+  }
+
+  private setEditorBusy(editorEl: HTMLElement, busy: boolean): void {
+    editorEl.classList.toggle("mach-editor-validating", busy);
+    if (busy) editorEl.setAttribute("aria-busy", "true");
+    else editorEl.removeAttribute("aria-busy");
+    editorEl.inert = busy;
   }
 
   private focusEditor(editor: ICellEditor, column: Column, node: RowNode<any>): void {
@@ -617,18 +615,16 @@ export class EditingService {
     }
   }
 
-  private destroyMountedEditor(mounted: MountedEditor, removeCellState: boolean): void {
+  private destroyMountedEditor(mounted: MountedEditor): void {
     mounted.editor.el.removeEventListener("keydown", mounted.keydown);
     if (mounted.input) mounted.editor.el.removeEventListener("input", mounted.input);
-    mounted.editor.el.classList.remove("mach-editor-validating");
-    mounted.editor.el.removeAttribute("aria-busy");
-    mounted.editor.el.inert = false;
+    this.setEditorBusy(mounted.editor.el, false);
     try {
       mounted.editor.destroy?.();
     } catch (error) {
       this.core.reportError(error, "cellEditor.destroy", { colId: mounted.cell.dataset.colId });
     }
-    if (removeCellState) mounted.cell.classList.remove("mach-cell--editing", "mach-cell--row-editing", "mach-cell--error");
+    mounted.cell.classList.remove("mach-cell--editing", "mach-cell--row-editing", "mach-cell--error");
   }
 
   private currentRowIndex(row: RowEditingState): number {

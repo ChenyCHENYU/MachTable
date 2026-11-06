@@ -7,6 +7,7 @@ type KeyboardContext = Pick<
   | "bodyRenderer"
   | "buildRangeTsv"
   | "clearRangeValues"
+  | "cutRangeToClipboard"
   | "cancelPendingInput"
   | "columnModel"
   | "editingService"
@@ -91,18 +92,21 @@ export class KeyboardService {
   }
 
   private handleGridCopy = (e: ClipboardEvent): void => {
-    if (this.shouldYieldEvent(e) || this.core.gridOptions.suppressClipboard) return;
+    if (this.shouldYieldEvent(e) || this.core.isDisposed() || this.core.gridOptions.suppressClipboard) return;
     const range = this.core.bodyRenderer.getNormalizedRangeOrFocus();
     if (!range) return;
     const text = this.core.buildRangeTsv(range);
     const dt = e.clipboardData;
+    e.preventDefault();
     if (dt && typeof dt.setData === "function") {
-      dt.setData("text/plain", text);
+      try { dt.setData("text/plain", text); }
+      catch { return; }
+      if (e.type === "cut") this.core.clearRangeValues(range);
+    } else if (e.type === "cut") {
+      void this.core.cutRangeToClipboard(range, text);
     } else {
       void writeClipboard(text);
     }
-    if (e.type === "cut") this.core.clearRangeValues(range);
-    e.preventDefault();
   };
 
   private handleGridPaste = (e: ClipboardEvent): void => {
@@ -161,9 +165,8 @@ export class KeyboardService {
       return true;
     }
     if (e.key !== "Delete" && e.key !== "Backspace") return false;
-    if (!this.core.gridOptions.enableRangeSelection) return true;
-    const range = body.normalizedRange();
-    if (range && !(range.r1 === range.r2 && range.c1 === range.c2)) {
+    const range = body.getNormalizedRangeOrFocus();
+    if (range) {
       e.preventDefault();
       this.core.clearRangeValues(range);
     }

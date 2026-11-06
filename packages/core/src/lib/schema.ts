@@ -27,6 +27,8 @@ export interface GridSchemaField {
 }
 
 export interface GridSchemaGroup {
+  /** Stable ID when a group title can change or be repeated. */
+  groupId?: string;
   title: string;
   fields: string[];
 }
@@ -67,6 +69,7 @@ function filterForField(field: GridSchemaField, type: GridSchemaFieldType): ColD
 }
 
 function applyFieldType(colDef: ColDef<any>, field: GridSchemaField, type: GridSchemaFieldType): void {
+  if (field.editable && (type === "number" || type === "date")) colDef.cellEditor = type;
   if (type === "date") {
     colDef.valueFormatter = dateFormatter(field.format);
     return;
@@ -129,7 +132,7 @@ export function buildColDefsFromSchema<TData = any>(
       used.add(fieldName);
     }
     if (children.length > 0) {
-      result.push({ headerName: group.title, children });
+      result.push({ groupId: group.groupId, headerName: group.title, children });
     }
   }
 

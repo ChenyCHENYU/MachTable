@@ -6,7 +6,7 @@
 
 MachTable 0.38.0 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
-小型本地明细设置 `domLayout="autoHeight"` 并让宿主保持自然高度即可随内容收起；空态、加载态和错误态保留必要空间，恢复数据后释放。大数据表仍应使用明确高度的虚拟视口，分页继续使用内置分页条。
+本地明细设置 `domLayout="autoHeight" maxBodyHeight={330}` 即可随内容收起，超过 330px 的表体进入虚拟滚动。表内筛选无匹配时可在默认空态中清除筛选。分页继续使用内置分页条。
 
 ```bash
 pnpm add @agile-team/mach-table-react

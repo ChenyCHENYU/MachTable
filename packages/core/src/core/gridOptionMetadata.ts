@@ -42,6 +42,7 @@ export const GRID_OPTION_KINDS = {
   columnLayout: "string",
   enableColumnResize: "boolean",
   domLayout: "string",
+  maxBodyHeight: "number",
   rowSelection: "string",
   multiSort: "boolean",
   size: "string",

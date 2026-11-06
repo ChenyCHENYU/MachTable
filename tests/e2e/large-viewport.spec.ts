@@ -100,7 +100,8 @@ test("native thumb jumps, exact API targets, keyboard steps and wheel deltas sha
 });
 
 test("range fill and unmanaged drag targets stay aligned after a large jump", async ({ page }) => {
-  await openFixture(page); await scrollTo(page, 8_765_400);
+  // Keep the source and drop outside the edge autoscroll zone.
+  await openFixture(page); await scrollTo(page, 8_765_398);
   await clickVisibleCell(page, 8_765_400);
   const fill = page.locator(".mach-fill-handle");
   await expect(fill).toBeVisible();

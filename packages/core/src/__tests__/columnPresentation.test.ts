@@ -80,6 +80,24 @@ it("remeasures changed formatter definitions without replacing consumer data", (
   expect(width(api, "name")).toBeGreaterThan(before);
 });
 
+it("only remeasures scoped columns if the refreshed row participates in the sample", () => {
+  const first = vi.fn(({ value }) => String(value ?? ""));
+  const second = vi.fn(({ value }) => String(value ?? ""));
+  const { api } = grid({
+    columnDefs: [{ field: "first", valueFormatter: first }, { field: "second", valueFormatter: second }],
+    rowKey: (row) => (row as { id: string }).id,
+    rowData: Array.from({ length: 1000 }, (_, index) => ({ id: `r${index}`, first: index, second: index }))
+  });
+  first.mockClear();
+  second.mockClear();
+  api.view.refreshCells({ rowIds: ["r998"], columns: ["second"] });
+  expect(first).not.toHaveBeenCalled();
+  expect(second).not.toHaveBeenCalled();
+  api.view.refreshCells({ rowIds: ["r999"], columns: ["second"] });
+  expect(first).not.toHaveBeenCalled();
+  expect(second).toHaveBeenCalledTimes(100);
+});
+
 it("retains explicitly neutral legacy status maps even when their label suggests success", () => {
   const { host } = grid({ columnDefs: [{ field: "state", cellRenderer: createStatusTagRenderer({ variantMap: { X: "neutral" }, labelMap: { X: "已完成" } }) }], rowData: [{ state: "X" }] });
   expect(host.querySelector(".mach-tag--neutral")?.textContent).toBe("已完成");

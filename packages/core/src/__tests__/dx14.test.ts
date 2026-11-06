@@ -149,6 +149,69 @@ describe("0.14 progressive DX", () => {
     api.destroy();
   });
 
+  it("expands the row pool on async data changes and releases hidden rich cells", () => {
+    const root = host();
+    const destroy = vi.fn();
+    const api = createGrid(root, {
+      columnDefs: [
+        { field: "id", width: 100, pinned: "left" },
+        { field: "name", width: 180, cellRenderer: () => ({ el: document.createElement("span"), destroy }) },
+        { field: "profile.code", width: 100, pinned: "right" },
+      ],
+      rowKey: "id", pagination: false, domLayout: "autoHeight"
+    });
+    const current = [...rows, { ...rows[0], id: "d" }, { ...rows[0], id: "e" }];
+    const renderedIds = (pane: string) => new Set(
+      [...root.querySelectorAll<HTMLElement>(`.mach-pane--${pane} .mach-row[data-id]`)].map(row => row.dataset.id)
+    );
+    for (const data of [rows, current, rows.slice(0, 1)]) {
+      api.rows.setData(data);
+      for (const pane of ["left", "center", "right"]) {
+        expect(renderedIds(pane)).toEqual(new Set(data.map(row => row.id)));
+      }
+    }
+    destroy.mockClear();
+    api.rows.setData([]);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    api.destroy();
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps the natural body height and returns to natural sizing after filtering", () => {
+    const root = host();
+    let rowHeight = 36;
+    const getRowHeight = () => rowHeight;
+    const api = createGrid(root, {
+      columnDefs: [{ field: "name", width: 180 }],
+      rowData: Array.from({ length: 500 }, (_, index) => ({ ...rows[0], id: String(index), name: `row ${index}` })),
+      rowKey: "id", pagination: false, domLayout: "autoHeight", maxBodyHeight: 120, getRowHeight
+    });
+    const body = root.querySelector<HTMLElement>(".mach-body")!;
+    const scroller = root.querySelector<HTMLElement>(".mach-body-viewport--scroll")!;
+    Object.defineProperty(scroller, "clientHeight", { get: () => parseFloat(body.style.height) });
+    api.view.refreshLayout();
+    expect(body.style.height).toBe("120px");
+    expect(scroller.style.overflowY).toBe("auto");
+    expect(root.querySelectorAll(".mach-row[data-id]").length).toBeLessThan(30);
+    api.filtering.setQuickText("row 499");
+    expect(body.style.height).toBe("36px");
+    expect(scroller.style.overflowY).toBe("");
+    expect(root.querySelector(".mach-row[data-id]")?.getAttribute("data-id")).toBe("499");
+    rowHeight = 72;
+    api.updateOptions({ getRowHeight });
+    expect(body.style.height).toBe("72px");
+    rowHeight = 50;
+    api.view.refreshLayout();
+    expect(body.style.height).toBe("72px");
+    api.updateOptions({ getRowHeight });
+    expect(body.style.height).toBe("50px");
+    api.filtering.setQuickText(null);
+    api.updateOptions({ maxBodyHeight: 180 });
+    expect(body.style.height).toBe("180px");
+    expect(root.querySelectorAll(".mach-row[data-id]").length).toBeLessThan(30);
+    api.destroy();
+  });
+
   it("autoHeight releases overlay sizing after empty, loading and error states recover", () => {
     const root = host();
     const api = createGrid(root, {

@@ -245,6 +245,7 @@ export class BodyRenderer {
   private rowHeightCache = new WeakMap<RowNode<any>, number>();
   private dirtyHeightNodes = new Set<RowNode<any>>();
   private rowLayoutSignature = "";
+  private expandsWithRows = false;
   private pendingFlash: Array<[number, string]> = [];
   private measureCanvas: HTMLCanvasElement | null = null;
 
@@ -257,8 +258,8 @@ export class BodyRenderer {
     const layout = this.resolveRowLayout(displayed.length);
     this.syncRowSizeIndex(displayed, layout);
     const totalHeight = this.totalRowLayoutHeight(layout);
-    this.applyRowContainerDimensions(widths, totalHeight);
     this.applyDomLayoutHeight(totalHeight);
+    this.applyRowContainerDimensions(widths, totalHeight);
     sk.root.setAttribute("aria-rowcount", String(layout.rowCount + sk.getHeaderRowCount()));
   }
 
@@ -334,7 +335,7 @@ export class BodyRenderer {
     const viewport = sk.bodyViewports.center;
     const logicalTop = this.scrollCoordinates.read(viewport.scrollTop);
     const wasCompressed = this.scrollCoordinates.compressed;
-    this.scrollCoordinates.configure(totalHeight, viewport.clientHeight, this.core.gridOptions.domLayout !== "autoHeight");
+    this.scrollCoordinates.configure(totalHeight, viewport.clientHeight, !this.expandsWithRows);
     const centerAvailable = Math.max(0, viewport.clientWidth - widths.left - widths.right);
     const centerWidth = Math.max(widths.center, centerAvailable);
     for (const pane of PANES) {
@@ -398,7 +399,14 @@ export class BodyRenderer {
   }
 
   private applyDomLayoutHeight(totalHeight: number): void {
-    this.core.skeleton.bodyEl.style.height = this.core.gridOptions.domLayout === "autoHeight" ? `${totalHeight}px` : "";
+    const { bodyEl, bodyViewports } = this.core.skeleton;
+    const { domLayout, maxBodyHeight } = this.core.gridOptions;
+    const auto = domLayout === "autoHeight";
+    const height = Math.min(totalHeight, maxBodyHeight ?? totalHeight);
+    this.expandsWithRows = auto && height === totalHeight;
+    bodyEl.style.height = auto ? `${height}px` : "";
+    bodyViewports.center.style.overflowY = auto && !this.expandsWithRows ? "auto" : "";
+    if (this.expandsWithRows && bodyViewports.center.scrollTop) bodyViewports.center.scrollTop = 0;
   }
 
   invalidateAllRowHeights(): void {
@@ -521,7 +529,7 @@ export class BodyRenderer {
       minRowHeight = Math.min(minRowHeight, this.lastMinRowHeight);
     }
     const visible = Math.ceil(viewport.clientHeight / Math.max(1, minRowHeight));
-    const rawNeeded = this.core.gridOptions.domLayout === "autoHeight"
+    const rawNeeded = this.expandsWithRows
       ? this.core.rowModel.getDisplayedRowCount()
       : visible + this.core.gridOptions.rowBuffer * 2 + 1;
     // An even pool preserves striped-row parity when slots are recycled.
@@ -739,17 +747,15 @@ export class BodyRenderer {
       return true;
     }
 
-    if (this.renderAutoHeightRange(rowCount, force, colWindowChanged)) return true;
-
     const { first, lastExcl } = this.calculateVisibleRange(viewport, rowCount, buffer);
 
     if (!force && !colWindowChanged && first === this.firstRenderedRow && lastExcl === this.renderedRowEndExclusive) {
       if (offsetChanged) { this.positionVisibleRows(); this.updateFillHandle(); }
       return colWindowChanged || offsetChanged;
     }
+    this.hideOutsideRange(first, lastExcl);
     this.firstRenderedRow = first;
     this.renderedRowEndExclusive = lastExcl;
-    this.hideOutsideRange(first, lastExcl);
     this.renderVirtualRange(first, lastExcl, force, colWindowChanged);
     if (offsetChanged) this.positionVisibleRows();
     this.updateFillHandle();
@@ -761,6 +767,7 @@ export class BodyRenderer {
     rowCount: number,
     buffer: number
   ): { first: number; lastExcl: number } {
+    if (this.expandsWithRows) return { first: 0, lastExcl: rowCount };
     const logicalTop = this.scrollCoordinates.read(viewport.scrollTop);
     const firstVisible = this.rowAtOffset(logicalTop, rowCount);
     const viewBottom = logicalTop + viewport.clientHeight;
@@ -772,12 +779,19 @@ export class BodyRenderer {
   }
 
   private hideOutsideRange(first: number, lastExcl: number): void {
+    if (this.expandsWithRows && this.firstRenderedRow === 0 && lastExcl >= this.renderedRowEndExclusive) return;
     for (const slot of this.rowPoolItems) {
       if (slot.index !== -1 && (slot.index < first || slot.index >= lastExcl)) this.hideSlot(slot);
     }
   }
 
   private renderVirtualRange(first: number, lastExcl: number, force: boolean, columnsChanged: boolean): void {
+    const needed = lastExcl - first;
+    // Data changes can grow the visible range without a container resize.
+    if (needed > this.poolSize) {
+      this.growPool(needed + needed % 2);
+      this.applyCellLayout();
+    }
     for (let i = first; i < lastExcl; i++) {
       const node = this.core.rowModel.getDisplayedRow(i);
       const slot = this.rowPoolItems[i % this.poolSize];
@@ -786,22 +800,17 @@ export class BodyRenderer {
         if (columnsChanged && slot.kind === "master") this.renderPaneCells(slot, node, "center");
         continue;
       }
-      this.assignSlot(slot, i);
+      this.assignSlot(slot, i, node);
     }
-  }
-
-  private renderAutoHeightRange(rowCount: number, force: boolean, columnsChanged: boolean): boolean {
-    if (this.core.gridOptions.domLayout !== "autoHeight") return false;
-    if (!force && !columnsChanged && this.firstRenderedRow === 0 && this.renderedRowEndExclusive === rowCount) return true;
-    if (rowCount < this.renderedRowEndExclusive) this.hideOutsideRange(0, rowCount);
-    this.firstRenderedRow = 0;
-    this.renderedRowEndExclusive = rowCount;
-    this.renderVirtualRange(0, rowCount, force, columnsChanged);
-    return true;
   }
 
   private hideSlot(slot: RowSlot): void {
     this.releaseSlotEditors(slot);
+    if (this.expandsWithRows && slot.index >= 0) {
+      for (const pane of PANES) {
+        for (const cell of slot.cells[pane] ?? []) cleanupCellContent(this.core, cell);
+      }
+    }
     if (this.focusedCell?.rowIndex === slot.index) {
       this.core.skeleton.root.removeAttribute("aria-activedescendant");
     }
@@ -824,13 +833,8 @@ export class BodyRenderer {
     }
   }
 
-  private assignSlot(slot: RowSlot, index: number): void {
+  private assignSlot(slot: RowSlot, index: number, node: RowNode<any>): void {
     if (slot.index >= 0 && slot.index !== index) this.releaseSlotEditors(slot);
-    const node = this.core.rowModel.getDisplayedRow(index);
-    if (!node) {
-      this.hideSlot(slot);
-      return;
-    }
     slot.index = index;
     slot.nodeId = node.id;
     const top = this.rowTop(index);

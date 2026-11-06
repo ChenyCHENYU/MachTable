@@ -34,6 +34,39 @@ test('automatic widths stay bounded and status tags retain their theme', async (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test("bounded natural height grows, scrolls and recovers from a filtered empty state", async ({ page }) => {
+  const body = page.locator(".mach-body");
+  const scroller = body.locator(".mach-body-viewport--scroll");
+  const centerRows = scroller.locator(".mach-row[data-id]");
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>("#grid")!.style.height = "auto";
+    window.columnPresentationApi.updateOptions({
+      rowKey: "id", rowHeight: 30, domLayout: "autoHeight", maxBodyHeight: 120,
+      columnDefs: [{ field: "id", pinned: "left", width: 120 }, { field: "name", width: 180 }],
+      rowData: []
+    });
+  });
+  await expect(page.getByText("暂无数据", { exact: true })).toBeVisible();
+  await page.evaluate(() => window.columnPresentationApi.rows.setData([{ id: "1", name: "第一条" }]));
+  await expect(centerRows).toHaveCount(1);
+  await expect(body).toHaveCSS("height", "30px");
+  await page.evaluate(() => window.columnPresentationApi.rows.setData(
+    Array.from({ length: 500 }, (_, index) => ({ id: String(index), name: `计划 ${index}` }))
+  ));
+  await expect(body).toHaveCSS("height", "120px");
+  await expect.poll(() => centerRows.count()).toBeLessThan(30);
+  await scroller.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await expect(scroller.getByText("计划 499", { exact: true })).toBeVisible();
+  await page.evaluate(() => window.columnPresentationApi.filtering.setQuickText("没有匹配"));
+  await expect(page.getByText("没有符合筛选条件的行")).toBeVisible();
+  await page.getByRole("button", { name: "清除筛选" }).click();
+  await expect(body).toHaveCSS("height", "120px");
+  await page.evaluate(() => window.columnPresentationApi.filtering.setQuickText("计划 499"));
+  await expect(body).toHaveCSS("height", "30px");
+  await expect(centerRows).toHaveCount(1);
+  await expect(centerRows).toHaveText("计划 499");
+});
+
 test('pointer and keyboard shrinking keep all four header characters visible', async ({ page }) => {
   const header = page.locator('.mach-header-cell[data-col-id="id"]');
   const label = header.locator('.mach-header-label');

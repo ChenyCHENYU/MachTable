@@ -1,4 +1,4 @@
-import { computed, isRef, onScopeDispose, ref, shallowRef, watch, type ComputedRef, type Ref, type ShallowRef } from "vue";
+import { computed, ref, shallowRef, unref, watch, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import { createMachTableCommands, type GridOptions, type MachTableCommands } from "@agile-team/mach-table";
 import type { MachTableVueProps } from "./MachTable";
 import { useMachTable, type UseMachTableReturn } from "./useMachTable";
@@ -42,27 +42,29 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
   options: UseMachTableControllerOptions<TData, TQuery> = {}
 ): UseMachTableControllerReturn<TData> {
   const table = useMachTable<TData>();
-  const search = ref(options.initialSearch ?? options.config?.quickFilterText ?? "");
+  const initialSearch = options.initialSearch ?? options.config?.quickFilterText ?? "";
+  const quickFilterText = options.query?.quickFilterText ?? ref(initialSearch.trim() ? initialSearch : null);
+  const search = computed({
+    get: () => quickFilterText.value ?? "",
+    set: (value: string) => { quickFilterText.value = value.trim() ? value : null; }
+  });
   const query = options.query
     ? useMachTableQuery({
         ...options.query,
-        quickFilterText: options.query.quickFilterText ?? computed(() => search.value || null)
+        quickFilterText
       })
     : null;
   const editing = useMachTableEditing(table, options.editing);
   const selectedRows = shallowRef<TData[]>([]);
-  let removeSelectionListener: (() => void) | null = null;
 
   const syncSelection = (): void => {
     selectedRows.value = query?.selectedRows.value ?? table.api.value?.selection.getRows() ?? [];
   };
-  watch(table.api, (api) => {
-    removeSelectionListener?.();
-    removeSelectionListener = null;
-    if (api && !api.isDestroyed()) removeSelectionListener = api.on("selectionChanged", syncSelection);
+  watch(table.api, (api, _previous, onCleanup) => {
+    if (api && !api.isDestroyed()) onCleanup(api.on("selectionChanged", syncSelection));
     syncSelection();
   }, { immediate: true });
-  if (query) watch(query.selectedRows, syncSelection, { deep: false });
+  if (query) watch(query.selectedRows, syncSelection);
 
   const reload = async (): Promise<void> => {
     if (query) await query.reload();
@@ -73,11 +75,11 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
     }
   };
   const commands = createMachTableCommands<TData>({ getApi: () => table.api.value, reload });
+  if (query) commands.search = (text) => { search.value = text ?? ""; };
   const bindings = computed<MachTableVueProps<TData>>(() => {
     const value: MachTableVueProps<TData> = {
       ...options.config,
-      ...(query?.bindings.value ?? {}),
-      quickFilterText: search.value || null
+      ...(query?.bindings.value ?? { quickFilterText: quickFilterText.value })
     };
     const loading = readSource(options.loading);
     const theme = readSource(options.theme);
@@ -103,19 +105,10 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
   const busy = computed(() => readSource(options.loading) === true || query?.loading.value === true || editing.saving.value);
   const error = computed(() => query?.error.value ?? editing.saveError.value ?? null);
 
-  watch(search, (value) => {
-    if (!query) commands.search(value || null);
-  });
-  onScopeDispose(() => {
-    removeSelectionListener?.();
-    removeSelectionListener = null;
-  });
-
+  if (!query) watch(quickFilterText, (value) => commands.search(value));
   return { table, query, editing, bindings, search, selectedRows, selectedCount, busy, error, commands, reload };
 }
 
 function readSource<T>(source: MachTableBindingSource<T> | undefined): T | undefined {
-  if (typeof source === "function") return (source as () => T)();
-  if (isRef(source)) return source.value as T;
-  return source as T | undefined;
+  return typeof source === "function" ? (source as () => T)() : unref(source as Ref<T> | T | undefined);
 }

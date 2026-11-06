@@ -1,6 +1,7 @@
 import { normalizePositive } from "../lib/optionValues";
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
+import type { RefreshCellsParams } from "../types/api";
 import { formatCellValueWith } from "../render/cellContent";
 import { statusEntry } from "../lib/columnStatus";
 
@@ -12,25 +13,39 @@ export class ColumnSizing {
 
   constructor(private core: GridCore) {}
 
-  updateContentWidths(): boolean {
+  updateContentWidths(scope?: RefreshCellsParams): boolean {
     const style = getComputedStyle(this.core.skeleton.root);
     const font = `${style.getPropertyValue("--mach-header-font-weight") || 650} ${style.fontSize} ${style.fontFamily}`;
-    this.needsContentMeasure ||= font !== this.measurementFont;
+    if (font !== this.measurementFont) {
+      this.needsContentMeasure = true;
+      scope = undefined;
+    }
     this.measurementFont = font;
+    const rows = this.needsContentMeasure ? this.sampleRows() : undefined;
+    const sampleChanged = rows && sampleIntersects(rows, scope);
+    const columns = scope?.columns && new Set(scope.columns);
     let changed = false;
     for (const column of this.core.columnModel.getOrderedVisible()) {
-      if (!this.needsContentMeasure && column.minWidth != null) continue;
+      if (column.minWidth != null && (!sampleChanged || (columns && !columns.has(column.id)))) continue;
       // 所有布局入口共享完整表头下限；数据测宽上限不作用于标题。
-      const def = column.colDef;
-      column.minWidth = this.headerWidth(column);
-      if (column.manualWidth == null && def.width == null && def.autoWidth !== false && !column.hasCheckbox && !column.isDetailToggle) {
-        const width = this.measureColumnWidth(column);
+      const minWidth = this.headerWidth(column);
+      changed = column.minWidth !== minWidth || changed;
+      column.minWidth = minWidth;
+      if (isContentSized(column)) {
+        const width = this.measureColumnWidth(column, rows);
         changed = width !== column.contentWidth || changed;
         column.contentWidth = width;
       }
     }
     this.needsContentMeasure = false;
     return changed;
+  }
+
+  private sampleRows() {
+    const nodes = this.core.rowModel.getAllNodes();
+    const count = Math.min(nodes.length, 100);
+    return Array.from({ length: count }, (_, index) =>
+      nodes[Math.floor(index * (nodes.length - 1) / Math.max(count - 1, 1))]);
   }
 
   private textWidth(value: string): number {
@@ -50,12 +65,9 @@ export class ColumnSizing {
 
   }
 
-  measureColumnWidth(column: Column): number {
+  measureColumnWidth(column: Column, rows = this.sampleRows()): number {
     let width = 28;
-    const nodes = this.core.rowModel.getAllNodes();
-    const count = Math.min(nodes.length, 100);
-    for (let i = 0; i < count; i++) {
-      const node = nodes[count === 1 ? 0 : Math.floor(i * (nodes.length - 1) / (count - 1))];
+    for (const node of rows) {
       const value = this.core.readCellValue(node, column);
       const label = statusEntry(value, column.colDef.status)?.label ??
         formatCellValueWith(this.core, node, column, value);
@@ -63,4 +75,16 @@ export class ColumnSizing {
     }
     return Math.ceil(Math.min(normalizePositive(column.colDef.maxWidth) ?? 360, width));
   }
+}
+
+function isContentSized(column: Column): boolean {
+  const { width, autoWidth } = column.colDef;
+  return column.manualWidth == null && width == null && autoWidth !== false && !column.hasCheckbox && !column.isDetailToggle;
+}
+
+function sampleIntersects(rows: { id: string; rowIndex: number }[], scope?: RefreshCellsParams): boolean {
+  if (!scope?.rowIds && !scope?.rowIndexes) return true;
+  const ids = new Set(scope.rowIds);
+  const indexes = new Set(scope.rowIndexes);
+  return rows.some(node => ids.has(node.id) || indexes.has(node.rowIndex));
 }

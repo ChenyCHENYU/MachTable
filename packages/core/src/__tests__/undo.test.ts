@@ -154,6 +154,51 @@ describe("undo/redo", () => {
     api.destroy();
   });
 
+  it("discards history for externally updated rows while keeping unrelated undo and redo", () => {
+    const { api, host } = createUndoGrid();
+    editCell(api, host, 0, "name", "local edit");
+    editCell(api, host, 1, "name", "other edit");
+    expect(api.editing.undo()).toBe(true);
+    api.rows.transact({ update: [{ id: "r0", name: "server value", score: 1 }] });
+
+    expect(api.editing.canUndo()).toBe(false);
+    expect(api.editing.undo()).toBe(false);
+    expect(api.rows.getById("r0")?.data?.name).toBe("server value");
+    expect(api.editing.redo()).toBe(true);
+    expect(api.rows.getById("r1")?.data?.name).toBe("other edit");
+    expect(api.editing.undo()).toBe(true);
+    expect(api.rows.getById("r1")?.data?.name).toBe("n1");
+    api.destroy();
+  });
+
+  it("discards redo for a row updated after undo", () => {
+    const { api, host } = createUndoGrid();
+    editCell(api, host, 0, "name", "local edit");
+    expect(api.editing.undo()).toBe(true);
+    api.rows.transact({ update: [{ id: "r0", name: "server value", score: 1 }] });
+    expect(api.editing.canRedo()).toBe(false);
+    expect(api.editing.redo()).toBe(false);
+    expect(api.rows.getById("r0")?.data?.name).toBe("server value");
+    api.destroy();
+  });
+
+  it("discards an entire paste history entry when one row is replaced or removed and re-added", () => {
+    const { api, host } = createUndoGrid();
+    editCell(api, host, 2, "name", "unrelated edit");
+    selectRange(host, 0, "name", 0, "name");
+    const paste = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, "clipboardData", { value: { getData: () => "a\nb" } });
+    (host.querySelector(".mach-root") as HTMLElement).dispatchEvent(paste);
+    api.rows.transact({ remove: [makeRows(1)[0]], add: [{ id: "r0", name: "replacement", score: 1 }] });
+
+    expect(api.editing.undo()).toBe(true);
+    expect(api.rows.getById("r2")?.data?.name).toBe("n2");
+    expect(api.rows.getById("r1")?.data?.name).toBe("b");
+    expect(api.rows.getById("r0")?.data?.name).toBe("replacement");
+    expect(api.editing.canUndo()).toBe(false);
+    api.destroy();
+  });
+
   it("respects undoStackSize=0 to disable history", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

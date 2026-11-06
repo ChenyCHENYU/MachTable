@@ -76,6 +76,31 @@ describe("buildColDefsFromSchema", () => {
     expect(group.children.length).toBe(2);
   });
 
+  it("edits blank numeric and date cells according to the schema type", async () => {
+    const host = createHost();
+    const api = createGrid(host, {
+      rowKey: "id",
+      rowData: [{ id: "1", amount: null, due: null }],
+      columnDefs: buildColDefsFromSchema({ fields: [
+        { field: "amount", type: "number", editable: true },
+        { field: "due", type: "date", editable: true }
+      ] })
+    });
+    try {
+      for (const [colId, type, value] of [["amount", "number", "42.50"], ["due", "date", "2026-11-06"]]) {
+        expect(api.editing.startCell({ rowIndex: 0, colId })).toBe(true);
+        const input = host.querySelector<HTMLInputElement>(".mach-editor-input")!;
+        expect(input.type).toBe(type);
+        input.value = value;
+        await api.editing.stop();
+      }
+      expect(api.rows.getById("1")?.data).toEqual({ id: "1", amount: 42.5, due: "2026-11-06" });
+    } finally {
+      api.destroy();
+      host.remove();
+    }
+  });
+
   it("formats boolean and date fields", () => {
     const defs = buildColDefsFromSchema<any>({
       fields: [

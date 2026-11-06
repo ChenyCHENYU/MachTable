@@ -178,6 +178,39 @@ describe("clipboard copy/paste", () => {
     api.destroy();
   });
 
+  it.each(["denied", "moved", "replaced", "succeeded"] as const)("checks clipboard success and the original cut target (%s)", async (result) => {
+    const { api, host } = createRangeGrid();
+    let complete!: () => void;
+    let deny!: (reason: Error) => void;
+    const pending = new Promise<void>((resolve, reject) => { complete = resolve; deny = reject; });
+    const writeText = vi.fn(() => pending);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const focus = (row: number) => {
+      cellAt(host, row, "name").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      window.dispatchEvent(new MouseEvent("mouseup"));
+    };
+    try {
+      focus(0);
+      host.querySelector(".mach-root")!.dispatchEvent(new Event("cut", { bubbles: true, cancelable: true }));
+      expect(writeText).toHaveBeenCalledWith("n0");
+      expect(api.rows.getById("0")?.data?.name).toBe("n0");
+      if (result === "moved") focus(1);
+      if (result === "replaced") api.rows.transact({ update: [{ id: "0", name: "server", score: 1 }] });
+      if (result === "denied") deny(new Error("Clipboard permission denied"));
+      else complete();
+      await pending.catch(() => undefined);
+      await Promise.resolve();
+
+      expect(api.rows.getById("0")?.data?.name).toBe(result === "succeeded" ? null : result === "replaced" ? "server" : "n0");
+      expect(api.rows.getById("1")?.data?.name).toBe("n1");
+      expect(api.editing.canUndo()).toBe(result === "succeeded");
+    } finally {
+      api.destroy();
+      host.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("paste writes values into editable cells with numeric coercion", () => {
     const changed = vi.fn();
     const { api, host } = createRangeGrid({ onCellValueChanged: changed });
@@ -215,6 +248,28 @@ describe("clipboard copy/paste", () => {
     api.destroy();
   });
 
+  it.each([["Delete", true], ["Backspace", false]] as const)("%s clears a single cell through validation and undo", (key, enableRangeSelection) => {
+    const rowEditValidator = vi.fn(() => null);
+    const { api, host } = createRangeGrid({ enableRangeSelection, rowEditValidator });
+    const press = (colId: string) => {
+      cellAt(host, 0, colId).click();
+      host.querySelector(".mach-root")!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    };
+    try {
+      press("id");
+      expect(api.rows.getById("0")?.data?.id).toBe("0");
+      expect(rowEditValidator).not.toHaveBeenCalled();
+      press("name");
+      expect(rowEditValidator).toHaveBeenCalledOnce();
+      expect(api.rows.getById("0")?.data?.name).toBeNull();
+      expect(api.editing.undo()).toBe(true);
+      expect(api.rows.getById("0")?.data?.name).toBe("n0");
+    } finally {
+      api.destroy();
+      host.remove();
+    }
+  });
+
   it("suppressClipboard disables copy and paste handlers", () => {
     const { api, host } = createRangeGrid({ suppressClipboard: true });
     cellAt(host, 0, "name").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
@@ -236,6 +291,20 @@ describe("clipboard copy/paste", () => {
 });
 
 describe("context menu", () => {
+  it("retains clear when the grid disables clipboard menu items", () => {
+    const { api, host } = createRangeGrid({ contextMenu: true, suppressClipboard: true });
+    try {
+      cellAt(host, 0, "name").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".mach-context-menu button"));
+      expect(buttons.map(button => button.textContent)).toEqual(["清除内容"]);
+      buttons[0].click();
+      expect(api.rows.getById("0")?.data?.name).toBeNull();
+    } finally {
+      api.destroy();
+      host.remove();
+    }
+  });
+
   it("opens built-in menu with locale items and closes on escape", () => {
     const { api, host } = createRangeGrid({ contextMenu: true });
     cellAt(host, 0, "name").dispatchEvent(

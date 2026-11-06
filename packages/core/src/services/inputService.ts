@@ -56,11 +56,11 @@ export class InputService {
   captureScope(changes: readonly InputChange[]): () => boolean {
     const node = changes[0].node;
     const data = node.data;
-    const columns = this.core.columnModel.getColumns();
-    const members = new Set(columns);
-    const valid = changes.every((change) => change.node === node && members.has(change.column));
+    const model = this.core.columnModel;
+    const columns = model.getColumns();
+    const valid = changes.every((change) => change.node === node && model.getColumn(change.column.id) === change.column);
     return () => valid && !this.core.isDisposed() && this.core.rowModel.getNodeById(node.id) === node
-      && node.data === data && this.core.columnModel.getColumns() === columns;
+      && node.data === data && model.getColumns() === columns;
   }
 
   validateChanges(changes: readonly InputChange[], current: () => boolean): MaybeAsync<InputError[]> {

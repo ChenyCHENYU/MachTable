@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { createGrid } from "../index";
+import { buildColDefsFromSchema, createGrid } from "../index";
 import type { ColDef, ColumnFilter, GridApi, GridOptions, GridStateInput, InfiniteGetRowsParams } from "../index";
 
 const grids: GridApi[] = [];
@@ -76,6 +76,40 @@ it("accepts revised definitions for untouched properties and keeps explicit view
     expect.objectContaining({ colId: "b", width: 210, widthMode: "manual", pinned: "right", hide: true }),
     expect.objectContaining({ colId: "c", flex: 2, hide: true })
   ]);
+});
+
+it("keeps grouped preferences on title changes and resets to the latest schema order", () => {
+  const definitions = (title: string, updated = false) => buildColDefsFromSchema({
+    fields: ["a", "b", "c", "d", "e", "f", "g"].map(field => ({ field })),
+    groups: [
+      { groupId: "main", title, fields: updated ? ["c", "d", "e"] : ["c", "e"] },
+      { groupId: "other", title, fields: ["f", "g"] }
+    ]
+  });
+  const api = create({ columnDefs: definitions("计划"), rowData: [{ id: "1", a: "keep" }] });
+  api.columns.move("b", 0);
+  api.columns.move("e", 0);
+  api.columns.setWidth("c", 250);
+  api.columns.setPinned("e", "right");
+  api.columns.setVisible("g", false);
+  api.sorting.setModel([{ colId: "a", direction: "asc" }]);
+  api.filtering.setQuickText("keep");
+  api.selection.setById("1");
+  const renamed = definitions("生产计划", true);
+  api.columns.setDefinitions(renamed);
+  expect(fieldOrder(api)).toEqual(["b", "a", "e", "d", "c", "f", "g"]);
+
+  api.columns.resetState();
+
+  expect(fieldOrder(api)).toEqual(["a", "b", "c", "d", "e", "f", "g"]);
+  expect(api.columns.getState().find(column => column.colId === "c")?.widthMode).toBe("auto");
+  expect(api.columns.getState().find(column => column.colId === "e")?.pinned).toBeNull();
+  expect(api.columns.getState().find(column => column.colId === "g")?.hide).toBe(false);
+  expect(api.sorting.getModel()).toEqual([{ colId: "a", direction: "asc" }]);
+  expect(api.filtering.getQuickText()).toBe("keep");
+  expect(api.selection.getIds()).toEqual(["1"]);
+  api.columns.setDefinitions(renamed);
+  expect(fieldOrder(api)).toEqual(["a", "b", "c", "d", "e", "f", "g"]);
 });
 
 it("keeps transaction-only rows through both column replacement entry points", () => {

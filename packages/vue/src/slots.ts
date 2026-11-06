@@ -73,41 +73,36 @@ export function applyVueSlots<TData>(
   slots: Slots,
   appContext?: AppContext
 ): GridOptions<TData> {
-  const columnDefs = options.columnDefs
-    ? enhanceColumns(options.columnDefs, slots, appContext)
-    : options.columnDefs;
-  return {
-    ...options,
-    columnDefs,
-    ...(slots.detail && !options.detailRowRenderer
-      ? { detailRowRenderer: vueDetailSlotRenderer(slots.detail, { appContext }) }
-      : {}),
-    ...(slots.loading ? { overlayLoadingTemplate: vueOverlaySlot(slots.loading, { appContext }) } : {}),
-    ...(slots.empty ? { overlayNoRowsTemplate: vueOverlaySlot(slots.empty, { appContext }) } : {})
-  };
+  return createVueSlotEnhancer<TData>(slots, appContext)(options);
 }
 
 /** Creates a stable enhancer so unrelated reactive prop updates do not rebuild columns. */
 export function createVueSlotEnhancer<TData>(slots: Slots, appContext?: AppContext) {
   let previousDefinitions: GridOptions<TData>["columnDefs"];
   let enhancedDefinitions: GridOptions<TData>["columnDefs"];
-  const detailRenderer = slots.detail ? vueDetailSlotRenderer<TData>(slots.detail, { appContext }) : undefined;
-  const loadingTemplate = slots.loading ? vueOverlaySlot(slots.loading, { appContext }) : undefined;
-  const emptyTemplate = slots.empty ? vueOverlaySlot(slots.empty, { appContext }) : undefined;
+  let previousSlots = "";
+  let templates: GridOptions<TData> = {};
 
   return (options: GridOptions<TData>): GridOptions<TData> => {
-    if (options.columnDefs !== previousDefinitions) {
+    const slotKeys = Object.keys(slots).join("\0");
+    if (options.columnDefs !== previousDefinitions || slotKeys !== previousSlots) {
       previousDefinitions = options.columnDefs;
       enhancedDefinitions = options.columnDefs
         ? enhanceColumns(options.columnDefs, slots, appContext)
         : options.columnDefs;
     }
+    if (slotKeys !== previousSlots) {
+      previousSlots = slotKeys;
+      templates = {};
+      if (slots.detail) templates.detailRowRenderer = vueDetailSlotRenderer<TData>(slots.detail, { appContext });
+      if (slots.loading) templates.overlayLoadingTemplate = vueOverlaySlot(slots.loading, { appContext });
+      if (slots.empty) templates.overlayNoRowsTemplate = vueOverlaySlot(slots.empty, { appContext });
+    }
     return {
       ...options,
+      ...templates,
+      detailRowRenderer: options.detailRowRenderer ?? templates.detailRowRenderer,
       columnDefs: enhancedDefinitions,
-      ...(detailRenderer && !options.detailRowRenderer ? { detailRowRenderer: detailRenderer } : {}),
-      ...(loadingTemplate ? { overlayLoadingTemplate: loadingTemplate } : {}),
-      ...(emptyTemplate ? { overlayNoRowsTemplate: emptyTemplate } : {})
     };
   };
 }

@@ -332,26 +332,23 @@ describe("React adapter", () => {
       return { rows: [{ id: "1" }], total: 1 };
     });
     let remote: UseMachTableQueryReturn<{ id: string }> | null = null;
+    const apiRef = { current: null as GridApi<{ id: string }> | null };
     function Harness() {
       remote = useMachTableQuery({ query: { keyword: "x" }, queryKey: "x", rowKey: "id", request, mode: "manual" });
-      return createElement(MachTable<{ id: string }>, { ...remote.bindings, columnDefs: [{ field: "id" }] });
+      return createElement(MachTable<{ id: string }>, { ...remote.bindings, apiRef, columnDefs: [{ field: "id" }] });
     }
     await act(async () => root.render(createElement(Harness)));
     expect(request).not.toHaveBeenCalled();
     await act(async () => {
-      remote!.bindings.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as any);
-      remote!.bindings.onFilterChanged?.({
-        filterModel: {},
-        api: { filtering: { getQuickText: () => null } },
-        advancedFilterModel: {
-          version: 1,
-          root: {
-            kind: "condition",
-            colId: "id",
-            filter: { type: "text", conditions: [{ match: "equals", value: "1" }] }
-          }
+      apiRef.current!.sorting.setModel([{ colId: "id", direction: "asc" }]);
+      apiRef.current!.filtering.setAdvancedModel({
+        version: 1,
+        root: {
+          kind: "condition",
+          colId: "id",
+          filter: { type: "text", conditions: [{ match: "equals", value: "1" }] }
         }
-      } as any);
+      });
       await remote!.reload();
     });
     expect(request).toHaveBeenCalledOnce();

@@ -157,7 +157,9 @@ api.destroy();
 
 > 默认虚拟布局要求容器具有明确高度。小型详情表可使用 `domLayout: "autoHeight"`，大表或远程无限数据源不要使用自动高度。
 
-自动高度表格随当前页内容收起；空态、加载态和错误态保留必要空间，恢复数据后释放最小高度。表格与后续内容的间距由页面容器设置，例如 `padding-bottom: 8px`。
+自动高度表格随当前页内容收起。明细行数不固定时，设置 `domLayout: "autoHeight", maxBodyHeight: 330`，表体到达 330px 后使用虚拟滚动。空态、加载态和错误态保留必要空间，恢复数据后释放最小高度。表格与后续内容的间距由页面容器设置，例如 `padding-bottom: 8px`。
+
+本地筛选无匹配时，内置空态提供「清除筛选」，一次清除表内列筛选、高级筛选和快速搜索。自定义空态、手动筛选和服务端查询可继续由应用定义提示及恢复操作。
 
 Vue 和 React 的 `MachTable` 默认显示序号与内置分页。Vue 可分别用 `:row-number="false"`、`:pagination="false"` 关闭，React 使用 `rowNumber={false}`、`pagination={false}`。已有 `indexColumn()` 可继续定制序号列。表头和单元格默认居中，包括数值列。可在业务列上单独覆盖 `align` 或 `headerAlign`。
 

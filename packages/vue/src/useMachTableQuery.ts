@@ -1,10 +1,10 @@
 import {
   computed,
-  isRef,
   nextTick,
   onScopeDispose,
   ref,
   shallowRef,
+  unref,
   watch,
   type ComputedRef,
   type Ref,
@@ -68,6 +68,7 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   selectionScope?: "page" | "preserve" | "query";
   /** Defaults true: a different business/filter query cannot inherit stale selections. */
   clearSelectionOnQueryChange?: boolean;
+  /** Writable quick-filter state shared with inputs and GridApi. */
   quickFilterText?: Ref<string | null>;
   /** Renders inside the first-class error overlay for the latest failed request. */
   errorOverlay?(context: { error: unknown; retry(): Promise<void> }): OverlayContent;
@@ -101,8 +102,7 @@ export interface UseMachTableQueryReturn<TData> {
 }
 
 function readSource<T>(source: MachTableQuerySource<T>): T {
-  if (typeof source === "function") return (source as () => T)();
-  return isRef(source) ? source.value : source;
+  return typeof source === "function" ? (source as () => T)() : unref(source);
 }
 
 function normalizePositive(value: number | undefined, fallback: number): number {
@@ -112,9 +112,7 @@ function normalizePositive(value: number | undefined, fallback: number): number 
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException
-    ? error.name === "AbortError"
-    : typeof error === "object" && error != null && "name" in error && (error as { name?: unknown }).name === "AbortError";
+  return error != null && typeof error === "object" && (error as { name?: unknown }).name === "AbortError";
 }
 
 /**
@@ -152,6 +150,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   let generation = 0;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let suppressGridEvents = false;
+  let handledQuickFilterText = quickFilterText.value;
   let suppressSelectionEvents = false;
   let updatingSelectedRefs = false;
 
@@ -275,21 +274,13 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
   };
 
-  const scheduleLoad = (resetPage: boolean): void => {
-    if (resetPage) page.value = 1;
-    if (debounceTimer != null) clearTimeout(debounceTimer);
-    if (controller) {
-      generation++;
-      controller.abort();
-      controller = null;
-      loading.value = false;
-    }
-    const delay = Math.max(0, options.debounceMs ?? 0);
-    if (delay === 0) {
-      void load();
-      return;
-    }
-    debounceTimer = setTimeout(() => { void load(); }, delay);
+  const scheduleLoad = (): void => {
+    page.value = 1;
+    if (!automatic) return;
+    abort();
+    const delay = options.debounceMs ?? 0;
+    if (delay > 0) debounceTimer = setTimeout(load, delay);
+    else void load();
   };
 
   const onGridReady = (event: { api: GridApi<TData> }): void => {
@@ -306,24 +297,15 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const onSortChanged = (event: SortChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
     sortModel.value = event.sortModel.map((item) => ({ ...item }));
-    if (automatic) scheduleLoad(true);
-    else page.value = 1;
+    scheduleLoad();
   };
   const onFilterChanged = (event: FilterChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
     filterModel.value = { ...event.filterModel };
     advancedFilterModel.value = normalizeAdvancedFilterModel(event.advancedFilterModel);
-    const gridQuickFilterText = event.api.filtering.getQuickText();
-    if (quickFilterText.value !== gridQuickFilterText) {
-      // Keep a controlled quick-filter ref in sync with changes initiated
-      // through GridApi without scheduling a duplicate remote request.
-      suppressGridEvents = true;
-      try { quickFilterText.value = gridQuickFilterText; }
-      finally { suppressGridEvents = false; }
-    }
-    if (options.clearSelectionOnQueryChange !== false) clearSelection();
-    if (automatic) scheduleLoad(true);
-    else page.value = 1;
+    handledQuickFilterText = event.api.filtering.getQuickText();
+    if (quickFilterText.value !== handledQuickFilterText) quickFilterText.value = handledQuickFilterText;
+    onCriteriaChanged();
   };
   const onSelectionChanged = (event: SelectionChangedEvent<TData>): void => {
     if (suppressSelectionEvents) return;
@@ -398,6 +380,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       sortModel.value = [];
       filterModel.value = {};
       advancedFilterModel.value = null;
+      handledQuickFilterText = null;
       quickFilterText.value = null;
       clearSelection();
       api?.sorting.setModel(null);
@@ -412,28 +395,27 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
     await load();
   };
-  const clearSelection = (): void => {
-    allMatching.value = false;
+  const clearSelectionCache = (): void => {
     selectedIds.clear();
     excludedIds.clear();
     selectedById.clear();
+  };
+  const clearSelection = (): void => {
+    allMatching.value = false;
+    clearSelectionCache();
     updateSelectedRefs();
     suppressSelectionEvents = true;
     try { api?.selection.clear(); } finally { suppressSelectionEvents = false; }
   };
   const selectAllMatching = (): void => {
     allMatching.value = true;
-    selectedIds.clear();
-    excludedIds.clear();
-    selectedById.clear();
+    clearSelectionCache();
     for (const row of rows.value) selectedById.set(rowId(row), row);
     updateSelectedRefs();
     syncVisibleSelection();
   };
   const applySelectionState = (state: MachTableRemoteSelectionState): void => {
-    selectedIds.clear();
-    excludedIds.clear();
-    selectedById.clear();
+    clearSelectionCache();
     allMatching.value = state.mode === "allMatching";
     const ids = state.mode === "allMatching" ? state.excludedKeys : state.selectedKeys;
     for (const id of ids.map(String)) {
@@ -455,21 +437,23 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       : { mode: "explicit", selectedKeys: [...selectedIds] };
   });
 
+  const onCriteriaChanged = (): void => {
+    if (options.clearSelectionOnQueryChange !== false) clearSelection();
+    scheduleLoad();
+  };
+
   watch(
     () => readSource(options.query),
-    () => {
-      if (options.clearSelectionOnQueryChange !== false) clearSelection();
-      if (automatic) scheduleLoad(true);
-      else page.value = 1;
-    },
+    onCriteriaChanged,
     { deep: true, immediate: automatic && options.immediate !== false }
   );
-  watch(quickFilterText, () => {
-    if (suppressGridEvents) return;
-    if (options.clearSelectionOnQueryChange !== false) clearSelection();
-    if (automatic) scheduleLoad(true);
-    else page.value = 1;
-  }, { flush: "sync" });
+  watch(quickFilterText, (value) => {
+    // A mounted grid can report the changed prop before gridReady. Give its
+    // event the first chance to load, while keeping headless query use working.
+    if (suppressGridEvents || value === handledQuickFilterText) return;
+    handledQuickFilterText = value;
+    onCriteriaChanged();
+  }, { flush: automatic ? "post" : "sync" });
   watch(selectedKeys, (keys) => {
     if (updatingSelectedRefs) return;
     allMatching.value = false;

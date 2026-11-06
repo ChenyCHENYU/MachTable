@@ -17,7 +17,7 @@ import type { AdvancedFilterModel } from "../types/advancedFilter";
 import { isValueColumn, type Column } from "./column";
 import { EVENT_TYPES } from "../types/events";
 import type { ColDefOrGroup, ColumnState, FilterModel, SortModel } from "../types/colDef";
-import { DEFAULT_COL_DEF, GRID_SIZE_PRESETS, VALUE_DEFAULTS, resolveWatermark, rowIdFromKey } from "../core/resolveOptions";
+import { DEFAULT_COL_DEF, GRID_SIZE_PRESETS, VALUE_DEFAULTS, resolveWatermark, rowIdFromKey, updateDatasourceTuning } from "../core/resolveOptions";
 import { buildCsv, sanitizeFormulaCell } from "../lib/csv";
 import { prepareMatrixImport } from "../lib/importData";
 import { serializeColumnValue } from "../lib/columnValues";
@@ -64,6 +64,7 @@ interface OptionUpdateEffects {
 
 interface AsyncTransactionEntry<TData> {
   transaction: RowTransaction<TData>;
+  revision: number;
   resolve(): void;
   reject(reason: Error): void;
   signal?: AbortSignal;
@@ -124,6 +125,7 @@ export class GridApiImpl<TData = any> {
     const promise = new Promise<void>((resolve, reject) => {
       const entry: AsyncTransactionEntry<TData> = {
         transaction,
+        revision: this.core.rowModel.getDataRevision(),
         resolve,
         reject,
         signal: options.signal,
@@ -153,14 +155,20 @@ export class GridApiImpl<TData = any> {
     this.asyncTransactionTimer = null;
     const entries = this.asyncTransactions;
     this.asyncTransactions = [];
-    const transactions = entries.filter((entry) => !entry.aborted).map((entry) => entry.transaction);
-    if (transactions.length > 0 && !this.core.isDisposed() && !this.core.rowModel.isInfinite) {
-      const impact = this.core.rowModel.applyTransactions(transactions);
-      this.requestTransactionRefresh(impact);
+    const model = this.core.rowModel;
+    const revision = model.getDataRevision();
+    const transactions = entries.filter((entry) => !entry.aborted && entry.revision === revision)
+      .map((entry) => entry.transaction);
+    if (transactions.length > 0 && !this.core.isDisposed() && !model.isInfinite) {
+      const impact = model.applyTransactions(transactions);
+      if (model.getDataRevision() === revision) this.requestTransactionRefresh(impact);
     }
+    const current = model.getDataRevision() === revision;
     for (const entry of entries) {
       if (entry.signal && entry.onAbort) entry.signal.removeEventListener("abort", entry.onAbort);
-      if (!entry.aborted) entry.resolve();
+      if (entry.aborted) continue;
+      if (current && entry.revision === revision) entry.resolve();
+      else entry.reject(createAbortError(undefined, "The table data changed before the transaction could complete"));
     }
   }
 
@@ -286,25 +294,12 @@ export class GridApiImpl<TData = any> {
   setFilterModel(filterModel: FilterModel | null): void {
     if (this.core.isDisposed()) return;
     this.core.rowModel.setFilterModel(filterModel);
-    this.core.headerRenderer.refreshFilterIcons();
-    this.emitFilterChanged();
-    if (this.core.rowModel.isInfinite) {
-      void this.core.rowModel.onServerParamsChanged();
-      return;
-    }
-    this.core.rowModel.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.core.applyFilterModel();
   }
 
   setAdvancedFilterModel(model: AdvancedFilterModel | null): void {
     if (this.core.isDisposed() || !this.core.rowModel.setAdvancedFilterModel(model)) return;
-    this.emitFilterChanged();
-    if (this.core.rowModel.isInfinite) {
-      void this.core.rowModel.onServerParamsChanged();
-      return;
-    }
-    this.core.rowModel.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.core.applyFilterModel();
   }
 
   private emitFilterChanged(persist = true): void {
@@ -318,7 +313,7 @@ export class GridApiImpl<TData = any> {
     if (this.core.isDisposed()) return;
     this.core.gridOptions.quickFilterText = text != null && text.trim() !== "" ? text : null;
     if (this.core.rowModel.setQuickFilter(text)) {
-      this.core.applyQuickFilter();
+      this.core.applyFilterModel();
     }
   }
 
@@ -611,6 +606,10 @@ export class GridApiImpl<TData = any> {
       this.core.skeleton.applyDomLayout(resolved.domLayout);
       effects.needsPoolRebuild = true;
     }
+    if (hasOwnOption(options, "maxBodyHeight")) {
+      resolved.maxBodyHeight = normalizeFinite(options.maxBodyHeight, 1);
+      effects.needsRelayout = true;
+    }
     copyOptions(options, resolved, ["multiSort"]);
     const detailHeight = changedFinite(options.detailRowHeight, resolved.detailRowHeight, 1);
     if (detailHeight !== undefined) {
@@ -677,9 +676,8 @@ export class GridApiImpl<TData = any> {
 
   private updateDynamicRowHeight(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     if (!hasOwnOption(options, "getRowHeight")) return;
-    const changed = this.core.gridOptions.getRowHeight !== options.getRowHeight;
     this.core.gridOptions.getRowHeight = options.getRowHeight;
-    if (changed) this.core.bodyRenderer.invalidateAllRowHeights();
+    this.core.bodyRenderer.invalidateAllRowHeights();
     effects.needsRelayout = true;
   }
 
@@ -924,27 +922,11 @@ export class GridApiImpl<TData = any> {
   }
 
   private updateDatasourceOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
-    this.updateDatasourceTuning(options, effects);
+    const resolved = this.core.gridOptions;
+    if (updateDatasourceTuning(options, resolved) && resolved.datasourceMode === "block") effects.datasourceChanged = true;
     this.updateDatasourceMode(options, effects);
     this.updateDatasourceReference(options, effects);
     this.updatePinnedRows(options);
-  }
-
-  private updateDatasourceTuning(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
-    const resolved = this.core.gridOptions;
-    // Cache geometry/concurrency changes reset block ownership; soft tuning does not.
-    for (const key of ["blockSize", "maxBlocksInCache", "datasourceMaxConcurrentRequests"] as const) {
-      const value = normalizeFinite(options[key], 1, true);
-      if (value === undefined || value === resolved[key]) continue;
-      resolved[key] = value;
-      effects.datasourceChanged ||= resolved.datasourceMode === "block";
-    }
-    for (const key of ["infiniteBufferRows", "blockPrefetch", "datasourceRetryCount", "datasourceRetryDelay"] as const) {
-      const value = normalizeFinite(options[key], 0, true);
-      if (value !== undefined) resolved[key] = value;
-    }
-    const retryJitter = normalizeFinite(options.datasourceRetryJitter, 0);
-    if (retryJitter !== undefined) resolved.datasourceRetryJitter = Math.min(1, retryJitter);
   }
 
   private updateDatasourceMode(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {

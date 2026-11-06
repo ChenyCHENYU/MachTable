@@ -49,7 +49,7 @@ const schema: GridSchema = {
     { field: "at",      title: "更新时间", type: "date", format: "datetime", width: 150 },
     { field: "remark",  title: "备注", filterable: false, hidden: false }
   ],
-  groups: [{ title: "执行信息", fields: ["owner", "amount"] }]   // 可选：生成多级表头
+  groups: [{ groupId: "execution", title: "执行信息", fields: ["owner", "amount"] }]
 };
 
 const api = createGrid(host, {
@@ -63,8 +63,8 @@ const api = createGrid(host, {
 | `type` | 生成行为 |
 | --- | --- |
 | `"string"`（默认） | 文本过滤器 |
-| `"number"` | 默认居中 + 等宽数字 + 数字过滤器 |
-| `"date"` | `format: "date" \| "datetime"` 格式化（ISO → 日期/日期时间）+ 日期过滤器 |
+| `"number"` | 居中等宽数字、数字过滤器；`editable` 时使用数字编辑器，即使初始值为空 |
+| `"date"` | `format: "date" \| "datetime"` 格式化、日期过滤器；`editable` 时使用日期编辑器，即使初始值为空 |
 | `"select"` | options 字典翻译显示（`value → label`）+ set 过滤器；`editable` 时生成 select 下拉编辑器（值为原始 value） |
 | `"boolean"` | `是 / 否` 格式化 + set 过滤器 |
 
@@ -84,7 +84,7 @@ const api = createGrid(host, {
 
 ## groups 与字段去重
 
-`groups[].fields` 引用的字段渲染为分组表头子列；未分组字段按声明顺序排在前。同名字段只出现一次。
+`groups[].fields` 引用的字段渲染为分组表头子列。未分组字段按声明顺序排在前，同名字段只出现一次。分组会改名或有同名分组时，为每组提供唯一、稳定的 `groupId`，更新标题时便可保留组内列顺序。
 
 ## 与渲染器注册表组合（完全可序列化配置）
 

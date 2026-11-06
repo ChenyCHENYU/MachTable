@@ -1,4 +1,4 @@
-import { defineComponent, getCurrentInstance, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type DefineComponent } from "vue";
+import { defineComponent, getCurrentInstance, h, onActivated, onBeforeUnmount, onBeforeUpdate, onDeactivated, onMounted, ref, watch, type DefineComponent } from "vue";
 import {
   createGrid,
   EVENT_TYPES
@@ -78,6 +78,9 @@ const MachTableImpl = defineComponent({
     let api: GridApi | null = null;
     const config = useMachTableConfig();
     const enhanceVueSlots = createVueSlotEnhancer<any>(slots, getCurrentInstance()?.appContext);
+    const slotKeys = ref("");
+    // Vue updates dynamic slots before this hook, even when table props stay stable.
+    onBeforeUpdate(() => { slotKeys.value = Object.keys(slots).join("\0"); });
     let lastResolution: ResolvedMachTableGridOptions<any> | null = null;
     const reportedWarnings = new Set<string>();
 
@@ -106,18 +109,19 @@ const MachTableImpl = defineComponent({
       lastResolution = {
         options: enhancedOptions,
         explain: (key) => {
+          const explanation = resolution.explain(key);
           if (key === "columnDefs" && enhancedOptions.columnDefs !== resolution.options.columnDefs) {
             return {
               key,
               value: enhancedOptions.columnDefs,
               source: "Vue slots",
-              layers: [...resolution.explain(key).layers, { name: "Vue slots", value: enhancedOptions.columnDefs }]
+              layers: [...explanation.layers, { name: "Vue slots", value: enhancedOptions.columnDefs }]
             };
           }
-          return resolution.explain(key);
+          return explanation;
         }
       };
-      return lastResolution.options;
+      return enhancedOptions;
     };
 
     onMounted(() => {
@@ -153,8 +157,9 @@ const MachTableImpl = defineComponent({
 
     watch(
       () => {
+        void slotKeys.value;
         const options = collectOptions() as Record<string, unknown>;
-        return [...GRID_OPTION_KEYS.map((key) => options[key])];
+        return GRID_OPTION_KEYS.map((key) => options[key]);
       },
       (values, previous) => {
         if (!api) return;

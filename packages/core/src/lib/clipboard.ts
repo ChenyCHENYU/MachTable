@@ -33,42 +33,27 @@ export function parseDelimited(text: string, separator: string): string[][] {
 
   while (i < text.length) {
     const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          cell += '"';
-          i += 2;
-          continue;
-        }
-        inQuotes = false;
+    if (ch === '"' && (inQuotes || cell === "")) {
+      if (inQuotes && text[i + 1] === '"') {
+        cell += ch;
         i++;
-        continue;
+      } else {
+        inQuotes = !inQuotes;
       }
+    } else if (inQuotes) {
       cell += ch;
-      i++;
-      continue;
-    }
-    if (ch === '"' && cell === "") {
-      inQuotes = true;
-      i++;
-      continue;
-    }
-    if (ch === separator) {
+    } else if (ch === separator) {
       row.push(cell);
       cell = "";
-      i++;
-      continue;
-    }
-    if (ch === "\n" || ch === "\r") {
+    } else if (ch === "\n" || ch === "\r") {
       row.push(cell);
       rows.push(row);
       row = [];
       cell = "";
-      if (ch === "\r" && text[i + 1] === "\n") i += 2;
-      else i++;
-      continue;
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+    } else {
+      cell += ch;
     }
-    cell += ch;
     i++;
   }
 

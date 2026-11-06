@@ -6,7 +6,7 @@
 
 MachTable 0.38.0 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。本版补齐异步表头的布局恢复和动态换列时的状态更新。通过 `rowNumber: true` 启用自动序号，内置分页默认开启。
 
-小型本地明细可使用 `domLayout: "autoHeight"` 随当前页内容收起；本版为该模式的空态、加载态和错误态预留必要展示空间，恢复数据后释放最小高度。可通过 `--mach-overlay-min-height` 局部调整。大数据表继续使用有明确高度的默认虚拟布局。
+本地明细使用 `domLayout: "autoHeight"` 随当前页内容收起。加上 `maxBodyHeight: 330`，超过 330px 的表体会使用虚拟滚动。表内筛选无匹配时，默认空态提供清除筛选；业务自定义空态优先。
 
 ```bash
 pnpm add @agile-team/mach-table

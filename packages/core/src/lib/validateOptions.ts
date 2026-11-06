@@ -1,5 +1,5 @@
 import { GRID_OPTION_KEYS, GRID_OPTION_KINDS } from "../core/gridOptionMetadata";
-import { EVENT_OPTION_KEYS, matchesGridOptionKind } from "../core/gridOptionRuntime";
+import { EVENT_OPTION_KEYS, matchesGridOptionValue } from "../core/gridOptionRuntime";
 import type { GridOptions } from "../types/options";
 
 export type GridValidationCode =
@@ -16,127 +16,85 @@ export interface GridValidationIssue {
 }
 
 const KNOWN_OPTIONS = new Set<string>([...GRID_OPTION_KEYS, ...EVENT_OPTION_KEYS]);
+const SPECIALISED_OPTIONS = new Set(["enableColumnResize", "pagination", "rowKey"]);
+type ReportIssue = (code: GridValidationCode, option: string, message: string) => void;
 
 function editDistance(a: string, b: string): number {
   if (a === b) return 0;
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  const distances = Array.from({ length: b.length + 1 }, (_, index) => index);
   for (let row = 1; row <= a.length; row++) {
-    const current = [row];
+    let diagonal = distances[0];
+    distances[0] = row;
     for (let column = 1; column <= b.length; column++) {
-      current[column] = Math.min(
-        current[column - 1] + 1,
-        previous[column] + 1,
-        previous[column - 1] + (a[row - 1] === b[column - 1] ? 0 : 1)
+      const above = distances[column];
+      distances[column] = Math.min(
+        distances[column - 1] + 1,
+        above + 1,
+        diagonal + (a[row - 1] === b[column - 1] ? 0 : 1)
       );
+      diagonal = above;
     }
-    previous = current;
   }
-  return previous[b.length];
+  return distances[b.length];
 }
 
 function closestOption(input: string): string | undefined {
   let closest: string | undefined;
-  let distance = Number.POSITIVE_INFINITY;
+  let distance = Math.max(2, Math.floor(input.length * 0.3)) + 1;
+  const normalized = input.toLowerCase();
   for (const candidate of KNOWN_OPTIONS) {
-    const next = editDistance(input.toLowerCase(), candidate.toLowerCase());
+    if (Math.abs(normalized.length - candidate.length) >= distance) continue;
+    const next = editDistance(normalized, candidate.toLowerCase());
     if (next < distance) {
       distance = next;
       closest = candidate;
     }
   }
-  const threshold = Math.max(2, Math.floor(input.length * 0.3));
-  return distance <= threshold ? closest : undefined;
+  return closest;
 }
 
-function validateIdentityAndLayout(source: Record<string, unknown>): GridValidationIssue[] {
-  const issues: GridValidationIssue[] = [];
+function validateIdentityAndLayout(source: Record<string, unknown>, report: ReportIssue): void {
   if (source.rowKey != null && typeof source.rowKey !== "string" && typeof source.rowKey !== "function") {
-    issues.push({
-      code: "INVALID_OPTION_VALUE",
-      option: "rowKey",
-      message: "rowKey 必须是字段路径或返回稳定业务主键的函数"
-    });
+    report("INVALID_OPTION_VALUE", "rowKey", "rowKey 必须是字段路径或返回稳定业务主键的函数");
   }
   if (source.domLayout === "autoHeight" && source.datasource != null) {
-    issues.push({
-      code: "OPTION_CONFLICT",
-      option: "domLayout",
-      message: "autoHeight 会渲染全部已加载行，不适用于 datasource 无限滚动模式"
-    });
+    report("OPTION_CONFLICT", "domLayout", "autoHeight 会渲染全部已加载行，不适用于 datasource 无限滚动模式");
   }
-  issues.push(...validateBlockDatasource(source));
+  validateBlockDatasource(source, report);
   if (source.enableColumnResize != null && typeof source.enableColumnResize !== "boolean") {
-    issues.push({
-      code: "INVALID_OPTION_VALUE",
-      option: "enableColumnResize",
-      message: "enableColumnResize 必须是 boolean；未配置时默认关闭"
-    });
+    report("INVALID_OPTION_VALUE", "enableColumnResize", "enableColumnResize 必须是 boolean；未配置时默认关闭");
   }
-  return issues;
 }
 
-function validateBlockDatasource(source: Record<string, unknown>): GridValidationIssue[] {
-  if (source.datasourceMode !== "block") return [];
-  const issues: GridValidationIssue[] = [];
+function validateBlockDatasource(source: Record<string, unknown>, report: ReportIssue): void {
+  if (source.datasourceMode !== "block") return;
   if (source.datasource == null) {
-    issues.push({
-      code: "OPTION_CONFLICT",
-      option: "datasourceMode",
-      message: "datasourceMode='block' requires a datasource"
-    });
+    report("OPTION_CONFLICT", "datasourceMode", "datasourceMode='block' requires a datasource");
   }
   if (typeof source.getRowHeight === "function") {
-    issues.push({
-      code: "OPTION_CONFLICT",
-      option: "getRowHeight",
-      message: "Random-access block rows require fixed rowHeight so unloaded offsets remain deterministic"
-    });
+    report("OPTION_CONFLICT", "getRowHeight", "Random-access block rows require fixed rowHeight so unloaded offsets remain deterministic");
   }
   if (source.masterDetail === true) {
-    issues.push({
-      code: "OPTION_CONFLICT",
-      option: "masterDetail",
-      message: "masterDetail is not supported by the sparse random-access block row model"
-    });
+    report("OPTION_CONFLICT", "masterDetail", "masterDetail is not supported by the sparse random-access block row model");
   }
   if (source.treeData === true) {
-    issues.push({
-      code: "OPTION_CONFLICT",
-      option: "treeData",
-      message: "treeData requires the local/tree row model and cannot use random-access blocks"
-    });
+    report("OPTION_CONFLICT", "treeData", "treeData requires the local/tree row model and cannot use random-access blocks");
   }
-  if (!hasStableRowId(source)) {
-    issues.push({
-      code: "MISSING_STABLE_ROW_ID",
-      option: "rowKey",
-      message: "Random-access blocks require rowKey to preserve selection and identity after eviction"
-    });
+  if (source.rowKey == null) {
+    report("MISSING_STABLE_ROW_ID", "rowKey", "Random-access blocks require rowKey to preserve selection and identity after eviction");
   }
-  return issues;
 }
 
-function hasStableRowId(source: Record<string, unknown>): boolean {
-  return source.rowKey != null;
-}
-
-function validateMetadataValues(source: Record<string, unknown>): GridValidationIssue[] {
-  const specialised = new Set(["enableColumnResize", "pagination", "rowKey"]);
-  const issues: GridValidationIssue[] = [];
+function validateMetadataValues(source: Record<string, unknown>, report: ReportIssue): void {
   for (const key of GRID_OPTION_KEYS) {
-    if (specialised.has(key) || !Object.prototype.hasOwnProperty.call(source, key)) continue;
-    const value = source[key];
-    const expected = GRID_OPTION_KINDS[key];
-    if (matchesGridOptionKind(value, expected)) continue;
-    issues.push({
-      code: "INVALID_OPTION_VALUE",
-      option: key,
-      message: `${key} 值类型无效，期望 ${expected}`
-    });
+    if (SPECIALISED_OPTIONS.has(key) || !Object.prototype.hasOwnProperty.call(source, key)) continue;
+    if (!matchesGridOptionValue(key, source[key])) {
+      const message = key === "maxBodyHeight" ? "maxBodyHeight 必须是至少 1px 的有限数" : `${key} 值类型无效，期望 ${GRID_OPTION_KINDS[key]}`;
+      report("INVALID_OPTION_VALUE", key, message);
+    }
   }
-  return issues;
 }
 
 function validateKnownOptions(source: Record<string, unknown>): GridValidationIssue[] {
@@ -158,63 +116,42 @@ function validateKnownOptions(source: Record<string, unknown>): GridValidationIs
 
 function validateServerPagination(
   source: Record<string, unknown>,
-  config: Record<string, unknown>
-): GridValidationIssue[] {
-  if (config.mode !== "server") return [];
-  const issues: GridValidationIssue[] = [];
-  if (!hasStableRowId(source)) {
-    issues.push({
-      code: "MISSING_STABLE_ROW_ID",
-      option: "rowKey",
-      message: "服务端分页建议提供稳定 rowKey，否则跨页选择与增量更新无法可靠保持"
-    });
+  config: Record<string, unknown>,
+  report: ReportIssue
+): void {
+  if (config.mode !== "server") return;
+  if (source.rowKey == null) {
+    report("MISSING_STABLE_ROW_ID", "rowKey", "服务端分页建议提供稳定 rowKey，否则跨页选择与增量更新无法可靠保持");
   }
   const total = config.total;
   if (total !== undefined && (typeof total !== "number" || !Number.isFinite(total) || total < 0)) {
-    issues.push({
-      code: "INVALID_OPTION_VALUE",
-      option: "pagination.total",
-      message: "服务端分页 total 必须是非负有限数"
-    });
+    report("INVALID_OPTION_VALUE", "pagination.total", "服务端分页 total 必须是非负有限数");
   }
-  return issues;
 }
 
-function validatePagination(source: Record<string, unknown>): GridValidationIssue[] {
-  const issues: GridValidationIssue[] = [];
+function validatePagination(source: Record<string, unknown>, report: ReportIssue): void {
   const pagination = source.pagination;
   if (pagination != null && typeof pagination !== "boolean" && typeof pagination !== "object") {
-    issues.push({ code: "INVALID_OPTION_VALUE", option: "pagination", message: "pagination 必须是 boolean 或配置对象" });
+    report("INVALID_OPTION_VALUE", "pagination", "pagination 必须是 boolean 或配置对象");
   }
   if (source.datasource != null && pagination !== undefined && pagination !== false) {
-    issues.push({
-      code: "OPTION_CONFLICT",
-      option: "pagination",
-      message: "datasource 顺序无限模式与 pagination 不能同时启用；普通服务端分页请使用 pagination.mode='server'"
-    });
+    report("OPTION_CONFLICT", "pagination", "datasource 顺序无限模式与 pagination 不能同时启用；普通服务端分页请使用 pagination.mode='server'");
   }
   if (pagination && typeof pagination === "object") {
-    issues.push(...validateServerPagination(source, pagination as Record<string, unknown>));
+    validateServerPagination(source, pagination as Record<string, unknown>, report);
   }
-  return issues;
-}
-
-function validateTreeDetailConflict(source: Record<string, unknown>): GridValidationIssue[] {
-  if (source.treeData !== true || source.masterDetail !== true) return [];
-  return [{
-    code: "OPTION_CONFLICT",
-    option: "masterDetail",
-    message: "treeData 与 masterDetail 不能同时启用，主从明细将被忽略"
-  }];
 }
 
 /** Runtime validation for JavaScript, JSON/schema driven and dynamic options. */
 export function validateGridOptions(options: Partial<GridOptions<any>> | Record<string, unknown>): GridValidationIssue[] {
   const source = options as Record<string, unknown>;
   const issues = validateKnownOptions(source);
-  issues.push(...validatePagination(source));
-  issues.push(...validateTreeDetailConflict(source));
-  issues.push(...validateMetadataValues(source));
-  issues.push(...validateIdentityAndLayout(source));
+  const report: ReportIssue = (code, option, message) => { issues.push({ code, option, message }); };
+  validatePagination(source, report);
+  if (source.treeData === true && source.masterDetail === true) {
+    report("OPTION_CONFLICT", "masterDetail", "treeData 与 masterDetail 不能同时启用，主从明细将被忽略");
+  }
+  validateMetadataValues(source, report);
+  validateIdentityAndLayout(source, report);
   return issues;
 }

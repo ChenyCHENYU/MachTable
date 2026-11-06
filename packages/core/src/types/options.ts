@@ -265,6 +265,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   enableColumnResize?: boolean;
   /** Lets small grids grow with their rows. Avoid for large or infinite datasets. */
   domLayout?: DomLayoutMode;
+  /** Maximum body height in CSS pixels for autoHeight. Larger results scroll virtually. */
+  maxBodyHeight?: number;
   rowSelection?: RowSelectionMode;
   multiSort?: boolean;
   size?: GridSize;
@@ -394,6 +396,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   columnLayout: ColumnLayoutMode;
   enableColumnResize: boolean;
   domLayout: DomLayoutMode;
+  maxBodyHeight?: number;
   rowSelection: RowSelectionMode;
   multiSort: boolean;
   size: GridSize;

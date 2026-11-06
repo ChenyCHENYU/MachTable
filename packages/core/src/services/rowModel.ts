@@ -137,7 +137,7 @@ export class RowModel<TData = any> {
 
   getDisplayRevision(): number { return this.displayRevision; }
 
-  /** Full data replacements invalidate asynchronous saves, not ordinary cache churn. */
+  /** Full data replacements invalidate asynchronous writes, not ordinary cache churn. */
   getDataRevision(): number { return this.dataRevision; }
 
   isLoadingInfinite(): boolean {
@@ -908,6 +908,7 @@ export class RowModel<TData = any> {
     }
 
     const impact = { pipelineChanged: this.transactionNeedsPipeline(transaction, replacements), updatedRowIds: touched.map((node) => node.id) };
+    this.core.undoService.invalidateRows(externallyReplacedIds);
     this.refreshTransaction(impact, refresh);
     this.core.changeTracker.clearRows(externallyReplacedIds);
     return impact;
@@ -922,10 +923,13 @@ export class RowModel<TData = any> {
 
   applyTransactions(transactions: readonly RowTransaction<TData>[]): RowTransactionImpact {
     if (transactions.length === 0) return { pipelineChanged: false, updatedRowIds: [] };
+    const revision = this.dataRevision;
     let pipelineChanged = false;
     const updatedRowIds = new Set<string>();
     for (const transaction of transactions) {
       const impact = this.applyTransaction(transaction, false);
+      // A synchronous event listener may replace the data while this batch is flushing.
+      if (this.dataRevision !== revision) return { pipelineChanged: false, updatedRowIds: [] };
       pipelineChanged ||= impact.pipelineChanged;
       for (const id of impact.updatedRowIds) updatedRowIds.add(id);
     }

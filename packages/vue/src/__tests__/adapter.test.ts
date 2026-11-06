@@ -656,6 +656,50 @@ describe("Vue adapter", () => {
     app.unmount();
   });
 
+  it("updates conditional cell and empty slots without replacing rows, columns or the grid", async () => {
+    const columnDefs = [{ field: "name" }];
+    const rows = shallowRef([{ name: "Original" }]);
+    const withSlots = ref(false);
+    const host = document.createElement("div");
+    let table!: UseMachTableReturn;
+    const app = createApp(defineComponent({
+      setup() {
+        table = useMachTable();
+        return () => h(MachTable, {
+          ref: table.ref, columnDefs, rowData: rows.value, pagination: false,
+        }, withSlots.value ? {
+          "cell-name": ({ value }: { value: string }) => h("b", { class: "conditional-cell" }, value),
+          empty: () => h("b", { class: "conditional-empty" }, "No records yet"),
+        } : {});
+      },
+    }));
+    app.mount(host);
+    await nextTick();
+    const api = table.api.value;
+    const cell = () => host.querySelector(".mach-cell[data-col-id='name']");
+    expect(cell()?.textContent).toBe("Original");
+    withSlots.value = true;
+    await nextTick();
+    expect(cell()?.querySelector(".conditional-cell")?.textContent).toBe("Original");
+    withSlots.value = false;
+    await nextTick();
+    expect(cell()?.textContent).toBe("Original");
+    expect(cell()?.querySelector(".conditional-cell")).toBeNull();
+
+    rows.value = [];
+    await nextTick();
+    expect(host.querySelector(".mach-empty")).not.toBeNull();
+    withSlots.value = true;
+    await nextTick();
+    expect(host.querySelector(".conditional-empty")?.textContent).toBe("No records yet");
+    withSlots.value = false;
+    await nextTick();
+    expect(host.querySelector(".conditional-empty")).toBeNull();
+    expect(host.querySelector(".mach-empty")).not.toBeNull();
+    expect(table.api.value).toBe(api);
+    app.unmount();
+  });
+
   it("reactively forwards structural options, datasource and inner grid class", async () => {
     const datasource = ref<any>(undefined);
     const gridClassName = ref("before");
@@ -1392,7 +1436,10 @@ describe("Vue adapter", () => {
     expect(local!.error.value).toBeNull();
     app.unmount();
 
-    const request = vi.fn(async () => ({ rows: [{ id: "2" }], total: 1 }));
+    const request = vi.fn<(params: { page: number; quickFilterText: string | null }) => Promise<{
+      rows: { id: string }[];
+      total: number;
+    }>>(async () => ({ rows: [{ id: "2" }], total: 50 }));
     let remote: UseMachTableControllerReturn<{ id: string }> | null = null;
     const remoteHost = document.createElement("div");
     document.body.appendChild(remoteHost);
@@ -1400,7 +1447,7 @@ describe("Vue adapter", () => {
       defineComponent({
         setup() {
           remote = useMachTableController({
-            query: { query: {}, rowKey: "id", request, mode: "manual" },
+            query: { query: {}, rowKey: "id", request, mode: "manual", initialPage: 2 },
           });
           return () =>
             h(MachTable, {
@@ -1413,13 +1460,71 @@ describe("Vue adapter", () => {
     );
     remoteApp.mount(remoteHost);
     expect(request).not.toHaveBeenCalled();
+    remote!.search.value = "manual search";
     await remote!.commands.refresh();
     await nextTick();
     expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.lastCall?.[0]).toMatchObject({ page: 1, quickFilterText: "manual search" });
     expect(remote!.query?.rows.value).toEqual([{ id: "2" }]);
     remote!.query?.selectAllMatching();
     await nextTick();
-    expect(remote!.selectedCount.value).toBe(1);
+    expect(remote!.selectedCount.value).toBe(50);
     remoteApp.unmount();
+  });
+
+  it.each([false, true])("keeps remote search and reset in sync with an external ref: %s", async (controlled) => {
+    const request = vi.fn(async ({ quickFilterText }: { quickFilterText: string | null }) => ({
+      rows: [{ id: quickFilterText ?? "1" }], total: 50,
+    }));
+    const quickFilterText = ref<string | null>("seed");
+    const columnDefs = [{ field: "id" }];
+    const host = document.createElement("div");
+    let controller!: UseMachTableControllerReturn<{ id: string }>;
+    const app = createApp(defineComponent({
+      setup() {
+        controller = useMachTableController({
+          initialSearch: "seed",
+          query: {
+            query: {}, rowKey: "id", request, initialPage: 2,
+            ...(controlled ? { quickFilterText } : {}),
+          },
+        });
+        const { table, bindings, search } = controller;
+        return () => h("div", [
+          h("input", {
+            value: search.value,
+            onInput: (event: Event) => { search.value = (event.target as HTMLInputElement).value; },
+          }),
+          h(MachTable, { ref: table.ref, columnDefs, ...bindings.value }),
+        ]);
+      },
+    }));
+    app.mount(host);
+    const input = host.querySelector("input")!;
+    const assertSearch = (text: string | null): void => {
+      expect(input.value).toBe(text ?? "");
+      expect(controller.table.api.value?.filtering.getQuickText()).toBe(text);
+      if (controlled) expect(quickFilterText.value).toBe(text);
+    };
+
+    await nextTick();
+    assertSearch("seed");
+    input.value = "typed";
+    input.dispatchEvent(new Event("input"));
+    await nextTick();
+    assertSearch("typed");
+    controller.commands.search("command");
+    await nextTick();
+    assertSearch("command");
+    controller.table.api.value?.filtering.setQuickText("api");
+    await nextTick();
+    assertSearch("api");
+    await controller.query?.reset();
+    await nextTick();
+    assertSearch(null);
+    expect(request.mock.calls.map(([params]) => params.quickFilterText)).toEqual([
+      "seed", "typed", "command", "api", null,
+    ]);
+    app.unmount();
   });
 });

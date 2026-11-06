@@ -265,6 +265,50 @@ describe("React B-side workflows", () => {
     await act(async () => root.unmount());
   });
 
+  it.each([false, true])("keeps mounted quick-filter state in sync before gridReady: %s", async (delayGridReady) => {
+    if (delayGridReady) vi.stubGlobal("requestAnimationFrame", vi.fn(() => 0));
+    type Row = { id: string };
+    const request = vi.fn(async ({ quickFilterText }: { quickFilterText: string | null }) => ({
+      rows: [{ id: quickFilterText ?? "1" }], total: 50,
+    }));
+    const criteria = {};
+    const columnDefs = [{ field: "id" }];
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    let controller!: UseMachTableControllerReturn<Row>;
+
+    function Harness() {
+      const query = useMachTableQuery({
+        query: criteria, rowKey: "id", request, initialPage: 2, initialQuickFilterText: "seed",
+      });
+      controller = useMachTableController({ query });
+      return createElement("div", null,
+        createElement("input", { value: controller.search, onChange: (event) => controller.setSearch(event.currentTarget.value) }),
+        createElement(MachTable<Row>, { columnDefs, ...controller.bindings, apiRef: controller.table.apiRef }),
+      );
+    }
+    const assertSearch = (text: string | null): void => {
+      expect(host.querySelector("input")?.value).toBe(text ?? "");
+      expect(controller.table.apiRef.current?.filtering.getQuickText()).toBe(text);
+    };
+
+    await act(async () => root.render(createElement(Harness)));
+    assertSearch("seed");
+    await act(async () => controller.setSearch("typed"));
+    assertSearch("typed");
+    await act(async () => controller.commands.search("command"));
+    assertSearch("command");
+    await act(async () => controller.table.apiRef.current?.filtering.setQuickText("api"));
+    assertSearch("api");
+    await act(async () => controller.query?.reset());
+    assertSearch(null);
+    expect(request.mock.calls.map(([params]) => params.quickFilterText)).toEqual([
+      "seed", "typed", "command", "api", null,
+    ]);
+    await act(async () => root.unmount());
+  });
+
   it("handles React query errors, reset, compact selection and cancellation", async () => {
     const steps: Array<(signal: AbortSignal) => Promise<{ rows: { id: string }[]; total: number }>> = [
       async () => { throw new Error("offline"); },
@@ -317,7 +361,12 @@ describe("React B-side workflows", () => {
     act(() => query!.bindings.onSortChanged?.({ sortModel: [{ colId: "id", sort: "asc" }] } as never));
     act(() => query!.bindings.onFilterChanged?.({
       filterModel: { id: { type: "contains", filter: "1" } },
-      api: { filtering: { getQuickText: () => null } }
+      api: {
+        filtering: { getQuickText: () => null, setQuickText: vi.fn(), setModel: vi.fn(), setAdvancedModel: vi.fn() },
+        sorting: { setModel: vi.fn() },
+        selection: { clear: vi.fn(), setRows: vi.fn() },
+        isDestroyed: () => false
+      }
     } as never));
     act(() => query!.setQuickFilterText("urgent"));
     await act(async () => { await query!.reset(); });

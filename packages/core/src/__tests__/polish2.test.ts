@@ -306,6 +306,48 @@ describe("async transaction batching", () => {
     expect(updated).toHaveBeenCalledTimes(1);
     api.destroy();
   });
+
+  it.each(["setData", "updateOptions"] as const)("discards queued changes from before %s", async (replace) => {
+    const host = createHost();
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "name", width: 120 }],
+      rowData: rows,
+      pagination: false,
+      asyncTransactionWaitMillis: 10_000,
+      rowKey: (row) => row.id
+    });
+    const pending = api.rows.transactAsync({ update: [{ id: "1", name: "stale", qty: 10 }] });
+    const cancelled = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const snapshot = [{ id: "1", name: "current", qty: 20 }];
+    if (replace === "setData") api.rows.setData(snapshot);
+    else api.updateOptions({ rowData: snapshot });
+
+    const current = api.rows.transactAsync({ update: [{ id: "1", name: "current", qty: 30 }] });
+    api.rows.flushTransactions();
+    await Promise.all([cancelled, current]);
+    expect(api.rows.getById("1")?.data).toEqual({ id: "1", name: "current", qty: 30 });
+    api.destroy();
+  });
+
+  it("stops a flushing batch when a listener installs a new snapshot", async () => {
+    const api = createGrid<Row>(createHost(), {
+      columnDefs: [{ field: "name", width: 120 }],
+      rowData: rows,
+      asyncTransactionWaitMillis: 10_000,
+      rowKey: (row) => row.id
+    });
+    const remove = api.on("dirtyStateChanged", () => {
+      remove();
+      api.rows.setData([{ id: "1", name: "snapshot", qty: 30 }]);
+    });
+    const first = api.rows.transactAsync({ update: [{ id: "1", name: "first", qty: 10 }] });
+    const second = api.rows.transactAsync({ update: [{ id: "1", name: "second", qty: 20 }] });
+    const rejected = Promise.all([first, second].map((task) => expect(task).rejects.toMatchObject({ name: "AbortError" })));
+    api.rows.flushTransactions();
+    await rejected;
+    expect(api.rows.getById("1")?.data?.name).toBe("snapshot");
+    api.destroy();
+  });
 });
 
 describe("versioned grid state", () => {

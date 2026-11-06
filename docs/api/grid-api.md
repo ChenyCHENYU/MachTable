@@ -33,7 +33,7 @@ off();
 | --- | --- |
 | `setData(rows)` | 全量替换本地数据；稳定 `rowKey` 可保留选择语义 |
 | `transact({ add?, addIndex?, remove?, update? })` | 同步增量事务 |
-| `transactAsync(transaction, { signal? })` | 合并到异步事务队列，可取消 |
+| `transactAsync(transaction, { signal? })` | 合并到异步事务队列，可取消。全量替换数据后，旧队列事务结算为 `AbortError` |
 | `flushTransactions()` | 立即提交待处理异步事务 |
 | `getCount()` | 当前展示行数 |
 | `getAt(index)` / `getById(id)` | 按展示索引或稳定 ID 取 RowNode |
@@ -92,6 +92,8 @@ off();
 | `save(handler, rowIds?)` | 快照化保存，返回提交、成功、失败和冲突明细 |
 | `undo()` / `redo()` | 撤销/重做最近一次可逆编辑 |
 | `canUndo()` / `canRedo()` | 是否可撤销/重做 |
+
+通过增量事务更新或移除一行后，涉及该行的撤销和重做批次失效。一次粘贴或填充保持为一个批次，无关历史可继续使用。
 
 `save()` 返回：
 

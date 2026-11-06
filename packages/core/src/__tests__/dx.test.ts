@@ -239,6 +239,18 @@ describe("grid option validation", () => {
     ]));
   });
 
+  it("keeps the current body-height cap when a runtime patch supplies an invalid height", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const api = createGrid(createHost(), { columnDefs: [{ field: "id" }], rowData: rows, maxBodyHeight: 320 });
+    api.updateOptions({ maxBodyHeight: -1 });
+    expect(api.getOption("maxBodyHeight")).toBe(320);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("[mach-table:INVALID_OPTION_VALUE] maxBodyHeight"));
+    api.updateOptions({ maxBodyHeight: undefined });
+    expect(api.getOption("maxBodyHeight")).toBeUndefined();
+    api.destroy();
+    warning.mockRestore();
+  });
+
   it("warns once for dynamic JavaScript mistakes and respects suppressWarnings", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const api = createGrid(createHost(), {

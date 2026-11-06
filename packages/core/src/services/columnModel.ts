@@ -430,6 +430,14 @@ export class ColumnModel {
       c.hide = c.colDef.hide ?? false;
       c.pinned = definitionPin(c.colDef.pinned);
     }
+    if (this.preferredOrders.size) {
+      this.preferredOrders.clear();
+      // Restore the current schema's order without reapplying an initial sort.
+      const sorts = this.activeSorts;
+      this.setColumnDefs(this.sourceDefinitions);
+      this.activeSorts = sorts;
+      return;
+    }
     this.regroup();
   }
 

@@ -1,24 +1,22 @@
 import { EVENT_TYPES } from "../types/events";
 import type { GridOptions } from "../types/options";
-import {
-  GRID_OPTION_KINDS,
-  type GridOptionKey,
-  type GridOptionValueKind
-} from "./gridOptionMetadata";
+import { normalizeFinite } from "../lib/optionValues";
+import { GRID_OPTION_KINDS, type GridOptionKey } from "./gridOptionMetadata";
 
 export const EVENT_OPTION_KEYS = new Set(
   EVENT_TYPES.map((type) => `on${type.charAt(0).toUpperCase()}${type.slice(1)}`)
 );
 
-export function matchesGridOptionKind(value: unknown, kind: GridOptionValueKind): boolean {
+export function matchesGridOptionValue(key: GridOptionKey, value: unknown): boolean {
+  const kind = GRID_OPTION_KINDS[key];
   if (value == null || kind === "unknown") return true;
   if (kind === "array") return Array.isArray(value);
-  if (kind === "boolean-object") {
-    return typeof value === "boolean" || (typeof value === "object" && !Array.isArray(value));
+  if (kind === "number") return normalizeFinite(value, key === "maxBodyHeight" ? 1 : -Infinity) !== undefined;
+  if (kind === "boolean-object" && typeof value === "boolean") return true;
+  if (kind === "object-function" && typeof value === "function") return true;
+  if (kind === "object" || kind === "boolean-object" || kind === "object-function") {
+    return typeof value === "object" && !Array.isArray(value);
   }
-  if (kind === "object") return typeof value === "object" && !Array.isArray(value);
-  if (kind === "object-function") return typeof value === "function" || (typeof value === "object" && !Array.isArray(value));
-  if (kind === "number") return typeof value === "number" && Number.isFinite(value);
   return typeof value === kind;
 }
 
@@ -36,8 +34,7 @@ export function sanitizeGridOptionPatch<TData>(
       if (value == null || typeof value === "function") output[key] = value;
       continue;
     }
-    const kind = GRID_OPTION_KINDS[key as GridOptionKey];
-    if (!kind || !matchesGridOptionKind(value, kind)) continue;
+    if (!Object.prototype.hasOwnProperty.call(GRID_OPTION_KINDS, key) || !matchesGridOptionValue(key as GridOptionKey, value)) continue;
     output[key] = value;
   }
   return output;

@@ -130,6 +130,7 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
     columnLayout: options.columnLayout === "fit" ? "fit" as const : "normal" as const,
     enableColumnResize: options.enableColumnResize === true,
     domLayout: options.domLayout === "autoHeight" ? "autoHeight" as const : "normal" as const,
+    maxBodyHeight: normalizeFinite(options.maxBodyHeight, 1),
     rowSelection:
       options.rowSelection === "single" || options.rowSelection === "multiple"
         ? options.rowSelection
@@ -213,21 +214,45 @@ function resolveInteraction(options: GridOptions) {
   };
 }
 
+const BLOCK_CACHE_DEFAULTS = { blockSize: 100, maxBlocksInCache: 12, datasourceMaxConcurrentRequests: 4 };
+const DATASOURCE_SOFT_DEFAULTS = { infiniteBufferRows: 40, blockPrefetch: 1, datasourceRetryCount: 2, datasourceRetryDelay: 300 };
+const BLOCK_CACHE_KEYS = Object.keys(BLOCK_CACHE_DEFAULTS) as (keyof typeof BLOCK_CACHE_DEFAULTS)[];
+const DATASOURCE_SOFT_KEYS = Object.keys(DATASOURCE_SOFT_DEFAULTS) as (keyof typeof DATASOURCE_SOFT_DEFAULTS)[];
+type DatasourceTuning = typeof BLOCK_CACHE_DEFAULTS & typeof DATASOURCE_SOFT_DEFAULTS & { datasourceRetryJitter: number };
+
+function copyDatasourceIntegers(
+  options: Partial<DatasourceTuning>, target: DatasourceTuning,
+  keys: readonly (keyof DatasourceTuning)[], min: number
+): boolean {
+  let changed = false;
+  for (const key of keys) {
+    const value = normalizeFinite(options[key], min, true);
+    if (value === undefined || value === target[key]) continue;
+    target[key] = value;
+    changed = true;
+  }
+  return changed;
+}
+
+/** Normalize initial and updated options alike. Only cache geometry/concurrency restarts the block model. */
+export function updateDatasourceTuning(options: Partial<DatasourceTuning>, target: DatasourceTuning): boolean {
+  const cacheChanged = copyDatasourceIntegers(options, target, BLOCK_CACHE_KEYS, 1);
+  copyDatasourceIntegers(options, target, DATASOURCE_SOFT_KEYS, 0);
+  const retryJitter = normalizeFinite(options.datasourceRetryJitter, 0);
+  if (retryJitter !== undefined) target.datasourceRetryJitter = Math.min(1, retryJitter);
+  return cacheChanged;
+}
+
 function resolveDatasource(options: GridOptions) {
+  const tuning = { ...BLOCK_CACHE_DEFAULTS, ...DATASOURCE_SOFT_DEFAULTS, datasourceRetryJitter: 0.15 };
+  updateDatasourceTuning(options, tuning);
   return {
+    ...tuning,
     datasourceMode: options.datasourceMode === "block" ? "block" as const : "sequential" as const,
-    blockSize: finiteAtLeast(options.blockSize, 100, 1, true),
-    infiniteBufferRows: finiteAtLeast(options.infiniteBufferRows, 40, 0, true),
-    maxBlocksInCache: finiteAtLeast(options.maxBlocksInCache, 12, 1, true),
-    datasourceMaxConcurrentRequests: finiteAtLeast(options.datasourceMaxConcurrentRequests, 4, 1, true),
-    blockPrefetch: finiteAtLeast(options.blockPrefetch, 1, 0, true),
     datasourceRowCount: options.datasourceRowCount == null
       ? null
       : finiteAtLeast(options.datasourceRowCount, 0, 0, true),
-    dataProcessorMinRows: finiteAtLeast(options.dataProcessorMinRows, 5_000, 1, true),
-    datasourceRetryCount: finiteAtLeast(options.datasourceRetryCount, 2, 0, true),
-    datasourceRetryDelay: finiteAtLeast(options.datasourceRetryDelay, 300, 0, true),
-    datasourceRetryJitter: Math.min(1, finiteAtLeast(options.datasourceRetryJitter, 0.15, 0))
+    dataProcessorMinRows: finiteAtLeast(options.dataProcessorMinRows, 5_000, 1, true)
   };
 }
 

@@ -254,6 +254,27 @@ describe("watermark", () => {
 });
 
 describe("empty state", () => {
+  it("distinguishes local filtering from empty data and clears all filters with one event", () => {
+    const host = createHost();
+    const changed = vi.fn();
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "name", filter: "text" }],
+      rowData: makeRows(2), onFilterChanged: changed
+    });
+    api.filtering.setModel({ name: { type: "text", conditions: [{ match: "equals", value: "n0" }] } });
+    api.filtering.setQuickText("other");
+    expect(host.querySelector(".mach-empty__title")?.textContent).toBe("没有符合筛选条件的行");
+    changed.mockClear();
+    host.querySelector<HTMLButtonElement>(".mach-empty button")!.click();
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(api.filtering.isPresent()).toBe(false);
+    expect(host.querySelector(".mach-empty")).toBeNull();
+    api.rows.setData([]);
+    api.filtering.setQuickText("other");
+    expect(host.querySelector(".mach-empty__title")?.textContent).toBe("没有可显示的行");
+    expect(host.querySelector(".mach-empty button")).toBeNull();
+    api.destroy();
+  });
   it("shows built-in illustration with locale text", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

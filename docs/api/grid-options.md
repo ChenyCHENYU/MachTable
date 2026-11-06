@@ -45,12 +45,13 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 | `columnLayout` | `"normal" \| "fit"` | `"normal"` | `fit` 持续填满容器 |
 | `enableColumnResize` | `boolean` | `false` | 开启鼠标、触控、双击和键盘列宽调整 |
 | `domLayout` | `"normal" \| "autoHeight"` | `"normal"` | 自动高度只用于小型本地表 |
+| `maxBodyHeight` | `number` | 未设上限 | 自动高度模式下表体的像素上限，超过后虚拟滚动 |
 | `rowStyleRules` | `readonly RowStyleRule<T>[]` | `[]` | 条件整行颜色，首条命中；见[行外观配方](/recipes/row-presentation) |
 | `stripedRows` | `boolean` | `false` | 斑马纹 |
 | `showCellBorders` | `boolean` | `false` | 纵向单元格边框 |
 | `className` | `string` | `""` | Core 根元素附加类名 |
 
-默认虚拟布局的宿主必须有明确高度。`autoHeight` 会渲染全部本地行，不能与 `datasource` 混用。
+默认虚拟布局的宿主必须有明确高度。`autoHeight` 用于本地数据，不能与 `datasource` 混用。设置 `maxBodyHeight` 后，当前页表体超过上限会启用虚拟滚动。表头、固定行和分页区的高度另计。
 
 小型明细表设置 `domLayout: "autoHeight"` 后，宿主保持自然高度即可；行数减少或切到较短的分页时会随内容收起。空态、加载态和错误态预留 180px 的最小展示空间，可通过 `--mach-overlay-min-height` 局部覆盖，恢复数据后会释放这段高度。表格外侧留白由页面容器的 `padding-bottom` 控制，例如 `8px`；大数据表保持明确高度和默认虚拟布局。
 

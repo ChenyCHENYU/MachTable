@@ -69,7 +69,7 @@ export interface UseMachTableQueryReturn<TData> {
   filterModel: FilterModel;
   advancedFilterModel: AdvancedFilterModel | null;
   quickFilterText: string | null;
-  setQuickFilterText(value: string | null): void;
+  setQuickFilterText: (value: string | null) => void;
   selectedKeys: string[];
   selectedRows: TData[];
   selectionState: MachTableRemoteSelectionState;
@@ -112,7 +112,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const [sortModel, setSortModel] = useState<SortModel>([]);
   const [filterModel, setFilterModel] = useState<FilterModel>({});
   const [advancedFilterModel, setAdvancedFilterModel] = useState<AdvancedFilterModel | null>(null);
-  const [quickFilterText, setQuickFilterText] = useState<string | null>(options.initialQuickFilterText ?? null);
+  const [quickFilterText, setQuickFilterState] = useState<string | null>(options.initialQuickFilterText ?? null);
   const [, refreshSelection] = useReducer((value: number) => value + 1, 0);
   const stateRef = useRef({ page, pageSize, sortModel, filterModel, advancedFilterModel, quickFilterText, rows });
   stateRef.current = { page, pageSize, sortModel, filterModel, advancedFilterModel, quickFilterText, rows };
@@ -275,6 +275,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   }, [scheduleLoad]);
   const onFilterChanged = useCallback((event: FilterChangedEvent<TData>): void => {
     if (suppressGrid.current) return;
+    // Commands can change filters before the gridReady animation frame.
+    apiRef.current = event.api;
     const next = { ...event.filterModel };
     stateRef.current.filterModel = next;
     const advanced = normalizeAdvancedFilterModel(event.advancedFilterModel);
@@ -282,7 +284,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     stateRef.current.quickFilterText = event.api.filtering.getQuickText();
     setFilterModel(next);
     setAdvancedFilterModel(advanced);
-    setQuickFilterText(stateRef.current.quickFilterText);
+    setQuickFilterState(stateRef.current.quickFilterText);
     if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
     if (optionsRef.current.mode !== "manual") scheduleLoad(true);
     else { stateRef.current.page = 1; setPage(1); }
@@ -318,7 +320,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     stateRef.current.filterModel = {};
     stateRef.current.advancedFilterModel = null;
     stateRef.current.quickFilterText = null;
-    setPage(1); setSortModel([]); setFilterModel({}); setAdvancedFilterModel(null); setQuickFilterText(null); clearSelection();
+    setPage(1); setSortModel([]); setFilterModel({}); setAdvancedFilterModel(null); setQuickFilterState(null); clearSelection();
     suppressGrid.current = true;
     try {
       apiRef.current?.sorting.setModel(null);
@@ -329,6 +331,17 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     finally { suppressGrid.current = false; }
     await load();
   }, [clearSelection, load]);
+  const setQuickFilterText = useCallback((value: string | null): void => {
+    if (stateRef.current.quickFilterText === value) return;
+    stateRef.current.quickFilterText = value;
+    setQuickFilterState(value);
+    suppressGrid.current = true;
+    try { apiRef.current?.filtering.setQuickText(value); }
+    finally { suppressGrid.current = false; }
+    if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
+    if (optionsRef.current.mode !== "manual") scheduleLoad(true);
+    else { stateRef.current.page = 1; setPage(1); }
+  }, [clearSelection, scheduleLoad]);
   const selectAllMatching = useCallback((): void => {
     allMatching.current = true; selectedIds.current.clear(); excludedIds.current.clear(); selectedById.current.clear();
     for (const row of stateRef.current.rows) selectedById.current.set(rowId(row), row);
@@ -399,18 +412,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
 
   return {
     rows, loading, error, page, pageSize, total, sortModel, filterModel, advancedFilterModel,
-    quickFilterText,
-    setQuickFilterText(value) {
-      if (stateRef.current.quickFilterText === value) return;
-      stateRef.current.quickFilterText = value;
-      setQuickFilterText(value);
-      suppressGrid.current = true;
-      try { apiRef.current?.filtering.setQuickText(value); }
-      finally { suppressGrid.current = false; }
-      if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
-      if (optionsRef.current.mode !== "manual") scheduleLoad(true);
-      else { stateRef.current.page = 1; setPage(1); }
-    },
+    quickFilterText, setQuickFilterText,
     selectedKeys, selectedRows, selectionState, bindings,
     reload, retry: load, reset, abort, clearSelection, selectAllMatching, applySelectionState
   };

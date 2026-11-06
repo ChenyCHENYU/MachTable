@@ -96,9 +96,10 @@ export class ContextMenuService {
         this.close();
       }));
     };
-    appendAction("menuCopy", () => void core.copyActiveRange());
-    if (core.gridOptions.suppressClipboard) return;
-    appendAction("menuPaste", () => void core.pasteFromSystemClipboard());
+    if (!core.gridOptions.suppressClipboard) {
+      appendAction("menuCopy", () => void core.copyActiveRange());
+      appendAction("menuPaste", () => void core.pasteFromSystemClipboard());
+    }
     appendAction("menuClearContents", () => {
       const active = core.bodyRenderer.getNormalizedRangeOrFocus();
       if (active) core.clearRangeValues(active);

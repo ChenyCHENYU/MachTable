@@ -10,6 +10,7 @@ import { ColumnDragService } from "../services/columnDragService";
 import { KeyboardService } from "../services/keyboardService";
 import { EditingService } from "../services/editingService";
 import { InputService, type InputChange } from "../services/inputService";
+import type { NormalizedRange } from "../services/rangeSelectionModel";
 import { parseColumnValue, serializeColumnValue } from "../lib/columnValues";
 import { coerceImportedValue } from "../lib/numericText";
 import { FilterPopupService } from "../services/filterPopup";
@@ -448,7 +449,29 @@ export class GridCore<TData = any> {
 
   clearRangeValues(range: { r1: number; c1: number; r2: number; c2: number }): void {
     if (this.disposedState) return;
-    const flat = this.columnModel.getOrderedVisible();
+    this.applyInputChanges(this.collectClearChanges(range, this.columnModel.getOrderedVisible()));
+  }
+
+  async cutRangeToClipboard(range: NormalizedRange, text: string): Promise<void> {
+    const { bodyRenderer: body, columnModel, rowModel } = this;
+    const current = this.inputService.beginIntent();
+    const revision = rowModel.getDisplayRevision();
+    const focus = body.focusedCell;
+    const selection = body.normalizedRange();
+    const columns = columnModel.getOrderedVisible();
+    const changes = this.collectClearChanges(range, columns);
+    const data = changes.map(({ node }) => node.data);
+    if (!await writeClipboard(text) || !current() || this.gridOptions.suppressClipboard ||
+      revision !== rowModel.getDisplayRevision() || focus !== body.focusedCell || selection !== body.normalizedRange()) return;
+
+    const visible = columnModel.getOrderedVisible();
+    // A delayed write must never clear new data or a different set of columns.
+    if (columns.slice(range.c1, range.c2 + 1).some((column, index) => column !== visible[range.c1 + index])) return;
+    if (changes.every(({ node, column, oldValue }, index) => node.data === data[index] &&
+      Object.is(this.readCellValue(node, column), oldValue))) this.applyInputChanges(changes);
+  }
+
+  private collectClearChanges(range: NormalizedRange, flat: Column[]): InputChange[] {
     const changes: InputChange[] = [];
     for (let r = range.r1; r <= range.r2; r++) {
       const node = this.rowModel.getDisplayedRow(r);
@@ -459,7 +482,7 @@ export class GridCore<TData = any> {
         changes.push({ node, column, oldValue: this.readCellValue(node, column), newValue: null });
       }
     }
-    this.applyInputChanges(changes);
+    return changes;
   }
 
   /** User input is validated here; trusted data transactions and undo replay stay separate. */
@@ -653,20 +676,11 @@ export class GridCore<TData = any> {
     if (filter) model[column.id] = filter;
     else delete model[column.id];
     this.rowModel.setFilterModel(model);
-    this.headerRenderer.refreshFilterIcons();
-    this.emit("filterChanged", {
-      filterModel: this.rowModel.getFilterModel(),
-      advancedFilterModel: this.rowModel.getAdvancedFilterModel()
-    });
-    if (this.rowModel.isInfinite) {
-      void this.rowModel.onServerParamsChanged();
-      return;
-    }
-    this.rowModel.refreshPipeline();
-    this.requestUpdate({ data: true });
+    this.applyFilterModel();
   }
 
-  applyQuickFilter(): void {
+  applyFilterModel(): void {
+    this.headerRenderer.refreshFilterIcons();
     this.emit("filterChanged", {
       filterModel: this.rowModel.getFilterModel(),
       advancedFilterModel: this.rowModel.getAdvancedFilterModel()
@@ -849,11 +863,31 @@ export class GridCore<TData = any> {
     // Static library-owned SVG only; locale strings stay on textContent below.
     empty.innerHTML = '<svg class="mach-empty__icon" viewBox="0 0 96 84" aria-hidden="true"><rect stroke-opacity=".3" x="8" y="6" width="76" height="66" rx="9"/><path fill="#8b98ff" opacity=".12" stroke="none" d="M17 6H75Q84 6 84 15V26H8V15Q8 6 17 6Z"/><path stroke="var(--mach-body-fg)" opacity=".06" d="M8 26h76M38 26v46M61 26v46M8 42h76M8 57h76"/><path stroke-width="5" opacity=".5" d="M19 15h12m17 0h7m15 0h7"/><path stroke="var(--mach-body-fg)" opacity=".06" stroke-width="4" d="M19 34h12m14 0h8m15 0h8M19 49h12m14 0h8m15 0h8M19 64h12m14 0h8"/><circle stroke-opacity=".3" cx="72" cy="55" r="19"/><circle cx="70" cy="53" r="9"/><path d="m77 60 6 6m-16-16 6 6m0-6-6 6"/></svg>';
 
+    const { locale, manualFiltering } = this.gridOptions;
+    const filtered = !manualFiltering && !this.rowModel.isInfinite &&
+      this.rowModel.getAllNodes().length > 0 && this.rowModel.isFilterPresent();
     const titleEl = el("div", "mach-empty__title");
-    titleEl.textContent = this.getLocaleText("emptyRows");
+    titleEl.textContent = filtered
+      ? locale.noMatchingRows ?? locale.emptyRows ?? this.getLocaleText("noMatchingRows")
+      : this.getLocaleText("emptyRows");
     const hintEl = el("div", "mach-empty__hint");
     hintEl.textContent = this.getLocaleText("emptyRowsHint");
-    empty.append(titleEl, hintEl);
+    empty.append(titleEl);
+    if (!filtered || locale.emptyRowsHint) empty.append(hintEl);
+    if (filtered) {
+      const reset = el("button", "mach-toolbar__select-host");
+      reset.type = "button";
+      reset.textContent = this.getLocaleText("clearFilters");
+      reset.onclick = () => {
+        this.rowModel.setFilterModel({});
+        this.rowModel.setAdvancedFilterModel(null);
+        this.rowModel.setQuickFilter(null);
+        this.gridOptions.quickFilterText = null;
+        this.applyFilterModel();
+        this.skeleton.root.focus({ preventScroll: true });
+      };
+      empty.append(reset);
+    }
     return empty;
   }
 
@@ -922,7 +956,8 @@ export class GridCore<TData = any> {
 
   private refreshContentLayout(request: GridUpdateRequest): void {
     if (!(request.data || request.cells) || request.layout || request.columns || request.pool) return;
-    if (this.columnSizing.updateContentWidths()) this.relayoutColumns();
+    const scope = request.data || request.cells === true ? undefined : request.cells;
+    if (this.columnSizing.updateContentWidths(scope)) this.relayoutColumns();
   }
 
   private applyColumnsStructureChanged(): void {
