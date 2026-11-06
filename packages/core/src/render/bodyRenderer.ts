@@ -793,6 +793,7 @@ export class BodyRenderer {
   private renderAutoHeightRange(rowCount: number, force: boolean, columnsChanged: boolean): boolean {
     if (this.core.gridOptions.domLayout !== "autoHeight") return false;
     if (!force && !columnsChanged && this.firstRenderedRow === 0 && this.renderedRowEndExclusive === rowCount) return true;
+    if (rowCount < this.renderedRowEndExclusive) this.hideOutsideRange(0, rowCount);
     this.firstRenderedRow = 0;
     this.renderedRowEndExclusive = rowCount;
     this.renderVirtualRange(0, rowCount, force, columnsChanged);

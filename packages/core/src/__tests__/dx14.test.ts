@@ -117,6 +117,38 @@ describe("0.14 progressive DX", () => {
     api.destroy();
   });
 
+  it("autoHeight removes stale rows from every pane when a nonempty data set shrinks", () => {
+    const root = host();
+    const api = createGrid(root, {
+      columnDefs: [
+        { field: "id", pinned: "left" },
+        { field: "name" },
+        { field: "profile.code", pinned: "right" },
+      ],
+      rowData: rows,
+      rowKey: "id",
+      pagination: false,
+      domLayout: "autoHeight",
+      getRowHeight: ({ data }) => (data?.id === "b" ? 48 : 36),
+    });
+    const rowIds = (pane: string) =>
+      [...root.querySelectorAll<HTMLElement>(`.mach-pane--${pane} .mach-row[data-id]`)]
+        .map((row) => row.dataset.id);
+    const panes = ["left", "center", "right"];
+    const body = root.querySelector<HTMLElement>(".mach-body")!;
+    for (const pane of panes) expect(rowIds(pane)).toEqual(["a", "b", "c"]);
+    expect(body.style.height).toBe("120px");
+
+    api.rows.setData(rows.slice(1, 2));
+    for (const pane of panes) expect(rowIds(pane)).toEqual(["b"]);
+    expect(body.style.height).toBe("48px");
+
+    api.rows.setData(rows);
+    for (const pane of panes) expect(rowIds(pane)).toEqual(["a", "b", "c"]);
+    expect(body.style.height).toBe("120px");
+    api.destroy();
+  });
+
   it("autoHeight releases overlay sizing after empty, loading and error states recover", () => {
     const root = host();
     const api = createGrid(root, {
