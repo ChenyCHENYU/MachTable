@@ -3,10 +3,17 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.38.0
+pnpm up @agile-team/mach-table-vue@^0.39.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.38.0
+pnpm up @agile-team/mach-table-react@^0.39.0
 ```
+
+## 0.38 → 0.39
+
+- 本地明细可用 `domLayout: "autoHeight", maxBodyHeight: 330` 随内容收起，超过表体上限时进入虚拟滚动。异步增加或减少行数会在同一实例中更新。
+- `rows.setData()` 切换数据快照后，旧的 `rows.transactAsync()` 以 `AbortError` 结束。通过外部事务替换或移除一行时，涉及该行的撤销批次失效。
+- Vue 和 React 的远程查询控制器同步工具栏、Grid API 和请求条件。原来的搜索与重置入口继续适用。
+- 本地筛选无结果时，默认空态显示清除操作。应用自定义空态仍然优先。
 
 ## 0.37 → 0.38
 

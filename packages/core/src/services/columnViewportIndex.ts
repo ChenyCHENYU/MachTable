@@ -1,22 +1,11 @@
 import type { Column } from "./column";
 
-function upperBound(values: Float64Array, target: number): number {
+function findBoundary(values: Float64Array, target: number, afterEqual = false): number {
   let low = 0;
   let high = values.length;
   while (low < high) {
     const middle = (low + high) >> 1;
-    if (values[middle] <= target) low = middle + 1;
-    else high = middle;
-  }
-  return low;
-}
-
-function lowerBound(values: Float64Array, target: number): number {
-  let low = 0;
-  let high = values.length;
-  while (low < high) {
-    const middle = (low + high) >> 1;
-    if (values[middle] < target) low = middle + 1;
+    if (values[middle] < target || (afterEqual && values[middle] === target)) low = middle + 1;
     else high = middle;
   }
   return low;
@@ -56,7 +45,7 @@ export class ColumnViewportIndex {
   indexAt(offset: number): number {
     const count = Math.max(0, this.columnStartOffsets.length - 1);
     if (count === 0) return -1;
-    return Math.min(count - 1, Math.max(0, upperBound(this.columnStartOffsets, Math.max(0, offset)) - 1));
+    return Math.min(count - 1, Math.max(0, findBoundary(this.columnStartOffsets, Math.max(0, offset), true) - 1));
   }
 
   visibleRange(scrollLeft: number, viewportWidth: number, overscan = 2): { first: number; lastExcl: number } {
@@ -66,11 +55,21 @@ export class ColumnViewportIndex {
     }
     const left = Math.max(0, scrollLeft);
     const right = left + viewportWidth;
-    const firstVisible = Math.max(0, upperBound(this.columnStartOffsets, left) - 1);
-    const lastVisible = Math.min(count, lowerBound(this.columnStartOffsets, right));
+    const firstVisible = Math.max(0, findBoundary(this.columnStartOffsets, left, true) - 1);
+    const lastVisible = Math.min(count, findBoundary(this.columnStartOffsets, right));
     return {
       first: Math.max(0, firstVisible - overscan),
       lastExcl: Math.min(count, lastVisible + overscan)
     };
+  }
+
+  scrollColumnIntoView(viewport: HTMLElement, columns: readonly Column[], column: Column): void {
+    const index = columns.indexOf(column);
+    if (index < 0) return;
+    this.update(columns);
+    const left = this.offsetAt(index);
+    const right = left + column.currentWidth;
+    if (left < viewport.scrollLeft) viewport.scrollLeft = left;
+    else if (right > viewport.scrollLeft + viewport.clientWidth) viewport.scrollLeft = right - viewport.clientWidth;
   }
 }

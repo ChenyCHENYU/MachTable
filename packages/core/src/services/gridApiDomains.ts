@@ -12,6 +12,7 @@ import type {
   GridStateApi,
   GridViewApi
 } from "../types/api";
+import { showGridOverlay } from "../render/skeleton";
 import type { GridCore } from "../core/gridCore";
 import type { GridApiImpl } from "./gridApi";
 
@@ -70,9 +71,9 @@ export function createGridSelectionApi<TData>(api: GridApiImpl<TData>, core: Gri
     getNodes: () => core.selectionService.getSelectedNodes(),
     getIds: () => core.selectionService.getSelectedIds(),
     setRows: (rows, clearOthers) => api.setSelection(rows, clearOthers),
-    setById: (nodeId, selected, clearOthers) => api.selectNodeById(nodeId, selected, clearOthers),
-    selectAll: (filteredOnly) => api.selectAll(filteredOnly),
-    clear: () => api.deselectAll(),
+    setById: (nodeId, selected, clearOthers) => core.selectionService.selectNodeById(nodeId, selected, clearOthers),
+    selectAll: (filteredOnly) => core.selectionService.selectAll(filteredOnly),
+    clear: () => core.selectionService.deselectAll(),
     getMode: () => core.gridOptions.rowSelection,
     setMode: (mode) => api.setRowSelection(mode),
     getRange: () => core.bodyRenderer.getRangeSelection(),
@@ -147,7 +148,7 @@ export function createGridPaginationApi<TData>(_api: GridApiImpl<TData>, core: G
   };
 }
 
-export function createGridHierarchyApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridHierarchyApi<TData> {
+export function createGridHierarchyApi<TData>(_api: GridApiImpl<TData>, core: GridCore<TData>): GridHierarchyApi<TData> {
   return {
     isRowExpanded: (rowId) => core.rowModel.isRowExpanded(rowId),
     setRowExpanded: (rowId, expanded) => {
@@ -156,8 +157,10 @@ export function createGridHierarchyApi<TData>(api: GridApiImpl<TData>, core: Gri
       else core.rowModel.collapseRow(rowId);
       return core.rowModel.isRowExpanded(rowId) === expanded;
     },
-    isTreeRowLoading: (rowId) => api.isTreeRowLoading(rowId),
-    loadTreeChildren: (rowId, options) => api.loadTreeChildren(rowId, options),
+    isTreeRowLoading: (rowId) => !core.isDisposed() && core.rowModel.isTreeRowLoading(rowId),
+    loadTreeChildren: (rowId, options) => core.isDisposed()
+      ? Promise.resolve([])
+      : core.rowModel.loadTreeChildren(rowId, options?.force === true),
     isGroupExpanded: (groupId) => core.rowModel.isGroupExpanded(groupId),
     setGroupExpanded: (groupId, expanded) => {
       if (core.isDisposed() || core.rowModel.isGroupExpanded(groupId) === expanded) return false;
@@ -165,14 +168,10 @@ export function createGridHierarchyApi<TData>(api: GridApiImpl<TData>, core: Gri
       return core.rowModel.isGroupExpanded(groupId) === expanded;
     },
     setAllGroupsExpanded: (expanded) => {
-      if (core.isDisposed()) return;
-      if (expanded) core.rowModel.expandAllGroups();
-      else core.rowModel.collapseAllGroups();
+      if (!core.isDisposed()) core.rowModel.setAllGroupsExpanded(expanded);
     },
     setAllDetailsExpanded: (expanded) => {
-      if (core.isDisposed()) return;
-      if (expanded) core.rowModel.expandAllDetails();
-      else core.rowModel.collapseAllDetails();
+      if (!core.isDisposed()) core.rowModel.setAllDetailsExpanded(expanded);
     }
   };
 }
@@ -180,11 +179,11 @@ export function createGridHierarchyApi<TData>(api: GridApiImpl<TData>, core: Gri
 export function createGridViewApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridViewApi<TData> {
   return {
     getRoot: () => core.isDisposed() ? null : core.skeleton.root,
-    scrollToRow: (index, position) => api.scrollToIndex(index, position),
+    scrollToRow: (index, position) => core.bodyRenderer.scrollToIndex(index, position),
     refreshCells: (params) => api.refreshCells(params),
     refreshLayout: () => api.refreshLayout(),
     flush: () => core.updateScheduler.flush(),
-    setOverlay: (type) => api.setOverlay(type),
+    setOverlay: (type) => showGridOverlay(core, type),
     getPinnedRows: (position) => core.pinnedRowsRenderer.getRows(position),
     setPinnedRows: (position, rows) => api.setPinnedRows(position, rows)
   };

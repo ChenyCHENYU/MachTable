@@ -3,12 +3,11 @@ import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type {
   ColumnFilter,
-  DateFilterCondition,
   DateFilterMatch,
   NumberFilterMatch,
   TextFilterMatch
 } from "../types/colDef";
-import { applyPortalTheme, el, positionAnchoredPortal, textButton } from "../lib/dom";
+import { applyPortalTheme, bindListeners, el, positionAnchoredPortal, textButton } from "../lib/dom";
 import { matchLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
@@ -49,19 +48,19 @@ export class FilterPopupService {
   private docMouseDown = (e: MouseEvent): void => {
     if (!this.panel) return;
     const target = e.target as Node;
-    if (!this.panel.contains(target) && !this.conditionSelect?.contains(target)) {
+    if (this.conditionSelect?.contains(target)) return;
+    if (!this.panel.contains(target)) {
       this.close();
       return;
     }
-    if (this.conditionSelect?.contains(target)) return;
     if (!(target instanceof Element) || !target.closest(".mach-filter-select-control")) {
-      this.closeConditionListbox();
+      this.conditionSelect?.close();
     }
   };
 
   private docKeyDown = (e: KeyboardEvent): void => {
     if (e.key !== "Escape") return;
-    if (this.closeConditionListbox(true)) {
+    if (this.conditionSelect?.close(true)) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -98,8 +97,7 @@ export class FilterPopupService {
 
     positionAnchoredPortal(panel, anchor);
 
-    document.addEventListener("mousedown", this.docMouseDown, true);
-    document.addEventListener("keydown", this.docKeyDown, true);
+    this.bindDocument(true);
     const firstInput = panel.querySelector<HTMLElement>(".mach-filter-select-trigger, input");
     firstInput?.focus();
   }
@@ -111,8 +109,11 @@ export class FilterPopupService {
     this.panel.remove();
     this.panel = null;
     this.openColId = null;
-    document.removeEventListener("mousedown", this.docMouseDown, true);
-    document.removeEventListener("keydown", this.docKeyDown, true);
+    this.bindDocument(false);
+  }
+
+  private bindDocument(active: boolean): void {
+    bindListeners(document, active, { mousedown: this.docMouseDown, keydown: this.docKeyDown }, true);
   }
 
   destroy(): void {
@@ -173,15 +174,10 @@ export class FilterPopupService {
     return control;
   }
 
-  private closeConditionListbox(restoreFocus = false): boolean {
-    return this.conditionSelect?.close(restoreFocus) ?? false;
-  }
-
   private createConditionInput(type: ConditionFilterType, second = false): HTMLInputElement {
     const className = `mach-filter-input${second ? " mach-filter-input--second" : ""}`;
     const input = el("input", className);
-    if (type === "number") input.type = "number";
-    if (type === "date") input.type = "date";
+    input.type = type;
     return input;
   }
 
@@ -231,7 +227,7 @@ export class FilterPopupService {
     }
 
     const selected = new Set<string>(
-      filter?.type === "set" ? filter.values.map(setValueKey) : values.map(setValueKey)
+      (filter?.type === "set" ? filter.values : values).map(setValueKey)
     );
 
     const search = el("input", "mach-filter-input mach-filter-input--search");
@@ -279,28 +275,18 @@ export class FilterPopupService {
 
   private readConditionFilter(type: ConditionFilterType, match: string, raw: string, end: string): ColumnFilter | null {
     if (isBlankMatch(match)) {
-      return { type, conditions: [{ match: match }] } as ColumnFilter;
+      return { type, conditions: [{ match }] } as ColumnFilter;
     }
     if (raw === "" && match !== "inRange") return null;
-    if (type === "number") return this.readNumberFilter(match, raw, end);
-    if (type === "date") {
-      const condition: DateFilterCondition = match === "inRange"
-        ? { match, value: raw, value2: end || raw }
-        : { match: match as DateFilterMatch, value: raw };
-      return { type, conditions: [condition] };
-    }
-    return { type: "text", conditions: [{ match: match as TextFilterMatch, value: raw }] };
-  }
-
-  private readNumberFilter(match: string, raw: string, end: string): ColumnFilter | null {
-    const value = Number(raw);
+    const number = type === "number";
+    const value = number ? Number(raw) : raw;
     if (Number.isNaN(value)) return null;
-    if (match !== "inRange") {
-      return { type: "number", conditions: [{ match: match as NumberFilterMatch, value }] };
+    if (type === "text" || match !== "inRange") {
+      return { type, conditions: [{ match, value }] } as ColumnFilter;
     }
-    const value2 = end ? Number(end) : value;
+    const value2 = end ? (number ? Number(end) : end) : value;
     if (Number.isNaN(value2)) return null;
-    return { type: "number", conditions: [{ match: "inRange", value, value2 }] };
+    return { type, conditions: [{ match, value, value2 }] } as ColumnFilter;
   }
 
 }

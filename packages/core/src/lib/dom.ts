@@ -25,6 +25,21 @@ export function textButton(className: string, label: string, action: () => void)
   return button;
 }
 
+/** Keep the same handler identities and capture mode at both ends of an interaction. */
+export function bindListeners(
+  target: EventTarget,
+  active: boolean,
+  handlers: Record<string, (event: never) => void>,
+  capture = false
+): void {
+  const method = active ? "addEventListener" : "removeEventListener";
+  for (const [event, handler] of Object.entries(handlers)) target[method](event, handler as EventListener, capture);
+}
+
+export function bindDismissListeners(active: boolean, mouseDown: (event: MouseEvent) => void, keyDown: (event: KeyboardEvent) => void): void {
+  bindListeners(document, active, { mousedown: mouseDown, keydown: keyDown }, true);
+}
+
 /** Keeps body-mounted overlays visually scoped to their owning grid instance. */
 export function applyPortalTheme(portal: HTMLElement, source: HTMLElement | null): void {
   portal.classList.add("mach-portal");

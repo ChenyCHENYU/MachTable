@@ -1,3 +1,4 @@
+import type { GridUpdateRequest } from "./updateScheduler";
 import type { GridCore } from "../core/gridCore";
 import { attachAdapterLifecycle } from "../lib/adapterLifecycle";
 import { attachImportContext, getImportContext } from "../lib/importContext";
@@ -24,7 +25,6 @@ import { serializeColumnValue } from "../lib/columnValues";
 import { clipboardText, parseCsv } from "../lib/clipboard";
 import { escapeHtml } from "../lib/download";
 import { formatCellValue } from "../render/cellContent";
-import { showGridOverlay } from "../render/skeleton";
 import { sanitizeGridOptionPatch } from "../core/gridOptionRuntime";
 import { normalizeGridState } from "../lib/gridState";
 import { copyOptions, normalizeFinite, normalizePersistence } from "../lib/optionValues";
@@ -46,18 +46,14 @@ import {
   createGridViewApi
 } from "./gridApiDomains";
 
-interface OptionUpdateEffects {
+interface OptionUpdateEffects extends Pick<GridUpdateRequest, "header" | "pool" | "layout" | "summary" | "overlays"> {
+  cells?: true;
   columnDefsChanged?: boolean;
   datasourceChanged?: boolean;
   filterChanged?: boolean;
-  needsCellRefresh?: boolean;
   needsColumnRebuild?: boolean;
-  needsHeaderRebuild?: boolean;
-  needsPoolRebuild?: boolean;
-  needsRelayout?: boolean;
   needsRowRebuild?: boolean;
   needsStateLoad?: boolean;
-  needsSummaryRefresh?: boolean;
   needsFeatureReload?: boolean;
   stateToApply?: GridStateInput;
 }
@@ -92,6 +88,15 @@ function changedFinite(
 ): number | undefined {
   const normalized = normalizeFinite(value, min, integer);
   return normalized === undefined || normalized === current ? undefined : normalized;
+}
+
+function copyChangedOption<T extends object, K extends keyof T>(
+  source: T, target: Pick<T, K>, key: K
+): boolean {
+  const value = source[key];
+  if (value == null || value === target[key]) return false;
+  target[key] = value;
+  return true;
 }
 
 /** @internal Only the domain facade, never this implementation instance, crosses the package boundary. */
@@ -150,11 +155,16 @@ export class GridApiImpl<TData = any> {
     return promise;
   }
 
-  flushAsyncTransactions(): void {
+  private takeAsyncTransactions(): AsyncTransactionEntry<TData>[] {
     if (this.asyncTransactionTimer != null) clearTimeout(this.asyncTransactionTimer);
     this.asyncTransactionTimer = null;
     const entries = this.asyncTransactions;
     this.asyncTransactions = [];
+    return entries;
+  }
+
+  flushAsyncTransactions(): void {
+    const entries = this.takeAsyncTransactions();
     const model = this.core.rowModel;
     const revision = model.getDataRevision();
     const transactions = entries.filter((entry) => !entry.aborted && entry.revision === revision)
@@ -221,8 +231,7 @@ export class GridApiImpl<TData = any> {
     if (this.core.isDisposed()) return false;
     const column = this.core.columnModel.getColumn(colId);
     if (!column || !this.core.columnModel.setColumnWidth(column, width)) return false;
-    this.core.relayoutColumns();
-    this.core.commitColumnWidths([column]);
+    this.commitColumnWidths([column]);
     return true;
   }
 
@@ -242,8 +251,7 @@ export class GridApiImpl<TData = any> {
     const changed = cols.filter((col, index) => responsive
       ? this.core.columnModel.setContentWidth(col, fitted[index])
       : this.core.columnModel.setColumnWidth(col, fitted[index]));
-    this.core.relayoutColumns();
-    this.core.commitColumnWidths(changed);
+    this.commitColumnWidths(changed);
   }
 
   autoSizeColumn(colId: string): void {
@@ -251,10 +259,7 @@ export class GridApiImpl<TData = any> {
     const column = this.core.columnModel.getColumn(colId);
     if (!column) return;
 
-    if (this.autoSizeColumnInternal(column)) {
-      this.core.relayoutColumns();
-      this.core.commitColumnWidths([column]);
-    }
+    if (this.autoSizeColumnInternal(column)) this.commitColumnWidths([column]);
   }
 
   private autoSizeColumnInternal(column: Column<TData>): boolean {
@@ -279,10 +284,12 @@ export class GridApiImpl<TData = any> {
     for (const col of this.core.columnModel.getOrderedVisible()) {
       if (this.autoSizeColumnInternal(col)) changed.push(col);
     }
-    if (changed.length > 0) {
-      this.core.relayoutColumns();
-      this.core.commitColumnWidths(changed);
-    }
+    if (changed.length > 0) this.commitColumnWidths(changed);
+  }
+
+  private commitColumnWidths(columns: Column<TData>[]): void {
+    this.core.relayoutColumns();
+    this.core.commitColumnWidths(columns);
   }
 
   setSortModel(sortModel: SortModel | null): void {
@@ -302,13 +309,6 @@ export class GridApiImpl<TData = any> {
     this.core.applyFilterModel();
   }
 
-  private emitFilterChanged(persist = true): void {
-    this.core.emit("filterChanged", {
-      filterModel: this.core.rowModel.getFilterModel(),
-      advancedFilterModel: this.core.rowModel.getAdvancedFilterModel()
-    }, persist);
-  }
-
   setQuickFilter(text: string | null | undefined): void {
     if (this.core.isDisposed()) return;
     this.core.gridOptions.quickFilterText = text != null && text.trim() !== "" ? text : null;
@@ -321,34 +321,9 @@ export class GridApiImpl<TData = any> {
     if (this.core.isDisposed()) return;
     if (this.core.gridOptions.rowSelection === mode) return;
     this.core.gridOptions.rowSelection = mode;
-    if (mode === "none") this.deselectAll();
+    if (mode === "none") this.core.selectionService.deselectAll();
     this.core.headerRenderer.build();
     this.core.bodyRenderer.rebuildPool();
-  }
-
-  selectNodeById(nodeId: string, selected = true, clearOthers = true): void {
-    this.core.selectionService.selectNodeById(nodeId, selected, clearOthers);
-  }
-
-  selectAll(filteredOnly = true): void {
-    this.core.selectionService.selectAll(filteredOnly);
-  }
-
-  deselectAll(): void {
-    this.core.selectionService.deselectAll();
-  }
-
-  scrollToIndex(rowIndex: number, position: "top" | "bottom" | "middle" | "nearest" = "top"): void {
-    this.core.bodyRenderer.scrollToIndex(rowIndex, position);
-  }
-
-  loadTreeChildren(rowId: string, options: { force?: boolean } = {}): Promise<readonly TData[]> {
-    if (this.core.isDisposed()) return Promise.resolve([]);
-    return this.core.rowModel.loadTreeChildren(rowId, options.force === true);
-  }
-
-  isTreeRowLoading(rowId: string): boolean {
-    return !this.core.isDisposed() && this.core.rowModel.isTreeRowLoading(rowId);
   }
 
   setSelection(rows: TData[], clearOthers = true): void {
@@ -366,7 +341,7 @@ export class GridApiImpl<TData = any> {
     if (changes.length > 0) {
       this.core.selectionService.applySelectionPublic(changes, clearOthers);
     } else if (clearOthers) {
-      this.deselectAll();
+      this.core.selectionService.deselectAll();
     }
   }
 
@@ -433,8 +408,7 @@ export class GridApiImpl<TData = any> {
     if (this.core.rowModel.isInfinite) {
       return withAbort(this.core.rowModel.startInfinite(options.signal), options.signal);
     } else {
-      this.core.rowModel.setRowData(this.core.gridOptions.rowData);
-      this.core.requestUpdate({ data: true });
+      this.setRowData(this.core.gridOptions.rowData);
       return Promise.resolve();
     }
   }
@@ -594,21 +568,21 @@ export class GridApiImpl<TData = any> {
       const next = changedFinite(options[key], resolved[key], key === "rowBuffer" ? 0 : 1, key === "rowBuffer");
       if (next === undefined) continue;
       resolved[key] = next;
-      effects.needsRelayout = true;
-      if (key === "headerHeight") effects.needsHeaderRebuild = true;
+      effects.layout = true;
+      if (key === "headerHeight") effects.header = true;
     }
     if (options.columnLayout != null && options.columnLayout !== resolved.columnLayout) {
       resolved.columnLayout = options.columnLayout === "fit" ? "fit" : "normal";
-      effects.needsRelayout = true;
+      effects.layout = true;
     }
     if (options.domLayout != null && options.domLayout !== resolved.domLayout) {
       resolved.domLayout = options.domLayout === "autoHeight" ? "autoHeight" : "normal";
       this.core.skeleton.applyDomLayout(resolved.domLayout);
-      effects.needsPoolRebuild = true;
+      effects.pool = true;
     }
     if (hasOwnOption(options, "maxBodyHeight")) {
       resolved.maxBodyHeight = normalizeFinite(options.maxBodyHeight, 1);
-      effects.needsRelayout = true;
+      effects.layout = true;
     }
     copyOptions(options, resolved, ["multiSort"]);
     const detailHeight = changedFinite(options.detailRowHeight, resolved.detailRowHeight, 1);
@@ -624,14 +598,14 @@ export class GridApiImpl<TData = any> {
     if (options.editType != null && options.editType !== resolved.editType) {
       this.core.editingService.stop(true);
       resolved.editType = options.editType === "fullRow" ? "fullRow" : "cell";
-      effects.needsCellRefresh = true;
+      effects.cells = true;
     }
     if (options.editableIndicator != null && options.editableIndicator !== resolved.editableIndicator) {
       resolved.editableIndicator =
         options.editableIndicator === "always" || options.editableIndicator === "none"
           ? options.editableIndicator
           : "hover";
-      effects.needsCellRefresh = true;
+      effects.cells = true;
     }
     copyOptions(options, resolved, ["rowEditValidator"], true);
     copyOptions(options, resolved, ["singleClickEdit", "manualSorting", "manualFiltering"]);
@@ -645,23 +619,20 @@ export class GridApiImpl<TData = any> {
     ) {
       this.core.resizeService.cancelResize();
       resolved.enableColumnResize = options.enableColumnResize;
-      effects.needsHeaderRebuild = true;
+      effects.header = true;
     }
-    if (options.locale != null && options.locale !== resolved.locale) {
-      resolved.locale = options.locale;
-      effects.needsHeaderRebuild = true;
-      effects.needsCellRefresh = true;
+    if (copyChangedOption(options, resolved, "locale")) {
+      effects.header = true;
+      effects.cells = true;
       this.core.paginationBar.rebuild();
       this.core.statusBarService.rebuild();
     }
-    if (options.indexOffset != null && options.indexOffset !== resolved.indexOffset) {
-      resolved.indexOffset = options.indexOffset;
-      effects.needsCellRefresh = true;
+    if (copyChangedOption(options, resolved, "indexOffset")) {
+      effects.cells = true;
     }
-    if (options.showSummary != null && options.showSummary !== resolved.showSummary) {
-      resolved.showSummary = options.showSummary;
-      effects.needsSummaryRefresh = true;
-      effects.needsRelayout = true;
+    if (copyChangedOption(options, resolved, "showSummary")) {
+      effects.summary = true;
+      effects.layout = true;
     }
     const undoStackSize = changedFinite(options.undoStackSize, resolved.undoStackSize, 0, true);
     if (undoStackSize !== undefined) {
@@ -678,7 +649,7 @@ export class GridApiImpl<TData = any> {
     if (!hasOwnOption(options, "getRowHeight")) return;
     this.core.gridOptions.getRowHeight = options.getRowHeight;
     this.core.bodyRenderer.invalidateAllRowHeights();
-    effects.needsRelayout = true;
+    effects.layout = true;
   }
 
   private updateRangeAndFeedbackOptions(options: Partial<GridOptions<TData>>): void {
@@ -692,9 +663,8 @@ export class GridApiImpl<TData = any> {
     if (tooltipDelay !== undefined) resolved.tooltipShowDelay = tooltipDelay;
     copyOptions(options, resolved, ["flashCells"]);
     copyOptions(options, resolved, ["getContextMenuItems"], true);
-    if (options.theme != null && options.theme !== resolved.theme) {
-      resolved.theme = options.theme;
-      this.core.skeleton.applyTheme(options.theme);
+    if (copyChangedOption(options, resolved, "theme")) {
+      this.core.skeleton.applyTheme(resolved.theme);
       this.core.watermarkService.refresh();
     }
   }
@@ -728,19 +698,17 @@ export class GridApiImpl<TData = any> {
   private updatePresentationOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     if (hasOwnOption(options, "rowStyleRules")) {
       this.core.gridOptions.rowStyleRules = Array.isArray(options.rowStyleRules) ? options.rowStyleRules : [];
-      effects.needsCellRefresh = true;
+      effects.cells = true;
       this.core.requestUpdate({ pinned: true });
     }
     this.updateWatermarkAndStatus(options, effects);
     this.updateSizePreset(options, effects);
     const resolved = this.core.gridOptions;
-    if (options.stripedRows != null && options.stripedRows !== resolved.stripedRows) {
-      resolved.stripedRows = options.stripedRows;
-      this.core.skeleton.setStriped(options.stripedRows);
+    if (copyChangedOption(options, resolved, "stripedRows")) {
+      this.core.skeleton.setStriped(resolved.stripedRows);
     }
-    if (options.showCellBorders != null && options.showCellBorders !== resolved.showCellBorders) {
-      resolved.showCellBorders = options.showCellBorders;
-      this.core.skeleton.setCellBorders(options.showCellBorders);
+    if (copyChangedOption(options, resolved, "showCellBorders")) {
+      this.core.skeleton.setCellBorders(resolved.showCellBorders);
     }
   }
 
@@ -753,7 +721,7 @@ export class GridApiImpl<TData = any> {
     this.updateStatusOptions(options);
     if (hasOwnOption(options, "summaryMethod")) {
       resolved.summaryMethod = options.summaryMethod;
-      effects.needsSummaryRefresh = true;
+      effects.summary = true;
     }
   }
 
@@ -778,16 +746,15 @@ export class GridApiImpl<TData = any> {
     this.core.gridOptions.rowHeight = options.rowHeight ?? preset.rowHeight;
     this.core.gridOptions.headerHeight = options.headerHeight ?? preset.headerHeight;
     this.core.skeleton.applySize(size);
-    effects.needsRelayout = true;
-    effects.needsHeaderRebuild = true;
+    effects.layout = true;
+    effects.header = true;
   }
 
   private updateAccessibilityOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.gridOptions;
     copyOptions(options, resolved, ["suppressCellFocus", "suppressRowHoverHighlight", "suppressNoRowsOverlay"]);
-    if (options.suppressHeaderFocus != null && options.suppressHeaderFocus !== resolved.suppressHeaderFocus) {
-      resolved.suppressHeaderFocus = options.suppressHeaderFocus;
-      effects.needsHeaderRebuild = true;
+    if (copyChangedOption(options, resolved, "suppressHeaderFocus")) {
+      effects.header = true;
     }
     this.updateAriaLabels(options);
     this.updateOverlayOptions(options);
@@ -823,28 +790,26 @@ export class GridApiImpl<TData = any> {
     this.updateHierarchyOptions(options, effects);
     const resolved = this.core.gridOptions;
     copyOptions(options, resolved, ["autoCheckedChildren"]);
-    if (options.defaultExpandAll != null && options.defaultExpandAll !== resolved.defaultExpandAll) {
-      resolved.defaultExpandAll = options.defaultExpandAll;
+    if (copyChangedOption(options, resolved, "defaultExpandAll")) {
       effects.needsRowRebuild = true;
     }
     if (options.applyRowDrag != null) {
       resolved.applyRowDrag = options.applyRowDrag;
-      effects.needsCellRefresh = true;
+      effects.cells = true;
     }
     if (hasOwnOption(options, "rowDragPolicy")) {
       resolved.rowDragPolicy = options.rowDragPolicy;
-      effects.needsCellRefresh = true;
+      effects.cells = true;
     }
     copyOptions(options, resolved, ["suppressWarnings"]);
   }
 
   private updateSelectionAndColumns(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.gridOptions;
-    if (options.rowSelection != null && options.rowSelection !== resolved.rowSelection) {
-      resolved.rowSelection = options.rowSelection;
-      if (options.rowSelection === "none") this.deselectAll();
-      effects.needsHeaderRebuild = true;
-      effects.needsPoolRebuild = true;
+    if (copyChangedOption(options, resolved, "rowSelection")) {
+      if (options.rowSelection === "none") this.core.selectionService.deselectAll();
+      effects.header = true;
+      effects.pool = true;
       this.core.refreshAriaState();
     }
     if (options.quickFilterText !== undefined) this.setQuickFilter(options.quickFilterText);
@@ -868,32 +833,28 @@ export class GridApiImpl<TData = any> {
 
   private updateHierarchyOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.gridOptions;
-    if (options.masterDetail != null && options.masterDetail !== resolved.masterDetail) {
-      resolved.masterDetail = options.masterDetail;
+    if (copyChangedOption(options, resolved, "masterDetail")) {
       effects.needsColumnRebuild = true;
       effects.needsRowRebuild = true;
     }
-    if (options.detailToggleColumn != null && options.detailToggleColumn !== resolved.detailToggleColumn) {
-      resolved.detailToggleColumn = options.detailToggleColumn;
+    if (copyChangedOption(options, resolved, "detailToggleColumn")) {
       effects.needsColumnRebuild = true;
     }
-    if (options.treeData != null && options.treeData !== resolved.treeData) {
-      resolved.treeData = options.treeData;
+    if (copyChangedOption(options, resolved, "treeData")) {
       effects.needsRowRebuild = true;
       effects.needsColumnRebuild = true;
       this.core.refreshAriaState();
     }
-    if (options.childrenKey != null && options.childrenKey !== resolved.childrenKey) {
-      resolved.childrenKey = options.childrenKey;
+    if (copyChangedOption(options, resolved, "childrenKey")) {
       effects.needsRowRebuild = true;
     }
-    if (copyOptions(options, resolved, ["isTreeRowExpandable", "loadTreeChildren"], true)) effects.needsCellRefresh = true;
+    if (copyOptions(options, resolved, ["isTreeRowExpandable", "loadTreeChildren"], true)) effects.cells = true;
   }
 
   private updateExtensionOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.gridOptions;
     if (copyOptions(options, resolved, ["aggFuncs"], true)) effects.needsRowRebuild = true;
-    if (copyOptions(options, resolved, ["components", "actionPolicy"], true)) effects.needsCellRefresh = true;
+    if (copyOptions(options, resolved, ["components", "actionPolicy"], true)) effects.cells = true;
     if (hasOwnOption(options, "features")) {
       resolved.features = Array.isArray(options.features) ? options.features : [];
       effects.needsFeatureReload = true;
@@ -957,19 +918,12 @@ export class GridApiImpl<TData = any> {
       effects.datasourceChanged = true;
       this.core.paginationBar.rebuild();
     }
-    if (copyOptions(options, resolved, ["detailRowRenderer", "isRowExpandable"], true)) effects.needsCellRefresh = true;
+    if (copyOptions(options, resolved, ["detailRowRenderer", "isRowExpandable"], true)) effects.cells = true;
   }
 
   private updatePinnedRows(options: Partial<GridOptions<TData>>): void {
-    const resolved = this.core.gridOptions;
-    if (options.pinnedTopRowData !== undefined) {
-      resolved.pinnedTopRowData = options.pinnedTopRowData ?? [];
-      this.core.pinnedRowsRenderer.setRows("top", resolved.pinnedTopRowData);
-    }
-    if (options.pinnedBottomRowData !== undefined) {
-      resolved.pinnedBottomRowData = options.pinnedBottomRowData ?? [];
-      this.core.pinnedRowsRenderer.setRows("bottom", resolved.pinnedBottomRowData);
-    }
+    if (options.pinnedTopRowData !== undefined) this.setPinnedRows("top", options.pinnedTopRowData);
+    if (options.pinnedBottomRowData !== undefined) this.setPinnedRows("bottom", options.pinnedBottomRowData);
   }
 
   private applyOptionUpdateEffects(
@@ -985,22 +939,17 @@ export class GridApiImpl<TData = any> {
     }
     if (effects.needsFeatureReload) this.core.setFeatures(resolved.features);
     this.applyRowsAndState(effects);
-    if (effects.filterChanged) this.emitFilterChanged(!effects.needsColumnRebuild);
-    if (effects.needsRelayout) {
+    if (effects.filterChanged) this.core.emitFilterChanged(!effects.needsColumnRebuild);
+    if (effects.layout) {
       this.core.skeleton.updateHeights(resolved.rowHeight, resolved.headerHeight);
     }
     if (options.columnMenu != null && options.columnMenu !== previousColumnMenu) {
-      effects.needsHeaderRebuild = true;
+      effects.header = true;
     }
     if (effects.stateToApply) this.applyState(effects.stateToApply);
-    this.core.requestUpdate({
-      layout: effects.needsRelayout,
-      header: effects.needsHeaderRebuild,
-      pool: effects.needsPoolRebuild,
-      cells: effects.needsCellRefresh && !effects.needsPoolRebuild ? true : undefined,
-      summary: effects.needsSummaryRefresh,
-      overlays: true
-    });
+    if (effects.pool) effects.cells = undefined;
+    effects.overlays = true;
+    this.core.requestUpdate(effects);
   }
 
   private rebuildColumns(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -1014,8 +963,8 @@ export class GridApiImpl<TData = any> {
     );
     if (sortChanged) this.core.emit("sortChanged", { sortModel: this.core.columnModel.getSortModel() }, false);
     this.core.onColumnsStructureChanged();
-    effects.needsHeaderRebuild = false;
-    effects.needsPoolRebuild = false;
+    effects.header = false;
+    effects.pool = false;
   }
 
   private applyRowsAndState(effects: OptionUpdateEffects): void {
@@ -1037,13 +986,11 @@ export class GridApiImpl<TData = any> {
       return;
     }
     if (!refreshRows) return;
-    if (this.core.rowModel.isInfinite) {
-      void this.core.rowModel.onServerParamsChanged();
-      return;
+    if (!this.core.rowModel.isInfinite && effects.needsRowRebuild) {
+      this.setRowData(this.core.gridOptions.rowData);
+    } else {
+      this.core.rowModel.refreshQueryRows();
     }
-    if (effects.needsRowRebuild) this.core.rowModel.setRowData(this.core.gridOptions.rowData);
-    else this.core.rowModel.refreshPipeline();
-    this.core.requestUpdate({ data: true });
   }
 
   getDataAsCsv(params: CsvExportParams = {}): string {
@@ -1123,8 +1070,7 @@ export class GridApiImpl<TData = any> {
     if (sections.has("columns")) this.core.onColumnsStructureChanged();
     if (!this.core.isRestoringBeforeRows()) {
       if (!this.core.rowModel.isInfinite) {
-        this.core.rowModel.refreshPipeline();
-        this.core.requestUpdate({ data: true });
+        this.core.rowModel.refreshRows();
       } else if (sections.has("sort") || sections.has("filter")) {
         void this.core.rowModel.onServerParamsChanged();
       }
@@ -1136,33 +1082,14 @@ export class GridApiImpl<TData = any> {
 
   private emitStateEvents(sections: ReadonlySet<GridStateSection>): void {
     if (sections.has("sort")) this.core.emit("sortChanged", { sortModel: this.core.columnModel.getSortModel() });
-    if (sections.has("filter")) this.emitFilterChanged();
+    if (sections.has("filter")) this.core.emitFilterChanged();
     if (sections.has("pagination")) {
-      this.core.emit("paginationChanged", {
-        page: this.core.rowModel.getCurrentPage(),
-        pageSize: this.core.gridOptions.paginationPageSize,
-        pageCount: this.core.rowModel.getPageCount(),
-        total: this.core.rowModel.getTotalRowCount()
-      });
+      this.core.rowModel.emitPaginationChanged(this.core.gridOptions.paginationPageSize);
     }
   }
 
-  setOverlay(type: "loading" | "noRows" | "error" | null): void {
-    showGridOverlay(this.core, type);
-  }
-
-  on<K extends import("../types/events").GridEventType>(
-    eventType: K,
-    listener: (event: any) => void
-  ): () => void {
-    return this.core.eventBus.on(eventType, listener);
-  }
-
   destroy(): void {
-    if (this.asyncTransactionTimer != null) clearTimeout(this.asyncTransactionTimer);
-    this.asyncTransactionTimer = null;
-    const entries = this.asyncTransactions;
-    this.asyncTransactions = [];
+    const entries = this.takeAsyncTransactions();
     for (const entry of entries) {
       if (entry.signal && entry.onAbort) entry.signal.removeEventListener("abort", entry.onAbort);
       if (!entry.aborted) entry.resolve();
@@ -1208,7 +1135,7 @@ export function createGridApi<TData>(core: GridCore<TData>): GridApi<TData> {
     whenReady: () => core.whenReady(),
     getOption: (key) => impl.getOption(key),
     updateOptions: (options) => impl.updateOptions(options),
-    on: (eventType, listener) => impl.on(eventType, listener),
+    on: (eventType, listener) => core.eventBus.on(eventType, listener),
     destroy: () => impl.destroy(),
     isDestroyed: () => core.isDisposed()
   } satisfies Pick<GridApi<TData>, BaseCommandKey>);

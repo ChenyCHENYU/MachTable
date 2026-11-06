@@ -7,6 +7,10 @@ function textOf(value: any): string {
   return value == null ? "" : String(value).toLowerCase();
 }
 
+function matchConditions<T>(conditions: T[], operator: "and" | "or", match: (condition: T) => boolean): boolean {
+  return conditions.length === 0 || (operator === "or" ? conditions.some(match) : conditions.every(match));
+}
+
 export function evaluateTextFilter(value: any, conditions: TextFilterCondition[], operator: "and" | "or"): boolean {
   const v = textOf(value);
   const matches = (c: TextFilterCondition): boolean => {
@@ -32,22 +36,23 @@ export function evaluateTextFilter(value: any, conditions: TextFilterCondition[]
         return true;
     }
   };
-  return conditions.length === 0 || (operator === "or" ? conditions.some(matches) : conditions.every(matches));
+  return matchConditions(conditions, operator, matches);
 }
 
-function compareNumberCondition(
+function compareOrderedCondition(
   numericValue: number,
   filterValue: number,
-  condition: NumberFilterCondition
+  match: NumberFilterCondition["match"] | DateFilterCondition["match"],
+  upper: number
 ): boolean {
-  switch (condition.match) {
+  switch (match) {
     case "equals": return numericValue === filterValue;
     case "notEquals": return numericValue !== filterValue;
     case "lessThan": return numericValue < filterValue;
     case "lessThanOrEqual": return numericValue <= filterValue;
     case "greaterThan": return numericValue > filterValue;
     case "greaterThanOrEqual": return numericValue >= filterValue;
-    case "inRange": return numericValue >= filterValue && numericValue <= (condition.value2 ?? filterValue);
+    case "inRange": return numericValue >= filterValue && numericValue <= upper;
     default: return true;
   }
 }
@@ -61,19 +66,18 @@ function evaluateNumberCondition(value: any, condition: NumberFilterCondition): 
   if (Number.isNaN(numericValue)) return false;
   const filterValue = condition.value;
   if (filterValue == null || Number.isNaN(filterValue)) return false;
-  return compareNumberCondition(numericValue, filterValue, condition);
+  return compareOrderedCondition(numericValue, filterValue, condition.match, condition.value2 ?? filterValue);
 }
 
 export function evaluateNumberFilter(value: any, conditions: NumberFilterCondition[], operator: "and" | "or"): boolean {
   const matches = (condition: NumberFilterCondition) => evaluateNumberCondition(value, condition);
-  return conditions.length === 0 || (operator === "or" ? conditions.some(matches) : conditions.every(matches));
+  return matchConditions(conditions, operator, matches);
 }
 
 function toTime(value: any): number | null {
   if (value == null || value === "") return null;
-  if (value instanceof Date) return isNaN(value.getTime()) ? null : value.getTime();
   if (typeof value === "number") return value;
-  const t = Date.parse(String(value));
+  const t = value instanceof Date ? value.getTime() : Date.parse(String(value));
   return isNaN(t) ? null : t;
 }
 
@@ -84,27 +88,12 @@ export function evaluateDateFilter(value: any, conditions: DateFilterCondition[]
     if (c.match === "blank") return isBlank;
     if (c.match === "notBlank") return !isBlank;
     if (isBlank) return false;
-    const t = time;
-    const f = c.value != null ? toTime(c.value) : null;
+    const f = toTime(c.value);
     if (f == null) return false;
-    switch (c.match) {
-      case "equals":
-        return t === f;
-      case "notEquals":
-        return t !== f;
-      case "lessThan":
-        return t < f;
-      case "greaterThan":
-        return t > f;
-      case "inRange": {
-        const f2 = c.value2 != null ? toTime(c.value2) : null;
-        return f2 != null ? t >= f && t <= f2 : t >= f;
-      }
-      default:
-        return true;
-    }
+    const upper = c.match === "inRange" ? toTime(c.value2) ?? Infinity : f;
+    return compareOrderedCondition(time, f, c.match, upper);
   };
-  return conditions.length === 0 || (operator === "or" ? conditions.some(matches) : conditions.every(matches));
+  return matchConditions(conditions, operator, matches);
 }
 
 export function evaluateSetFilter(value: any, filterValues: (string | number | null)[]): boolean {
@@ -131,6 +120,10 @@ export function evaluateColumnFilter(value: any, filter: ColumnFilter): boolean 
 type RowFilter = (node: RowNode<any>) => boolean;
 type CellValueReader = (node: RowNode<any>, column: Column) => any;
 
+function compileColumnFilter(column: Column, filter: ColumnFilter, read: CellValueReader): RowFilter {
+  return (node) => evaluateColumnFilter(read(node, column), filter);
+}
+
 /** Resolves column identities once per pipeline, without caching application values. */
 function compileAdvancedFilter(
   node: AdvancedFilterNode,
@@ -139,7 +132,7 @@ function compileAdvancedFilter(
 ): RowFilter {
   if (node.kind === "condition") {
     const column = columns.get(node.colId);
-    return column ? (row) => evaluateColumnFilter(read(row, column), node.filter) : () => true;
+    return column ? compileColumnFilter(column, node.filter, read) : () => true;
   }
   const children = node.children.map((child) => compileAdvancedFilter(child, columns, read));
   return (row) => {
@@ -164,13 +157,10 @@ export function createRowFilter(
   const byId = new Map(columns.map((column) => [column.id, column]));
   const filters = Object.entries(filterModel).flatMap(([id, filter]) => {
     const column = byId.get(id);
-    return column ? [{ column, filter }] : [];
+    return column ? [compileColumnFilter(column, filter, read)] : [];
   });
-  const advanced = advancedFilterModel ? compileAdvancedFilter(advancedFilterModel.root, byId, read) : () => true;
+  if (advancedFilterModel) filters.push(compileAdvancedFilter(advancedFilterModel.root, byId, read));
   const tokens = quickFilter?.trim().toLowerCase().split(/\s+/).filter(Boolean) ?? [];
-  return (node) => {
-    if (!filters.every(({ column, filter }) => evaluateColumnFilter(read(node, column), filter))) return false;
-    if (!advanced(node)) return false;
-    return tokens.every((token) => columns.some((column) => textOf(read(node, column)).includes(token)));
-  };
+  return (node) => filters.every((filter) => filter(node)) &&
+    tokens.every((token) => columns.some((column) => textOf(read(node, column)).includes(token)));
 }

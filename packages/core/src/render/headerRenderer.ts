@@ -4,7 +4,7 @@ import { ColumnGroup } from "../services/columnGroup";
 import type { PaneType } from "../services/columnModel";
 import { COLUMN_TOOLS_ICON, el, FILTER_ICON, SORT_ASC_ICON, SORT_DESC_ICON } from "../lib/dom";
 import { describeFilter } from "../lib/filterSummary";
-import { setHeaderDestroyer, takeHeaderDestroyer } from "./runtimeState";
+import { setRendererDestroyer, takeRendererDestroyer } from "./runtimeState";
 import { ColumnViewportIndex } from "../services/columnViewportIndex";
 import { PANES } from "./skeleton";
 
@@ -241,7 +241,7 @@ export class HeaderRenderer {
     }
     if (output && typeof output === "object" && output.el instanceof HTMLElement) {
       this.appendCustomHeader(cellEl, output.el);
-      setHeaderDestroyer(cellEl, output.destroy);
+      setRendererDestroyer(cellEl, output.destroy);
       return;
     }
     const colDef = column.colDef;
@@ -459,17 +459,9 @@ export class HeaderRenderer {
   }
 
   private scrollColumnIntoView(column: Column): void {
-    const columns = this.core.columnModel.getPaneColumns("center");
-    const index = columns.indexOf(column);
-    if (index < 0) return;
-    const viewport = this.core.skeleton.bodyViewports.center;
-    this.columnViewport.update(columns);
-    const left = this.columnViewport.offsetAt(index);
-    const right = left + column.currentWidth;
-    if (left < viewport.scrollLeft) viewport.scrollLeft = left;
-    else if (right > viewport.scrollLeft + viewport.clientWidth) {
-      viewport.scrollLeft = right - viewport.clientWidth;
-    }
+    this.columnViewport.scrollColumnIntoView(
+      this.core.skeleton.bodyViewports.center, this.core.columnModel.getPaneColumns("center"), column
+    );
   }
 
   private canResizeColumn(column: Column): boolean {
@@ -513,8 +505,9 @@ export class HeaderRenderer {
   refreshSelectAllCheckbox(): void {
     for (const hc of this.leafCells) {
       if (!hc.selectAllEl) continue;
-      hc.selectAllEl.checked = this.core.selectionService.isSelectAllActive();
-      hc.selectAllEl.indeterminate = this.core.selectionService.isSelectAllIndeterminate();
+      const { all, some } = this.core.selectionService.getSelectAllState();
+      hc.selectAllEl.checked = all;
+      hc.selectAllEl.indeterminate = some;
     }
   }
 
@@ -524,7 +517,7 @@ export class HeaderRenderer {
 
   private clearCells(destroying: boolean): void {
     for (const cell of this.leafCells) {
-      const destroy = takeHeaderDestroyer(cell.el);
+      const destroy = takeRendererDestroyer(cell.el);
       if (!destroy) continue;
       try {
         destroy();

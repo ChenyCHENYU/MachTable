@@ -157,7 +157,7 @@ export function applyCellStyle(core: CellValueContext, cell: HTMLElement, node: 
 
 export function renderCellContent(core: CellRenderContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
   const value = core.readCellValue(node, column);
-  const formatted = formatCellValue(core, node, column);
+  const formatted = formatCellValueWith(core, node, column, value);
   const rendererDef = column.colDef.cellRenderer;
   const renderer =
     typeof rendererDef === "string" ? core.resolveCellRenderer(rendererDef) : rendererDef;

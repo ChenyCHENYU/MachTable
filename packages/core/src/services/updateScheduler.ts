@@ -20,7 +20,7 @@ export interface GridUpdateSchedulerSnapshot {
   pending: boolean;
 }
 
-function mergeValues(left?: readonly string[], right?: readonly string[]): string[] | undefined {
+function mergeValues<T>(left?: readonly T[], right?: readonly T[]): T[] | undefined {
   if (left == null || right == null) return undefined;
   return [...new Set([...left, ...right])];
 }
@@ -34,27 +34,19 @@ function mergeCellRequests(
   if (!next) return current;
   return {
     rowIds: mergeValues(current.rowIds, next.rowIds),
-    rowIndexes: current.rowIndexes == null || next.rowIndexes == null
-      ? undefined
-      : [...new Set([...current.rowIndexes, ...next.rowIndexes])],
+    rowIndexes: mergeValues(current.rowIndexes, next.rowIndexes),
     columns: mergeValues(current.columns, next.columns),
     force: current.force === true || next.force === true,
     includePinned: current.includePinned === true || next.includePinned === true
   };
 }
 
+const UPDATE_FLAGS = ["columns", "header", "pool", "data", "layout", "pinned", "summary", "overlays"] as const;
+
 function mergeRequests(current: GridUpdateRequest, next: GridUpdateRequest): GridUpdateRequest {
-  return {
-    columns: current.columns === true || next.columns === true,
-    header: current.header === true || next.header === true,
-    pool: current.pool === true || next.pool === true,
-    data: current.data === true || next.data === true,
-    layout: current.layout === true || next.layout === true,
-    cells: mergeCellRequests(current.cells, next.cells),
-    pinned: current.pinned === true || next.pinned === true,
-    summary: current.summary === true || next.summary === true,
-    overlays: current.overlays === true || next.overlays === true
-  };
+  const merged: GridUpdateRequest = { cells: mergeCellRequests(current.cells, next.cells) };
+  for (const key of UPDATE_FLAGS) merged[key] = current[key] === true || next[key] === true;
+  return merged;
 }
 
 /** Coalesces explicit API batches while preserving synchronous behavior outside a batch. */

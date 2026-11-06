@@ -2,7 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type { ContextMenuItem } from "../types/params";
 import type { RowNode } from "../types/row";
-import { applyPortalTheme, el, clamp, textButton } from "../lib/dom";
+import { applyPortalTheme, bindDismissListeners, el, clamp, textButton } from "../lib/dom";
 
 type ContextMenuContext = Pick<
   GridCore<any>,
@@ -131,16 +131,14 @@ export class ContextMenuService {
     const top = clamp(y, 8, Math.max(8, window.innerHeight - rect.height - 8));
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
-    document.addEventListener("mousedown", this.docMouseDown, true);
-    document.addEventListener("keydown", this.docKeyDown, true);
+    bindDismissListeners(true, this.docMouseDown, this.docKeyDown);
   }
 
   close(): void {
     if (!this.panel) return;
     this.panel.remove();
     this.panel = null;
-    document.removeEventListener("mousedown", this.docMouseDown, true);
-    document.removeEventListener("keydown", this.docKeyDown, true);
+    bindDismissListeners(false, this.docMouseDown, this.docKeyDown);
   }
 
   destroy(): void {

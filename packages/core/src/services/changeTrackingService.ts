@@ -53,7 +53,9 @@ export class ChangeTrackingService<TData = any> {
   }
 
   getDirtyRowIds(): string[] {
-    return [...new Set([...this.trackedCellChanges.values()].map((change) => change.rowId))];
+    const ids = new Set<string>();
+    for (const { rowId } of this.trackedCellChanges.values()) ids.add(rowId);
+    return [...ids];
   }
 
   getChanges(): GridChange<TData>[] {
@@ -156,12 +158,7 @@ export class ChangeTrackingService<TData = any> {
   }
 
   clearRows(rowIds: readonly string[]): void {
-    if (rowIds.length === 0) return;
-    const ids = new Set(rowIds);
-    for (const [key, change] of this.trackedCellChanges) {
-      if (ids.has(change.rowId)) this.trackedCellChanges.delete(key);
-    }
-    this.emitChanged();
+    if (rowIds.length > 0) this.markSaved(rowIds);
   }
 
   clear(): void {

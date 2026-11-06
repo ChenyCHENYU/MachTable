@@ -62,8 +62,8 @@ export class SelectionService {
     return this.core.rowModel.getAllNodes().filter((n) => this.selectedIds.has(n.id));
   }
 
-  getSelectedRows(): any[] {
-    return this.getSelectedNodes().filter((n) => n.data != null).map((n) => n.data);
+  getSelectedRows(nodes = this.getSelectedNodes()): any[] {
+    return nodes.filter((n) => n.data != null).map((n) => n.data);
   }
 
   getSelectedIds(): string[] {
@@ -80,34 +80,24 @@ export class SelectionService {
   }
 
   onRowsRebuilt(preserveIds: boolean): void {
+    const nodes = this.core.rowModel.getAllNodes();
     if (!preserveIds) {
       this.selectedIds.clear();
       this.anchorId = null;
     } else {
-      const existing = new Set(this.core.rowModel.getAllNodes().map((n) => n.id));
+      const existing = new Set(nodes.map((n) => n.id));
       for (const id of [...this.selectedIds]) {
         if (!existing.has(id)) this.selectedIds.delete(id);
       }
       if (this.anchorId != null && !existing.has(this.anchorId)) this.anchorId = null;
     }
-    for (const node of this.core.rowModel.getAllNodes()) {
-      node.selected = this.selectedIds.has(node.id);
-    }
     this.recomputeTriState();
+    for (const node of nodes) node.selected = this.selectedIds.has(node.id);
   }
 
   getGroupSelectionState(groupNode: RowNode<any>): { all: boolean; some: boolean } {
-    const leaves = groupNode.leafNodes ?? [];
-    if (leaves.length === 0) return { all: false, some: false };
-    let selectableCount = 0;
-    let count = 0;
-    for (const leaf of leaves) {
-      if (!this.isSelectable(leaf)) continue;
-      selectableCount++;
-      if (this.selectedIds.has(leaf.id)) count++;
-    }
-    if (selectableCount === 0) return { all: false, some: false };
-    return { all: count === selectableCount, some: count > 0 };
+    const { selectable, selected } = this.countSelection(groupNode.leafNodes ?? [], false);
+    return { all: selected > 0 && selected === selectable, some: selected > 0 };
   }
 
   setGroupSelected(groupNode: RowNode<any>, selected: boolean): void {
@@ -127,13 +117,13 @@ export class SelectionService {
 
   private selectFromCheckbox(node: RowNode<any>, mode: "single" | "multiple"): void {
     const single = mode === "single";
-    this.applySelection([{ node, selected: single ? true : !node.selected, clearOthers: single }]);
+    this.setNodeSelected(node, single || !node.selected, single);
     this.anchorId = node.id;
   }
 
   private toggleFromModifier(node: RowNode<any>, event: MouseEvent, multiple: boolean): boolean {
     if (!multiple || (!event.ctrlKey && !event.metaKey)) return false;
-    this.applySelection([{ node, selected: !node.selected }]);
+    this.setNodeSelected(node, !node.selected);
     this.anchorId = node.id;
     return true;
   }
@@ -165,7 +155,7 @@ export class SelectionService {
     const multi = mode === "multiple";
     if (this.toggleFromModifier(node, event, multi)) return;
     if (this.selectAnchorRange(node, event, multi)) return;
-    this.applySelection([{ node, selected: true, clearOthers: true }]);
+    this.setNodeSelected(node, true, true);
     this.anchorId = node.id;
   }
 
@@ -176,7 +166,7 @@ export class SelectionService {
     const selectable = candidates.filter((n) => !n.isDetail && !n.isGroup && this.isSelectable(n));
     if (selectable.length === 0) return;
     if (mode === "single") {
-      this.applySelection([{ node: selectable[0], selected: true, clearOthers: true }]);
+      this.setNodeSelected(selectable[0], true, true);
       return;
     }
     this.applySelection(selectable.map((node) => ({ node, selected: true })));
@@ -186,27 +176,23 @@ export class SelectionService {
     this.applySelection([], true);
   }
 
-  isSelectAllActive(): boolean {
-    const rows = this.core.rowModel.getDisplayedRows().filter((n) => !n.isDetail && !n.isGroup);
-    const selectable = rows.filter((n) => this.isSelectable(n));
-    if (selectable.length === 0) return false;
-    if (this.core.rowModel.isInfinite) {
-      const total = this.core.rowModel.getDisplayTotalCount();
-      if (selectable.length < total) return false;
-    }
-    return selectable.every((n) => this.selectedIds.has(n.id));
+  getSelectAllState(): { all: boolean; some: boolean } {
+    const model = this.core.rowModel;
+    const { selectable, selected } = this.countSelection(model.getDisplayedRows(), true);
+    const all = selected > 0 && selected === selectable &&
+      (!model.isInfinite || selectable >= model.getDisplayTotalCount());
+    return { all, some: selected > 0 && !all };
   }
 
-  isSelectAllIndeterminate(): boolean {
-    const rows = this.core.rowModel.getDisplayedRows().filter((n) => !n.isDetail && !n.isGroup);
-    const selectable = rows.filter((n) => this.isSelectable(n));
-    const count = selectable.reduce((acc, n) => acc + (this.selectedIds.has(n.id) ? 1 : 0), 0);
-    if (count === 0) return false;
-    if (this.core.rowModel.isInfinite) {
-      const total = this.core.rowModel.getDisplayTotalCount();
-      if (selectable.length < total) return true;
+  private countSelection(rows: readonly RowNode<any>[], displayed: boolean) {
+    let selectable = 0;
+    let selected = 0;
+    for (const row of rows) {
+      if ((displayed && (row.isDetail || row.isGroup)) || !this.isSelectable(row)) continue;
+      selectable++;
+      if (this.selectedIds.has(row.id)) selected++;
     }
-    return count > 0 && count < selectable.length;
+    return { selectable, selected };
   }
 
   applySelectionPublic(
@@ -244,26 +230,25 @@ export class SelectionService {
   }
 
   private changedSelectionIds(before: ReadonlySet<string>): Set<string> {
-    const changed = new Set<string>();
-    for (const id of new Set([...before, ...this.selectedIds])) {
-      if (before.has(id) !== this.selectedIds.has(id)) changed.add(id);
+    const changed = new Set(before);
+    for (const id of this.selectedIds) {
+      if (!changed.delete(id)) changed.add(id);
     }
     return changed;
   }
 
   private synchronizeNodeSelection(
     changedIds: ReadonlySet<string>,
-    previousSelected: ReadonlyMap<string, boolean>,
     previousIndeterminate: ReadonlySet<string>
   ): number[] {
     const refreshIndexes: number[] = [];
     const touched = new Set<string>([...changedIds, ...previousIndeterminate, ...this.indeterminateIds]);
     for (const node of this.core.rowModel.getAllNodes()) {
       const selected = this.selectedIds.has(node.id);
-      node.selected = selected;
-      if ((touched.has(node.id) || previousSelected.get(node.id) !== selected) && node.rowIndex >= 0) {
+      if ((touched.has(node.id) || node.selected !== selected) && node.rowIndex >= 0) {
         refreshIndexes.push(node.rowIndex);
       }
+      node.selected = selected;
     }
     return refreshIndexes;
   }
@@ -277,20 +262,17 @@ export class SelectionService {
     this.replaceSelection(changes, clearAll, cascadeTree);
     this.applySelectionChanges(changes, cascadeTree);
     const changedIds = this.changedSelectionIds(before);
-    const prevSelected = new Map<string, boolean>();
-    for (const node of this.core.rowModel.getAllNodes()) {
-      prevSelected.set(node.id, node.selected);
-    }
     const prevIndeterminate = new Set(this.indeterminateIds);
 
     this.recomputeTriState();
-    const refreshIndexes = this.synchronizeNodeSelection(changedIds, prevSelected, prevIndeterminate);
+    const refreshIndexes = this.synchronizeNodeSelection(changedIds, prevIndeterminate);
     if (changedIds.size > 0) {
       this.core.bodyRenderer.refreshRows(refreshIndexes);
       this.core.headerRenderer.refreshSelectAllCheckbox();
+      const selectedNodes = this.getSelectedNodes();
       this.core.emit("selectionChanged", {
-        selectedNodes: this.getSelectedNodes(),
-        selectedRows: this.getSelectedRows()
+        selectedNodes,
+        selectedRows: this.getSelectedRows(selectedNodes)
       });
     }
   }
@@ -320,13 +302,8 @@ export class SelectionService {
       let some = false;
       for (const childId of childIds) {
         const state = evaluate(childId);
-        if (state.all) some = true;
-        else if (state.some) {
-          some = true;
-          all = false;
-        } else {
-          all = false;
-        }
+        all &&= state.all;
+        some ||= state.some;
       }
       if (some && !all) this.indeterminateIds.add(id);
       if (all) this.selectedIds.add(id);
@@ -336,9 +313,6 @@ export class SelectionService {
 
     for (const root of this.core.rowModel.getRootNodes()) {
       evaluate(root.id);
-    }
-    for (const node of this.core.rowModel.getAllNodes()) {
-      node.selected = this.selectedIds.has(node.id);
     }
   }
 }

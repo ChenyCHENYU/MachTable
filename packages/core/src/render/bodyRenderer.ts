@@ -11,14 +11,14 @@ import { applyRowAppearance, resolveRowAppearance } from "./rowAppearance";
 import { ColumnViewportIndex } from "../services/columnViewportIndex";
 import { VariableSizeIndex } from "../services/variableSizeIndex";
 import { VirtualScrollCoordinates } from "./virtualScrollCoordinates";
-import { el, clamp } from "../lib/dom";
+import { bindListeners, el, clamp } from "../lib/dom";
 import { DEFAULT_LOCALE } from "../lib/locale";
 import { PANES, showGridOverlay } from "./skeleton";
 import { renderDataCell, cleanupCellContent, applyCellClasses, cellAlignmentClass, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
 import {
   getCellRuntimeState,
-  setDetailDestroyer,
-  takeDetailDestroyer
+  setRendererDestroyer,
+  takeRendererDestroyer
 } from "./runtimeState";
 
 type BodyContext = Pick<
@@ -153,9 +153,7 @@ export class BodyRenderer {
   }
 
   private bindBodyEvents(active: boolean): void {
-    const body = this.core.skeleton.bodyEl;
-    const method = active ? "addEventListener" : "removeEventListener";
-    const handlers = {
+    bindListeners(this.core.skeleton.bodyEl, active, {
       click: this.onBodyClick,
       dblclick: this.onBodyDblClick,
       contextmenu: this.onContextMenu,
@@ -164,8 +162,7 @@ export class BodyRenderer {
       mouseleave: this.onMouseLeave,
       pointerdown: this.onDragHandlePointerDown,
       keydown: this.onDragHandleKeyDown
-    };
-    for (const [event, handler] of Object.entries(handlers)) body[method](event, handler as EventListener);
+    });
   }
 
   suspend(): void {
@@ -1030,13 +1027,13 @@ export class BodyRenderer {
         container.appendChild(out);
       } else if (out && typeof out === "object" && out.el instanceof HTMLElement) {
         container.appendChild(out.el);
-        setDetailDestroyer(row, out.destroy);
+        setRendererDestroyer(row, out.destroy);
       }
     }
   }
 
   private cleanupDetail(row: HTMLElement): void {
-    const destroy = takeDetailDestroyer(row);
+    const destroy = takeRendererDestroyer(row);
     if (destroy) {
       try {
         destroy();
@@ -1714,37 +1711,41 @@ export class BodyRenderer {
   private fillRange({ r1, r2, c1, c2 }: NormalizedRange, targetEnd: number, horizontal: boolean): void {
     const flat = this.core.columnModel.getOrderedVisible();
     const changes: InputChange[] = [];
-    if (horizontal) {
-      for (let r = r1; r <= r2; r++) this.fillHorizontalRow(r, c1, c2, targetEnd, flat, changes);
-    } else {
-      for (let c = c1; c <= c2; c++) {
-        const column = flat[c];
-        if (isFillableColumn(column)) this.fillColumnDown(column, r1, r2, targetEnd, changes);
-      }
+    const sourceStart = horizontal ? c1 : r1;
+    const sourceEnd = horizontal ? c2 : r2;
+    const lineEnd = horizontal ? r2 : c2;
+    for (let index = horizontal ? r1 : c1; index <= lineEnd; index++) {
+      const row = horizontal ? this.core.rowModel.getDisplayedRow(index) : undefined;
+      const column = horizontal ? undefined : flat[index];
+      if (horizontal ? !row || row.isDetail || row.isGroup : !isFillableColumn(column)) continue;
+      this.fillLine(flat, sourceStart, sourceEnd, targetEnd, changes, row, column);
     }
     this.core.applyInputChanges(changes);
     this.core.emit("rangeSelectionChanged", { range: this.getRangeSelection() });
   }
 
-  private fillHorizontalRow(
-    rowIndex: number,
+  private fillLine(
+    columns: Column[],
     sourceStart: number,
     sourceEnd: number,
     targetEnd: number,
-    columns: Column[],
-    changes: InputChange[]
+    changes: InputChange[],
+    fixedRow?: RowNode<any>,
+    fixedColumn?: Column
   ): void {
-    const node = this.core.rowModel.getDisplayedRow(rowIndex);
-    if (!node || node.isDetail || node.isGroup) return;
+    // Horizontal fills keep the row fixed. Vertical fills keep the column fixed.
     const sources: any[] = [];
     for (let index = sourceStart; index <= sourceEnd; index++) {
-      const column = columns[index];
-      sources.push(column ? this.core.readCellValue(node, column) : undefined);
+      const node = fixedRow ?? this.core.rowModel.getDisplayedRow(index);
+      const column = fixedColumn ?? columns[index];
+      sources.push(node && column ? this.core.readCellValue(node, column) : undefined);
     }
+    if (fixedColumn && sources.length === 1 && sources[0] === undefined) return;
     const pattern = createFillPattern(sources);
     for (let index = sourceEnd + 1; index <= targetEnd; index++) {
-      const column = columns[index];
-      if (!isFillableColumn(column) || !this.core.editingService.isEditable(node, column)) continue;
+      const node = fixedRow ?? this.core.rowModel.getDisplayedRow(index);
+      const column = fixedColumn ?? columns[index];
+      if (!node || !isFillableColumn(column) || !this.core.editingService.isEditable(node, column)) continue;
       const value = fillPatternValue(pattern, index - sourceStart);
       const oldValue = this.core.readCellValue(node, column);
       changes.push({ node, column, oldValue, newValue: value });
@@ -1774,30 +1775,6 @@ export class BodyRenderer {
       this.setFillRangeEnd(horizontal, edge, false);
     }
   };
-
-  private fillColumnDown(
-    column: Column,
-    sourceStart: number,
-    sourceEnd: number,
-    targetEnd: number,
-    changes: InputChange[]
-  ): void {
-    const values: any[] = [];
-    for (let rowIndex = sourceStart; rowIndex <= sourceEnd; rowIndex++) {
-      const node = this.core.rowModel.getDisplayedRow(rowIndex);
-      values.push(node ? this.core.readCellValue(node, column) : undefined);
-    }
-    if (values.length === 1 && values[0] === undefined) return;
-    const pattern = createFillPattern(values);
-    for (let rowIndex = sourceEnd + 1; rowIndex <= targetEnd; rowIndex++) {
-      const node = this.core.rowModel.getDisplayedRow(rowIndex);
-      if (!node || node.isDetail || node.isGroup) continue;
-      if (!this.core.editingService.isEditable(node, column)) continue;
-      const value = fillPatternValue(pattern, rowIndex - sourceStart);
-      const oldValue = this.core.readCellValue(node, column);
-      changes.push({ node, column, oldValue, newValue: value });
-    }
-  }
 
   setFocusedCell(rowIndex: number | null, colId: string | null): void {
     this.clearFocusClass();
@@ -1838,16 +1815,9 @@ export class BodyRenderer {
 
     const column = this.core.columnModel.getColumn(this.focusedCell.colId);
     if (!column || column.pinned) return;
-    const viewport = this.core.skeleton.bodyViewports.center;
-    const centerColumns = this.core.columnModel.getPaneColumns("center");
-    this.columnViewport.update(centerColumns);
-    const x = this.columnViewport.offsetAt(centerColumns.indexOf(column));
-    const left = viewport.scrollLeft;
-    const width = viewport.clientWidth;
-    if (x < left) viewport.scrollLeft = x;
-    else if (x + column.currentWidth > left + width) {
-      viewport.scrollLeft = x + column.currentWidth - width;
-    }
+    this.columnViewport.scrollColumnIntoView(
+      this.core.skeleton.bodyViewports.center, this.core.columnModel.getPaneColumns("center"), column
+    );
   }
 
   scrollToIndex(rowIndex: number, position: "top" | "bottom" | "middle" | "nearest" = "top"): void {

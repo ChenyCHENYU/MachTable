@@ -1,6 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { applyPortalTheme, clamp, el } from "../lib/dom";
+import { applyPortalTheme, bindListeners, clamp, el } from "../lib/dom";
 
 const DRAG_THRESHOLD = 6;
 type ColumnDragContext = Pick<
@@ -38,9 +38,11 @@ export class ColumnDragService {
     if (e.button !== 0) return;
     if (!column.movable) return;
     this.pendingColumnDrag = { column, startX: e.clientX, startY: e.clientY };
-    window.addEventListener("pointermove", this.onMove);
-    window.addEventListener("pointerup", this.onUp);
-    window.addEventListener("pointercancel", this.onUp);
+    this.bindDragEvents(true);
+  }
+
+  private bindDragEvents(active: boolean): void {
+    bindListeners(window, active, { pointermove: this.onMove, pointerup: this.onUp, pointercancel: this.onUp });
   }
 
   didDrag(): boolean {
@@ -173,9 +175,7 @@ export class ColumnDragService {
   }
 
   private cleanup(): void {
-    window.removeEventListener("pointermove", this.onMove);
-    window.removeEventListener("pointerup", this.onUp);
-    window.removeEventListener("pointercancel", this.onUp);
+    this.bindDragEvents(false);
     if (this.moveRaf) cancelAnimationFrame(this.moveRaf);
     this.moveRaf = 0;
     this.pendingPoint = null;

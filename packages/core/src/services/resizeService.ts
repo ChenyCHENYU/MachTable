@@ -1,4 +1,5 @@
 import type { GridCore } from "../core/gridCore";
+import { bindListeners } from "../lib/dom";
 import type { Column } from "./column";
 
 type ResizeContext = Pick<
@@ -50,11 +51,7 @@ export class ResizeService {
       startX: event.clientX
     };
 
-    window.addEventListener("pointermove", this.onMove);
-    // Capture phase finalizes before the browser's normal lostpointercapture event.
-    window.addEventListener("pointerup", this.onUp, true);
-    window.addEventListener("pointercancel", this.onCancel, true);
-    handle.addEventListener("lostpointercapture", this.onLostPointerCapture);
+    this.bindResizeEvents(handle, true);
     try {
       handle.setPointerCapture?.(event.pointerId);
     } catch {
@@ -70,7 +67,7 @@ export class ResizeService {
     if (!active) return;
     this.activeColumnResize = null;
     this.clearFrame();
-    this.removeListeners(active);
+    this.bindResizeEvents(active.handle, false);
     if (restore) {
       active.column.manualWidth = active.startManualWidth;
       active.column.flex = active.startFlex;
@@ -121,7 +118,7 @@ export class ResizeService {
       }
       this.core.relayoutColumns();
     }
-    this.removeListeners(active);
+    this.bindResizeEvents(active.handle, false);
     try {
       active.handle.releasePointerCapture?.(active.pointerId);
     } catch {
@@ -186,11 +183,11 @@ export class ResizeService {
     this.rafId = 0;
   }
 
-  private removeListeners(active: ActiveResize): void {
-    window.removeEventListener("pointermove", this.onMove);
-    window.removeEventListener("pointerup", this.onUp, true);
-    window.removeEventListener("pointercancel", this.onCancel, true);
-    active.handle.removeEventListener("lostpointercapture", this.onLostPointerCapture);
+  private bindResizeEvents(handle: HTMLElement, active: boolean): void {
+    bindListeners(window, active, { pointermove: this.onMove });
+    // Capture phase finalizes before the browser's normal lostpointercapture event.
+    bindListeners(window, active, { pointerup: this.onUp, pointercancel: this.onCancel }, true);
+    bindListeners(handle, active, { lostpointercapture: this.onLostPointerCapture });
   }
 
   destroy(): void {

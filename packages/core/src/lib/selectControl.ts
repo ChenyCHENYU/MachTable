@@ -1,4 +1,4 @@
-import { applyPortalTheme, clamp, el, nextUid } from "./dom";
+import { applyPortalTheme, bindDismissListeners, clamp, el, nextUid } from "./dom";
 
 export interface SelectControlOption {
   value: string;
@@ -71,23 +71,24 @@ function onActiveSelectKeyDown(event: KeyboardEvent): void {
   activeSelect.close(true);
 }
 
+function bindActiveSelectEvents(active: boolean): void {
+  bindDismissListeners(active, onActiveSelectMouseDown, onActiveSelectKeyDown);
+  const method = active ? "addEventListener" : "removeEventListener";
+  window[method]("resize", onActiveSelectViewportChange);
+  window[method]("scroll", onActiveSelectViewportChange, true);
+}
+
 function activateSelect(next: ActiveSelectControl): void {
   if (activeSelect?.close !== next.close) activeSelect?.close();
   if (activeSelect) return;
   activeSelect = next;
-  document.addEventListener("mousedown", onActiveSelectMouseDown, true);
-  document.addEventListener("keydown", onActiveSelectKeyDown, true);
-  window.addEventListener("resize", onActiveSelectViewportChange);
-  window.addEventListener("scroll", onActiveSelectViewportChange, true);
+  bindActiveSelectEvents(true);
 }
 
 function deactivateSelect(close: ActiveSelectControl["close"]): void {
   if (activeSelect?.close !== close) return;
   activeSelect = null;
-  document.removeEventListener("mousedown", onActiveSelectMouseDown, true);
-  document.removeEventListener("keydown", onActiveSelectKeyDown, true);
-  window.removeEventListener("resize", onActiveSelectViewportChange);
-  window.removeEventListener("scroll", onActiveSelectViewportChange, true);
+  bindActiveSelectEvents(false);
 }
 
 function classNames(base: string, extra?: string): string {

@@ -1,6 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { applyPortalTheme, el, positionAnchoredPortal, textButton } from "../lib/dom";
+import { applyPortalTheme, bindDismissListeners, el, positionAnchoredPortal, textButton } from "../lib/dom";
 import type { MachTableLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
@@ -54,8 +54,7 @@ export class ColumnMenuService {
     this.panel?.remove();
     this.panel = null;
     this.openColId = null;
-    document.removeEventListener("mousedown", this.docMouseDown, true);
-    document.removeEventListener("keydown", this.docKeyDown, true);
+    bindDismissListeners(false, this.docMouseDown, this.docKeyDown);
   }
 
   destroy(): void {
@@ -162,8 +161,7 @@ export class ColumnMenuService {
 
     positionAnchoredPortal(panel, anchor);
 
-    document.addEventListener("mousedown", this.docMouseDown, true);
-    document.addEventListener("keydown", this.docKeyDown, true);
+    bindDismissListeners(true, this.docMouseDown, this.docKeyDown);
   }
 
   private rebuildListStates(): void {

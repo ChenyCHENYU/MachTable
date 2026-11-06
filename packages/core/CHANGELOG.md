@@ -1,5 +1,17 @@
 # @agile-team/mach-table
 
+## 0.39.0
+
+### Minor Changes
+
+- 5eb6beb: Keep newer row snapshots safe from queued writes and stale edit history. Grow short auto-height grids when data arrives and cap the body with `maxBodyHeight` for longer results. Distinguish local filter results in the built-in empty state and offer a single clear action. Scope content sizing to affected columns and sampled rows, improve schema editing and column reset, and keep toolbar search and server requests in sync.
+
+### Patch Changes
+
+- 复用网格更新、筛选计划、拖拽监听和视口定位逻辑。保留原有 Core 消费体积预算。
+
+- 9aa646a: Clear stale rows from every pane when an auto-height table shrinks to a smaller nonempty result. The remaining rows retain their measured heights.
+
 ## 0.38.0
 
 ### Minor Changes

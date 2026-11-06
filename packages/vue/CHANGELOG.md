@@ -1,5 +1,17 @@
 # @agile-team/mach-table-vue
 
+## 0.39.0
+
+### Minor Changes
+
+- 5eb6beb: Keep newer row snapshots safe from queued writes and stale edit history. Grow short auto-height grids when data arrives and cap the body with `maxBodyHeight` for longer results. Distinguish local filter results in the built-in empty state and offer a single clear action. Scope content sizing to affected columns and sampled rows, improve schema editing and column reset, and keep toolbar search and server requests in sync.
+
+### Patch Changes
+
+- Updated dependencies [9aa646a]
+- Updated dependencies [5eb6beb]
+  - @agile-team/mach-table@0.39.0
+
 ## 0.38.0
 
 ### Patch Changes

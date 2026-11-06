@@ -663,12 +663,7 @@ export class GridCore<TData = any> {
   applySortModel(): void {
     this.headerRenderer.refreshSortIndicators();
     this.emit("sortChanged", { sortModel: this.columnModel.getSortModel() });
-    if (this.rowModel.isInfinite) {
-      void this.rowModel.onServerParamsChanged();
-      return;
-    }
-    this.rowModel.refreshPipeline();
-    this.requestUpdate({ data: true });
+    this.rowModel.refreshQueryRows();
   }
 
   applyColumnFilter(column: Column, filter: ColumnFilter | null): void {
@@ -681,16 +676,15 @@ export class GridCore<TData = any> {
 
   applyFilterModel(): void {
     this.headerRenderer.refreshFilterIcons();
+    this.emitFilterChanged();
+    this.rowModel.refreshQueryRows();
+  }
+
+  emitFilterChanged(persist = true): void {
     this.emit("filterChanged", {
       filterModel: this.rowModel.getFilterModel(),
       advancedFilterModel: this.rowModel.getAdvancedFilterModel()
-    });
-    if (this.rowModel.isInfinite) {
-      void this.rowModel.onServerParamsChanged();
-      return;
-    }
-    this.rowModel.refreshPipeline();
-    this.requestUpdate({ data: true });
+    }, persist);
   }
 
   moveColumn(colId: string, toIndex: number): void {

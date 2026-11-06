@@ -1,4 +1,4 @@
-import { clamp, el } from "../lib/dom";
+import { bindListeners, clamp, el } from "../lib/dom";
 
 export interface RowDragSurfaceHost {
   root: HTMLElement;
@@ -36,11 +36,17 @@ export abstract class RowDragSurface {
     const preview = el("div", "mach-row-drag-preview");
     preview.setAttribute("role", "status"); preview.hidden = true; this.host.root.append(preview);
     this.activeRowDrag = { startY: event.clientY, clientX: event.clientX, clientY: event.clientY, pointerId: event.pointerId, indicators, preview, drop: null, active: false };
-    window.addEventListener("pointermove", this.onMove);
-    window.addEventListener("pointerup", this.onUp);
-    window.addEventListener("pointercancel", this.onCancel);
-    window.addEventListener("keydown", this.onKeyDown);
-    window.addEventListener("blur", this.onCancel);
+    this.bindDragEvents(true);
+  }
+
+  private bindDragEvents(active: boolean): void {
+    bindListeners(window, active, {
+      pointermove: this.onMove,
+      pointerup: this.onUp,
+      pointercancel: this.onCancel,
+      keydown: this.onKeyDown,
+      blur: this.onCancel
+    });
   }
 
   protected draggingSource(id: string): boolean { return this.activeRowDrag?.active === true && this.sourceContains(id); }
@@ -125,8 +131,7 @@ export abstract class RowDragSurface {
   };
   private takeState(): void {
     const drag = this.activeRowDrag; this.activeRowDrag = null;
-    window.removeEventListener("pointermove", this.onMove); window.removeEventListener("pointerup", this.onUp);
-    window.removeEventListener("pointercancel", this.onCancel); window.removeEventListener("keydown", this.onKeyDown); window.removeEventListener("blur", this.onCancel);
+    this.bindDragEvents(false);
     cancelAnimationFrame(this.moveRaf); this.moveRaf = 0;
     this.host.root?.classList.remove("mach-root--row-dragging");
     this.host.root?.querySelectorAll(".mach-row--drag-source").forEach(row => row.classList.remove("mach-row--drag-source"));

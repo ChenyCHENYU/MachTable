@@ -77,7 +77,6 @@ export class RowModel<TData = any> {
   private infiniteLoading = false;
   private infiniteSeq = 0;
   private infiniteAbort: AbortController | null = null;
-  private infinitePendingResolve: (() => void) | null = null;
   private treeDepth = new WeakMap<RowNode<TData>, number>();
   private rowSequence = new WeakMap<RowNode<TData>, number>();
   private treeLoadControllers = new Map<string, AbortController>();
@@ -147,21 +146,7 @@ export class RowModel<TData = any> {
   startInfinite(signal?: AbortSignal): Promise<void> {
     if (!this.isInfinite) return Promise.resolve();
     if (signal?.aborted) return Promise.resolve();
-    this.dataRevision++;
-    // Reload/filter/sort replace the datasource scope, just like setRowData.
-    this.core.cancelPendingInput();
-    void this.core.api.editing.stop({ cancel: true });
-    this.core.changeTracker.clear();
-    this.cancelInfiniteRequest();
-    this.infiniteLastRow = null;
-    this.infiniteRequested = false;
-    this.loadedRowNodes = [];
-    this.roots = [];
-    this.nodesById.clear();
-    this.expandedIds.clear();
-    this.core.undoService.clear();
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.resetInfiniteRows(true);
     if (this.isBlockDatasource) {
       this.blockCache.configure(
         this.core.gridOptions.maxBlocksInCache,
@@ -192,16 +177,11 @@ export class RowModel<TData = any> {
     this.setInfiniteLoading(true);
 
     return new Promise<void>((resolve) => {
-      let settled = false;
-      this.infinitePendingResolve = resolve;
       const done = (reason?: unknown) => {
-        if (settled) return;
-        settled = true;
         externalSignal?.removeEventListener("abort", abortFromExternal);
         if (seq === this.infiniteSeq) {
           this.infiniteRequested = false;
           this.infiniteAbort = null;
-          this.infinitePendingResolve = null;
           this.setInfiniteLoading(false);
           if (reason != null && (reason as { name?: string })?.name !== "AbortError") {
             this.core.reportError(reason, "datasource.getRows", { startRow: start, endRow: stop });
@@ -223,8 +203,7 @@ export class RowModel<TData = any> {
         const wasEmpty = this.loadedRowNodes.length === 0;
         this.appendInfiniteRows(received);
         done();
-        this.refreshPipeline();
-        this.core.requestUpdate({ data: true });
+        this.refreshRows();
         if (wasEmpty) this.core.relayout();
         this.core.headerRenderer.refreshSelectAllCheckbox();
       }, reason => done(controller.signal.aborted || this.core.isDisposed()
@@ -238,8 +217,6 @@ export class RowModel<TData = any> {
     this.infiniteAbort = null;
     this.infiniteRequested = false;
     this.setInfiniteLoading(false);
-    this.infinitePendingResolve?.();
-    this.infinitePendingResolve = null;
     this.blockCache.purge();
     this.blockNodes.clear();
     this.blockPlaceholders.clear();
@@ -293,8 +270,7 @@ export class RowModel<TData = any> {
         !this.isBlockDatasource || !this.blockCache.has(blockIndex)) return;
       if (this.installedBlocks.has(blockIndex)) return;
       this.installBlock(blockIndex, result);
-      this.refreshPipeline();
-      this.core.requestUpdate({ data: true });
+      this.refreshRows();
       this.core.headerRenderer.refreshSelectAllCheckbox();
       // A small block may not fill the first viewport; seed its remaining
       // visible blocks without requiring an initial user scroll.
@@ -340,14 +316,16 @@ export class RowModel<TData = any> {
     let attempt = 0;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let settled = false;
-    const finish = (callback: () => void) => {
-      if (settled) return;
+    const finish = () => {
+      if (settled) return false;
       settled = true;
       if (retryTimer != null) clearTimeout(retryTimer);
       signal.removeEventListener("abort", abort);
-      callback();
+      return true;
     };
-    const abort = () => finish(() => onFailure(this.abortError(signal.reason)));
+    const abort = () => {
+      if (finish()) onFailure(this.abortError(signal.reason));
+    };
     signal.addEventListener("abort", abort, { once: true });
 
     const runAttempt = () => {
@@ -367,8 +345,8 @@ export class RowModel<TData = any> {
         }
         if (attempt <= this.core.gridOptions.datasourceRetryCount) {
           retryTimer = setTimeout(runAttempt, this.retryDelay(attempt));
-        } else {
-          finish(() => onFailure(reason));
+        } else if (finish()) {
+          onFailure(reason);
         }
       };
       try {
@@ -381,9 +359,7 @@ export class RowModel<TData = any> {
           quickFilterText: this.activeQuickFilterText,
           signal,
           onSuccess: (rows, lastRow) => {
-            if (attemptSettled || settled) return;
-            attemptSettled = true;
-            finish(() => onSuccess(rows ?? [], lastRow));
+            if (!attemptSettled && finish()) onSuccess(rows ?? [], lastRow);
           },
           fail: failAttempt
         });
@@ -582,17 +558,29 @@ export class RowModel<TData = any> {
 
   purgeDatasourceCache(): void {
     if (!this.isBlockDatasource) return;
-    this.dataRevision++;
-    this.core.cancelPendingInput();
-    void this.core.api.editing.stop({ cancel: true });
+    this.resetInfiniteRows(false);
+  }
+
+  /** A datasource reset replaces the editing scope even if new rows reuse IDs. */
+  private resetInfiniteRows(resetQuery: boolean): void {
+    this.beginDataReplacement();
     this.core.changeTracker.clear();
     this.cancelInfiniteRequest();
-    this.core.undoService.clear();
+    if (resetQuery) {
+      this.infiniteLastRow = null;
+      this.expandedIds.clear();
+    }
     this.loadedRowNodes = [];
     this.roots = [];
     this.nodesById.clear();
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.core.undoService.clear();
+    this.refreshRows();
+  }
+
+  private beginDataReplacement(): void {
+    this.dataRevision++;
+    this.core.cancelPendingInput();
+    void this.core.api.editing.stop({ cancel: true });
   }
 
   getDatasourceCacheSnapshot(): RemoteBlockCacheSnapshot {
@@ -620,9 +608,7 @@ export class RowModel<TData = any> {
   }
 
   setRowData(rows: TData[] | null | undefined): void {
-    this.dataRevision++;
-    this.core.cancelPendingInput();
-    void this.core.api.editing.stop({ cancel: true });
+    this.beginDataReplacement();
     this.cancelTreeLoads();
     this.core.changeTracker.clear();
     const resolveRowId = this.core.gridOptions.resolveRowId;
@@ -788,8 +774,7 @@ export class RowModel<TData = any> {
     }
     this.reindexAll();
     this.core.selectionService.onRowsRebuilt(this.core.gridOptions.resolveRowId != null);
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.refreshRows();
   }
 
   private validateTreeChildren(children: readonly TData[], replacedIds: ReadonlySet<string>): void {
@@ -1059,6 +1044,16 @@ export class RowModel<TData = any> {
     return Object.keys(this.activeColumnFilters).length > 0 || this.activeAdvancedFilters != null || this.activeQuickFilterText != null;
   }
 
+  refreshRows(): void {
+    this.refreshPipeline();
+    this.core.requestUpdate({ data: true });
+  }
+
+  refreshQueryRows(): void {
+    if (this.isInfinite) void this.onServerParamsChanged();
+    else this.refreshRows();
+  }
+
   refreshPipeline(): void {
     this.projectionBaseline = null;
     const startedAt = this.core.performanceMonitor.start();
@@ -1118,24 +1113,23 @@ export class RowModel<TData = any> {
       }
     }
 
-    for (const node of this.loadedRowNodes) node.rowIndex = -1;
+    this.installProjection(rows, startedAt, true);
+    this.reportAmbiguousExpansions(ambiguousExpansions);
+  }
 
-    let seq = 0;
+  private installProjection(rows: RowNode<TData>[], startedAt: number, captureDependencies = false): void {
+    for (const node of this.loadedRowNodes) node.rowIndex = -1;
+    let sequence = 0;
     rows.forEach((node, index) => {
       node.rowIndex = index;
-      if (!node.isDetail && !node.isGroup) {
-        seq++;
-        this.rowSequence.set(node, seq);
-      }
+      if (!node.isDetail && !node.isGroup) this.rowSequence.set(node, ++sequence);
     });
     this.pipelineRows = rows;
     this.applyPagination();
-    this.captureProjectionBaseline();
-
-    this.computeSpans(getCellValue);
+    if (captureDependencies) this.captureProjectionBaseline();
+    this.computeSpans((node, column) => this.core.readCellValue(node, column));
     this.core.emit("modelUpdated", { rowCount: rows.length });
     this.core.performanceMonitor.recordModel(startedAt);
-    this.reportAmbiguousExpansions(ambiguousExpansions);
   }
 
   private refreshInfinitePipeline(startedAt: number): void {
@@ -1204,24 +1198,13 @@ export class RowModel<TData = any> {
         const node = this.nodesById.get(id);
         if (node && !node.isDetail && !node.isGroup) next.push(node);
       }
-      for (const node of this.loadedRowNodes) node.rowIndex = -1;
-      next.forEach((node, index) => {
-        node.rowIndex = index;
-        this.rowSequence.set(node, index + 1);
-      });
-      this.pipelineRows = next;
-      this.applyPagination();
-      const getCellValue = (node: RowNode<any>, column: ColumnLike) => this.core.readCellValue(node, column);
-      this.computeSpans(getCellValue);
-      this.core.emit("modelUpdated", { rowCount: next.length });
-      this.core.performanceMonitor.recordModel(startedAt);
+      this.installProjection(next, startedAt);
       this.core.requestUpdate({ data: true });
     }).catch((error) => {
       if (seq !== this.dataProcessorSeq || controller.signal.aborted || this.core.isDisposed()) return;
       this.core.reportError(error, "dataProcessor.process");
       this.skipDataProcessorOnce = true;
-      this.refreshPipeline();
-      this.core.requestUpdate({ data: true });
+      this.refreshRows();
     }).finally(() => {
       if (seq === this.dataProcessorSeq) this.dataProcessorAbort = null;
     });
@@ -1252,20 +1235,13 @@ export class RowModel<TData = any> {
     if (this.activePageNumber > pageCount) this.activePageNumber = pageCount;
     if (this.activePageNumber < 1) this.activePageNumber = 1;
     this.core.gridOptions.paginationPage = this.activePageNumber;
-    if (this.core.gridOptions.paginationMode === "server") {
-      this.pipelineRows.forEach((node, index) => {
-        node.rowIndex = index;
-      });
-      this.displayedRowNodes = this.pipelineRows;
-      this.displayRevision++;
-      return;
-    }
     const start = (this.activePageNumber - 1) * size;
-    const slice = this.pipelineRows.slice(start, start + size);
-    slice.forEach((node, index) => {
+    this.displayedRowNodes = this.core.gridOptions.paginationMode === "server"
+      ? this.pipelineRows
+      : this.pipelineRows.slice(start, start + size);
+    this.displayedRowNodes.forEach((node, index) => {
       node.rowIndex = index;
     });
-    this.displayedRowNodes = slice;
     this.displayRevision++;
   }
 
@@ -1347,10 +1323,10 @@ export class RowModel<TData = any> {
     this.emitPaginationChanged();
   }
 
-  private emitPaginationChanged(): void {
+  emitPaginationChanged(pageSize = this.effectivePageSize()): void {
     this.core.emit("paginationChanged", {
       page: this.getCurrentPage(),
-      pageSize: this.effectivePageSize(),
+      pageSize,
       pageCount: this.getPageCount(),
       total: this.getTotalRowCount()
     });
@@ -1590,8 +1566,7 @@ export class RowModel<TData = any> {
     if (expanded === this.expandedIds.has(id)) return expanded;
     if (expanded) this.expandedIds.add(id);
     else this.expandedIds.delete(id);
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.refreshRows();
     this.core.emit("detailToggled", { rowId: id, rowNode: node, expanded });
     if (expanded && this.isTree && !this.hasChildren(id) && !node.treeLoading) {
       void this.loadTreeChildren(id).catch(() => undefined);
@@ -1599,25 +1574,20 @@ export class RowModel<TData = any> {
     return expanded;
   }
 
-  expandAllDetails(): void {
+  setAllDetailsExpanded(expanded: boolean): void {
     let changed = false;
-    for (const node of this.loadedRowNodes) {
-      if (!this.expandedIds.has(node.id) && this.isRowExpandable(node)) {
-        this.expandedIds.add(node.id);
-        changed = true;
+    if (expanded) {
+      for (const node of this.loadedRowNodes) {
+        if (!this.expandedIds.has(node.id) && this.isRowExpandable(node)) {
+          this.expandedIds.add(node.id);
+          changed = true;
+        }
       }
+    } else if (this.expandedIds.size > 0) {
+      this.expandedIds.clear();
+      changed = true;
     }
-    if (changed) {
-      this.refreshPipeline();
-      this.core.requestUpdate({ data: true });
-    }
-  }
-
-  collapseAllDetails(): void {
-    if (this.expandedIds.size === 0) return;
-    this.expandedIds.clear();
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    if (changed) this.refreshRows();
   }
 
   toggleGroup(groupId: string): boolean {
@@ -1628,26 +1598,14 @@ export class RowModel<TData = any> {
     return this.groupExpandedIds.has(groupId);
   }
 
-  expandAllGroups(): void {
-    if (this.knownGroupIds.length === 0) return;
-    let changed = false;
-    for (const id of this.knownGroupIds) {
-      if (!this.groupExpandedIds.has(id)) {
-        this.groupExpandedIds.add(id);
-        changed = true;
-      }
+  setAllGroupsExpanded(expanded: boolean): void {
+    const size = this.groupExpandedIds.size;
+    if (expanded) {
+      for (const id of this.knownGroupIds) this.groupExpandedIds.add(id);
+    } else {
+      this.groupExpandedIds.clear();
     }
-    if (changed) {
-      this.refreshPipeline();
-      this.core.requestUpdate({ data: true });
-    }
-  }
-
-  collapseAllGroups(): void {
-    if (this.groupExpandedIds.size === 0) return;
-    this.groupExpandedIds.clear();
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    if (this.groupExpandedIds.size !== size) this.refreshRows();
   }
 
   private setGroupExpanded(groupId: string, expanded: boolean): boolean {
@@ -1655,8 +1613,7 @@ export class RowModel<TData = any> {
     if (expanded === this.groupExpandedIds.has(groupId)) return expanded;
     if (expanded) this.groupExpandedIds.add(groupId);
     else this.groupExpandedIds.delete(groupId);
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.refreshRows();
     return expanded;
   }
 
@@ -1680,8 +1637,7 @@ export class RowModel<TData = any> {
 
     this.loadedRowNodes.splice(fromAllIdx, 1);
     this.loadedRowNodes.splice(toAllIdx, 0, fromNode);
-    this.refreshPipeline();
-    this.core.requestUpdate({ data: true });
+    this.refreshRows();
     return true;
   }
 

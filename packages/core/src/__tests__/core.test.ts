@@ -193,6 +193,8 @@ describe("filter evaluation", () => {
   it("number filters support ranges", () => {
     expect(evaluateNumberFilter(5, [{ match: "inRange", value: 1, value2: 10 }], "and")).toBe(true);
     expect(evaluateNumberFilter(50, [{ match: "inRange", value: 1, value2: 10 }], "and")).toBe(false);
+    expect(evaluateNumberFilter(5, [{ match: "inRange", value: 5 }], "and")).toBe(true);
+    expect(evaluateNumberFilter(6, [{ match: "inRange", value: 5 }], "and")).toBe(false);
     expect(evaluateNumberFilter("7", [{ match: "equals", value: 7 }], "and")).toBe(true);
     expect(evaluateNumberFilter(null, [{ match: "equals", value: 7 }], "and")).toBe(false);
   });
@@ -200,6 +202,8 @@ describe("filter evaluation", () => {
   it("date filters compare timestamps", () => {
     expect(evaluateDateFilter("2024-05-01", [{ match: "greaterThan", value: "2024-01-01" }], "and")).toBe(true);
     expect(evaluateDateFilter("2024-01-01", [{ match: "equals", value: "2024-01-01" }], "and")).toBe(true);
+    expect(evaluateDateFilter("2024-05-01", [{ match: "inRange", value: "2024-01-01" }], "and")).toBe(true);
+    expect(evaluateDateFilter("2024-05-01", [{ match: "inRange", value: "2024-01-01", value2: "2024-04-01" }], "and")).toBe(false);
   });
 
   it("set filters include values", () => {
