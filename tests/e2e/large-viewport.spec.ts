@@ -121,15 +121,17 @@ test("range fill and unmanaged drag targets stay aligned after a large jump", as
   await page.mouse.move(sourceBox.x + 10, drop.y + drop.height - 4, { steps: 6 });
   const indicators = page.locator(".mach-row-drop-indicator:visible");
   await expect(indicators).toHaveCount(3);
-  // Edge autoscroll can move rows during the gesture. Compare the current row
-  // and feedback in one layout sample, rather than the pre-drag cell rectangle.
-  const { lines, rowBottoms } = await page.evaluate(() => ({
-    lines: [...document.querySelectorAll(".mach-row-drop-indicator")].map(element => element.getBoundingClientRect().top),
-    rowBottoms: [...document.querySelectorAll('.mach-row[data-index="8765403"]')].map(element => element.getBoundingClientRect().bottom)
-  }));
-  expect(Math.max(...rowBottoms) - Math.min(...rowBottoms)).toBeLessThanOrEqual(1);
-  expect(Math.max(...lines) - Math.min(...lines)).toBeLessThanOrEqual(1);
-  expect(Math.abs(lines[0] - rowBottoms[0])).toBeLessThanOrEqual(2);
+  // The line becomes visible during the gesture, before the final pointer
+  // position is painted by requestAnimationFrame. Sample both in one layout.
+  await expect.poll(() => page.evaluate(() => {
+    const lines = [...document.querySelectorAll(".mach-row-drop-indicator")].map(element => element.getBoundingClientRect().top);
+    const rowBottoms = [...document.querySelectorAll('.mach-row[data-index="8765403"]')].map(element => element.getBoundingClientRect().bottom);
+    return {
+      rowsAligned: Math.max(...rowBottoms) - Math.min(...rowBottoms) <= 1,
+      linesAligned: Math.max(...lines) - Math.min(...lines) <= 1,
+      targetAligned: Math.abs(lines[0] - rowBottoms[0]) <= 2
+    };
+  })).toEqual({ rowsAligned: true, linesAligned: true, targetAligned: true });
   await page.mouse.up();
   expect(await page.evaluate(() => window.largeViewportFixture.events[0]?.toIndex)).toBe(8_765_404);
   expect(await page.evaluate(() => window.largeViewportFixture.events[0]?.applied)).toBe(false);
