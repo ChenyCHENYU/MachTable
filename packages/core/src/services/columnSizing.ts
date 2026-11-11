@@ -48,10 +48,10 @@ export class ColumnSizing {
       nodes[Math.floor(index * (nodes.length - 1) / Math.max(count - 1, 1))]);
   }
 
-  private textWidth(value: string): number {
+  textWidth(value: string, font?: string): number {
     if (this.textMeasureContext === undefined) this.textMeasureContext = document.createElement("canvas").getContext("2d");
-    if (!this.textMeasureContext) return value.replace(/[^\x00-\xff]/g, "mm").length * 7;
-    this.textMeasureContext.font = this.measurementFont;
+    if (!this.textMeasureContext) return font ? Infinity : value.replace(/[^\x00-\xff]/g, "mm").length * 7;
+    this.textMeasureContext.font = font ?? this.measurementFont;
     return this.textMeasureContext.measureText(value).width;
   }
 

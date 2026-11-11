@@ -49,7 +49,7 @@ function readChildren(data: unknown, key: string): unknown[] | undefined {
 }
 
 export interface RowTransactionImpact {
-  /** True when ordering, membership, grouping, spans or row geometry may have changed. */
+  /** True when ordering, membership, grouping or spans may have changed. */
   pipelineChanged: boolean;
   /** Stable IDs whose data references were replaced. */
   updatedRowIds: readonly string[];
@@ -807,7 +807,6 @@ export class RowModel<TData = any> {
 
   applyTransaction(transaction: RowTransaction<TData>, refresh = true): RowTransactionImpact {
     const resolveRowId = this.core.gridOptions.resolveRowId;
-    const touched: RowNode<TData>[] = [];
     const replacements: RowReplacement<TData>[] = [];
     const externallyReplacedIds: string[] = [];
 
@@ -863,7 +862,6 @@ export class RowModel<TData = any> {
           node.data = data;
           externallyReplacedIds.push(node.id);
           this.core.bodyRenderer.invalidateRowHeight(node);
-          touched.push(node);
         }
       }
     }
@@ -892,7 +890,7 @@ export class RowModel<TData = any> {
       this.reindexAll();
     }
 
-    const impact = { pipelineChanged: this.transactionNeedsPipeline(transaction, replacements), updatedRowIds: touched.map((node) => node.id) };
+    const impact = { pipelineChanged: this.transactionNeedsPipeline(transaction, replacements), updatedRowIds: replacements.map(({ node }) => node.id) };
     this.core.undoService.invalidateRows(externallyReplacedIds);
     this.refreshTransaction(impact, refresh);
     this.core.changeTracker.clearRows(externallyReplacedIds);
@@ -935,7 +933,7 @@ export class RowModel<TData = any> {
   }
 
   private getProjectionFields(): string[] | null {
-    if (this.isTree || this.core.gridOptions.masterDetail || this.core.gridOptions.getRowHeight || this.shouldUseDataProcessor()) return null;
+    if (this.isTree || this.core.gridOptions.masterDetail || this.shouldUseDataProcessor()) return null;
     const columns = this.core.columnModel.getOrderedVisible();
     if (columns.some((column) =>
       column.colDef.autoHeight === true || column.colDef.autoRowSpan === true || column.colDef.rowSpan != null
@@ -949,7 +947,8 @@ export class RowModel<TData = any> {
 
   private captureProjectionBaseline(): void {
     const fields = this.getProjectionFields();
-    this.projectionBaseline = fields?.length ? { fields, values: captureProjectionValues(this.loadedRowNodes, fields) } : null;
+    const values = fields?.length ? captureProjectionValues(this.loadedRowNodes, fields) : null;
+    this.projectionBaseline = fields && values ? { fields, values } : null;
   }
 
   private emitIncrementalModelUpdate(): void {
@@ -1140,6 +1139,7 @@ export class RowModel<TData = any> {
     this.displayedRowNodes = this.loadedRowNodes;
     this.pipelineRows = this.loadedRowNodes;
     this.spanInfo.clear();
+    if (this.core.gridOptions.getRowHeight) this.core.bodyRenderer.invalidateAllRowHeights();
     this.displayRevision++;
     this.core.emit("modelUpdated", { rowCount: this.loadedRowNodes.length });
     this.core.performanceMonitor.recordModel(startedAt);
@@ -1218,13 +1218,14 @@ export class RowModel<TData = any> {
 
   private pipelineRows: RowNode<TData>[] = [];
   private activePageNumber = 1;
-  private activePageSize = 20;
 
   get paginationActive(): boolean {
     return this.core.gridOptions.paginationEnabled && !this.isInfinite;
   }
 
   private applyPagination(): void {
+    // A callback can read the displayed index or current page through its API.
+    if (this.core.gridOptions.getRowHeight) this.core.bodyRenderer.invalidateAllRowHeights();
     if (!this.paginationActive) {
       this.displayedRowNodes = this.pipelineRows;
       this.displayRevision++;
@@ -1246,8 +1247,7 @@ export class RowModel<TData = any> {
   }
 
   private effectivePageSize(): number {
-    this.activePageSize = this.core.gridOptions.paginationPageSize;
-    return Math.max(1, this.activePageSize);
+    return Math.max(1, this.core.gridOptions.paginationPageSize);
   }
 
   getCurrentPage(): number {
@@ -1289,7 +1289,6 @@ export class RowModel<TData = any> {
     const next = Math.max(1, Math.round(size) || this.effectivePageSize());
     const firstVisible = (this.activePageNumber - 1) * this.effectivePageSize();
     this.core.gridOptions.paginationPageSize = next;
-    this.activePageSize = next;
     this.activePageNumber = Math.floor(firstVisible / next) + 1;
     this.core.gridOptions.paginationPage = this.activePageNumber;
     this.applyPagination();
@@ -1298,8 +1297,7 @@ export class RowModel<TData = any> {
   }
 
   restorePagination(page: number, pageSize: number): void {
-    this.activePageSize = Math.max(1, Math.round(pageSize) || 1);
-    this.core.gridOptions.paginationPageSize = this.activePageSize;
+    this.core.gridOptions.paginationPageSize = Math.max(1, Math.round(pageSize) || 1);
     this.activePageNumber = Math.max(1, Math.round(page) || 1);
     this.core.gridOptions.paginationPage = this.activePageNumber;
   }
@@ -1308,6 +1306,7 @@ export class RowModel<TData = any> {
     if (this.core.gridOptions.paginationEnabled === enabled) return;
     this.core.gridOptions.paginationEnabled = enabled && !this.isInfinite;
     if (this.core.gridOptions.paginationEnabled) this.activePageNumber = 1;
+    if (!enabled) this.pipelineRows.forEach((node, index) => { node.rowIndex = index; });
     this.applyPagination();
     this.core.requestUpdate({ data: true });
     this.emitPaginationChanged();
@@ -1505,30 +1504,22 @@ export class RowModel<TData = any> {
   }
 
   isRowExpandable(node: RowNode<TData>): boolean {
-    if (this.isTree) {
-      if (this.hasChildren(node.id)) return true;
-      if (node.treeLoading) return true;
+    const tree = this.isTree;
+    if (tree) {
+      if (this.hasChildren(node.id) || node.treeLoading) return true;
       if (node.treeChildrenLoaded || !node.data || !this.core.gridOptions.loadTreeChildren) return false;
-      const checkTree = this.core.gridOptions.isTreeRowExpandable;
-      if (!checkTree) return false;
-      try {
-        return checkTree({ data: node.data, node, api: this.core.api });
-      } catch (error) {
-        this.core.reportError(error, "isTreeRowExpandable", { rowId: node.id });
-        return false;
-      }
+    } else if (!this.core.gridOptions.masterDetail) {
+      return false;
     }
-    if (!this.core.gridOptions.masterDetail) return false;
-    const check = this.core.gridOptions.isRowExpandable;
-    if (check) {
-      try {
-        return check({ data: node.data, node, api: this.core.api });
-      } catch (error) {
-        this.core.reportError(error, "isRowExpandable", { rowId: node.id });
-        return false;
-      }
+    const key = tree ? "isTreeRowExpandable" : "isRowExpandable";
+    const check = this.core.gridOptions[key];
+    if (!check) return !tree;
+    try {
+      return check({ data: node.data, node, api: this.core.api });
+    } catch (error) {
+      this.core.reportError(error, key, { rowId: node.id });
+      return false;
     }
-    return true;
   }
 
   isRowExpanded(id: string): boolean {

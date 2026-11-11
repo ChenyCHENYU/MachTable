@@ -67,6 +67,38 @@ test("bounded natural height grows, scrolls and recovers from a filtered empty s
   await expect(centerRows).toHaveText("计划 499");
 });
 
+test("wrapped words remain fully visible after font and column width changes", async ({ page }) => {
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>("#grid")!.style.height = "auto";
+    window.columnPresentationApi.updateOptions({
+      rowNumber: false, domLayout: "autoHeight",
+      columnDefs: [{ field: "name", width: 130, wrapText: true, autoHeight: true, sortable: false, filter: false }],
+      rowData: [
+        { id: "words", name: "abcdefghij klmnopqrst uvwxyzabcd efghijklmn opqrstuvwx yzabcdefgh ijklmnopqr stuvwxyzab" },
+        { id: "mixed", name: "生产计划 manufacturing scheduling accountability production ".repeat(3) }
+      ]
+    });
+  });
+  const checkText = async () => {
+    const clipped = await page.locator('.mach-pane--center .mach-row[data-id] .mach-cell').evaluateAll(cells => cells.flatMap(cell => {
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      return range.getBoundingClientRect().bottom > cell.getBoundingClientRect().bottom + 1
+        ? [cell.closest<HTMLElement>(".mach-row")!.dataset.id] : [];
+    }));
+    expect(clipped).toEqual([]);
+  };
+  await checkText();
+  await page.evaluate(() => {
+    const api = window.columnPresentationApi;
+    api.view.getRoot()!.style.setProperty("--mach-font-size", "20px");
+    api.view.refreshLayout();
+  });
+  await checkText();
+  await page.evaluate(() => window.columnPresentationApi.columns.setWidth("name", 220));
+  await checkText();
+});
+
 test('pointer and keyboard shrinking keep all four header characters visible', async ({ page }) => {
   const header = page.locator('.mach-header-cell[data-col-id="id"]');
   const label = header.locator('.mach-header-label');

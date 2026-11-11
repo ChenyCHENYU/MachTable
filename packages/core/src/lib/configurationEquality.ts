@@ -1,3 +1,5 @@
+import { hasOwnOption } from "./optionValues";
+
 /** Bounded structural comparison for small immutable config values, never row data. */
 export function equivalentConfigValue(left: unknown, right: unknown, depth = 2): boolean {
   if (Object.is(left, right)) return true;
@@ -9,7 +11,7 @@ export function equivalentConfigValue(left: unknown, right: unknown, depth = 2):
   if (!plain(left) || !plain(right)) return false;
   const keys = Object.keys(left);
   if (keys.length !== Object.keys(right).length || keys.length > 100) return false;
-  return keys.every(key => Object.prototype.hasOwnProperty.call(right, key) &&
+  return keys.every(key => hasOwnOption(right, key) &&
     equivalentConfigValue(left[key], right[key], depth - 1));
 }
 

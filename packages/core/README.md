@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.39.0 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。通过 `rowNumber: true` 启用自动序号，内置分页默认开启。
+MachTable 0.39.1 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。通过 `rowNumber: true` 启用自动序号，内置分页默认开启。
 
 本地明细使用 `domLayout: "autoHeight"` 随当前页内容收起。加上 `maxBodyHeight: 330`，超过 330px 的表体会使用虚拟滚动。表内筛选无匹配时，默认空态提供清除筛选；业务自定义空态优先。
 

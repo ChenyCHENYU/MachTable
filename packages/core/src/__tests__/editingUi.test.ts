@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { actionsColumn, createGrid, rowActionsColumn } from "../index";
+import type { ColDef } from "../index";
 
 interface Person {
   id: string;
@@ -143,6 +144,88 @@ describe("polished editing UI", () => {
     expect(nameCell.querySelector(".mach-editor-input")).toBe(input);
     expect(input.classList.contains("mach-editor-invalid")).toBe(true);
     expect(statusCell.querySelector(".mach-editor-input")).toBeNull();
+    api.destroy();
+  });
+
+  it.each(["api", "click", "tab"])("keeps the intended row when sorting during an async %s switch", async (trigger) => {
+    let resolve!: (valid: true) => void;
+    const pending = new Promise<true>((done) => { resolve = done; });
+    const host = createHost();
+    const stopped = vi.fn();
+    const api = createGrid(host, {
+      columnDefs: [{ field: "age", editable: true, cellEditor: "number", validate: () => pending }],
+      rowData: [{ id: "a", age: 2 }, { id: "b", age: 1 }], rowKey: "id", onCellEditingStopped: stopped
+    });
+    api.editing.startCell({ rowIndex: 0, colId: "age" });
+    const input = host.querySelector<HTMLInputElement>(".mach-editor-input")!;
+    input.value = "3";
+    if (trigger === "tab") input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    else if (trigger === "click") host.querySelector<HTMLElement>('.mach-row[data-id="b"] .mach-cell[data-col-id="age"]')!.click();
+    else api.editing.startCell({ rowIndex: 1, colId: "age" });
+    api.sorting.setModel([{ colId: "age", direction: "asc" }]);
+    resolve(true);
+    await flush();
+    const editor = host.querySelector<HTMLInputElement>(".mach-editor-input")!;
+    expect(editor?.closest<HTMLElement>(".mach-row")?.dataset.id).toBe("b");
+    expect(editor.value).toBe("1");
+    expect(stopped).toHaveBeenCalledWith(expect.objectContaining({ rowIndex: 1, rowNode: expect.objectContaining({ id: "a" }) }));
+    api.destroy();
+  });
+
+  it.each([
+    ["api", "filter"], ["api", "remove"], ["api", "replace"], ["api", "columns"], ["api", "cancel"], ["api", "destroy"],
+    ["click", "cancel"], ["click", "destroy"]
+  ])("drops a queued %s editor after %s", async (trigger, action) => {
+    let resolve!: (valid: true) => void;
+    const pending = new Promise<true>((done) => { resolve = done; });
+    const host = createHost();
+    const defs: ColDef[] = [{ field: "age", editable: true, cellEditor: "number", validate: () => pending }];
+    const api = createGrid(host, {
+      columnDefs: defs, rowData: [{ id: "a", age: 2 }, { id: "b", age: 1 }], rowKey: "id"
+    });
+    api.editing.startCell({ rowIndex: 0, colId: "age" });
+    host.querySelector<HTMLInputElement>(".mach-editor-input")!.value = "3";
+    if (trigger === "click") host.querySelector<HTMLElement>('.mach-row[data-id="b"] .mach-cell[data-col-id="age"]')!.click();
+    else api.editing.startCell({ rowIndex: 1, colId: "age" });
+    if (action === "filter") api.filtering.setModel({ age: { type: "number", conditions: [{ match: "greaterThan", value: 1 }] } });
+    if (action === "remove") api.rows.transact({ remove: [api.rows.getById("b")!.data!] });
+    if (action === "replace") api.rows.setData([{ id: "b", age: 7 }]);
+    if (action === "columns") api.columns.setDefinitions([{ ...defs[0], headerName: "New age" }]);
+    if (action === "cancel") await api.editing.stop({ cancel: true });
+    if (action === "destroy") api.destroy();
+    resolve(true);
+    await flush();
+    expect(host.querySelector(".mach-editor-input")).toBeNull();
+    api.destroy();
+  });
+
+  it.each(["api", "click"])("uses the latest queued %s editor and cancels a synchronously completed switch", async (trigger) => {
+    let resolve!: (valid: true) => void;
+    const pending = new Promise<true>((done) => { resolve = done; });
+    const host = createHost();
+    const api = createGrid(host, {
+      columnDefs: [{ field: "age", editable: true, cellEditor: "number", validate: () => pending }],
+      rowData: [{ id: "a", age: 1 }, { id: "b", age: 2 }, { id: "c", age: 3 }], rowKey: "id"
+    });
+    api.editing.startCell({ rowIndex: 0, colId: "age" });
+    host.querySelector<HTMLInputElement>(".mach-editor-input")!.value = "4";
+    if (trigger === "click") {
+      host.querySelector<HTMLElement>('.mach-row[data-id="b"] .mach-cell[data-col-id="age"]')!.click();
+      host.querySelector<HTMLElement>('.mach-row[data-id="c"] .mach-cell[data-col-id="age"]')!.click();
+    } else {
+      api.editing.startCell({ rowIndex: 1, colId: "age" });
+      api.editing.startCell({ rowIndex: 2, colId: "age" });
+    }
+    resolve(true);
+    await flush();
+    expect(host.querySelector(".mach-editor-input")?.closest<HTMLElement>(".mach-row")?.dataset.id).toBe("c");
+    await api.editing.stop({ cancel: true });
+    api.columns.setDefinitions([{ field: "age", editable: true, cellEditor: "number" }]);
+    api.editing.startCell({ rowIndex: 0, colId: "age" });
+    api.editing.startCell({ rowIndex: 1, colId: "age" });
+    await api.editing.stop({ cancel: true });
+    await flush();
+    expect(host.querySelector(".mach-editor-input")).toBeNull();
     api.destroy();
   });
 

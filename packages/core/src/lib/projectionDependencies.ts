@@ -46,7 +46,9 @@ function opaque(value: unknown): boolean {
   return value != null && (typeof value === "object" || typeof value === "function");
 }
 
-export function captureProjectionValues<T>(rows: readonly RowNode<T>[], fields: readonly string[]): WeakMap<RowNode<T>, readonly unknown[]> {
+export function captureProjectionValues<T>(rows: readonly RowNode<T>[], fields: readonly string[]): WeakMap<RowNode<T>, readonly unknown[]> | null {
+  // Include per-row bookkeeping in the cache budget. Wide quick search can depend on every column.
+  if (rows.length * (fields.length + 4) > 1_000_000) return null;
   const values = new WeakMap<RowNode<T>, readonly unknown[]>();
   for (const node of rows) {
     if (node.data == null) continue;

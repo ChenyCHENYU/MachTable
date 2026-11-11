@@ -43,13 +43,7 @@ interface HeaderCell {
 interface GroupCell {
   group: ColumnGroup<any>;
   el: HTMLElement;
-}
-
-interface PaneTree {
-  column?: Column;
-  group?: ColumnGroup<any>;
-  level: number;
-  children: PaneTree[];
+  pane: PaneType;
 }
 
 type HeaderComponentOutput = string | HTMLElement | { el: HTMLElement; destroy?: () => void } | null | undefined;
@@ -88,45 +82,30 @@ export class HeaderRenderer {
     this.core.skeleton.setHeaderRowCount(depth);
 
     const activeCenter = new Set(model.getPaneColumns("center").slice(this.centerFirst, this.centerLastExcl));
-    const buildTree = (
-      children: (ColumnGroup<any> | Column<any>)[],
-      level: number,
-      pane: PaneType
-    ): PaneTree[] => {
-      const out: PaneTree[] = [];
-      for (const child of children) {
-        if (child instanceof ColumnGroup) {
-          const subtree = buildTree(child.children, level + 1, pane);
-          if (subtree.length > 0) out.push({ group: child, level, children: subtree });
-        } else if (!child.hide && model.paneOf(child) === pane && (pane !== "center" || activeCenter.has(child))) {
-          out.push({ column: child, level, children: [] });
-        }
-      }
-      return out;
-    };
-
     const roots = model.getRootChildren();
-    const paneTrees = PANES.map(pane => buildTree(roots, 0, pane));
-
     const perRowHeight = this.core.gridOptions.headerHeight;
-    PANES.forEach((pane, paneIndex) => {
+    for (const pane of PANES) {
       const rows = this.core.skeleton.headerRows[pane];
       for (const row of rows) row.textContent = "";
-      const appendCell = (tree: PaneTree) => {
-        const row = rows[Math.min(tree.level, rows.length - 1)];
-        if (tree.column) {
-          const cell = this.createLeafCell(tree.column, depth - tree.level, perRowHeight);
-          row.appendChild(cell.el);
-          this.leafCells.push(cell);
-        } else if (tree.group) {
-          const cell = this.createGroupCell(tree.group);
-          row.appendChild(cell);
-          this.groupCells.push({ group: tree.group, el: cell });
+      const append = (children: (ColumnGroup<any> | Column<any>)[], level: number): void => {
+        const row = rows[Math.min(level, rows.length - 1)];
+        for (const child of children) {
+          if (child instanceof ColumnGroup) {
+            const count = this.leafCells.length;
+            append(child.children, level + 1);
+            if (this.leafCells.length === count) continue;
+            const cell = this.createGroupCell(child);
+            row.appendChild(cell);
+            this.groupCells.push({ group: child, el: cell, pane });
+          } else if (!child.hide && model.paneOf(child) === pane && (pane !== "center" || activeCenter.has(child))) {
+            const cell = this.createLeafCell(child, depth - level, perRowHeight);
+            row.appendChild(cell.el);
+            this.leafCells.push(cell);
+          }
         }
-        for (const child of tree.children) appendCell(child);
       };
-      for (const tree of paneTrees[paneIndex]) appendCell(tree);
-    });
+      append(roots, 0);
+    }
 
     if (!this.core.gridOptions.suppressHeaderFocus) {
       this.leafCells.forEach((cell, index) => {
@@ -211,53 +190,21 @@ export class HeaderRenderer {
 
   private appendHeaderContent(cellEl: HTMLElement, column: Column): void {
     const colDef = column.colDef;
-    const headerComponent = colDef.headerComponent;
     let output: HeaderComponentOutput;
-    if (!headerComponent) {
-      this.appendHeaderLabel(cellEl, colDef.headerName ?? colDef.field ?? column.id);
-      return;
-    }
     try {
-      output = headerComponent({ colDef, column, api: this.core.api });
+      output = colDef.headerComponent?.({ colDef, column, api: this.core.api });
     } catch (error) {
       this.core.reportError(error, "headerComponent", { colId: column.id });
       output = null;
     }
-    this.appendHeaderComponentOutput(cellEl, column, output);
-  }
-
-  private appendHeaderComponentOutput(
-    cellEl: HTMLElement,
-    column: Column,
-    output: HeaderComponentOutput
-  ): void {
-    if (typeof output === "string") {
-      this.appendHeaderLabel(cellEl, output);
-      return;
-    }
-    if (output instanceof HTMLElement) {
-      this.appendCustomHeader(cellEl, output);
-      return;
-    }
+    if (output instanceof HTMLElement) output = { el: output };
+    const label = el("span", "mach-header-label");
     if (output && typeof output === "object" && output.el instanceof HTMLElement) {
-      this.appendCustomHeader(cellEl, output.el);
+      label.classList.add("mach-header-label--custom");
+      label.appendChild(output.el);
       setRendererDestroyer(cellEl, output.destroy);
-      return;
-    }
-    const colDef = column.colDef;
-    this.appendHeaderLabel(cellEl, colDef.headerName ?? colDef.field ?? column.id);
-  }
-
-  private appendHeaderLabel(cellEl: HTMLElement, value: string): void {
-    const labelEl = el("span", "mach-header-label");
-    labelEl.textContent = value;
-    cellEl.appendChild(labelEl);
-  }
-
-  private appendCustomHeader(cellEl: HTMLElement, content: HTMLElement): void {
-    const wrapper = el("span", "mach-header-label mach-header-label--custom");
-    wrapper.appendChild(content);
-    cellEl.appendChild(wrapper);
+    } else label.textContent = typeof output === "string" ? output : colDef.headerName ?? colDef.field ?? column.id;
+    cellEl.appendChild(label);
   }
 
   private appendFilterControls(
@@ -358,7 +305,8 @@ export class HeaderRenderer {
       }
 
       for (const gc of this.groupCells) {
-        const leaves = this.visiblePaneLeaves(gc.group, pane);
+        if (gc.pane !== pane) continue;
+        const leaves = gc.group.getLeafColumns().filter(column => !column.hide && this.core.columnModel.paneOf(column) === pane);
         if (leaves.length === 0) continue;
         const left = leafLefts.get(leaves[0].id) ?? 0;
         let width = 0;
@@ -373,12 +321,6 @@ export class HeaderRenderer {
       widths[pane] = x;
     }
     this.core.skeleton.setPaneWidths(widths.left, widths.right);
-  }
-
-  private visiblePaneLeaves(group: ColumnGroup<any>, pane: PaneType): Column[] {
-    return group
-      .getLeafColumns()
-      .filter((c) => !c.hide && this.core.columnModel.paneOf(c) === pane);
   }
 
   private onHeaderKeyDown(e: KeyboardEvent, column: Column): void {

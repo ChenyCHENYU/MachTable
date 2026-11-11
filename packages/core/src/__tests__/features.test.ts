@@ -61,6 +61,35 @@ describe("selectable rows", () => {
     expect(api.selection.getRows()[0].id).toBe("2");
     api.destroy();
   });
+
+  it("ignores rejected replacement targets and can clear a previously selected locked row", () => {
+    const host = createHost();
+    const rows: Row[] = [
+      { id: "locked", name: "a", score: 0 },
+      { id: "first", name: "b", score: 1 },
+      { id: "second", name: "c", score: 1 }
+    ];
+    const api = createGrid(host, {
+      columnDefs: [{ colId: "sel", width: 46, checkboxSelection: true, selectable: ({ data }) => (data?.score ?? 0) > 0 }],
+      rowData: rows,
+      rowSelection: "multiple",
+      rowKey: "id"
+    });
+    api.selection.setById("first");
+    api.selection.setById("locked");
+    api.selection.setRows([rows[0]]);
+    expect(api.selection.getIds()).toEqual(["first"]);
+    expect(host.querySelector<HTMLInputElement>('.mach-row[data-id="locked"] .mach-row-checkbox')?.checked).toBe(false);
+
+    api.selection.setRows([rows[0], rows[1], rows[2]]);
+    expect(api.selection.getIds()).toEqual(["first", "second"]);
+    api.rows.transact({ update: [{ ...rows[2], score: 0 }] });
+    api.selection.setById("second", false);
+    expect(api.selection.getIds()).toEqual(["first"]);
+    api.selection.clear();
+    expect(api.selection.getIds()).toEqual([]);
+    api.destroy();
+  });
 });
 
 describe("singleClickEdit", () => {
@@ -433,6 +462,41 @@ describe("tree data", () => {
     expect(r1Checkbox2?.checked).toBe(true);
     expect(r1Checkbox2?.indeterminate).toBe(false);
     expect(api.selection.getRows().length).toBe(3);
+    api.destroy();
+  });
+
+  it("keeps disabled tree rows unchecked during cascade and tri-state derivation", () => {
+    const host = createHost();
+    const columnDefs = treeDefs();
+    const locked = new Set(["c1", "r2", "c4"]);
+    columnDefs[0] = { ...columnDefs[0], selectable: ({ node }) => !locked.has(node.id) };
+    const api = createGrid(host, {
+      columnDefs,
+      rowData: [...treeRows, { id: "r3", name: "华北", children: [{ id: "c4", name: "天津" }] }],
+      treeData: true,
+      rowSelection: "multiple",
+      rowKey: "id",
+      defaultExpandAll: true
+    });
+    const checkbox = (id: string) =>
+      host.querySelector<HTMLInputElement>(`.mach-row[data-id="${id}"] .mach-row-checkbox`)!;
+    api.selection.setById("r1");
+    expect(api.selection.getIds()).toEqual(["r1", "c2"]);
+    expect(checkbox("r1").checked).toBe(true);
+    expect(checkbox("r1").indeterminate).toBe(false);
+    expect(checkbox("c1").disabled).toBe(true);
+    expect(checkbox("c1").checked).toBe(false);
+
+    api.selection.setById("c3", true, false);
+    expect(api.selection.getIds()).toEqual(["r1", "c2", "c3"]);
+    expect(checkbox("r2").disabled).toBe(true);
+    expect(checkbox("r2").checked).toBe(false);
+    api.selection.setById("r1", false, false);
+    expect(api.selection.getIds()).toEqual(["c3"]);
+    api.selection.setById("r3");
+    expect(api.selection.getIds()).toEqual(["r3"]);
+    expect(checkbox("c4").disabled).toBe(true);
+    expect(checkbox("c4").checked).toBe(false);
     api.destroy();
   });
 

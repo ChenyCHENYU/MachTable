@@ -212,6 +212,70 @@ describe("0.14 progressive DX", () => {
     api.destroy();
   });
 
+  it("reclaims oversized auto-height pools while retaining the active rows", () => {
+    const root = host();
+    let mounted = 0;
+    const cellRenderer = () => {
+      mounted++;
+      return { el: document.createElement("span"), destroy: () => { mounted--; } };
+    };
+    const data = Array.from({ length: 250 }, (_, index) => ({ ...rows[0], id: String(index) }));
+    const api = createGrid(root, {
+      columnDefs: [
+        { field: "id", width: 100, pinned: "left" },
+        { field: "name", width: 180, cellRenderer },
+        { field: "profile.code", width: 100, pinned: "right" }
+      ],
+      rowData: data, rowKey: "id", pagination: false, domLayout: "autoHeight"
+    });
+    const paneRows = (pane: string) => root.querySelectorAll(`.mach-pane--${pane} .mach-row`);
+    const first = paneRows("center")[0];
+    expect(paneRows("center")).toHaveLength(250);
+    expect(mounted).toBe(250);
+
+    api.rows.setData(data.slice(0, 2));
+    for (const pane of ["left", "center", "right"]) expect(paneRows(pane).length).toBeLessThan(20);
+    expect(paneRows("center")[0]).toBe(first);
+    expect(mounted).toBe(2);
+
+    api.rows.setData(data);
+    expect(root.querySelectorAll(".mach-pane--center .mach-row[data-index]")).toHaveLength(250);
+    api.rows.setData([]);
+    expect(paneRows("center").length).toBeLessThan(20);
+    expect(root.querySelectorAll(".mach-row[data-index]")).toHaveLength(0);
+    expect(mounted).toBe(0);
+    api.destroy();
+    expect(mounted).toBe(0);
+  });
+
+  it("reclaims a capped pool while preserving scrolled visible cells and editors", () => {
+    const root = host();
+    let mounted = 0;
+    const api = createGrid(root, {
+      columnDefs: [{ field: "name", width: 180, editable: true, cellRenderer: () => {
+        mounted++;
+        return { el: document.createElement("span"), destroy: () => { mounted--; } };
+      } }],
+      rowData: Array.from({ length: 250 }, (_, index) => ({ id: String(index), name: `row ${index}` })),
+      rowKey: "id", pagination: false, domLayout: "autoHeight"
+    });
+    const body = root.querySelector<HTMLElement>(".mach-body")!;
+    const viewport = root.querySelector<HTMLElement>(".mach-body-viewport--scroll")!;
+    Object.defineProperty(viewport, "clientHeight", { get: () => parseFloat(body.style.height) });
+    api.updateOptions({ maxBodyHeight: 1200 });
+    api.view.scrollToRow(100, "top");
+    expect(api.editing.startCell({ rowIndex: 100, colId: "name" })).toBe(true);
+    const editor = root.querySelector(".mach-editor-input");
+    const cell = root.querySelector('.mach-row[data-id="100"] .mach-cell');
+    api.updateOptions({ maxBodyHeight: 120 });
+    expect(root.querySelectorAll(".mach-pane--center .mach-row").length).toBeLessThan(40);
+    expect(mounted).toBeLessThan(40);
+    expect(root.querySelector(".mach-editor-input")).toBe(editor);
+    expect(root.querySelector('.mach-row[data-id="100"] .mach-cell')).toBe(cell);
+    api.destroy();
+    expect(mounted).toBe(0);
+  });
+
   it("autoHeight releases overlay sizing after empty, loading and error states recover", () => {
     const root = host();
     const api = createGrid(root, {
@@ -244,6 +308,7 @@ describe("0.14 progressive DX", () => {
       rowKey: "id",
       pagination: false,
       persistence: { key: "orders", debounceMs: 10 },
+      rowSelection: "multiple",
     });
     first.sorting.setModel([{ colId: "name", direction: "desc" }]);
     first.selection.setById("b");
@@ -257,6 +322,7 @@ describe("0.14 progressive DX", () => {
       rowKey: "id",
       pagination: false,
       persistence: { key: "orders" },
+      rowSelection: "multiple",
     });
     expect(second.sorting.getModel()).toEqual([
       { colId: "name", direction: "desc" },

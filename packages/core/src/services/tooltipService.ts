@@ -1,7 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type { TooltipParams } from "../types/params";
-import { applyPortalTheme, el, positionAnchoredPortal } from "../lib/dom";
+import { applyPortalTheme, bindListeners, el, positionAnchoredPortal } from "../lib/dom";
 import { formatCellValue } from "../render/cellContent";
 
 type TooltipContext = Pick<
@@ -20,24 +20,17 @@ type TooltipContext = Pick<
 export class TooltipService {
   private panel: HTMLElement | null = null;
   private showTimer = 0;
-  private hideTimer = 0;
   private currentCell: HTMLElement | null = null;
 
   constructor(private core: TooltipContext) {}
 
   init(): void {
-    const body = this.core.skeleton.bodyEl;
-    body.addEventListener("mouseover", this.onMouseOver);
-    body.addEventListener("mouseleave", this.onBodyLeave);
+    bindListeners(this.core.skeleton.bodyEl, true, { mouseover: this.onMouseOver, mouseleave: this.onBodyLeave });
   }
 
   destroy(): void {
-    this.clearTimers();
-    this.removePanel();
-    const body = this.core.skeleton.bodyEl;
-    body.removeEventListener("mouseover", this.onMouseOver);
-    body.removeEventListener("mouseleave", this.onBodyLeave);
-    this.currentCell = null;
+    this.hide();
+    bindListeners(this.core.skeleton.bodyEl, false, { mouseover: this.onMouseOver, mouseleave: this.onBodyLeave });
   }
 
   hide(): void {
@@ -51,15 +44,10 @@ export class TooltipService {
       clearTimeout(this.showTimer);
       this.showTimer = 0;
     }
-    if (this.hideTimer) {
-      clearTimeout(this.hideTimer);
-      this.hideTimer = 0;
-    }
   }
 
   private removePanel(): void {
-    if (!this.panel) return;
-    this.panel.remove();
+    this.panel?.remove();
     this.panel = null;
   }
 

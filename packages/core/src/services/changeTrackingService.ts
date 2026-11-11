@@ -39,7 +39,7 @@ export class ChangeTrackingService<TData = any> {
   private record(event: CellValueChangedEvent<TData>): void {
     const key = `${event.rowNode.id}\u0000${event.column.id}`;
     const existing = this.trackedCellChanges.get(key);
-    const originalValue = existing?.originalValue ?? event.oldValue;
+    const originalValue = existing ? existing.originalValue : event.oldValue;
     if (Object.is(event.newValue, originalValue)) this.trackedCellChanges.delete(key);
     else {
       this.trackedCellChanges.set(key, {

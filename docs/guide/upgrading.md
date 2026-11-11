@@ -3,10 +3,17 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.39.0
+pnpm up @agile-team/mach-table-vue@^0.39.1
 # 或
-pnpm up @agile-team/mach-table-react@^0.39.0
+pnpm up @agile-team/mach-table-react@^0.39.1
 ```
+
+## 0.39.0 → 0.39.1
+
+- 程序化选择同样遵守 `rowSelection`。需要选择数据时显式配置 `"single"` 或 `"multiple"`；`"none"` 禁止新增选择，切换单选后最多保留一个有效项。
+- `selectionScope: "page"` 只保留最新成功结果中仍存在的选中项。同页刷新保留相同 ID，失败或已失效的请求不会清理当前选择。
+- `autoHeight` 列按浏览器实际文字换行测高，更新列宽或字体后重新测量。自定义单元格渲染器使用 `getRowHeight` 指定业务高度。
+- 变高行的普通内容事务更新局部高度索引。回调若依赖其他行或外部状态，使用 `api.updateOptions({ getRowHeight })` 显式重算。
 
 ## 0.38 → 0.39
 

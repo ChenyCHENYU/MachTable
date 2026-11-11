@@ -1008,6 +1008,103 @@ describe("Vue adapter", () => {
     app.unmount();
   });
 
+  it.each(["page", "preserve", "query"] as const)("keeps mounted %s selection consistent with accepted pages", async (selectionScope) => {
+    type Row = { id: string; name: string };
+    const query = {};
+    let revision = 0;
+    const request = vi.fn(async ({ page }: { page: number }) => ({
+      rows: [{ id: String(page), name: `page-${page}-${++revision}` }, { id: "shared", name: "shared" }], total: 40,
+    }));
+    let remote!: UseMachTableQueryReturn<Row>;
+    const table = shallowRef<{ getApi(): GridApi<Row> | null } | null>(null);
+    const columnDefs: ColDef<Row>[] = [{ field: "name", checkboxSelection: true }];
+    const host = document.createElement("div");
+    document.body.append(host);
+    const app = createApp(defineComponent({ setup() {
+      remote = useMachTableQuery({ query, request, rowKey: "id", selectionScope });
+      return () => h(MachTable, { ...remote.bindings.value, columnDefs, rowSelection: "multiple", ref: table });
+    } }));
+    app.mount(host);
+    await vi.waitFor(() => expect(remote.rows.value).toHaveLength(2));
+    const api = table.value!.getApi()!;
+    await api.whenReady();
+    api.selection.setById("1");
+    api.selection.setById("shared", true, false);
+    expect(remote.selectedKeys.value).toEqual(["1", "shared"]);
+
+    await remote.reload();
+    await nextTick();
+    expect(remote.selectedRows.value).toEqual(remote.rows.value);
+    expect(api.selection.getIds()).toEqual(["1", "shared"]);
+
+    api.pagination.setPage(2);
+    await vi.waitFor(() => expect(remote.rows.value[0]?.id).toBe("2"));
+    await nextTick();
+    expect(api.selection.getIds()).toEqual(["shared"]);
+    expect(remote.selectedKeys.value).toEqual(selectionScope === "page" ? ["shared"] : ["1", "shared"]);
+    expect(remote.selectedRows.value.map(row => row.id)).toEqual(selectionScope === "page" ? ["shared"] : ["1", "shared"]);
+    api.selection.setById("2");
+    expect(remote.selectedKeys.value).toEqual(selectionScope === "page" ? ["2"] : ["1", "2"]);
+    app.unmount();
+  });
+
+  it("does not discard page selection for failed or stale responses", async () => {
+    type Row = { id: string };
+    const pending: Array<{ resolve(result: { rows: Row[]; total: number }): void; reject(error: Error): void }> = [];
+    const request = () => new Promise<{ rows: Row[]; total: number }>((resolve, reject) => pending.push({ resolve, reject }));
+    let remote!: UseMachTableQueryReturn<Row>;
+    const table = shallowRef<{ getApi(): GridApi<Row> | null } | null>(null);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const app = createApp(defineComponent({ setup() {
+      remote = useMachTableQuery({ query: {}, request, rowKey: "id", selectionScope: "page", mode: "manual" });
+      return () => h(MachTable, { ...remote.bindings.value, columnDefs: [{ field: "id" }], rowSelection: "multiple", ref: table });
+    } }));
+    app.mount(host);
+    const api = table.value!.getApi()!;
+    await api.whenReady();
+    const initial = remote.reload();
+    pending.shift()!.resolve({ rows: [{ id: "1" }], total: 40 });
+    await initial;
+    api.selection.setById("1");
+
+    api.pagination.setPage(2);
+    const failed = remote.reload();
+    pending.shift()!.reject(new Error("offline"));
+    await failed;
+    expect(remote.selectedKeys.value).toEqual(["1"]);
+    expect(api.selection.getIds()).toEqual(["1"]);
+
+    const invalid = remote.reload();
+    pending.shift()!.resolve({ rows: [{} as Row], total: 40 });
+    await invalid;
+    expect(remote.error.value).toBeInstanceOf(Error);
+    expect(remote.selectedKeys.value).toEqual(["1"]);
+
+    const stale = remote.reload();
+    const old = pending.shift()!;
+    api.pagination.setPage(3);
+    const latest = remote.reload();
+    pending.shift()!.resolve({ rows: [{ id: "3" }], total: 60 });
+    await latest;
+    expect(remote.selectedKeys.value).toEqual([]);
+    api.selection.setById("3");
+    old.resolve({ rows: [{ id: "2" }], total: 40 });
+    await stale;
+    expect(remote.rows.value).toEqual([{ id: "3" }]);
+    expect(remote.selectedKeys.value).toEqual(["3"]);
+    expect(remote.selectedRows.value).toEqual([{ id: "3" }]);
+    expect(api.selection.getIds()).toEqual(["3"]);
+    const aborted = remote.reload();
+    const cancelled = pending.shift()!;
+    remote.abort();
+    cancelled.resolve({ rows: [{ id: "4" }], total: 40 });
+    await aborted;
+    expect(remote.rows.value).toEqual([{ id: "3" }]);
+    expect(remote.selectedKeys.value).toEqual(["3"]);
+    app.unmount();
+  });
+
   it("represents select-all matching as compact server rules", async () => {
     const requests: Array<{ page: number; resolve: (value: any) => void }> = [];
     let remote: UseMachTableQueryReturn<{ id: string }> | null = null;

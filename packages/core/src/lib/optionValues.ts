@@ -1,5 +1,10 @@
 import type { GridOptions, ResolvedGridOptions } from "../types/options";
 
+/** Works with null-prototype records and ignores inherited option names. */
+export function hasOwnOption<T extends object>(options: T, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(options, key);
+}
+
 /** Invalid numeric patches are ignored; initial resolution supplies its own fallback. */
 export function normalizeFinite(value: unknown, min: number, integer = false): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value < min) return undefined;
@@ -27,7 +32,7 @@ export function copyOptions<TSource extends object, K extends keyof TSource>(
 ): boolean {
   let copied = false;
   for (const key of keys) {
-    if (own ? Object.prototype.hasOwnProperty.call(source, key) : source[key] != null) {
+    if (own ? hasOwnOption(source, key) : source[key] != null) {
       target[key] = source[key];
       copied = true;
     }

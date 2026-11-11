@@ -245,6 +245,7 @@ describe("infinite scroll datasource", () => {
     const { api } = createInfinite(capture);
     await flush();
 
+    api.selection.setMode("multiple");
     api.selection.setById("r5");
     expect(api.selection.getRows().length).toBe(1);
 

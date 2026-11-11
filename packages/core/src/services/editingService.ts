@@ -40,7 +40,6 @@ interface CellEditingState extends MountedEditor {
   shell: HTMLElement;
   node: RowNode<any>;
   column: Column;
-  rowIndex: number;
   oldValue: any;
   confirmButton: HTMLButtonElement;
   cancelButton: HTMLButtonElement;
@@ -84,13 +83,14 @@ export class EditingService {
   private rowEditing: RowEditingState | null = null;
   private stopPromise: Promise<boolean> | null = null;
   private stopToken = 0;
+  private startToken = 0;
 
   constructor(private core: EditingContext) {}
 
   isEditing(rowIndex?: number, colId?: string): boolean {
     if (this.cellEditing) {
       if (rowIndex == null && colId == null) return true;
-      return this.cellEditing.rowIndex === rowIndex && this.cellEditing.column.id === colId;
+      return this.cellEditing.node.rowIndex === rowIndex && this.cellEditing.column.id === colId;
     }
     if (!this.rowEditing) return false;
     if (rowIndex == null && colId == null) return true;
@@ -135,18 +135,25 @@ export class EditingService {
     return true;
   }
 
-  start(rowIndex: number, column: Column, keyPress?: string | null): boolean {
+  start(rowIndex: number, column: Column, keyPress?: string | null, reveal = false): boolean {
+    this.startToken++;
+    if (this.core.isDisposed()) return false;
+    const node = this.core.rowModel.getDisplayedRow(rowIndex);
+    if (!node || node.data == null) return false;
     if (this.core.gridOptions.editType === "fullRow") return this.startRow(rowIndex, column.id);
     if (this.rowEditing) return false;
     if (this.cellEditing) {
-      if (this.cellEditing.rowIndex === rowIndex && this.cellEditing.column.id === column.id) return true;
-      void this.stopAsync(false).then((stopped) => {
-        if (stopped && !this.cellEditing && !this.rowEditing) this.start(rowIndex, column, keyPress);
+      if (!this.stopPromise && this.cellEditing.node === node && this.cellEditing.column === column) return true;
+      void this.stopForNavigation(node, column).then((stopped) => {
+        if (stopped) this.start(node.rowIndex, column, keyPress, reveal);
       });
       return true;
     }
-    const node = this.core.rowModel.getDisplayedRow(rowIndex);
-    if (!node || node.data == null || !this.isEditable(node, column)) return false;
+    if (!this.isEditable(node, column)) return false;
+    if (reveal) {
+      this.core.bodyRenderer.scrollToIndex(rowIndex, "nearest");
+      this.core.bodyRenderer.setFocusedCell(rowIndex, column.id);
+    }
     const cell = this.core.bodyRenderer.getCellElement(rowIndex, column.id);
     if (!cell) return false;
 
@@ -176,7 +183,6 @@ export class EditingService {
       node,
       column,
       editor,
-      rowIndex,
       oldValue,
       cell,
       shell,
@@ -187,6 +193,14 @@ export class EditingService {
     this.focusEditor(editor, column, node);
     this.core.emit("cellEditingStarted", { rowIndex, colId: column.id, rowNode: node });
     return true;
+  }
+
+  /** Clicks, API calls and Tab share one identity-checked navigation intent. */
+  stopForNavigation(node: RowNode<any>, column?: Column): Promise<boolean> {
+    const token = ++this.startToken;
+    return this.stopAsync(false).then((stopped) => stopped && token === this.startToken &&
+      !this.isEditing() && this.core.rowModel.getDisplayedRow(node.rowIndex) === node &&
+      (column == null || this.core.columnModel.getColumn(column.id) === column));
   }
 
   startRow(rowIndex: number, preferredColId?: string): boolean {
@@ -257,6 +271,7 @@ export class EditingService {
   }
 
   stopAsync(cancel = false): Promise<boolean> {
+    if (cancel) this.startToken++;
     if (this.rowEditing) return this.stopRowAsync(cancel);
     const editing = this.cellEditing;
     if (!editing) return Promise.resolve(false);
@@ -392,7 +407,7 @@ export class EditingService {
     if (this.core.isDisposed()) return true;
 
     this.core.emit("cellEditingStopped", {
-      rowIndex: editing.rowIndex,
+      rowIndex: editing.node.rowIndex,
       colId: editing.column.id,
       rowNode: editing.node,
       oldValue: editing.oldValue,
@@ -646,14 +661,9 @@ export class EditingService {
       event.preventDefault();
       event.stopPropagation();
       const current = this.cellEditing;
-      const next = this.core.keyboardService.nextEditable(current.rowIndex, current.column.id, event.shiftKey ? -1 : 1);
-      void this.stopAsync(false).then((stopped) => {
-        if (stopped && next) {
-          this.core.bodyRenderer.scrollToIndex(next.rowIndex, "nearest");
-          this.core.bodyRenderer.setFocusedCell(next.rowIndex, next.column.id);
-          this.start(next.rowIndex, next.column);
-        }
-      });
+      const next = this.core.keyboardService.nextEditable(current.node.rowIndex, current.column.id, event.shiftKey ? -1 : 1);
+      if (next) this.start(next.rowIndex, next.column, null, true);
+      else void this.stopAsync(false);
     }
   };
 
@@ -687,6 +697,6 @@ export class EditingService {
   }
 
   destroy(): void {
-    if (this.cellEditing || this.rowEditing) void this.stopAsync(true);
+    void this.stopAsync(true);
   }
 }

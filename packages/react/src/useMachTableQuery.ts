@@ -49,6 +49,7 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   mode?: "auto" | "manual";
   debounceMs?: number;
   keepPreviousData?: boolean;
+  /** `page` keeps explicit selections present in the accepted page; `preserve`/`query` retain cross-page selections. */
   selectionScope?: "page" | "preserve" | "query";
   clearSelectionOnQueryChange?: boolean;
   initialQuickFilterText?: string | null;
@@ -167,8 +168,16 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       throw new TypeError("[MachTable] Remote request must resolve to { rows: TData[], total: non-negative number }.");
     }
     const nextRows = [...result.rows];
-    for (const row of nextRows) {
-      const id = rowId(row);
+    const pageRows = new Map(nextRows.map((row) => [rowId(row), row] as const));
+    if (optionsRef.current.selectionScope === "page") {
+      for (const id of selectedIds.current) {
+        if (!pageRows.has(id)) {
+          selectedIds.current.delete(id);
+          selectedById.current.delete(id);
+        }
+      }
+    }
+    for (const [id, row] of pageRows) {
       if (selected(id)) selectedById.current.set(id, row);
       else selectedById.current.delete(id);
     }
@@ -291,7 +300,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   }, [clearSelection, scheduleLoad]);
   const onSelectionChanged = useCallback((event: SelectionChangedEvent<TData>): void => {
     if (suppressSelection.current) return;
-    const visibleIds = new Set(stateRef.current.rows.map(rowId));
+    const visibleIds = stateRef.current.rows.map(rowId);
     const nextVisible = new Set(event.selectedRows.map(rowId));
     if (allMatching.current) {
       for (const id of visibleIds) {

@@ -309,6 +309,116 @@ describe("React B-side workflows", () => {
     await act(async () => root.unmount());
   });
 
+  it.each(["page", "preserve", "query"] as const)("keeps mounted %s selection consistent with accepted pages", async (selectionScope) => {
+    type Row = { id: string; name: string };
+    const criteria = {};
+    let revision = 0;
+    const request = vi.fn(async ({ page }: { page: number }) => ({
+      rows: [{ id: String(page), name: `page-${page}-${++revision}` }, { id: "shared", name: "shared" }], total: 40,
+    }));
+    let query!: UseMachTableQueryReturn<Row>;
+    const apiRef = { current: null as GridApi<Row> | null };
+    const columnDefs = [{ field: "name", checkboxSelection: true }];
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    function Harness() {
+      query = useMachTableQuery({ query: criteria, request, rowKey: "id", selectionScope });
+      return createElement(MachTable<Row>, { ...query.bindings, columnDefs, rowSelection: "multiple", apiRef });
+    }
+    await act(async () => root.render(createElement(Harness)));
+    const api = apiRef.current!;
+    await act(async () => { await api.whenReady(); });
+    await act(async () => api.selection.setById("1"));
+    await act(async () => api.selection.setById("shared", true, false));
+    expect(query.selectedKeys).toEqual(["1", "shared"]);
+
+    await act(async () => query.reload());
+    expect(query.selectedRows).toEqual(query.rows);
+    expect(api.selection.getIds()).toEqual(["1", "shared"]);
+    await act(async () => api.pagination.setPage(2));
+    expect(query.rows[0]?.id).toBe("2");
+    expect(api.selection.getIds()).toEqual(["shared"]);
+    expect(query.selectedKeys).toEqual(selectionScope === "page" ? ["shared"] : ["1", "shared"]);
+    expect(query.selectedRows.map(row => row.id)).toEqual(selectionScope === "page" ? ["shared"] : ["1", "shared"]);
+    await act(async () => api.selection.setById("2"));
+    expect(query.selectedKeys).toEqual(selectionScope === "page" ? ["2"] : ["1", "2"]);
+    await act(async () => root.unmount());
+  });
+
+  it("does not discard page selection for failed or stale responses", async () => {
+    type Row = { id: string };
+    const criteria = {};
+    const pending: Array<{ resolve(result: { rows: Row[]; total: number }): void; reject(error: Error): void }> = [];
+    const request = () => new Promise<{ rows: Row[]; total: number }>((resolve, reject) => pending.push({ resolve, reject }));
+    let query!: UseMachTableQueryReturn<Row>;
+    const apiRef = { current: null as GridApi<Row> | null };
+    const columnDefs = [{ field: "id" }];
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    function Harness() {
+      query = useMachTableQuery({ query: criteria, request, rowKey: "id", selectionScope: "page", mode: "manual" });
+      return createElement(MachTable<Row>, { ...query.bindings, columnDefs, rowSelection: "multiple", apiRef });
+    }
+    await act(async () => root.render(createElement(Harness)));
+    const api = apiRef.current!;
+    await act(async () => { await api.whenReady(); });
+    await act(async () => {
+      const initial = query.reload();
+      pending.shift()!.resolve({ rows: [{ id: "1" }], total: 40 });
+      await initial;
+    });
+    await act(async () => api.selection.setById("1"));
+
+    await act(async () => {
+      api.pagination.setPage(2);
+      const failed = query.reload();
+      pending.shift()!.reject(new Error("offline"));
+      await failed;
+    });
+    expect(query.selectedKeys).toEqual(["1"]);
+    expect(api.selection.getIds()).toEqual(["1"]);
+    await act(async () => {
+      const invalid = query.reload();
+      pending.shift()!.resolve({ rows: [{} as Row], total: 40 });
+      await invalid;
+    });
+    expect(query.error).toBeInstanceOf(Error);
+    expect(query.selectedKeys).toEqual(["1"]);
+
+    let stale!: Promise<void>;
+    let old!: (typeof pending)[number];
+    await act(async () => {
+      stale = query.reload();
+      old = pending.shift()!;
+      api.pagination.setPage(3);
+      const latest = query.reload();
+      pending.shift()!.resolve({ rows: [{ id: "3" }], total: 60 });
+      await latest;
+    });
+    expect(query.selectedKeys).toEqual([]);
+    await act(async () => api.selection.setById("3"));
+    await act(async () => {
+      old.resolve({ rows: [{ id: "2" }], total: 40 });
+      await stale;
+    });
+    expect(query.rows).toEqual([{ id: "3" }]);
+    expect(query.selectedKeys).toEqual(["3"]);
+    expect(query.selectedRows).toEqual([{ id: "3" }]);
+    expect(api.selection.getIds()).toEqual(["3"]);
+    await act(async () => {
+      const aborted = query.reload();
+      const cancelled = pending.shift()!;
+      query.abort();
+      cancelled.resolve({ rows: [{ id: "4" }], total: 40 });
+      await aborted;
+    });
+    expect(query.rows).toEqual([{ id: "3" }]);
+    expect(query.selectedKeys).toEqual(["3"]);
+    await act(async () => root.unmount());
+  });
+
   it("handles React query errors, reset, compact selection and cancellation", async () => {
     const steps: Array<(signal: AbortSignal) => Promise<{ rows: { id: string }[]; total: number }>> = [
       async () => { throw new Error("offline"); },

@@ -1,4 +1,5 @@
 import { createMachTablePreset } from "./presets";
+import { hasOwnOption } from "./optionValues";
 import type { ColDef } from "../types/colDef";
 import type { GridComponents, GridDataProcessor, GridOptions } from "../types/options";
 
@@ -197,7 +198,7 @@ export function resolveMachTableGridOptions<TData>(
     options,
     explain(key) {
       const declared = layers
-        .filter((layer) => Object.prototype.hasOwnProperty.call(layer.options, key))
+        .filter((layer) => hasOwnOption(layer.options, key))
         .map((layer) => ({ name: layer.name, value: (layer.options as Record<string, unknown>)[key] }));
       const last = declared[declared.length - 1];
       return {

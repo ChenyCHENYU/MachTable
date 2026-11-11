@@ -37,6 +37,8 @@ rowSelection: "single"
 
 复选框列自动渲染为 radio；点击新行自动取消旧行；再次点击已选行保持选中。
 
+程序化选择同样遵守模式。`single` 最多保留一行，切换到单选时保留首个有效选择；`none` 禁止新增选择，仍可清空已有选择。
+
 ## 行级禁选
 
 ```ts
@@ -62,6 +64,8 @@ api.selection.setRows([rowA, rowB]);              // 按数据引用批量选中
 api.selection.selectAll(true);                         // 全选过滤结果
 api.selection.clear();
 ```
+
+编程式选择遵循 `rowSelection`。`none` 禁止选中，`single` 始终只保留一行，批量传入时取第一个有资格的行。通过 `setMode("single")` 或动态配置切换为单选时，已有多选也会收敛；树级联仅在多选模式生效。
 
 ## 与过滤/排序/数据替换的交互
 

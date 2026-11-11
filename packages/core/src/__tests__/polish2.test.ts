@@ -481,6 +481,27 @@ describe("enterprise DX helpers and change tracking", () => {
     api.destroy();
   });
 
+  it.each([null, undefined])("preserves %s as the original value across repeated edits and rollback", async (original) => {
+    const host = createHost();
+    const api = createGrid<{ id: string; qty?: number | null }>(host, {
+      columnDefs: [{ field: "qty", editable: true, cellEditor: "number", width: 120 }],
+      rowData: [{ id: "1", qty: original }],
+      rowKey: "id",
+      pagination: false
+    });
+    await api.whenReady();
+    for (const value of ["10", "20"]) {
+      expect(api.editing.startCell({ rowIndex: 0, colId: "qty" })).toBe(true);
+      host.querySelector<HTMLInputElement>(".mach-editor-input")!.value = value;
+      await api.editing.stop();
+    }
+    expect(api.editing.getChanges()[0].cells[0]).toMatchObject({ originalValue: original, value: 20 });
+    expect(api.editing.rollback()).toBe(true);
+    expect(api.rows.getById("1")?.data?.qty).toBe(original);
+    expect(api.editing.getChanges()).toEqual([]);
+    api.destroy();
+  });
+
   it("preserves edits made while an async save is in flight", async () => {
     const host = createHost();
     const data = [{ id: "1", name: "before", qty: 1 }];

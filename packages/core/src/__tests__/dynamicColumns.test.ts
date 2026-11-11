@@ -78,6 +78,24 @@ it("accepts revised definitions for untouched properties and keeps explicit view
   ]);
 });
 
+it("preserves a cleared sort when stable columns are renamed and initializes genuinely new columns", () => {
+  const definition: ColDef = { field: "a", initialSort: "asc" };
+  const api = create({ columnDefs: [definition], rowData: [{ id: "1", a: 2, b: 1 }, { id: "2", a: 1, b: 2 }] });
+  expect(api.rows.getAt(0)?.id).toBe("2");
+  api.sorting.setModel([]);
+  api.columns.setDefinitions([{ ...definition, headerName: "更新标题", initialSort: "desc" }]);
+  expect(api.sorting.getModel()).toEqual([]);
+  expect(api.rows.getAt(0)?.id).toBe("1");
+
+  api.columns.setDefinitions([definition, { field: "b", initialSort: "desc" }]);
+  expect(api.sorting.getModel()).toEqual([{ colId: "b", direction: "desc" }]);
+  api.columns.setDefinitions([definition]);
+  expect(api.sorting.getModel()).toEqual([]);
+  api.columns.setDefinitions([]);
+  api.columns.setDefinitions([definition]);
+  expect(api.sorting.getModel()).toEqual([{ colId: "a", direction: "asc" }]);
+});
+
 it("keeps grouped preferences on title changes and resets to the latest schema order", () => {
   const definitions = (title: string, updated = false) => buildColDefsFromSchema({
     fields: ["a", "b", "c", "d", "e", "f", "g"].map(field => ({ field })),
@@ -86,7 +104,7 @@ it("keeps grouped preferences on title changes and resets to the latest schema o
       { groupId: "other", title, fields: ["f", "g"] }
     ]
   });
-  const api = create({ columnDefs: definitions("计划"), rowData: [{ id: "1", a: "keep" }] });
+  const api = create({ columnDefs: definitions("计划"), rowData: [{ id: "1", a: "keep" }], rowSelection: "multiple" });
   api.columns.move("b", 0);
   api.columns.move("e", 0);
   api.columns.setWidth("c", 250);

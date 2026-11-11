@@ -3,6 +3,7 @@ import type { PaneType } from "../services/columnModel";
 import type { Column } from "../services/column";
 import type { InputChange } from "../services/inputService";
 import { hasColumnType } from "../core/resolveOptions";
+import { hasOwnOption } from "../lib/optionValues";
 import type { RowNode } from "../types/row";
 import type { RefreshCellsParams } from "../types/api";
 import { RangeSelectionModel, type NormalizedRange } from "../services/rangeSelectionModel";
@@ -27,6 +28,7 @@ type BodyContext = Pick<
   | "buildDefaultEmptyState"
   | "buildDefaultErrorState"
   | "columnModel"
+  | "columnSizing"
   | "contextMenuService"
   | "editingService"
   | "emit"
@@ -113,7 +115,6 @@ export interface FocusedCell {
 /** @internal Per-grid DOM owner; render callbacks receive public parameters only. */
 export class BodyRenderer {
   private rowPoolItems: RowSlot[] = [];
-  private poolSize = 0;
   private firstRenderedRow = 0;
   private renderedRowEndExclusive = -1;
   private rafId = 0;
@@ -131,6 +132,8 @@ export class BodyRenderer {
   private centerSource?: Column[];
   private centerColumns: Column[] = [];
   private centerFirst = 0;
+  private centerLastExcl = 0;
+  private centerHasSpans = false;
   focusedCell: FocusedCell | null = null;
   private rowDragController: RowDragController;
 
@@ -188,7 +191,8 @@ export class BodyRenderer {
     this.dirtyHeightNodes.clear();
     this.rowSizes.reset([], () => this.core.gridOptions.rowHeight);
     this.columnViewport.update([]);
-    this.measureCanvas = null;
+    this.measureCell?.remove();
+    this.measureCell = null;
   }
 
   paneForColumn(column: Column): PaneType {
@@ -244,7 +248,11 @@ export class BodyRenderer {
   private rowLayoutSignature = "";
   private expandsWithRows = false;
   private pendingFlash: Array<[number, string]> = [];
-  private measureCanvas: HTMLCanvasElement | null = null;
+  private measureCell: HTMLElement | null = null;
+  private measureStyle = "";
+  private measureFont = "";
+  private textPadding = 0;
+  private singleLineHeight = 0;
 
   applyContainerSizes(): void {
     const sk = this.core.skeleton;
@@ -264,6 +272,7 @@ export class BodyRenderer {
     const rowCount = this.core.rowModel.getDisplayTotalCount();
     const rowHeight = this.core.gridOptions.rowHeight;
     const autoHeightColumns = this.core.gridOptions.masterDetail ? [] : this.collectAutoHeightColumns();
+    if (autoHeightColumns.length) this.syncTextMeasurement();
     // Sparse random-access blocks cannot materialize a variable-height prefix for every remote row.
     const variable = this.core.gridOptions.datasourceMode !== "block" && (
       this.core.gridOptions.masterDetail ||
@@ -455,36 +464,44 @@ export class BodyRenderer {
     return this.core.columnModel.getOrderedVisible().some((c) => c.colDef.autoHeight === true);
   }
 
-  private measureAutoHeight(node: RowNode<any>, cols: Column[]): number {
-    this.measureCanvas ??= document.createElement("canvas");
-    const ctx = this.measureCanvas.getContext("2d");
-    if (!ctx) return 0;
-    const style = window.getComputedStyle(this.core.skeleton.root);
-    const fontSize = parseFloat(style.fontSize) || 13;
-    ctx.font = `${style.fontStyle} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
-    const padding = parseFloat(style.getPropertyValue("--mach-cell-padding")) || 9;
-    const lineHeight = Math.round(fontSize * 1.45);
-    let maxLines = 1;
-
-    for (const col of cols) {
-      const text = formatCellValue(this.core, node, col);
-      if (!text) continue;
-      const availW = Math.max(10, col.currentWidth - padding * 2 - 2);
-      let lines = 1;
-      let w = 0;
-      for (const ch of text) {
-        const cw = ctx.measureText(ch).width;
-        if (w > 0 && w + cw > availW) {
-          lines++;
-          w = cw;
-        } else {
-          w += cw;
-        }
-        if (lines >= 12) break;
-      }
-      if (lines > maxLines) maxLines = lines;
+  private syncTextMeasurement(): void {
+    if (!this.measureCell) {
+      this.measureCell = el("div", "mach-cell mach-cell--wrap", { "aria-hidden": "true" });
+      this.measureCell.style.cssText = "height:auto;visibility:hidden;pointer-events:none";
+      this.core.skeleton.root.appendChild(this.measureCell);
     }
-    return maxLines * lineHeight + Math.round(padding * 0.9);
+    const style = window.getComputedStyle(this.measureCell);
+    const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const signature = [font, style.lineHeight, style.letterSpacing, style.wordSpacing, style.padding, style.boxSizing].join("|");
+    if (signature !== this.measureStyle) {
+      this.measureStyle = signature;
+      this.invalidateAllRowHeights();
+      this.measureFont = parseFloat(style.letterSpacing) || parseFloat(style.wordSpacing) ? "" : font;
+      this.textPadding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+      this.measureCell.style.width = "10000px";
+      this.measureCell.textContent = "M";
+      this.singleLineHeight = Math.ceil(this.measureCell.getBoundingClientRect().height);
+    }
+  }
+
+  private measureAutoHeight(node: RowNode<any>, cols: Column[]): number {
+    const cell = this.measureCell!;
+    let height = 0;
+    for (const column of cols) {
+      const text = formatCellValue(this.core, node, column);
+      if (!text) continue;
+      let measured = this.singleLineHeight;
+      if (!this.measureFont || this.core.columnSizing.textWidth(text, this.measureFont) > column.currentWidth - this.textPadding) {
+        const width = `${column.currentWidth}px`;
+        if (cell.style.width !== width) cell.style.width = width;
+        if (cell.textContent !== text) cell.textContent = text;
+        measured = Math.ceil(cell.getBoundingClientRect().height);
+        // Repeated values reuse the same layout; large strings are released immediately.
+        if (text.length > 4096) cell.textContent = "";
+      }
+      height = Math.max(height, measured);
+    }
+    return height;
   }
 
   queueFlash(rowIndexes: number[], colIds: string[]): void {
@@ -532,14 +549,14 @@ export class BodyRenderer {
     // An even pool preserves striped-row parity when slots are recycled.
     const needed = rawNeeded % 2 === 0 ? rawNeeded : rawNeeded + 1;
     this.updateCenterWindow();
-    if (needed > this.poolSize) this.growPool(needed);
+    if (needed > this.rowPoolItems.length) this.growPool(needed);
     this.applyCellLayout();
     this.updateRange(true, false);
     this.refreshOverlays();
   }
 
   private growPool(needed: number): void {
-    while (this.poolSize < needed) {
+    while (this.rowPoolItems.length < needed) {
       const slot: RowSlot = { index: -1, nodeId: "", kind: "master", rows: {}, cells: {} };
       const sk = this.core.skeleton;
       for (const pane of PANES) {
@@ -562,7 +579,6 @@ export class BodyRenderer {
         slot.detailRow = detailRow;
       }
       this.rowPoolItems.push(slot);
-      this.poolSize++;
     }
   }
 
@@ -598,17 +614,21 @@ export class BodyRenderer {
       const row = slot.rows.center;
       const cells = slot.cells.center;
       if (!row || !cells) continue;
-      const next = columns.map((column, index) => {
-        const oldIndex = positions[index];
-        return row.appendChild(oldIndex === undefined ? this.createCell(column) : cells[oldIndex]);
-      });
       for (const index of previous.values()) {
         const cell = cells[index];
         if (slot.index >= 0) this.core.editingService.releaseCell(slot.index, cell.dataset.colId ?? "", cell);
         cleanupCellContent(this.core, cell);
         cell.remove();
       }
-      slot.cells.center = next;
+      // Moving a retained DOM node can blur a mounted editor inside it.
+      let before = row.firstElementChild;
+      slot.cells.center = columns.map((column, index) => {
+        const oldIndex = positions[index];
+        const cell = oldIndex === undefined ? this.createCell(column) : cells[oldIndex];
+        if (cell !== before) row.insertBefore(cell, before);
+        before = cell.nextElementSibling;
+        return cell;
+      });
     }
   }
 
@@ -622,7 +642,14 @@ export class BodyRenderer {
   }
 
   private clearPool(removeRows: boolean): void {
-    for (const slot of this.rowPoolItems) {
+    this.discardPoolTail(0, removeRows);
+    this.centerSource = undefined;
+    this.centerColumns = [];
+  }
+
+  private discardPoolTail(size: number, removeRows: boolean): void {
+    for (let index = size; index < this.rowPoolItems.length; index++) {
+      const slot = this.rowPoolItems[index];
       if (slot.detailRow) this.cleanupDetail(slot.detailRow);
       for (const pane of PANES) {
         for (const cell of slot.cells[pane] ?? []) {
@@ -633,10 +660,7 @@ export class BodyRenderer {
       }
       if (removeRows) slot.detailRow?.remove();
     }
-    this.rowPoolItems = [];
-    this.poolSize = 0;
-    this.centerSource = undefined;
-    this.centerColumns = [];
+    this.rowPoolItems.length = size;
   }
 
   applyCellLayout(): void {
@@ -655,11 +679,12 @@ export class BodyRenderer {
   }
 
   private paneColumnLefts(pane: PaneType, columns: Column[], allPaneColumns: Column[]): number[] {
-    let offset = 0;
-    if (pane === "center" && columns.length > 0) {
+    if (pane === "center") {
       this.columnViewport.update(allPaneColumns);
-      offset = this.columnViewport.offsetAt(allPaneColumns.indexOf(columns[0]));
+      const leftCount = this.core.columnModel.getPaneColumns("left").length;
+      return columns.map((column) => this.columnViewport.offsetAt(this.core.columnModel.getFlatIndex(column.id) - leftCount));
     }
+    let offset = 0;
     const lefts: number[] = [];
     for (const column of columns) {
       lefts.push(offset);
@@ -699,16 +724,21 @@ export class BodyRenderer {
     const viewport = this.core.skeleton.bodyViewports.center;
     const cols = this.core.columnModel.getPaneColumns("center");
     this.columnViewport.update(cols);
-    const virtual = cols.length > 20 && !this.core.columnModel.hasColSpan();
-    const { first, lastExcl } = virtual
+    const { first, lastExcl } = cols.length > 20
       ? this.columnViewport.visibleRange(viewport.scrollLeft, viewport.clientWidth, 2)
       : { first: 0, lastExcl: cols.length };
-    if (cols === this.centerSource && first === this.centerFirst && lastExcl - first === this.centerColumns.length) return false;
-    const next = virtual ? cols.slice(first, lastExcl) : cols;
+    if (cols === this.centerSource && first === this.centerFirst && lastExcl === this.centerLastExcl) return false;
+    // An earlier span can reach the window. Only span-capable prefix columns need a slot.
+    const window = cols.slice(first, lastExcl);
+    const next = first > 0
+      ? cols.slice(0, first).filter((column) => column.colDef.colSpan != null).concat(window)
+      : window;
     if (this.rowPoolItems.length > 0) this.reconcileCenterCells(next);
     this.centerSource = cols;
     this.centerColumns = next;
     this.centerFirst = first;
+    this.centerLastExcl = lastExcl;
+    this.centerHasSpans = next.some((column) => column.colDef.colSpan != null);
     return true;
   }
 
@@ -721,6 +751,15 @@ export class BodyRenderer {
     const startedAt = this.core.performanceMonitor.start();
     if (!this.updateRangeInner(force, checkColumnWindow)) return;
     const rows = Math.max(0, this.renderedRowEndExclusive - this.firstRenderedRow);
+    if (this.rowPoolItems.length > Math.max(32, rows * 2)) {
+      const size = rows + rows % 2 + 8;
+      const active = new Map(this.rowPoolItems.filter(slot => slot.index >= 0).map(slot => [slot.index % size, slot]));
+      const spare = this.rowPoolItems.filter(slot => slot.index < 0);
+      // Remap existing active slots before changing the modulo, retaining editors and focus.
+      this.rowPoolItems = Array.from({ length: size }, (_, index) => active.get(index) ?? spare.pop()!).concat(spare);
+      this.discardPoolTail(size, true);
+    }
+    this.updateFillHandle();
     const columns = this.core.columnModel.getPaneColumns("left").length +
       this.activePaneColumns("center").length +
       this.core.columnModel.getPaneColumns("right").length;
@@ -747,15 +786,15 @@ export class BodyRenderer {
     const { first, lastExcl } = this.calculateVisibleRange(viewport, rowCount, buffer);
 
     if (!force && !colWindowChanged && first === this.firstRenderedRow && lastExcl === this.renderedRowEndExclusive) {
-      if (offsetChanged) { this.positionVisibleRows(); this.updateFillHandle(); }
+      if (offsetChanged) this.positionVisibleRows();
       return colWindowChanged || offsetChanged;
     }
     this.hideOutsideRange(first, lastExcl);
     this.firstRenderedRow = first;
     this.renderedRowEndExclusive = lastExcl;
     this.renderVirtualRange(first, lastExcl, force, colWindowChanged);
+    if (colWindowChanged) this.applyFocusClass();
     if (offsetChanged) this.positionVisibleRows();
-    this.updateFillHandle();
     return true;
   }
 
@@ -785,13 +824,13 @@ export class BodyRenderer {
   private renderVirtualRange(first: number, lastExcl: number, force: boolean, columnsChanged: boolean): void {
     const needed = lastExcl - first;
     // Data changes can grow the visible range without a container resize.
-    if (needed > this.poolSize) {
+    if (needed > this.rowPoolItems.length) {
       this.growPool(needed + needed % 2);
       this.applyCellLayout();
     }
     for (let i = first; i < lastExcl; i++) {
       const node = this.core.rowModel.getDisplayedRow(i);
-      const slot = this.rowPoolItems[i % this.poolSize];
+      const slot = this.rowPoolItems[i % this.rowPoolItems.length];
       if (!slot || !node) continue;
       if (!force && slot.index === i && slot.nodeId === node.id) {
         if (columnsChanged && slot.kind === "master") this.renderPaneCells(slot, node, "center");
@@ -941,38 +980,31 @@ export class BodyRenderer {
     const cells = slot.cells[pane];
     if (!cells) return;
     const index = slot.index;
-    const hasColSpan = pane === "center" && this.core.columnModel.hasColSpan();
-    let coverage = 0;
+    const model = this.core.columnModel;
+    const hasColSpan = pane === "center" && this.centerHasSpans;
+    const leftCount = hasColSpan ? model.getPaneColumns("left").length : 0;
+    let coveredUntil = 0;
     slot.rows[pane]?.classList.toggle("mach-row--editing", this.core.editingService.isRowEditing(index));
 
     for (let i = 0; i < cols.length; i++) {
       const col = cols[i];
       const cell = cells[i];
 
-      if (hasColSpan && coverage > 0) {
-        coverage--;
-        cleanupCellContent(this.core, cell);
-        cell.setAttribute("aria-hidden", "true");
-        if (cell.style.display !== "none") cell.style.display = "none";
-        continue;
+      if (hasColSpan) {
+        const start = model.getFlatIndex(col.id) - leftCount;
+        const span = start < coveredUntil ? 0 : this.resolveColSpan(node, col, index, this.centerSource!.length - start);
+        if (span > 0) coveredUntil = start + span;
+        if (span === 0 || coveredUntil <= this.centerFirst) {
+          cleanupCellContent(this.core, cell);
+          cell.setAttribute("aria-hidden", "true");
+          cell.style.display = "none";
+          continue;
+        }
+        if (span > 1 || cell.hasAttribute("aria-colspan")) this.applySpanWidth(cell, start, span);
       }
 
       if (cell.style.display === "none") cell.style.display = "";
       cell.removeAttribute("aria-hidden");
-
-      if (hasColSpan) {
-        const span = this.resolveColSpan(node, col, index, cols.length - i);
-        if (span > 1) {
-          coverage = span - 1;
-          this.applySpanWidth(cell, cols, i, span);
-        } else {
-          cell.removeAttribute("aria-colspan");
-          if (cell.style.width !== `${col.currentWidth}px`) cell.style.width = `${col.currentWidth}px`;
-        }
-      } else {
-        cell.removeAttribute("aria-colspan");
-      }
-
       if (this.core.editingService.renderEditor(index, node, col, cell)) continue;
       this.renderCell(cell, node, col);
       this.applyRangeClass(cell, index, col);
@@ -999,11 +1031,11 @@ export class BodyRenderer {
     }
   }
 
-  private applySpanWidth(cell: HTMLElement, cols: Column[], start: number, span: number): void {
-    let w = 0;
-    for (let i = start; i < start + span && i < cols.length; i++) w += cols[i].currentWidth;
-    cell.style.width = `${w}px`;
-    cell.setAttribute("aria-colspan", String(span));
+  private applySpanWidth(cell: HTMLElement, start: number, span: number): void {
+    const width = `${this.columnViewport.offsetAt(start + span) - this.columnViewport.offsetAt(start)}px`;
+    if (cell.style.width !== width) cell.style.width = width;
+    if (span > 1) cell.setAttribute("aria-colspan", String(span));
+    else cell.removeAttribute("aria-colspan");
   }
 
   private renderDetailContent(row: HTMLElement, node: RowNode<any>): void {
@@ -1299,7 +1331,7 @@ export class BodyRenderer {
 
   private renderGroupAggregate(cell: HTMLElement, node: RowNode<any>, column: Column): boolean {
     if (!column.colDef.aggFunc || !node.aggValues) return false;
-    if (!Object.prototype.hasOwnProperty.call(node.aggValues, column.id)) return false;
+    if (!hasOwnOption(node.aggValues, column.id)) return false;
     const value = node.aggValues[column.id];
     cell.textContent = column.colDef.valueFormatter != null
       ? formatCellValueWith(this.core, node, column, value)
@@ -1320,7 +1352,7 @@ export class BodyRenderer {
     for (const index of indexes) {
       if (index < 0 || seen.has(index)) continue;
       seen.add(index);
-      const slot = this.rowPoolItems[index % this.poolSize];
+      const slot = this.rowPoolItems[index % this.rowPoolItems.length];
       if (!slot || slot.index !== index) continue;
       const node = this.core.rowModel.getDisplayedRow(index);
       if (!node) continue;
@@ -1375,7 +1407,7 @@ export class BodyRenderer {
       if (columns == null && slot.detailRow) this.renderDetailContent(slot.detailRow, node);
       return;
     }
-    const refreshPane = columns == null || this.core.columnModel.hasColSpan();
+    const refreshPane = columns == null || this.centerHasSpans;
     const appearance = resolveRowAppearance(this.core, node);
     for (const pane of PANES) {
       const row = slot.rows[pane];
@@ -1415,7 +1447,6 @@ export class BodyRenderer {
     this.invalidateRangeCache();
     this.applyContainerSizes();
     this.updateRange(true);
-    this.updateFillHandle();
     this.refreshOverlays();
     this.core.summaryRenderer.refresh();
   }
@@ -1433,7 +1464,7 @@ export class BodyRenderer {
     const pane = this.paneForColumn(column);
     const colIdx = this.activePaneColumns(pane).indexOf(column);
     if (colIdx < 0) return null;
-    const slot = this.rowPoolItems[rowIndex % this.poolSize];
+    const slot = this.rowPoolItems[rowIndex % this.rowPoolItems.length];
     if (!slot || slot.index !== rowIndex || slot.kind !== "master") return null;
     return slot.cells[pane]?.[colIdx] ?? null;
   }
@@ -1790,11 +1821,13 @@ export class BodyRenderer {
   private applyFocusClass(): void {
     if (!this.focusedCell) return;
     const cell = this.getCellElement(this.focusedCell.rowIndex, this.focusedCell.colId);
-    if (cell) {
+    if (cell && cell.style.display !== "none") {
       const colIndex = Math.max(0, this.core.columnModel.getFlatIndex(this.focusedCell.colId));
       cell.id = `mach-grid-${this.core.gridId}-r${this.focusedCell.rowIndex}-c${colIndex}`;
       cell.classList.add("mach-cell--focus");
       this.core.skeleton.root.setAttribute("aria-activedescendant", cell.id);
+    } else {
+      this.core.skeleton.root.removeAttribute("aria-activedescendant");
     }
   }
 
@@ -1859,7 +1892,7 @@ export class BodyRenderer {
 
   private toggleHover(index: number, hover: boolean): void {
     if (index < 0) return;
-    const slot = this.rowPoolItems[index % this.poolSize];
+    const slot = this.rowPoolItems[index % this.rowPoolItems.length];
     if (!slot || slot.index !== index || slot.kind !== "master") return;
     for (const pane of PANES) {
       slot.rows[pane]?.classList.toggle("mach-row--hover", hover);
@@ -1892,16 +1925,13 @@ export class BodyRenderer {
     if (this.core.editingService.isCellEditing()) {
       const colId = resolved.cellEl?.dataset.colId ?? "";
       if (this.core.editingService.isEditing(resolved.index, colId)) return;
-      void this.core.editingService.stopAsync(false).then((stopped) => {
+      const column = colId ? this.core.columnModel.getColumn(colId) : undefined;
+      void this.core.editingService.stopForNavigation(resolved.node, column).then((stopped) => {
         if (!stopped || this.core.isDisposed()) return;
-        this.handleBodyClick(e, target, resolved);
-        const column = colId ? this.core.columnModel.getColumn(colId) : undefined;
-        if (
-          column &&
-          !this.core.editingService.isCellEditing() &&
-          this.core.editingService.isEditable(resolved.node, column)
-        ) {
-          this.core.editingService.start(resolved.index, column);
+        this.handleBodyClick(e, target, { ...resolved, index: resolved.node.rowIndex });
+        const currentColumn = colId ? this.core.columnModel.getColumn(colId) : undefined;
+        if (currentColumn && !this.core.editingService.isCellEditing()) {
+          this.core.editingService.start(resolved.node.rowIndex, currentColumn);
         }
       });
       return;

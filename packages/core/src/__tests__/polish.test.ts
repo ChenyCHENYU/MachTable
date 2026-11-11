@@ -190,15 +190,69 @@ describe("colSpan", () => {
     expect(row1status.style.display).toBe("");
     api.destroy();
   });
+
+  it("keeps wide rows virtualized and renders only the span that reaches the viewport", async () => {
+    const host = createHost();
+    const coveredSpan = vi.fn(() => 200);
+    const api = createGrid(host, {
+      rowKey: "id",
+      rowNumber: false,
+      columnDefs: [
+        { colId: "left", pinned: "left", width: 80 },
+        ...Array.from({ length: 500 }, (_, index): ColDef => ({
+          colId: `c${index}`, field: `c${index}`, width: 80,
+          colSpan: index === 0 ? ({ data }) => data.span : index === 1 ? coveredSpan : undefined
+        })),
+        { colId: "right", pinned: "right", width: 80 }
+      ],
+      rowData: [{ id: "wide", c0: "Anchor", c100: "Value", span: 110 }]
+    });
+    const viewport = host.querySelector<HTMLElement>(".mach-body-viewport--scroll")!;
+    Object.defineProperty(viewport, "clientWidth", { value: 400 });
+    viewport.scrollLeft = 100 * 80;
+    api.view.refreshLayout();
+
+    const row = host.querySelector(".mach-pane--center .mach-row[data-index='0']")!;
+    const cell = (id: string) => row.querySelector<HTMLElement>(`[data-col-id="${id}"]`)!;
+    expect(row.querySelectorAll(".mach-cell").length).toBeLessThan(14);
+    expect(cell("c0").textContent).toBe("Anchor");
+    expect(cell("c0").style.width).toBe("8800px");
+    expect(cell("c0").getAttribute("aria-colspan")).toBe("110");
+    expect(cell("c100").style.left).toBe("8000px");
+    expect(cell("c100").getAttribute("aria-hidden")).toBe("true");
+    expect(coveredSpan).not.toHaveBeenCalled();
+    expect(cellAt(host, 0, "left").style.left).toBe("0px");
+    expect(cellAt(host, 0, "right").style.left).toBe("0px");
+
+    api.rows.transact({ update: [{ id: "wide", c0: "Anchor", c100: "Value", span: 2 }] });
+    expect(cell("c0").style.display).toBe("none");
+    expect(cell("c100").getAttribute("aria-hidden")).toBeNull();
+    expect(cell("c100").textContent).toBe("Value");
+    expect(coveredSpan).not.toHaveBeenCalled();
+
+    const root = host.querySelector(".mach-root")!;
+    cell("c100").click();
+    root.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", cancelable: true }));
+    root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", cancelable: true }));
+    expect(viewport.scrollLeft).toBe(0);
+    viewport.dispatchEvent(new Event("scroll"));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(cell("c0").style.display).toBe("");
+    expect(cell("c0").getAttribute("aria-colspan")).toBe("2");
+    expect(root.getAttribute("aria-activedescendant")).toBe(cell("c0").id);
+    api.destroy();
+  });
 });
 
 describe("autoHeight", () => {
-  it("measures wrapped content height via canvas", () => {
-    const measureMock = vi
-      .spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue({
-        measureText: (t: string) => ({ width: t.length * 7 })
-      } as any);
+  it("uses bounded cached DOM measurements for wrapped text", () => {
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    const measured: string[] = [];
+    const measureMock = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.style.height !== "auto") return original.call(this);
+      measured.push(this.textContent ?? "");
+      return { ...original.call(this), height: (this.textContent?.length ?? 0) > 20 ? 80 : 20 };
+    });
 
     const host = createHost();
     const data: Row[] = [
@@ -216,6 +270,9 @@ describe("autoHeight", () => {
     const rowLong = rowsEls.find((r) => r.dataset.index === "1")!;
     expect(parseInt(rowShort.style.height)).toBeLessThanOrEqual(40);
     expect(parseInt(rowLong.style.height)).toBeGreaterThan(40);
+    expect(measured).toHaveLength(3);
+    api.view.refreshLayout();
+    expect(measured).toHaveLength(3);
 
     measureMock.mockRestore();
     api.destroy();
@@ -223,6 +280,22 @@ describe("autoHeight", () => {
 });
 
 describe("preset columns", () => {
+  it("lays out split group headers in their own pinned panes", () => {
+    const host = createHost();
+    const api = createGrid(host, {
+      rowNumber: false,
+      columnDefs: [{ groupId: "group", headerName: "分组", children: [
+        { field: "id", pinned: "left", width: 120 },
+        { field: "name", width: 200 },
+        { field: "status", pinned: "right", width: 100 }
+      ] }], rowData: rows
+    });
+    for (const [pane, width] of [["left", "120px"], ["center", "200px"], ["right", "100px"]]) {
+      expect(host.querySelector<HTMLElement>(`.mach-header-pane.mach-pane--${pane} .mach-header-cell--group`)?.style.width).toBe(width);
+    }
+    api.destroy();
+  });
+
   it("selectionColumn + indexColumn + actionsColumn compose concisely", () => {
     const clicked: string[] = [];
     const host = createHost();

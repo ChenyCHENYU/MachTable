@@ -1,6 +1,6 @@
 import { EVENT_TYPES } from "../types/events";
 import type { GridOptions } from "../types/options";
-import { normalizeFinite } from "../lib/optionValues";
+import { hasOwnOption, normalizeFinite } from "../lib/optionValues";
 import { GRID_OPTION_KINDS, type GridOptionKey } from "./gridOptionMetadata";
 
 export const EVENT_OPTION_KEYS = new Set(
@@ -34,7 +34,7 @@ export function sanitizeGridOptionPatch<TData>(
       if (value == null || typeof value === "function") output[key] = value;
       continue;
     }
-    if (!Object.prototype.hasOwnProperty.call(GRID_OPTION_KINDS, key) || !matchesGridOptionValue(key as GridOptionKey, value)) continue;
+    if (!hasOwnOption(GRID_OPTION_KINDS, key) || !matchesGridOptionValue(key as GridOptionKey, value)) continue;
     output[key] = value;
   }
   return output;

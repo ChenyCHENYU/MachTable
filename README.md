@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.39.0-2563eb" alt="Source version 0.39.0" />
+  <img src="https://img.shields.io/badge/source-0.39.1-2563eb" alt="Source version 0.39.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -158,6 +158,8 @@ api.destroy();
 > 默认虚拟布局要求容器具有明确高度。小型详情表可使用 `domLayout: "autoHeight"`，大表或远程无限数据源不要使用自动高度。
 
 自动高度表格随当前页内容收起。明细行数不固定时，设置 `domLayout: "autoHeight", maxBodyHeight: 330`，表体到达 330px 后使用虚拟滚动。空态、加载态和错误态保留必要空间，恢复数据后释放最小高度。表格与后续内容的间距由页面容器设置，例如 `padding-bottom: 8px`。
+
+多行文字使用列配置 `wrapText: true, autoHeight: true`，按浏览器实际排版测高。业务行高使用 `getRowHeight`；内容事务只更新受影响行的高度索引。接入细节见[变高行与换行](./docs/recipes/variable-height.md)。
 
 本地筛选无匹配时，内置空态提供「清除筛选」，一次清除表内列筛选、高级筛选和快速搜索。自定义空态、手动筛选和服务端查询可继续由应用定义提示及恢复操作。
 
@@ -412,7 +414,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.39.0`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
+当前源码版本为 `0.39.1`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

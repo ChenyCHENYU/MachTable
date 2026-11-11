@@ -16,7 +16,6 @@ import type { GridOptions } from "../types/options";
 import type { ApplyGridStateOptions, GridState, GridStateInput, GridStateSection } from "../types/state";
 import type { AdvancedFilterModel } from "../types/advancedFilter";
 import { isValueColumn, type Column } from "./column";
-import { EVENT_TYPES } from "../types/events";
 import type { ColDefOrGroup, ColumnState, FilterModel, SortModel } from "../types/colDef";
 import { DEFAULT_COL_DEF, GRID_SIZE_PRESETS, VALUE_DEFAULTS, resolveWatermark, rowIdFromKey, updateDatasourceTuning } from "../core/resolveOptions";
 import { buildCsv, sanitizeFormulaCell } from "../lib/csv";
@@ -25,9 +24,9 @@ import { serializeColumnValue } from "../lib/columnValues";
 import { clipboardText, parseCsv } from "../lib/clipboard";
 import { escapeHtml } from "../lib/download";
 import { formatCellValue } from "../render/cellContent";
-import { sanitizeGridOptionPatch } from "../core/gridOptionRuntime";
+import { EVENT_OPTION_KEYS, sanitizeGridOptionPatch } from "../core/gridOptionRuntime";
 import { normalizeGridState } from "../lib/gridState";
-import { copyOptions, normalizeFinite, normalizePersistence } from "../lib/optionValues";
+import { copyOptions, hasOwnOption, normalizeFinite, normalizePersistence } from "../lib/optionValues";
 import { fitColumnWidths } from "../lib/layout";
 import { abortable, createAbortError } from "../lib/abortable";
 import { createSaveSnapshot, normalizeBatchSaveResult } from "../lib/batchSave";
@@ -74,10 +73,6 @@ function abortError(signal?: AbortSignal): Error {
 
 function withAbort<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
   return abortable(task, signal, () => abortError(signal));
-}
-
-function hasOwnOption<T extends object>(options: T, key: PropertyKey): boolean {
-  return Object.prototype.hasOwnProperty.call(options, key);
 }
 
 function changedFinite(
@@ -183,11 +178,11 @@ export class GridApiImpl<TData = any> {
   }
 
   private requestTransactionRefresh(impact: import("./rowModel").RowTransactionImpact): void {
-    if (impact.pipelineChanged) {
+    if (!impact.pipelineChanged && impact.updatedRowIds.length === 0) return;
+    if (impact.pipelineChanged || this.core.gridOptions.getRowHeight) {
       this.core.requestUpdate({ data: true });
       return;
     }
-    if (impact.updatedRowIds.length === 0) return;
     this.core.requestUpdate({
       cells: { rowIds: impact.updatedRowIds },
       summary: true,
@@ -202,15 +197,13 @@ export class GridApiImpl<TData = any> {
   setColumnState(state: ColumnState[]): void {
     if (this.core.isDisposed()) return;
     this.core.columnModel.applyColumnState(state);
-    this.core.onColumnsStructureChanged();
-    this.core.scheduleGridStateSave();
+    this.commitColumnState();
   }
 
   resetColumnState(): void {
     if (this.core.isDisposed()) return;
     this.core.columnModel.resetColumnState();
-    this.core.onColumnsStructureChanged();
-    this.core.scheduleGridStateSave();
+    this.commitColumnState();
   }
 
   setColumnVisibility(colId: string, visible: boolean): void {
@@ -223,6 +216,10 @@ export class GridApiImpl<TData = any> {
   setColumnPinned(colId: string, pinned: "left" | "right" | null): void {
     if (this.core.isDisposed()) return;
     this.core.columnModel.setColumnPinned(colId, pinned);
+    this.commitColumnState();
+  }
+
+  private commitColumnState(): void {
     this.core.onColumnsStructureChanged();
     this.core.scheduleGridStateSave();
   }
@@ -311,19 +308,14 @@ export class GridApiImpl<TData = any> {
 
   setQuickFilter(text: string | null | undefined): void {
     if (this.core.isDisposed()) return;
-    this.core.gridOptions.quickFilterText = text != null && text.trim() !== "" ? text : null;
-    if (this.core.rowModel.setQuickFilter(text)) {
-      this.core.applyFilterModel();
-    }
+    const changed = this.core.rowModel.setQuickFilter(text);
+    this.core.gridOptions.quickFilterText = this.core.rowModel.getQuickFilter();
+    if (changed) this.core.applyFilterModel();
   }
 
   setRowSelection(mode: "none" | "single" | "multiple"): void {
-    if (this.core.isDisposed()) return;
     if (this.core.gridOptions.rowSelection === mode) return;
-    this.core.gridOptions.rowSelection = mode;
-    if (mode === "none") this.core.selectionService.deselectAll();
-    this.core.headerRenderer.build();
-    this.core.bodyRenderer.rebuildPool();
+    this.updateOptions({ rowSelection: mode });
   }
 
   setSelection(rows: TData[], clearOthers = true): void {
@@ -339,17 +331,17 @@ export class GridApiImpl<TData = any> {
       if (node) changes.push({ node, selected: true });
     }
     if (changes.length > 0) {
-      this.core.selectionService.applySelectionPublic(changes, clearOthers);
+      this.core.selectionService.applySelection(changes, clearOthers);
     } else if (clearOthers) {
       this.core.selectionService.deselectAll();
     }
   }
 
   getVisibleSelection(): TData[] {
-    const selectedIds = new Set(this.core.selectionService.getSelectedNodes().map((n) => n.id));
+    const selection = this.core.selectionService;
     return this.core.rowModel
       .getDisplayedRows()
-      .filter((n) => !n.isDetail && !n.isGroup && selectedIds.has(n.id))
+      .filter((n) => !n.isDetail && !n.isGroup && selection.isSelected(n.id))
       .map((n) => n.data!)
       .filter(Boolean);
   }
@@ -556,8 +548,8 @@ export class GridApiImpl<TData = any> {
   }
 
   private updateEventHandlers(options: Partial<GridOptions<TData>>): void {
-    for (const eventType of EVENT_TYPES) {
-      const key = `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}` as keyof GridOptions<TData>;
+    for (const eventKey of EVENT_OPTION_KEYS) {
+      const key = eventKey as keyof GridOptions<TData>;
       if (hasOwnOption(options, key)) Object.assign(this.core.gridOptions, { [key]: options[key] });
     }
   }
@@ -807,7 +799,7 @@ export class GridApiImpl<TData = any> {
   private updateSelectionAndColumns(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.gridOptions;
     if (copyChangedOption(options, resolved, "rowSelection")) {
-      if (options.rowSelection === "none") this.core.selectionService.deselectAll();
+      this.core.selectionService.onModeChanged();
       effects.header = true;
       effects.pool = true;
       this.core.refreshAriaState();
@@ -1002,7 +994,7 @@ export class GridApiImpl<TData = any> {
     const cols = this.core.columnModel.getOrderedVisible().filter(isValueColumn);
     const header = params.includeHeader === false ? [] : [cols.map(column => column.colDef.headerName ?? column.colDef.field ?? column.id)];
     if (params.headersOnly) return header;
-    const nodes = params.onlySelected ? this.core.selectionService.getSelectedNodes().slice().sort((left, right) => left.rowIndex - right.rowIndex)
+    const nodes = params.onlySelected ? this.core.selectionService.getSelectedNodes().sort((left, right) => left.rowIndex - right.rowIndex)
       : params.onlyAllDisplayed ? this.core.rowModel.getDisplayedRows() : this.core.rowModel.getPipelineRows();
     return [...header, ...nodes.filter(node => !node.isDetail && !node.isGroup).map(node => cols.map(column => {
       const value = serializeColumnValue(this.core, node, column, params.target ?? "xlsx");

@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import { writeClipboard } from "../lib/clipboard";
+import { bindListeners } from "../lib/dom";
 
 type KeyboardContext = Pick<
   GridCore<any>,
@@ -37,24 +38,25 @@ export class KeyboardService {
   constructor(private core: KeyboardContext) {}
 
   init(): void {
-    this.bindEvents("addEventListener");
+    this.bindEvents(true);
   }
 
   destroy(): void {
-    this.bindEvents("removeEventListener");
+    this.bindEvents(false);
   }
 
-  private bindEvents(method: "addEventListener" | "removeEventListener"): void {
-    const root = this.core.skeleton.root;
-    root[method]("keydown", this.handleGridKey as EventListener);
-    root[method]("copy", this.handleGridCopy as EventListener);
-    root[method]("cut", this.handleGridCopy as EventListener);
-    root[method]("paste", this.handleGridPaste as EventListener);
+  private bindEvents(active: boolean): void {
+    bindListeners(this.core.skeleton.root, active, {
+      keydown: this.handleGridKey,
+      copy: this.handleGridCopy,
+      cut: this.handleGridCopy,
+      paste: this.handleGridPaste
+    });
   }
 
   nextEditable(rowIndex: number, colId: string, dir: 1 | -1): { rowIndex: number; column: Column } | null {
     const cols = this.core.columnModel.getOrderedVisible();
-    const start = cols.findIndex((c) => c.id === colId);
+    const start = this.core.columnModel.getFlatIndex(colId);
     if (start < 0) return null;
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     let i = start;
@@ -188,7 +190,7 @@ export class KeyboardService {
     const focus = body.focusedCell;
     if (!focus) return;
     const columns = this.core.columnModel.getOrderedVisible();
-    const colIdx = columns.findIndex((column) => column.id === focus.colId);
+    const colIdx = this.core.columnModel.getFlatIndex(focus.colId);
     const rowCount = this.core.rowModel.getDisplayedRowCount();
     if (colIdx < 0 || rowCount === 0) return;
 

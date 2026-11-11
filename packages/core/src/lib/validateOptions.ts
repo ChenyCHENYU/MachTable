@@ -1,6 +1,7 @@
 import { GRID_OPTION_KEYS, GRID_OPTION_KINDS } from "../core/gridOptionMetadata";
 import { EVENT_OPTION_KEYS, matchesGridOptionValue } from "../core/gridOptionRuntime";
 import type { GridOptions } from "../types/options";
+import { hasOwnOption } from "./optionValues";
 
 export type GridValidationCode =
   | "UNKNOWN_OPTION"
@@ -89,7 +90,7 @@ function validateBlockDatasource(source: Record<string, unknown>, report: Report
 
 function validateMetadataValues(source: Record<string, unknown>, report: ReportIssue): void {
   for (const key of GRID_OPTION_KEYS) {
-    if (SPECIALISED_OPTIONS.has(key) || !Object.prototype.hasOwnProperty.call(source, key)) continue;
+    if (SPECIALISED_OPTIONS.has(key) || !hasOwnOption(source, key)) continue;
     if (!matchesGridOptionValue(key, source[key])) {
       const message = key === "maxBodyHeight" ? "maxBodyHeight 必须是至少 1px 的有限数" : `${key} 值类型无效，期望 ${GRID_OPTION_KINDS[key]}`;
       report("INVALID_OPTION_VALUE", key, message);

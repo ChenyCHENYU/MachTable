@@ -8,9 +8,9 @@
 { field: "desc", headerName: "描述", flex: 1, wrapText: true, autoHeight: true }
 ```
 
-- 按列宽用 canvas 逐字测量换行行数（CJK 安全），行高 = 行数 × 行高 + 内边距
-- 结果进入 per-node 行高缓存：滚动/重排零重复测量，编辑/撤销后仅该行失效重测
-- 多列 autoHeight 取最大行数；与 `getRowHeight` 并存时取两者最大值
+- 复用一个不可见测量单元格，按浏览器实际的字体、列宽和换行规则计算文字高度，包含内边距与边框。
+- 行高按节点缓存。同宽、同文本复用测量节点的排版，超长测量文本立即释放。普通滚动复用行高缓存，文字、列宽和字体变化后重新测量。
+- 多列 `autoHeight` 取最高结果；与 `getRowHeight` 并存时取两者最大值。自定义渲染器的高度使用 `getRowHeight` 指定。
 
 ## 变高行（getRowHeight 回调，完全控制）
 
@@ -29,7 +29,7 @@ createGrid(host, {
 ```
 
 - 返回值单位 px，最小 1；非法值回退 `rowHeight`
-- 基于前缀和 + 二分查找定位，滚动、`scrollToIndex`、行合并、明细行全部精确
+- 使用 Fenwick 索引维护偏移，定位和单行高度更新均为 O(log n)。
 - 行池按**最小行高**估算容量，变高行多时自动扩池
 - 运行时更新：`api.updateOptions({ getRowHeight: fn })` 自动重排
 
@@ -42,7 +42,7 @@ createGrid(host, {
 ```
 
 ::: tip 换行样式与行高是两件事
-`wrapText` 只负责折行样式；行高由 `getRowHeight` 决定。两者配合才是完整的多行单元格。
+`wrapText` 负责折行样式。配合 `autoHeight` 自动测量文字，或用 `getRowHeight` 指定业务行高。
 :::
 
 ## 常用估算策略
@@ -59,7 +59,7 @@ getRowHeight: (p) => p.data?.heightOverride ?? 36
 ```
 
 ::: warning 性能建议
-`getRowHeight` 在每次布局计算中对**全部行**调用一次。请保持纯函数 + 轻计算（不要在里面做 DOM 测量/正则重活）。基于内容自动测量行高在路线图中。
+`getRowHeight` 的结果按节点缓存，保持回调纯净且轻量。只改变行内容的事务会更新受影响行的高度索引；排序、分页等改变行位置时重新计算。回调依赖外部状态或其他行时，调用 `api.updateOptions({ getRowHeight })` 显式更新缓存。
 :::
 
 ## 限制

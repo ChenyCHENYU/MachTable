@@ -7,7 +7,7 @@ import type {
   NumberFilterMatch,
   TextFilterMatch
 } from "../types/colDef";
-import { applyPortalTheme, bindListeners, el, positionAnchoredPortal, textButton } from "../lib/dom";
+import { applyPortalTheme, bindDismissListeners, el, positionAnchoredPortal, textButton } from "../lib/dom";
 import { matchLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
@@ -97,7 +97,7 @@ export class FilterPopupService {
 
     positionAnchoredPortal(panel, anchor);
 
-    this.bindDocument(true);
+    bindDismissListeners(true, this.docMouseDown, this.docKeyDown);
     const firstInput = panel.querySelector<HTMLElement>(".mach-filter-select-trigger, input");
     firstInput?.focus();
   }
@@ -109,11 +109,7 @@ export class FilterPopupService {
     this.panel.remove();
     this.panel = null;
     this.openColId = null;
-    this.bindDocument(false);
-  }
-
-  private bindDocument(active: boolean): void {
-    bindListeners(document, active, { mousedown: this.docMouseDown, keydown: this.docKeyDown }, true);
+    bindDismissListeners(false, this.docMouseDown, this.docKeyDown);
   }
 
   destroy(): void {

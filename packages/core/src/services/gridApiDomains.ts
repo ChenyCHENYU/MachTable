@@ -15,6 +15,7 @@ import type {
 import { showGridOverlay } from "../render/skeleton";
 import type { GridCore } from "../core/gridCore";
 import type { GridApiImpl } from "./gridApi";
+import { hasOwnOption } from "../lib/optionValues";
 
 /** Domain facades are the only public command surface. They own no duplicate state. */
 export function createGridRowsApi<TData>(api: GridApiImpl<TData>, core: GridCore<TData>): GridRowsApi<TData> {
@@ -121,7 +122,7 @@ export function createGridFilteringApi<TData>(api: GridApiImpl<TData>, core: Gri
     setQuickText: (text) => api.setQuickFilter(text),
     isPresent: (colId) => colId == null
       ? core.rowModel.isFilterPresent()
-      : Object.prototype.hasOwnProperty.call(core.rowModel.getFilterModel(), colId)
+      : hasOwnOption(core.rowModel.getFilterModel(), colId)
   };
 }
 

@@ -391,4 +391,65 @@ describe("column state persistence", () => {
     expect(radio?.getAttribute("type")).toBe("radio");
     api.destroy();
   });
+
+  it.each(["single", "none"] as const)("enforces %s through selection APIs and restoration", (mode) => {
+    const data = makeRows(3);
+    const api = createGrid<Row>(createHost(), {
+      columnDefs: [{ field: "id", checkboxSelection: true }],
+      rowData: data, rowKey: "id", rowSelection: mode
+    });
+    api.selection.setById("0");
+    api.selection.setById("1", true, false);
+    expect(api.selection.getIds()).toEqual(mode === "single" ? ["1"] : []);
+    api.selection.setRows(data);
+    expect(api.selection.getIds()).toEqual(mode === "single" ? ["0"] : []);
+    api.state.apply({ ...api.state.get(), selectedRowIds: ["1", "2"] }, { sections: ["selection"] });
+    expect(api.selection.getIds()).toEqual(mode === "single" ? ["1"] : []);
+    api.selection.clear();
+    expect(api.selection.getIds()).toEqual([]);
+    api.destroy();
+  });
+
+  it("reduces existing selection when switching modes and does not cascade a single tree selection", () => {
+    const api = createGrid(createHost(), {
+      columnDefs: [{ field: "id", checkboxSelection: true }],
+      rowData: [{ id: "parent", children: [{ id: "first" }, { id: "second" }] }],
+      rowKey: "id", treeData: true, defaultExpandAll: true, rowSelection: "multiple"
+    });
+    api.selection.selectAll();
+    expect(api.selection.getIds()).toHaveLength(3);
+    api.selection.setMode("single");
+    expect(api.selection.getIds()).toEqual(["parent"]);
+    api.selection.setById("first", true, false);
+    expect(api.selection.getIds()).toEqual(["first"]);
+    api.selection.setById("parent");
+    expect(api.selection.getIds()).toEqual(["parent"]);
+    api.updateOptions({ rowSelection: "multiple" });
+    api.selection.selectAll();
+    api.updateOptions({ rowSelection: "single" });
+    expect(api.selection.getIds()).toEqual(["parent"]);
+    api.updateOptions({ rowSelection: "none" });
+    api.selection.setById("second");
+    expect(api.selection.getIds()).toEqual([]);
+    api.destroy();
+  });
+
+  it("clears restored selection when every previously selected row became locked", () => {
+    let locked = false;
+    const data = makeRows(2);
+    const api = createGrid(createHost(), {
+      columnDefs: [{ field: "id", checkboxSelection: true, selectable: () => !locked }],
+      rowData: data, rowKey: "id", rowSelection: "multiple"
+    });
+    api.selection.setRows(data);
+    locked = true;
+    api.selection.setMode("single");
+    expect(api.selection.getIds()).toEqual([]);
+    locked = false;
+    api.selection.setById("0");
+    locked = true;
+    api.state.apply({ ...api.state.get(), selectedRowIds: ["1"] }, { sections: ["selection"] });
+    expect(api.selection.getIds()).toEqual([]);
+    api.destroy();
+  });
 });

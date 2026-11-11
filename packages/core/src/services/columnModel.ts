@@ -127,7 +127,8 @@ export class ColumnModel {
     if (this.activeSorts.length === 0) {
       const initial: SortModelItem[] = [];
       for (const c of this.leafColumns) {
-        if (c.colDef.initialSort) initial.push({ colId: c.id, direction: c.colDef.initialSort });
+        // Initial values belong to new columns; an empty existing sort is a user preference.
+        if (c.colDef.initialSort && !prev.has(c.id)) initial.push({ colId: c.id, direction: c.colDef.initialSort });
       }
       this.activeSorts = initial;
     }
@@ -206,10 +207,6 @@ export class ColumnModel {
     return this.getOrderedVisible().filter((c) => c.colDef.aggFunc != null && c.colDef.rowGroup !== true);
   }
 
-  hasColSpan(): boolean {
-    return this.centerPaneColumns.some((c) => c.colDef.colSpan != null);
-  }
-
   getGroupLabelColumn(): Column | undefined {
     const ordered = this.getOrderedVisible();
     return this.centerPaneColumns.find(isValueColumn) ?? ordered.find(isValueColumn) ?? ordered[0];
@@ -286,20 +283,20 @@ export class ColumnModel {
       ? column.parentGroup.children
       : this.rootChildren;
 
-    const siblings = container.filter(
-      (child): child is Column<any> => child instanceof Column && !child.hide && inScope(child)
-    );
+    const siblings: Column[] = [];
+    const leafSlots: number[] = [];
+    container.forEach((child, index) => {
+      if (child instanceof Column && !child.hide && inScope(child)) {
+        siblings.push(child);
+        leafSlots.push(index);
+      }
+    });
     const from = siblings.indexOf(column);
     if (from < 0) return false;
     siblings.splice(from, 1);
     const target = Math.max(0, Math.min(toIndex, siblings.length));
     siblings.splice(target, 0, column);
 
-    const leafSlots: number[] = [];
-    container.forEach((child, idx) => {
-      if (child instanceof Column && !child.hide && inScope(child)) leafSlots.push(idx);
-    });
-    if (leafSlots.length !== siblings.length) return false;
     leafSlots.forEach((slotIdx, i) => {
       container[slotIdx] = siblings[i];
     });
@@ -432,10 +429,7 @@ export class ColumnModel {
     }
     if (this.preferredOrders.size) {
       this.preferredOrders.clear();
-      // Restore the current schema's order without reapplying an initial sort.
-      const sorts = this.activeSorts;
       this.setColumnDefs(this.sourceDefinitions);
-      this.activeSorts = sorts;
       return;
     }
     this.regroup();
@@ -451,7 +445,7 @@ export class ColumnModel {
       return;
     }
     this.activeSorts = sortModel
-      .filter((s) => this.leafColumns.some((c) => c.id === s.colId) && (s.direction === "asc" || s.direction === "desc"))
+      .filter((s) => this.columnById.has(s.colId) && (s.direction === "asc" || s.direction === "desc"))
       .map((s) => ({ colId: s.colId, direction: s.direction }));
   }
 

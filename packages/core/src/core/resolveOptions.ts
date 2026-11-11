@@ -2,7 +2,7 @@ import type { GridOptions, GridSize, ResolvedGridOptions } from "../types/option
 import type { ColDef } from "../types/colDef";
 import { getByPath } from "../lib/path";
 import { normalizeAdvancedFilterModel } from "../lib/advancedFilter";
-import { normalizeFinite, normalizePersistence } from "../lib/optionValues";
+import { hasOwnOption, normalizeFinite, normalizePersistence } from "../lib/optionValues";
 
 export const DEFAULT_COL_DEF: Partial<ColDef> = {
   align: "center",
@@ -80,7 +80,7 @@ function finiteAtLeast(value: unknown, fallback: number, min: number, integer = 
 }
 
 function resolveSize(value: GridOptions["size"]): GridSize {
-  return value && Object.prototype.hasOwnProperty.call(GRID_SIZE_PRESETS, value) ? value : "normal";
+  return value && hasOwnOption(GRID_SIZE_PRESETS, value) ? value : "normal";
 }
 
 function resolveTheme(options: GridOptions): ResolvedGridOptions["theme"] {

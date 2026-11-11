@@ -1,5 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import type { RowNode } from "../types/row";
+import type { Column } from "./column";
 
 type SelectionContext = Pick<
   GridCore<any>,
@@ -13,6 +14,7 @@ type SelectionContext = Pick<
   | "reportError"
   | "rowModel"
 >;
+type SelectionChange = { node: RowNode<any>; selected: boolean; clearOthers?: boolean };
 
 /** @internal Consumers receive selection records and facade methods only. */
 export class SelectionService {
@@ -30,9 +32,10 @@ export class SelectionService {
     return this.indeterminateIds.has(id);
   }
 
-  isSelectable(node: RowNode<any>): boolean {
+  isSelectable(node: RowNode<any>, policy?: Column | null): boolean {
     if (node.loading) return false;
-    const column = this.findSelectableColumn(node);
+    if (node.isGroup || node.isDetail) return true;
+    const column = policy === undefined ? this.findSelectableColumn() : policy;
     const check = column?.colDef.selectable;
     if (!column || !check) return true;
     try {
@@ -46,13 +49,12 @@ export class SelectionService {
         rowIndex: node.rowIndex
       });
     } catch (error) {
-      this.core.reportError(error, "selectable", { rowId: node.id, colId: column?.id });
+      this.core.reportError(error, "selectable", { rowId: node.id, colId: column.id });
       return false;
     }
   }
 
-  private findSelectableColumn(node: RowNode<any>) {
-    if (node.isGroup || node.isDetail) return undefined;
+  private findSelectableColumn() {
     return this.core.columnModel
       .getOrderedVisible()
       .find((column) => column.hasCheckbox && column.colDef.selectable != null);
@@ -72,27 +74,33 @@ export class SelectionService {
 
   restoreSelection(ids: readonly string[]): void {
     const requested = new Set(ids);
+    const policy = this.findSelectableColumn() ?? null;
     const changes = this.core.rowModel
       .getAllNodes()
-      .filter((node) => requested.has(node.id) && !node.isDetail && !node.isGroup)
+      .filter((node) => requested.has(node.id) && !node.isDetail && !node.isGroup && this.isSelectable(node, policy))
       .map((node) => ({ node, selected: true }));
     this.applySelection(changes, true);
   }
 
+  onModeChanged(): void {
+    this.restoreSelection(this.core.gridOptions.rowSelection === "none" ? [] : this.getSelectedIds());
+  }
+
   onRowsRebuilt(preserveIds: boolean): void {
-    const nodes = this.core.rowModel.getAllNodes();
+    const model = this.core.rowModel;
     if (!preserveIds) {
       this.selectedIds.clear();
       this.anchorId = null;
     } else {
-      const existing = new Set(nodes.map((n) => n.id));
-      for (const id of [...this.selectedIds]) {
-        if (!existing.has(id)) this.selectedIds.delete(id);
+      for (const id of this.selectedIds) {
+        if (!model.getNodeById(id)) this.selectedIds.delete(id);
       }
-      if (this.anchorId != null && !existing.has(this.anchorId)) this.anchorId = null;
+      if (this.anchorId != null && !model.getNodeById(this.anchorId)) this.anchorId = null;
     }
-    this.recomputeTriState();
-    for (const node of nodes) node.selected = this.selectedIds.has(node.id);
+    // The projection assigns row indexes after rebuilding. Keep stable-ID
+    // selection here and evaluate row eligibility on explicit selection.
+    this.recomputeTriState(null);
+    for (const node of model.getAllNodes()) node.selected = this.selectedIds.has(node.id);
   }
 
   getGroupSelectionState(groupNode: RowNode<any>): { all: boolean; some: boolean } {
@@ -115,19 +123,6 @@ export class SelectionService {
     if (node) this.setNodeSelected(node, selected, clearOthers);
   }
 
-  private selectFromCheckbox(node: RowNode<any>, mode: "single" | "multiple"): void {
-    const single = mode === "single";
-    this.setNodeSelected(node, single || !node.selected, single);
-    this.anchorId = node.id;
-  }
-
-  private toggleFromModifier(node: RowNode<any>, event: MouseEvent, multiple: boolean): boolean {
-    if (!multiple || (!event.ctrlKey && !event.metaKey)) return false;
-    this.setNodeSelected(node, !node.selected);
-    this.anchorId = node.id;
-    return true;
-  }
-
   private selectAnchorRange(node: RowNode<any>, event: MouseEvent, multiple: boolean): boolean {
     if (!multiple || !event.shiftKey || this.anchorId == null) return false;
     const anchor = this.core.rowModel.getNodeById(this.anchorId);
@@ -137,7 +132,7 @@ export class SelectionService {
     const changes = [];
     for (let index = start; index <= end; index++) {
       const row = this.core.rowModel.getDisplayedRow(index);
-      if (row && !row.isDetail && !row.isGroup && this.isSelectable(row)) {
+      if (row && !row.isDetail && !row.isGroup) {
         changes.push({ node: row, selected: true });
       }
     }
@@ -148,14 +143,10 @@ export class SelectionService {
   onRowClick(node: RowNode<any>, event: MouseEvent, fromCheckbox: boolean): void {
     const mode = this.core.gridOptions.rowSelection;
     if (mode === "none" || !this.isSelectable(node)) return;
-    if (fromCheckbox) {
-      this.selectFromCheckbox(node, mode);
-      return;
-    }
     const multi = mode === "multiple";
-    if (this.toggleFromModifier(node, event, multi)) return;
-    if (this.selectAnchorRange(node, event, multi)) return;
-    this.setNodeSelected(node, true, true);
+    const toggle = multi && (fromCheckbox || event.ctrlKey || event.metaKey);
+    if (!toggle && this.selectAnchorRange(node, event, multi)) return;
+    this.setNodeSelected(node, !toggle || !node.selected, !toggle);
     this.anchorId = node.id;
   }
 
@@ -163,13 +154,7 @@ export class SelectionService {
     const mode = this.core.gridOptions.rowSelection;
     if (mode === "none") return;
     const candidates = filteredOnly ? this.core.rowModel.getDisplayedRows() : this.core.rowModel.getAllNodes();
-    const selectable = candidates.filter((n) => !n.isDetail && !n.isGroup && this.isSelectable(n));
-    if (selectable.length === 0) return;
-    if (mode === "single") {
-      this.setNodeSelected(selectable[0], true, true);
-      return;
-    }
-    this.applySelection(selectable.map((node) => ({ node, selected: true })));
+    this.applySelection(candidates.filter(node => !node.isDetail && !node.isGroup).map(node => ({ node, selected: true })));
   }
 
   deselectAll(): void {
@@ -195,37 +180,25 @@ export class SelectionService {
     return { selectable, selected };
   }
 
-  applySelectionPublic(
-    changes: { node: RowNode<any>; selected: boolean; clearOthers?: boolean }[],
-    clearOthers = false
-  ): void {
-    this.applySelection(changes, clearOthers);
-  }
-
-  private replaceSelection(
-    changes: { node: RowNode<any>; selected: boolean; clearOthers?: boolean }[],
-    clearAll: boolean,
-    cascadeTree: boolean
-  ): void {
-    if (!clearAll && !changes.some((change) => change.clearOthers)) return;
-    this.selectedIds = clearAll
-      ? new Set<string>()
-      : new Set(changes.filter((change) => change.selected).flatMap(
-        (change) => cascadeTree ? this.subtreeIds(change.node) : [change.node.id]
-      ));
-  }
-
   private applySelectionChanges(
-    changes: { node: RowNode<any>; selected: boolean; clearOthers?: boolean }[],
-    cascadeTree: boolean
+    changes: SelectionChange[],
+    policy: Column | null
   ): void {
-    for (const change of changes) {
-      if (!this.isSelectable(change.node)) continue;
-      const targets = cascadeTree ? this.subtreeIds(change.node) : [change.node.id];
-      for (const id of targets) {
-        if (change.selected) this.selectedIds.add(id);
-        else this.selectedIds.delete(id);
+    const model = this.core.rowModel;
+    const single = this.core.gridOptions.rowSelection === "single";
+    const cascadeTree = !single && model.isTree && this.core.gridOptions.autoCheckedChildren;
+    const apply = (node: RowNode<any>, selected: boolean, validated = false): void => {
+      if (!selected) this.selectedIds.delete(node.id);
+      else if (validated || this.isSelectable(node, policy)) this.selectedIds.add(node.id);
+      if (!cascadeTree) return;
+      for (const id of model.getChildrenIds(node.id)) {
+        const child = model.getNodeById(id);
+        if (child) apply(child, selected);
       }
+    };
+    for (const { node, selected } of changes) {
+      apply(node, selected, true);
+      if (single && selected) break;
     }
   }
 
@@ -237,15 +210,11 @@ export class SelectionService {
     return changed;
   }
 
-  private synchronizeNodeSelection(
-    changedIds: ReadonlySet<string>,
-    previousIndeterminate: ReadonlySet<string>
-  ): number[] {
+  private synchronizeNodeSelection(previousIndeterminate: ReadonlySet<string>): number[] {
     const refreshIndexes: number[] = [];
-    const touched = new Set<string>([...changedIds, ...previousIndeterminate, ...this.indeterminateIds]);
     for (const node of this.core.rowModel.getAllNodes()) {
       const selected = this.selectedIds.has(node.id);
-      if ((touched.has(node.id) || node.selected !== selected) && node.rowIndex >= 0) {
+      if ((node.selected !== selected || previousIndeterminate.has(node.id) || this.indeterminateIds.has(node.id)) && node.rowIndex >= 0) {
         refreshIndexes.push(node.rowIndex);
       }
       node.selected = selected;
@@ -253,19 +222,23 @@ export class SelectionService {
     return refreshIndexes;
   }
 
-  private applySelection(
-    changes: { node: RowNode<any>; selected: boolean; clearOthers?: boolean }[],
-    clearAll = false
-  ): void {
+  applySelection(changes: SelectionChange[], clearAll = false): void {
+    const mode = this.core.gridOptions.rowSelection;
+    const policy = this.findSelectableColumn() ?? null;
+    const eligible = changes.filter((change) => !change.selected || (mode !== "none" && this.isSelectable(change.node, policy)));
+    // A rejected target must not replace an existing selection. An explicit
+    // empty request still clears, and an old disabled selection can be removed.
+    if (changes.length > 0 && eligible.length === 0) return;
     const before = new Set(this.selectedIds);
-    const cascadeTree = this.core.rowModel.isTree && this.core.gridOptions.autoCheckedChildren;
-    this.replaceSelection(changes, clearAll, cascadeTree);
-    this.applySelectionChanges(changes, cascadeTree);
-    const changedIds = this.changedSelectionIds(before);
+    if (clearAll || eligible.some(change => change.selected
+      ? mode === "single" || change.clearOthers
+      : change.clearOthers && this.isSelectable(change.node, policy))) this.selectedIds.clear();
+    this.applySelectionChanges(eligible, policy);
     const prevIndeterminate = new Set(this.indeterminateIds);
 
-    this.recomputeTriState();
-    const refreshIndexes = this.synchronizeNodeSelection(changedIds, prevIndeterminate);
+    this.recomputeTriState(policy);
+    const changedIds = this.changedSelectionIds(before);
+    const refreshIndexes = this.synchronizeNodeSelection(prevIndeterminate);
     if (changedIds.size > 0) {
       this.core.bodyRenderer.refreshRows(refreshIndexes);
       this.core.headerRenderer.refreshSelectAllCheckbox();
@@ -277,42 +250,35 @@ export class SelectionService {
     }
   }
 
-  private subtreeIds(node: RowNode<any>): string[] {
-    const out: string[] = [node.id];
-    const walk = (id: string) => {
-      for (const childId of this.core.rowModel.getChildrenIds(id)) {
-        out.push(childId);
-        walk(childId);
-      }
-    };
-    walk(node.id);
-    return out;
-  }
-
-  private recomputeTriState(): void {
+  private recomputeTriState(policy: Column | null): void {
     this.indeterminateIds.clear();
-    if (!this.core.rowModel.isTree) return;
+    const model = this.core.rowModel;
+    if (this.core.gridOptions.rowSelection !== "multiple" || !model.isTree || this.selectedIds.size === 0) return;
 
     const evaluate = (id: string): { all: boolean; some: boolean } => {
-      const childIds = this.core.rowModel.getChildrenIds(id);
-      if (childIds.length === 0) {
-        return { all: this.selectedIds.has(id), some: this.selectedIds.has(id) };
-      }
+      const node = policy && model.getNodeById(id);
+      const selectable = !node || this.isSelectable(node, policy);
       let all = true;
       let some = false;
-      for (const childId of childIds) {
+      for (const childId of model.getChildrenIds(id)) {
         const state = evaluate(childId);
         all &&= state.all;
         some ||= state.some;
       }
-      if (some && !all) this.indeterminateIds.add(id);
-      if (all) this.selectedIds.add(id);
-      else this.selectedIds.delete(id);
+      // With no eligible descendants, the row has its own selection state.
+      if (all && !some) {
+        if (!selectable) this.selectedIds.delete(id);
+        const selected = this.selectedIds.has(id);
+        return { all: selected || !selectable, some: selected };
+      }
+      if (selectable && all) this.selectedIds.add(id);
+      else {
+        this.selectedIds.delete(id);
+        if (selectable && some) this.indeterminateIds.add(id);
+      }
       return { all, some };
     };
 
-    for (const root of this.core.rowModel.getRootNodes()) {
-      evaluate(root.id);
-    }
+    for (const root of model.getRootNodes()) evaluate(root.id);
   }
 }

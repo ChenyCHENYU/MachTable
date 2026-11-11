@@ -57,8 +57,6 @@ import type {
   ColDefGroup
 } from "../types/colDef";
 
-const DATA_SOURCE_ERROR_PREFIXES = ["datasource", "treeData"] as const;
-const STATE_ERROR_PREFIXES = ["columnState.", "gridState."] as const;
 const RENDERER_ERROR_SOURCES = new Set(["valueFormatter", "cellStyle", "cellClass"]);
 const GRID_STATE_CHANGE_EVENTS = new Set<GridEventType>([
   "selectionChanged",
@@ -608,25 +606,24 @@ export class GridCore<TData = any> {
   }
 
   reportError(error: unknown, source: string, context?: Record<string, unknown>): void {
-    const code = this.errorCodeFor(source, error);
     const message = error instanceof Error ? error.message : String(error);
+    const code = this.errorCodeFor(source, message);
     this.recentErrors.push({ code, source, message, timestamp: Date.now(), ...(context ? { context } : {}) });
-    if (this.recentErrors.length > 50) this.recentErrors.splice(0, this.recentErrors.length - 50);
+    if (this.recentErrors.length > 50) this.recentErrors.shift();
     console.error(`[mach-table] ${code} (${source})`, error);
     if (this.disposedState) return;
     this.emit("gridError", { code, error, source, context });
   }
 
-  private errorCodeFor(source: string, error: unknown): GridErrorCode {
-    if (DATA_SOURCE_ERROR_PREFIXES.some((prefix) => source.startsWith(prefix))) return "DATA_SOURCE_ERROR";
-    const message = error instanceof Error ? error.message : String(error);
+  private errorCodeFor(source: string, message: string): GridErrorCode {
+    if (/^(datasource|treeData)/.test(source)) return "DATA_SOURCE_ERROR";
     if (source === "rowKey" || message.includes("Duplicate row id")) return "DATA_INTEGRITY_ERROR";
     if (source === "validate") return "VALIDATION_ERROR";
     if (source.toLowerCase().includes("renderer") || RENDERER_ERROR_SOURCES.has(source)) return "RENDERER_ERROR";
     if (source.toLowerCase().includes("editor") || source === "editable") return "EDITOR_ERROR";
     if (source.startsWith("feature.")) return "FEATURE_ERROR";
-    if (STATE_ERROR_PREFIXES.some((prefix) => source.startsWith(prefix))) return "STATE_ERROR";
-    if (source.startsWith("eventBus.") || source.startsWith("eventHandler.")) return "EVENT_HANDLER_ERROR";
+    if (/^(columnState|gridState)\./.test(source)) return "STATE_ERROR";
+    if (/^(eventBus|eventHandler)\./.test(source)) return "EVENT_HANDLER_ERROR";
     return "GRID_ERROR";
   }
 

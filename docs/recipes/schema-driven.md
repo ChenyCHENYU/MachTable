@@ -33,6 +33,8 @@ onMounted(loadReport);
 
 同一个报表新增或删减字段时，表格按稳定列 ID 延续现有列偏好。切换到独立报表时，Vue 用 `:key="reportId"` 区分实例。启用列状态持久化的页面也应为每个报表分配独立的 `persistence.key`。
 
+`initialSort` 在列首次创建时生效。刷新同 ID 列的标题或配置，会保留用户当前排序，包括已经清空排序的状态。
+
 ## Schema 结构
 
 ```ts

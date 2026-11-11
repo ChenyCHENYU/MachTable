@@ -82,7 +82,7 @@
 | `autoRowSpan` | `boolean` | 自动合并连续相同值单元格 |
 | `rowSpan` | `(p) => number` | 回调式跨行数（与变高行兼容） |
 | `colSpan` | `(p) => number` | 跨列数：首格宽度延伸、被覆盖格隐藏（中窗格；与列虚拟化共存时按需渲染） |
-| `autoHeight` | `boolean` | 内容驱动行高：按列宽 canvas 测量换行行数（配合 `wrapText`），结果进行高缓存，仅首帧测量 |
+| `autoHeight` | `boolean` | 配合 `wrapText` 按浏览器文字排版测高，缓存结果，在内容、列宽或字体变化后重新测量 |
 | `initialSort` | `"asc" \| "desc"` | 初始排序 |
 | `onCellClick` / `onCellDoubleClick` | `(e) => void` | 列级单元格事件 |
 

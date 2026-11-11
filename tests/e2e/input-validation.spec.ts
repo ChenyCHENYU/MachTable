@@ -72,3 +72,35 @@ test("clipboard and delete share column/row validation, undo and async cancellat
   expect(await data()).toEqual({ id: "a", name: "Alpha", quantity: 2 });
   expect(await page.evaluate(() => window.inputFixtureErrors.length)).toBe(3);
 });
+
+test("async editor clicks retain row identity after sorting and honor the newest target", async ({ page }) => {
+  const fixtureUrl = `${url}/switch`;
+  await page.route(fixtureUrl, route => route.fulfill({ contentType: "text/html", body: `<!doctype html>
+    <link rel="stylesheet" href="/@fs${root}/dist/mach-table.css">
+    <div id="grid" style="width:600px;height:320px"></div>
+    <script type="module">
+    import {createGrid} from '/@fs${root}/dist/index.js';
+    window.inputFixtureApi=createGrid(document.getElementById('grid'),{
+      rowKey:'id',pagination:false,
+      columnDefs:[{field:'quantity',width:180,editable:true,cellEditor:'number',
+        validate:()=>new Promise(resolve=>window.resolveInputValidation=()=>resolve(true))}],
+      rowData:[{id:'a',quantity:2},{id:'b',quantity:1},{id:'c',quantity:4}]
+    });
+    </script>` }));
+  await page.goto(fixtureUrl);
+  const cell = (id: string) => page.locator(`.mach-row[data-id="${id}"] .mach-cell[data-col-id="quantity"]`);
+  await expect(cell("a")).toHaveText("2");
+  await page.evaluate(() => window.inputFixtureApi.editing.startCell({ rowIndex: 0, colId: "quantity" }));
+  await cell("a").locator("input").fill("3");
+  await cell("b").click();
+  await page.evaluate(() => window.inputFixtureApi.sorting.setModel([{ colId: "quantity", direction: "asc" }]));
+  await page.evaluate(() => window.resolveInputValidation());
+  await expect(cell("b").locator("input")).toHaveValue("1");
+
+  await cell("b").locator("input").fill("5");
+  await cell("c").click();
+  await cell("a").click();
+  await page.evaluate(() => window.resolveInputValidation());
+  await expect(cell("a").locator("input")).toHaveValue("3");
+  await expect(cell("c").locator("input")).toHaveCount(0);
+});
