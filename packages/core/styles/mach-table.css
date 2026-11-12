@@ -650,6 +650,8 @@
 
 .mach-row-container {
   position: relative;
+  /* Keep negative logical row layers above the pane background. */
+  z-index: 0;
   width: 100%;
 }
 

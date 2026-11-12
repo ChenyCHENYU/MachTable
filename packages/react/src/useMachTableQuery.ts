@@ -85,13 +85,19 @@ export interface UseMachTableQueryReturn<TData> {
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException
-    ? error.name === "AbortError"
-    : typeof error === "object" && error != null && "name" in error && (error as { name?: unknown }).name === "AbortError";
+  return error != null && typeof error === "object" && (error as { name?: unknown }).name === "AbortError";
 }
 
 function readQuery<T>(source: MachTableQuerySource<T>): T {
   return typeof source === "function" ? (source as () => T)() : source;
+}
+
+/** Validate the transport envelope before deriving its last available page. */
+function lastResultPage<T>(result: MachTablePageResult<T>, pageSize: number): number {
+  if (!Array.isArray(result?.rows) || !Number.isFinite(result.total) || result.total < 0) {
+    throw new TypeError("[MachTable] Expected rows[] and a finite total >= 0.");
+  }
+  return Math.ceil(Math.floor(result.total) / pageSize) || 1;
 }
 
 /** React remote-list controller with cancellation, stale guards and cross-page selection. */
@@ -129,7 +135,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     // Query paths may come from runtime schemas; Core additionally types static field paths.
     const id = rowIdFromKey(rowKey as NonNullable<GridOptions<TData>["rowKey"]>, row);
     if (!id) {
-      throw new Error(`[MachTable] useMachTableQuery rowKey "${String(rowKey)}" returned an empty value.`);
+      throw new Error(`[MachTable] Empty rowKey "${String(rowKey)}".`);
     }
     return id;
   }, []);
@@ -157,16 +163,11 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
 
   const applyPageResult = useCallback((
     result: MachTablePageResult<TData>,
-    controller: AbortController,
-    generation: number
+    acceptedPage: number
   ): void => {
-    if (isStale(controller, generation)) return;
-    if (!result || !Array.isArray(result.rows) || !Number.isFinite(result.total) || result.total < 0) {
-      throw new TypeError("[MachTable] Remote request must resolve to { rows: TData[], total: non-negative number }.");
-    }
     const nextRows = [...result.rows];
     const pageRows = new Map(nextRows.map((row) => [rowId(row), row] as const));
-    if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Remote rows contain duplicate row keys.");
+    if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Duplicate remote row keys.");
     if (optionsRef.current.selectionScope === "page") {
       for (const id of selectedIds.current) {
         if (!pageRows.has(id)) {
@@ -179,35 +180,18 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       if (selected(id)) selectedById.current.set(id, row);
       else selectedById.current.delete(id);
     }
+    stateRef.current.page = acceptedPage;
     stateRef.current.rows = nextRows;
+    setPage(acceptedPage);
     setRows(nextRows);
     setTotal(Math.floor(result.total));
     notifySelection();
     optionsRef.current.onSuccess?.(result);
     queueMicrotask(syncVisibleSelection);
-  }, [isStale, notifySelection, rowId, selected, syncVisibleSelection]);
-
-  const handleRequestError = useCallback((
-    requestError: unknown,
-    controller: AbortController,
-    generation: number
-  ): void => {
-    if (isStale(controller, generation) || isAbortError(requestError)) return;
-    const normalized = requestError ?? new Error("Remote request failed");
-    setError(normalized);
-    optionsRef.current.onError?.(normalized);
-  }, [isStale]);
-
-  const finishRequest = useCallback((controller: AbortController, generation: number): void => {
-    if (generation !== generationRef.current) return;
-    setLoading(false);
-    if (abortRef.current === controller) abortRef.current = null;
-  }, []);
+  }, [notifySelection, rowId, selected, syncVisibleSelection]);
 
   const load = useCallback(async (): Promise<void> => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = null;
-    abortRef.current?.abort();
+    abort();
     const controller = new AbortController();
     abortRef.current = controller;
     const generation = ++generationRef.current;
@@ -219,36 +203,55 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
     const current = stateRef.current;
     try {
-      const result = await abortable(optionsRef.current.request({
+      const activeOptions = optionsRef.current;
+      let params: MachTablePageRequest<TQuery> = {
         page: current.page,
         pageSize: current.pageSize,
-        query: readQuery(optionsRef.current.query),
+        query: readQuery(activeOptions.query),
         sortModel: current.sortModel.map((item) => ({ ...item })),
         filterModel: { ...current.filterModel },
         advancedFilterModel: normalizeAdvancedFilterModel(current.advancedFilterModel),
         quickFilterText: current.quickFilterText,
         signal: controller.signal
-      }), controller.signal);
-      applyPageResult(result, controller, generation);
+      };
+      // Keep recovery within one cancellable request and only publish the final
+      // valid page. A second shrink is a retryable error, never a request loop.
+      for (let attempt = 0; ; attempt++) {
+        const result = await abortable(activeOptions.request(params), controller.signal);
+        if (isStale(controller, generation)) return;
+        const lastPage = lastResultPage(result, params.pageSize);
+        if (params.page <= lastPage || result.total < 1) {
+          applyPageResult(result, Math.min(params.page, lastPage));
+          break;
+        }
+        if (attempt) throw new RangeError("[MachTable] Page changed during recovery; retry.");
+        params = { ...params, page: lastPage };
+      }
     } catch (requestError) {
-      handleRequestError(requestError, controller, generation);
+      if (!isStale(controller, generation) && !isAbortError(requestError)) {
+        const normalized = requestError ?? new Error("Remote request failed");
+        setError(normalized);
+        optionsRef.current.onError?.(normalized);
+      }
     } finally {
-      finishRequest(controller, generation);
+      if (generation === generationRef.current) {
+        setLoading(false);
+        abortRef.current = null;
+      }
     }
-  }, [applyPageResult, finishRequest, handleRequestError]);
+  }, [abort, applyPageResult, isStale]);
 
   const scheduleLoad = useCallback((resetPage: boolean): void => {
     if (resetPage) {
       stateRef.current.page = 1;
       setPage(1);
     }
-    abortRef.current?.abort();
-    abortRef.current = null;
+    abort();
+    if (optionsRef.current.mode === "manual") return;
     const delay = Math.max(0, optionsRef.current.debounceMs ?? 0);
-    if (timerRef.current) clearTimeout(timerRef.current);
     if (delay === 0) void load();
     else timerRef.current = setTimeout(() => { void load(); }, delay);
-  }, [load]);
+  }, [abort, load]);
 
   const clearSelection = useCallback((): void => {
     const changed = allMatching.current || selectedIds.current.size > 0 ||
@@ -271,30 +274,35 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     setPage(event.page);
     setPageSize(event.pageSize);
     if (optionsRef.current.mode !== "manual") void load();
-  }, [load]);
+    else abort();
+  }, [abort, load]);
   const onSortChanged = useCallback((event: { sortModel: SortModel }): void => {
     if (suppressGrid.current) return;
     const next = event.sortModel.map((item) => ({ ...item }));
     stateRef.current.sortModel = next;
     setSortModel(next);
-    if (optionsRef.current.mode !== "manual") scheduleLoad(true);
-    else { stateRef.current.page = 1; setPage(1); }
+    scheduleLoad(true);
   }, [scheduleLoad]);
   const onFilterChanged = useCallback((event: FilterChangedEvent<TData>): void => {
     if (suppressGrid.current) return;
     // Commands can change filters before the gridReady animation frame.
     apiRef.current = event.api;
+    const advanced = normalizeAdvancedFilterModel(event.advancedFilterModel);
+    const quickText = event.api.filtering.getQuickText();
+    const current = stateRef.current;
+    // Ignore the grid's echo of already submitted criteria, so it cannot
+    // cancel a fresh manual reload or issue a duplicate automatic request.
+    if (quickText === current.quickFilterText &&
+      JSON.stringify([event.filterModel, advanced]) === JSON.stringify([current.filterModel, current.advancedFilterModel])) return;
     const next = { ...event.filterModel };
     stateRef.current.filterModel = next;
-    const advanced = normalizeAdvancedFilterModel(event.advancedFilterModel);
     stateRef.current.advancedFilterModel = advanced;
-    stateRef.current.quickFilterText = event.api.filtering.getQuickText();
+    stateRef.current.quickFilterText = quickText;
     setFilterModel(next);
     setAdvancedFilterModel(advanced);
     setQuickFilterState(stateRef.current.quickFilterText);
     if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
-    if (optionsRef.current.mode !== "manual") scheduleLoad(true);
-    else { stateRef.current.page = 1; setPage(1); }
+    scheduleLoad(true);
   }, [clearSelection, scheduleLoad]);
   const onSelectionChanged = useCallback((event: SelectionChangedEvent<TData>): void => {
     if (suppressSelection.current) return;
@@ -317,9 +325,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     notifySelection();
   }, [notifySelection, rowId]);
 
-  const reload = useCallback(async (reloadOptions: { resetPage?: boolean } = {}): Promise<void> => {
+  const reload = useCallback((reloadOptions: { resetPage?: boolean } = {}): Promise<void> => {
     if (reloadOptions.resetPage) { stateRef.current.page = 1; setPage(1); }
-    await load();
+    return load();
   }, [load]);
   const reset = useCallback(async (): Promise<void> => {
     stateRef.current.page = 1;
@@ -346,14 +354,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     try { apiRef.current?.filtering.setQuickText(value); }
     finally { suppressGrid.current = false; }
     if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
-    if (optionsRef.current.mode !== "manual") scheduleLoad(true);
-    else { stateRef.current.page = 1; setPage(1); }
+    scheduleLoad(true);
   }, [clearSelection, scheduleLoad]);
-  const selectAllMatching = useCallback((): void => {
-    allMatching.current = true; selectedIds.current.clear(); excludedIds.current.clear(); selectedById.current.clear();
-    for (const row of stateRef.current.rows) selectedById.current.set(rowId(row), row);
-    notifySelection(); syncVisibleSelection();
-  }, [notifySelection, rowId, syncVisibleSelection]);
   const applySelectionState = useCallback((state: MachTableRemoteSelectionState): void => {
     selectedIds.current.clear(); excludedIds.current.clear(); selectedById.current.clear();
     allMatching.current = state.mode === "allMatching";
@@ -363,6 +365,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     for (const row of stateRef.current.rows) if (selected(rowId(row))) selectedById.current.set(rowId(row), row);
     notifySelection(); syncVisibleSelection();
   }, [notifySelection, rowId, selected, syncVisibleSelection]);
+  const selectAllMatching = useCallback((): void => {
+    applySelectionState({ mode: "allMatching", excludedKeys: [] });
+  }, [applySelectionState]);
 
   const queryDependency = options.queryKey === undefined ? options.query : options.queryKey;
   const previousQueryDependency = useRef(queryDependency);
@@ -372,8 +377,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (Object.is(previousQueryDependency.current, queryDependency)) return;
     previousQueryDependency.current = queryDependency;
     if (optionsRef.current.clearSelectionOnQueryChange !== false) clearSelection();
-    if (optionsRef.current.mode !== "manual") scheduleLoad(true);
-    else { stateRef.current.page = 1; setPage(1); }
+    scheduleLoad(true);
   }, [queryDependency, clearSelection, scheduleLoad]);
   useEffect(() => {
     if (options.mode !== "manual" && options.immediate !== false) void load();
@@ -381,9 +385,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   }, []);
 
   const pageSizes = useMemo(() => {
-    const values = [...new Set((options.pageSizeOptions ?? [10, 20, 50, 100]).map((value) => finiteAtLeast(value, 0, 1, true)).filter(Boolean))];
-    if (!values.includes(pageSize)) values.push(pageSize);
-    return values.sort((left, right) => left - right);
+    return [...new Set([...(options.pageSizeOptions ?? [10, 20, 50, 100]), pageSize]
+      .map((value) => finiteAtLeast(value, 0, 1, true)).filter(Boolean))].sort((left, right) => left - right);
   }, [options.pageSizeOptions, pageSize]);
   const bindings = useMemo<GridOptions<TData>>(() => ({
     rowData: rows,

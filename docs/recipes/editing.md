@@ -116,11 +116,14 @@ rowEditValidator: async ({ values, data }) => {
   valueSetter: (p) => {
     if (p.newValue < 0) return false;          // 返回 false = 未变更（不发事件）
     p.data.price = p.newValue;
-    p.data.total = p.data.qty * p.newValue;    // 联动其他字段
     return true;
   }
 }
 ```
+
+`valueSetter` 只写当前字段，派生金额用 `valueGetter` 计算。不要在 setter 中修改其他字段或发起请求，这些副作用无法作为当前单元格的值参与撤销。需要一起提交的复合值（如检测结果与取样时间），将它们保存为同一个不可变对象，编辑器返回新对象，校验、粘贴和撤销便可共用同一条链路。
+
+Delete / 剪切清空沿用 `null` 候选值，经过 `validate` 和 setter，不重复调用 `valueParser`。复合列若以空对象表达“未填写”，在这两处明确接受并规范化 `null`；setter 仍只修改本列负责的值。
 
 内置 select 编辑器、筛选条件、分页容量、列工作台固定位置和官方工具栏密度共用同一套主题化下拉：不触发操作系统原生弹层，支持方向键、Home / End、Enter、Escape 和 Tab，并保留隐藏原生 `select` 的 `change` 兼容契约。
 

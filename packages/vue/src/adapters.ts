@@ -24,12 +24,7 @@ export type VueCellRendererProps<TData = any, TValue = any> = CellRendererParams
 
 /** Uses an explicit app context, or captures the current Vue component context. */
 function resolveAppContext(explicit?: AppContext): AppContext | undefined {
-  if (explicit) return explicit;
-  try {
-    return getCurrentInstance()?.appContext;
-  } catch {
-    return undefined;
-  }
+  return explicit ?? getCurrentInstance()?.appContext;
 }
 
 function styleCellHost(host: HTMLElement): void {

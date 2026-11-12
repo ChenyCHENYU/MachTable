@@ -19,6 +19,9 @@ export default defineConfig({
   clean: true,
   minify: true,
   target: "es2020",
+  esbuildOptions(options) {
+    options.charset = "utf8";
+  },
   external: ["vue", "@agile-team/mach-table", "@agile-team/mach-table/adapter", "@agile-team/mach-table/worker"],
   outExtension({ format }) {
     return { js: format === "esm" ? ".js" : ".cjs" };

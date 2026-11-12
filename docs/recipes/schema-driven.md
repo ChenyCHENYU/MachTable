@@ -35,6 +35,30 @@ onMounted(loadReport);
 
 `initialSort` 在列首次创建时生效。刷新同 ID 列的标题或配置，会保留用户当前排序，包括已经清空排序的状态。
 
+## 带分页、取消和重试的动态报表
+
+远程列表复用 `useMachTableQuery`。项目接口层验证响应、转换字段，并返回 `{ rows, total, columns }`；`columns` 是项目自己的扩展元数据，表格包不识别后端协议。
+
+```ts
+import { shallowRef } from "vue";
+import type { ColDef } from "@agile-team/mach-table-vue";
+import { useMachTableQuery } from "@agile-team/mach-table-vue/workflows";
+import { getReportPageApi, type ReportPage, type ReportRow } from "@/api/report";
+
+const columns = shallowRef<ColDef<ReportRow>[]>([]);
+const table = useMachTableQuery({
+  query,
+  rowKey: "id",
+  request: getReportPageApi,
+  onSuccess: result => { columns.value = (result as ReportPage).columns; }
+});
+// <MachTable v-bind="table.bindings.value" :column-defs="columns" />
+```
+
+这里的类型恢复对应项目接口已验证的 `ReportPage`，不替代运行时校验。元数据必须在 `request` 返回前校验，不要在 `onSuccess` 中才处理坏结构。只有最新有效响应会进入 `onSuccess`；在同一个同步回调中替换列，Vue 会将列和行一起交给表格。旧请求晚到、取消及末页补查的中间结果都不会改变表头。不要在 `request` 等待后直接写列状态，也不要在 `onSuccess` 中再次等待异步请求。
+
+字典晚到时由项目订阅字典并调用 `api.view.refreshCells()`，普通 `valueFormatter` 重新读取标签即可。无需重新请求业务数据、替换列、按单元格发请求或把字典实例传进表格。需要更新下拉选项时，由项目更新普通 `cellEditorParams.options` / `filterOptions` 配置，并在替换编辑配置前处理已有草稿。
+
 ## Schema 结构
 
 ```ts

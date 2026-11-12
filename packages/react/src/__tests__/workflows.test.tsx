@@ -461,7 +461,7 @@ describe("React B-side workflows", () => {
       if (typeof identify !== "function") throw new Error("Expected the normalized row-key binding");
       for (const key of [0, false, "001", "0", "1"]) expect(identify({ meta: { key } })).toBe(String(key));
       for (const key of [null, undefined, ""]) {
-        expect(() => identify({ meta: { key } })).toThrow(`[MachTable] useMachTableQuery rowKey "${String(rowKey)}" returned an empty value.`);
+        expect(() => identify({ meta: { key } })).toThrow(`[MachTable] Empty rowKey "${String(rowKey)}".`);
       }
     } finally { await act(async () => root.unmount()); }
   });

@@ -405,8 +405,10 @@ describe("Vue adapter", () => {
 
   it("does not silently overwrite an existing global component", () => {
     const app = createApp({ render: () => null });
+    const provide = vi.spyOn(app, "provide");
     app.component("MachTable", defineComponent({ render: () => null }));
     expect(() => app.use(MachTablePlugin)).toThrow(/already in use/);
+    expect(provide).not.toHaveBeenCalled();
   });
 
   it("accepts datasource and forwards ordinary host attributes", async () => {
@@ -1001,7 +1003,7 @@ describe("Vue adapter", () => {
       if (typeof identify !== "function") throw new Error("Expected the normalized row-key binding");
       for (const key of [0, false, "001", "0", "1"]) expect(identify({ meta: { key } })).toBe(String(key));
       for (const key of [null, undefined, ""]) {
-        expect(() => identify({ meta: { key } })).toThrow(`[MachTable] useMachTableQuery rowKey "${String(rowKey)}" returned an empty value.`);
+        expect(() => identify({ meta: { key } })).toThrow(`[MachTable] Empty rowKey "${String(rowKey)}".`);
       }
     } finally { app.unmount(); }
   });

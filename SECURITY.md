@@ -6,8 +6,8 @@ MachTable 处于 `0.x` 阶段。安全修复优先发布到最新 minor；使用
 
 | Version | Supported |
 | --- | --- |
-| `0.9.x` | Yes |
-| `< 0.9` | No |
+| 最新 `0.x` minor | Yes |
+| 其他版本 | 请先升级到最新 minor |
 
 ## Reporting a vulnerability
 
@@ -28,3 +28,9 @@ MachTable 处于 `0.x` 阶段。安全修复优先发布到最新 minor；使用
 - CSV 公式保护默认开启，不要对外部数据关闭。
 - 自定义 renderer/editor 同样属于应用攻击面，必须遵守宿主项目的输出编码和 CSP 策略。
 - npm token 只能存放在 Secret 管理系统，不得进入源码、Issue 或构建日志。
+
+## Development tooling
+
+2026-11-12 的官方 npm 审计在开发依赖链中剩余一项 `minimatch 10.2.6` 的中风险公告 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)。它不进入已发布的运行时产物；Core 保持零运行时依赖。开发工具只使用仓库内受控的 glob 配置，后续跟进上游兼容修复。
+
+`minimatch 11` 已改变公开 API、内部匹配类型及部分路径行为，需要随上游依赖升级验证。CI 继续执行现有的 high/critical 审计门禁，完整审计记录应同时保留中低风险项及其实际依赖范围。

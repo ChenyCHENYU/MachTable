@@ -16,11 +16,11 @@ export function registerGlobalMachTable(
   component: Component,
   options: MachTablePluginOptions = {}
 ): void {
-  const config = createMachTableConfigRef(options);
-  app.provide(MACH_TABLE_CONFIG_KEY, config);
   const existing = app.component("MachTable");
   if (existing && existing !== component) {
-    throw new Error('[MachTable] Cannot register global component "MachTable" because that name is already in use.');
+    throw new Error('[MachTable] "MachTable" already in use.');
   }
+  // A rejected registration must leave the host application's config intact.
+  app.provide(MACH_TABLE_CONFIG_KEY, createMachTableConfigRef(options));
   if (!existing) app.component("MachTable", component);
 }

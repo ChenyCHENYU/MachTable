@@ -81,7 +81,7 @@ api.batch((grid) => {
 | `rowBuffer: 4` | 快速滚动场景可降到 4（默认 8）减少 DOM |
 | 列数 < 20 | 列虚拟化不启用（无收益），列多时自动开启无需配置 |
 | `suppressRowHoverHighlight` | 极端场景关闭 hover 三窗格同步 |
-| 慎用 autoRowSpan | 行合并需在每次管线刷新时比较相邻值，超长同值列收益最高 |
+| 有界使用 autoRowSpan | 行合并需比较相邻值；最大跨度应在 rowBuffer 内，避免原锚点被虚拟窗口回收。不要用巨大缓冲替代分组布局 |
 | `getRowHeight` 轻量化 | 见[变高行](/recipes/variable-height)的性能提示 |
 
 ## 测量基准

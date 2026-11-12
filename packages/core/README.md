@@ -4,9 +4,11 @@
 
 # @agile-team/mach-table
 
-MachTable 0.40.0 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。裸 `createGrid()` 保留原有低层默认值：分页开启，序号按 `rowNumber: true` 启用。通过 `createMachTablePreset("list" | "detail", options)` 可显式使用与适配器一致的场景。
+MachTable 0.40.1 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。裸 `createGrid()` 保留原有低层默认值：分页开启，序号按 `rowNumber: true` 启用。通过 `createMachTablePreset("list" | "detail", options)` 可显式使用与适配器一致的场景。
 
 `list` 提供序号、列筛选、列设置与列宽调整；`detail` 保留序号、默认只读和纯文字表头，关闭分页并按内容收起，表体超过 330px 后使用虚拟滚动。表内筛选无匹配时，默认空态提供清除筛选；业务自定义空态优先。
+
+跨行合并适合有界小跨度，当前应将 `rowBuffer` 配置为不小于最大合并行数。超过缓冲的大跨度尚未提供跨窗口锚点保留；边界与配置见[列定义](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/api/col-def.md)。
 
 ```bash
 pnpm add @agile-team/mach-table

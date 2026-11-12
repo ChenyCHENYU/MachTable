@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.40.0-2563eb" alt="Source version 0.40.0" />
+  <img src="https://img.shields.io/badge/source-0.40.1-2563eb" alt="Source version 0.40.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -342,6 +342,8 @@ const columns = [
 
 远程 B 端列表从适配包的 `/workflows` 使用 `useMachTableQuery`：内置取消旧请求、防止过期响应覆盖、加载/空/错状态、服务端分页和跨页选择。`useMachTableEditing` 提供脏状态、部分成功、失败定位和乐观锁冲突闭环。
 
+删除后直接 `reload()`；当前页越界时最多补查一次最后有效页，最终结果一起更新页码、数据和总数。手动查询变更条件会取消旧请求，仍等待显式提交。动态表头在接受最新响应时同步更新，字典由项目独立刷新显示，见[远程查询](./docs/recipes/remote-query.md)与[动态报表](./docs/recipes/schema-driven.md)。
+
 ## 架构原则
 
 - 有资源所有权、缓存与销毁边界的能力使用 class service。
@@ -376,7 +378,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.40.0`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
+当前源码版本为 `0.40.1`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

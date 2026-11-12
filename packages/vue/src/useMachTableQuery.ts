@@ -4,7 +4,6 @@ import {
   onScopeDispose,
   ref,
   shallowRef,
-  unref,
   watch,
   type ComputedRef,
   type Ref,
@@ -25,6 +24,7 @@ import {
   type SortModel
 } from "@agile-team/mach-table";
 import { abortable, finiteAtLeast, rowIdFromKey } from "@agile-team/mach-table/adapter";
+import { resolveSource } from "./source";
 
 export type MachTableQuerySource<TQuery> =
   | TQuery
@@ -101,12 +101,16 @@ export interface UseMachTableQueryReturn<TData> {
   applySelectionState(state: MachTableRemoteSelectionState): void;
 }
 
-function readSource<T>(source: MachTableQuerySource<T>): T {
-  return typeof source === "function" ? (source as () => T)() : unref(source);
-}
-
 function isAbortError(error: unknown): boolean {
   return error != null && typeof error === "object" && (error as { name?: unknown }).name === "AbortError";
+}
+
+/** Validate the transport envelope before deriving its last available page. */
+function lastResultPage<T>(result: MachTablePageResult<T>, pageSize: number): number {
+  if (!Array.isArray(result?.rows) || !Number.isFinite(result.total) || result.total < 0) {
+    throw new TypeError("[MachTable] Expected rows[] and a finite total >= 0.");
+  }
+  return Math.ceil(Math.floor(result.total) / pageSize) || 1;
 }
 
 /**
@@ -134,9 +138,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const selectionScope = options.selectionScope ?? "preserve";
   const automatic = options.mode !== "manual";
   const allMatching = ref(false);
-  const pageSizes = [...new Set((options.pageSizeOptions ?? [10, 20, 50, 100]).map((value) => finiteAtLeast(value, 0, 1, true)).filter(Boolean))];
-  if (!pageSizes.includes(pageSize.value)) pageSizes.push(pageSize.value);
-  pageSizes.sort((a, b) => a - b);
+  const pageSizes = [...new Set([...(options.pageSizeOptions ?? [10, 20, 50, 100]), pageSize.value]
+    .map((value) => finiteAtLeast(value, 0, 1, true)).filter(Boolean))].sort((a, b) => a - b);
 
   let api: GridApi<TData> | null = null;
   let controller: AbortController | null = null;
@@ -151,7 +154,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     // Query paths may come from runtime schemas; Core additionally types static field paths.
     const id = rowIdFromKey(options.rowKey as NonNullable<GridOptions<TData>["rowKey"]>, row);
     if (!id) {
-      throw new Error(`[MachTable] useMachTableQuery rowKey \"${String(options.rowKey)}\" returned an empty value.`);
+      throw new Error(`[MachTable] Empty rowKey \"${String(options.rowKey)}\".`);
     }
     return id;
   };
@@ -193,16 +196,11 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
 
   const applyPageResult = async (
     result: MachTablePageResult<TData>,
-    requestGeneration: number
+    acceptedPage: number
   ): Promise<void> => {
-    // Abort and replacement both advance the generation before any response can resume.
-    if (requestGeneration !== generation) return;
-    if (!result || !Array.isArray(result.rows) || !Number.isFinite(result.total) || result.total < 0) {
-      throw new TypeError("[MachTable] Remote request must resolve to { rows: TData[], total: non-negative number }.");
-    }
     const nextRows = [...result.rows];
     const pageRows = new Map(nextRows.map((row) => [rowId(row), row] as const));
-    if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Remote rows contain duplicate row keys.");
+    if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Duplicate remote row keys.");
     if (selectionScope === "page") {
       for (const id of selectedIds) {
         if (!pageRows.has(id)) {
@@ -211,6 +209,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
         }
       }
     }
+    page.value = acceptedPage;
     rows.value = nextRows;
     total.value = Math.floor(result.total);
     for (const [id, row] of pageRows) {
@@ -219,23 +218,11 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
     updateSelectedRefs();
     options.onSuccess?.(result);
-    await nextTick();
-    syncVisibleSelection();
-  };
-
-  const handleRequestError = (
-    requestError: unknown,
-    requestGeneration: number
-  ): void => {
-    if (requestGeneration !== generation || isAbortError(requestError)) return;
-    error.value = requestError ?? new Error();
-    options.onError?.(error.value);
+    await nextTick(syncVisibleSelection);
   };
 
   const load = async (): Promise<void> => {
-    if (debounceTimer != null) clearTimeout(debounceTimer);
-    debounceTimer = null;
-    controller?.abort();
+    abort();
     const activeController = new AbortController();
     controller = activeController;
     const requestGeneration = ++generation;
@@ -244,31 +231,47 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (options.keepPreviousData === false) rows.value = [];
 
     try {
-      const result = await abortable(options.request({
+      let params: MachTablePageRequest<TQuery> = {
         page: page.value,
         pageSize: pageSize.value,
-        query: readSource(options.query),
+        query: resolveSource<TQuery>(options.query),
         sortModel: sortModel.value.map((item) => ({ ...item })),
         filterModel: { ...filterModel.value },
         advancedFilterModel: normalizeAdvancedFilterModel(advancedFilterModel.value),
         quickFilterText: quickFilterText.value,
         signal: activeController.signal
-      }), activeController.signal);
-      await applyPageResult(result, requestGeneration);
+      };
+      // A deletion can invalidate the current page. Recover once under the same
+      // request identity; never publish an intermediate empty page or loop.
+      for (let attempt = 0; ; attempt++) {
+        const result = await abortable(options.request(params), activeController.signal);
+        // Check after each await, before validation, recovery or publication.
+        if (requestGeneration !== generation) return;
+        const lastPage = lastResultPage(result, params.pageSize);
+        if (params.page <= lastPage || result.total < 1) {
+          await applyPageResult(result, Math.min(params.page, lastPage));
+          break;
+        }
+        if (attempt) throw new RangeError("[MachTable] Page changed during recovery; retry.");
+        params = { ...params, page: lastPage };
+      }
     } catch (requestError) {
-      handleRequestError(requestError, requestGeneration);
+      if (requestGeneration === generation && !isAbortError(requestError)) {
+        error.value = requestError ?? new Error();
+        options.onError?.(error.value);
+      }
     } finally {
       if (requestGeneration === generation) {
         loading.value = false;
-        if (controller === activeController) controller = null;
+        controller = null;
       }
     }
   };
 
   const scheduleLoad = (): void => {
     page.value = 1;
-    if (!automatic) return;
     abort();
+    if (!automatic) return;
     const delay = options.debounceMs ?? 0;
     if (delay > 0) debounceTimer = setTimeout(load, delay);
     else void load();
@@ -284,6 +287,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     page.value = event.page;
     pageSize.value = event.pageSize;
     if (automatic) void load();
+    else abort();
   };
   const onSortChanged = (event: SortChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
@@ -292,18 +296,24 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   };
   const onFilterChanged = (event: FilterChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
+    const advanced = normalizeAdvancedFilterModel(event.advancedFilterModel);
+    const quickText = event.api.filtering.getQuickText();
+    // Prop synchronization can echo criteria already submitted by reload().
+    // Only a real change may cancel that request, including in manual mode.
+    if (quickText === handledQuickFilterText &&
+      JSON.stringify([event.filterModel, advanced]) === JSON.stringify([filterModel.value, advancedFilterModel.value])) return;
     filterModel.value = { ...event.filterModel };
-    advancedFilterModel.value = normalizeAdvancedFilterModel(event.advancedFilterModel);
-    handledQuickFilterText = event.api.filtering.getQuickText();
+    advancedFilterModel.value = advanced;
+    handledQuickFilterText = quickText;
     if (quickFilterText.value !== handledQuickFilterText) quickFilterText.value = handledQuickFilterText;
     onCriteriaChanged();
   };
   const onSelectionChanged = (event: SelectionChangedEvent<TData>): void => {
     if (suppressSelectionEvents) return;
-    const visibleIds = rows.value.map(rowId);
-    const nextVisibleIds = new Set(event.selectedRows.map(rowId));
     if (allMatching.value) {
-      for (const id of visibleIds) {
+      const nextVisibleIds = new Set(event.selectedRows.map(rowId));
+      for (const row of rows.value) {
+        const id = rowId(row);
         if (nextVisibleIds.has(id)) excludedIds.delete(id);
         else {
           excludedIds.add(id);
@@ -313,7 +323,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     } else if (selectionScope === "page") {
       clearSelectionCache();
     } else {
-      for (const id of visibleIds) {
+      for (const row of rows.value) {
+        const id = rowId(row);
         selectedIds.delete(id);
         selectedById.delete(id);
       }
@@ -355,9 +366,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     onSelectionChanged
   }));
 
-  const reload = async (reloadOptions: { resetPage?: boolean } = {}): Promise<void> => {
+  const reload = (reloadOptions: { resetPage?: boolean } = {}): Promise<void> => {
     if (reloadOptions.resetPage) page.value = 1;
-    await load();
+    return load();
   };
   const reset = async (): Promise<void> => {
     suppressGridEvents = true;
@@ -394,11 +405,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     try { api?.selection.clear(); } finally { suppressSelectionEvents = false; }
   };
   const selectAllMatching = (): void => {
-    allMatching.value = true;
-    clearSelectionCache();
-    for (const row of rows.value) selectedById.set(rowId(row), row);
-    updateSelectedRefs();
-    syncVisibleSelection();
+    applySelectionState({ mode: "allMatching", excludedKeys: [] });
   };
   const applySelectionState = (state: MachTableRemoteSelectionState): void => {
     clearSelectionCache();
@@ -427,7 +434,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   };
 
   watch(
-    () => readSource(options.query),
+    () => resolveSource<TQuery>(options.query),
     onCriteriaChanged,
     { deep: true, immediate: automatic && options.immediate !== false }
   );
@@ -442,15 +449,14 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (updatingSelectedRefs) return;
     allMatching.value = false;
     excludedIds.clear();
-    const wanted = new Set(keys.map(String));
     selectedIds.clear();
-    for (const id of wanted) selectedIds.add(id);
+    for (const id of keys) selectedIds.add(String(id));
     for (const id of [...selectedById.keys()]) {
-      if (!wanted.has(id)) selectedById.delete(id);
+      if (!selectedIds.has(id)) selectedById.delete(id);
     }
     for (const row of rows.value) {
       const id = rowId(row);
-      if (wanted.has(id)) selectedById.set(id, row);
+      if (selectedIds.has(id)) selectedById.set(id, row);
     }
     syncVisibleSelection();
     updateSelectedRefs();

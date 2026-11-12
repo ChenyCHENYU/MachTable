@@ -72,7 +72,7 @@ export const MachTableToolbar = defineComponent({
       props.features[key] ?? DEFAULT_FEATURES[key];
     const command = (key: keyof MachTableCommands, ...args: unknown[]): unknown => {
       const callback = props.commands ? Reflect.get(props.commands, key) as unknown : undefined;
-      return typeof callback === "function" && props.commands
+      return typeof callback === "function"
         ? Reflect.apply(callback, props.commands, args)
         : undefined;
     };

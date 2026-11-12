@@ -26,7 +26,7 @@ export function createMachTableConfigRef(config: MachTableRuntimeConfig): Readon
 
 /** Provides route/layout-scoped defaults, presets and diagnostics reactively. */
 export function provideMachTableConfig(source: MachTableConfigSource): Readonly<Ref<ResolvedMachTableConfig>> {
-  const parent = inject(MACH_TABLE_CONFIG_KEY, shallowRef(EMPTY_CONFIG));
+  const parent = useMachTableConfig();
   const resolved = computed(() => mergeMachTableConfig(parent.value, readSource(source)));
   provide(MACH_TABLE_CONFIG_KEY, resolved);
   return resolved;

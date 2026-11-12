@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.40.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.40.1 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
 
@@ -110,6 +110,8 @@ export default defineMachTableConfig({
 ```
 
 场景按用途选择，不随行数变化。业务列可显式 `editable: true`，单表可覆盖 `maxBodyHeight` 等差异；只读默认不替代权限校验。全局 `defaultPreset: false` 或单表 `:preset="false"` 可退出，`detail → list/false` 会回退场景字段。切换列配置仍按原有生命周期重建编辑器，先保存或放弃未提交草稿。详见[场景与配置](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/configuration.md)。
+
+远程页删除后只需调用 `reload()`：当前页越界时最多补查一次最后有效页，不先发布中间空页。手动查询模式的条件变化会取消旧请求，仍等待显式提交。详见[远程查询](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/remote-query.md)。
 
 ## 按需子入口
 

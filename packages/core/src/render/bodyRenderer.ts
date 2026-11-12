@@ -958,6 +958,8 @@ export class BodyRenderer {
   private positionRow(row: HTMLElement, index: number, y: number, height: number, id?: string): void {
     row.style.display = "";
     row.style.transform = `translateY(${y}px)`;
+    // Earlier anchors must paint above later rows, including staggered spans.
+    row.style.zIndex = String(-index);
     row.style.height = `${height}px`;
     row.dataset.index = String(index);
     if (id !== undefined) row.dataset.id = id;
@@ -1235,7 +1237,6 @@ export class BodyRenderer {
 
   private resetSpanStyle(cell: HTMLElement): void {
     if (cell.style.height !== "") cell.style.height = "";
-    if (cell.style.zIndex !== "") cell.style.zIndex = "";
     if (cell.style.display === "none") cell.style.display = "";
     cell.removeAttribute("aria-rowspan");
   }
@@ -1263,7 +1264,6 @@ export class BodyRenderer {
       const end = Math.min(idx + value, this.core.rowModel.getDisplayedRowCount());
       const height = this.rowTop(end) - this.rowTop(idx);
       cell.style.height = `${height > 0 ? height : value * this.core.gridOptions.rowHeight}px`;
-      cell.style.zIndex = "1";
       cell.setAttribute("aria-rowspan", String(value));
     } else {
       this.resetSpanStyle(cell);

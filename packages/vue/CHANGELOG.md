@@ -1,5 +1,13 @@
 # @agile-team/mach-table-vue
 
+## 0.40.1
+
+### Patch Changes
+
+- 全局组件重名时先拒绝注册，保留宿主已提供的配置；收敛重复的查询源解析与选择处理。
+- Keep remote pagination valid after the last row on a page is removed. Recover the final available page with at most one additional request, publish only the accepted result, and cancel stale in-flight results when manual query criteria change.
+- @agile-team/mach-table@0.40.1
+
 ## 0.40.0
 
 ### Minor Changes

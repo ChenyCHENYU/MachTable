@@ -1,5 +1,12 @@
 # @agile-team/mach-table-react
 
+## 0.40.1
+
+### Patch Changes
+
+- Keep remote pagination valid after the last row on a page is removed. Recover the final available page with at most one additional request, publish only the accepted result, and cancel stale in-flight results when manual query criteria change.
+- @agile-team/mach-table@0.40.1
+
 ## 0.40.0
 
 ### Minor Changes

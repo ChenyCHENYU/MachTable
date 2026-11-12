@@ -1,4 +1,5 @@
-import { computed, ref, shallowRef, unref, watch, type ComputedRef, type Ref, type ShallowRef } from "vue";
+import { computed, ref, shallowRef, watch, type ComputedRef, type Ref, type ShallowRef } from "vue";
+import { resolveSource } from "./source";
 import { createMachTableCommands, type GridOptions, type MachTableCommands } from "@agile-team/mach-table";
 import type { MachTableVueProps } from "./MachTable";
 import { useMachTable, type UseMachTableReturn } from "./useMachTable";
@@ -81,9 +82,9 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
       ...options.config,
       ...(query?.bindings.value ?? { quickFilterText: quickFilterText.value })
     };
-    const loading = readSource(options.loading);
-    const theme = readSource(options.theme);
-    const editMode = readSource(options.editMode);
+    const loading = resolveSource(options.loading);
+    const theme = resolveSource(options.theme);
+    const editMode = resolveSource(options.editMode);
     if (loading !== undefined) value.loading = loading;
     if (theme !== undefined) value.theme = theme;
     if (editMode !== undefined) {
@@ -102,13 +103,9 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
       ? Math.max(0, query.total.value - state.excludedKeys.length)
       : state.selectedKeys.length;
   });
-  const busy = computed(() => readSource(options.loading) === true || query?.loading.value === true || editing.saving.value);
+  const busy = computed(() => resolveSource(options.loading) === true || query?.loading.value === true || editing.saving.value);
   const error = computed(() => query?.error.value ?? editing.saveError.value ?? null);
 
   if (!query) watch(quickFilterText, (value) => commands.search(value));
   return { table, query, editing, bindings, search, selectedRows, selectedCount, busy, error, commands, reload };
-}
-
-function readSource<T>(source: MachTableBindingSource<T> | undefined): T | undefined {
-  return typeof source === "function" ? (source as () => T)() : unref(source as Ref<T> | T | undefined);
 }

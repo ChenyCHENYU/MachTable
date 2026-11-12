@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.40.0 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.40.1 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 不传 `preset` 默认主列表 `list`；小明细只加 `preset="detail"`，保留序号、纯文字表头、默认只读、不分页，按内容收起，表体超过 330px 后虚拟滚动。无需先配置 Provider，主题与密度继续共享。
 
@@ -86,6 +86,8 @@ import machTableConfig from "@/config/mach-table.config";
 场景按用途选择，不根据数据行数猜测。`list` 默认表头工具和分页，`detail` 默认纯文字表头、只读、内容高度与 330px 表体上限，两者都保留序号。单列 `editable: true` 或表格 props 可覆盖差异；只读不承担权限校验。
 
 全局 `defaultPreset: false` 或单表 `preset={false}` 可退出。切换会回退高度、分页和工具默认值，不额外清除业务排序、筛选或选择；改变列配置仍按既有生命周期重建编辑器，应先完成保存或放弃草稿。完整规则见[场景与配置](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/configuration.md)。
+
+远程页删除后只需调用 `reload()`：当前页越界时最多补查一次最后有效页，不先发布中间空页。手动查询模式的条件变化会取消旧请求，仍等待显式提交。详见[远程查询](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/remote-query.md)。
 
 ## 按需加载
 

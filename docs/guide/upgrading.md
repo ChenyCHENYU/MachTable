@@ -3,10 +3,19 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.40.0
+pnpm up @agile-team/mach-table-vue@^0.40.1
 # 或
-pnpm up @agile-team/mach-table-react@^0.40.0
+pnpm up @agile-team/mach-table-react@^0.40.1
 ```
+
+## 0.40.0 → 0.40.1
+
+- 跨行合并格按稳定的显示顺序绘制，避免后续行背景盖住内容，固定区与横纵滚动保持一致。
+- Vue/React 远程查询在末页删除后自动补查最后有效页，最多补查一次；只接受最终结果，不先发布越界空页或清除当前选择。总数归零时直接回到第一页，不额外请求。
+- 补查期间发生新查询或取消时，旧结果不会修改页码、数据、总数或触发 `onSuccess`。总数继续收缩、补查仍越界时进入原有错误与重试流程，保留上一份有效结果。
+- `mode: "manual"` 变更条件或页码会取消在途旧请求，仍只由显式 `reload/reset/retry` 发起请求。
+- Vue 全局组件重名时先拒绝注册，不覆盖宿主已提供的配置。
+- 无新增配置项；Core、字典与 HTTP 依赖边界保持不变。
 
 ## 0.39.2 → 0.40.0
 

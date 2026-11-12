@@ -1,5 +1,11 @@
 # @agile-team/mach-table-xlsx
 
+## 0.40.1
+
+### Patch Changes
+
+- @agile-team/mach-table@0.40.1
+
 ## 0.40.0
 
 ### Patch Changes
