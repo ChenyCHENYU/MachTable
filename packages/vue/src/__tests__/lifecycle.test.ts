@@ -29,6 +29,48 @@ const saveHandler: SaveChangesHandler = async () => undefined;
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("Vue workflow instance ownership", () => {
+  it("releases each dirty listener once on API replacement and scope disposal", () => {
+    const firstApi = editingApi(Promise.resolve(emptyResult));
+    const secondApi = editingApi(Promise.resolve(emptyResult));
+    const firstRelease = vi.fn(), secondRelease = vi.fn();
+    firstApi.on = vi.fn(() => firstRelease);
+    secondApi.on = vi.fn(() => secondRelease);
+    const table = { api: shallowRef(firstApi) } as UseMachTableReturn;
+    const scope = effectScope();
+    scope.run(() => useMachTableEditing(table));
+    expect(firstApi.on).toHaveBeenCalledOnce();
+    table.api.value = secondApi;
+    expect(firstRelease).toHaveBeenCalledOnce();
+    expect(secondApi.on).toHaveBeenCalledOnce();
+    scope.stop();
+    expect(firstRelease).toHaveBeenCalledOnce();
+    expect(secondRelease).toHaveBeenCalledOnce();
+  });
+
+  it("can attach a new dirty listener after a replacement listener fails to register", () => {
+    const firstApi = editingApi(Promise.resolve(emptyResult));
+    const brokenApi = editingApi(Promise.resolve(emptyResult));
+    const recoveredApi = editingApi(Promise.resolve(emptyResult));
+    const firstRelease = vi.fn(), recoveredRelease = vi.fn();
+    firstApi.on = vi.fn(() => firstRelease);
+    brokenApi.on = vi.fn(() => { throw new Error("listener registration failed"); });
+    recoveredApi.on = vi.fn(() => recoveredRelease);
+    const table = { api: shallowRef(firstApi) } as UseMachTableReturn;
+    const app = createApp(defineComponent({
+      setup() { useMachTableEditing(table); return () => h("div"); }
+    }));
+    app.config.errorHandler = vi.fn();
+    app.mount(document.createElement("div"));
+    table.api.value = brokenApi;
+    expect(firstRelease).toHaveBeenCalledOnce();
+    expect(app.config.errorHandler).toHaveBeenCalledOnce();
+    table.api.value = recoveredApi;
+    expect(recoveredApi.on).toHaveBeenCalledOnce();
+    app.unmount();
+    expect(firstRelease).toHaveBeenCalledOnce();
+    expect(recoveredRelease).toHaveBeenCalledOnce();
+  });
+
   it("ignores readiness from replaced APIs and disposed scopes", async () => {
     const first = deferred<GridApi>();
     const second = deferred<GridApi>();

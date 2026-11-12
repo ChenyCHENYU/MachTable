@@ -785,6 +785,9 @@ describe("Vue adapter", () => {
     app.mount(host);
     await vi.waitFor(() => expect(grid.ready.value).toBe(true));
     const initialApi = grid.api.value!;
+    expect(grid.ref.value?.getApi()).toBe(initialApi);
+    expect(grid.ref.value?.getResolvedConfig().rowData).toEqual([{ id: 0 }]);
+    expect(grid.ref.value?.explainOption("rowData").value).toEqual([{ id: 0 }]);
     scenario.value++;
     await vi.waitFor(() => {
       expect(initialApi.isDestroyed()).toBe(true);
@@ -792,6 +795,9 @@ describe("Vue adapter", () => {
       expect(grid.api.value).not.toBe(initialApi);
       expect(grid.api.value?.rows.getAt(0)?.data?.id).toBe(1);
     });
+    expect(grid.ref.value?.getApi()).toBe(grid.api.value);
+    expect(grid.ref.value?.getResolvedConfig().rowData).toEqual([{ id: 1 }]);
+    expect(grid.ref.value?.explainOption("rowData").value).toEqual([{ id: 1 }]);
     app.unmount();
     await nextTick();
     expect(grid.api.value).toBeNull();
@@ -957,6 +963,123 @@ describe("Vue adapter", () => {
     await Promise.resolve();
     expect(remote!.rows.value).toEqual([{ id: "new" }]);
     app.unmount();
+  });
+
+  it.each([[0.5, 20], [1.5, 1]])("normalizes fractional initial paging %s to valid page and size", async (input, expectedSize) => {
+    let query!: UseMachTableQueryReturn<{ id: string }>;
+    const request = vi.fn(async (params: unknown) => { void params; return { rows: [] as { id: string }[], total: 0 }; });
+    const app = createApp(defineComponent({ setup() {
+      query = useMachTableQuery({
+        query: {}, rowKey: "id", request, mode: "manual", initialPage: input, pageSize: input,
+        pageSizeOptions: [0.5, 1.5, 2.9, Number.NaN, Infinity, -1, true as unknown as number]
+      });
+      return () => h("div");
+    } }));
+    app.mount(document.createElement("div"));
+    try {
+      expect(query.page.value).toBe(1);
+      expect(query.pageSize.value).toBe(expectedSize);
+      expect(query.bindings.value.pagination).toEqual(expect.objectContaining({
+        page: 1, pageSize: expectedSize, pageSizeOptions: expectedSize === 20 ? [1, 2, 20] : [1, 2]
+      }));
+      await query.reload();
+      expect(request).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ page: 1, pageSize: expectedSize }));
+    } finally { app.unmount(); }
+  });
+
+  it.each(["path", "function"] as const)("normalizes %s row keys consistently while preserving empty-key errors", (kind) => {
+    type Row = { meta: { key: unknown } };
+    const rowKey = kind === "path" ? "meta.key" : (row: Row) => row.meta.key as string | number;
+    let query!: UseMachTableQueryReturn<Row>;
+    const app = createApp(defineComponent({ setup() {
+      query = useMachTableQuery({ query: {}, rowKey, mode: "manual", request: async () => ({ rows: [], total: 0 }) });
+      return () => h("div");
+    } }));
+    app.mount(document.createElement("div"));
+    try {
+      const identify = query.bindings.value.rowKey;
+      if (typeof identify !== "function") throw new Error("Expected the normalized row-key binding");
+      for (const key of [0, false, "001", "0", "1"]) expect(identify({ meta: { key } })).toBe(String(key));
+      for (const key of [null, undefined, ""]) {
+        expect(() => identify({ meta: { key } })).toThrow(`[MachTable] useMachTableQuery rowKey "${String(rowKey)}" returned an empty value.`);
+      }
+    } finally { app.unmount(); }
+  });
+
+  it.each(["abort", "dispose", "supersede"] as const)("settles a non-cooperative request on %s and observes its late rejection", async (action) => {
+    type Result = { rows: { id: string }[]; total: number };
+    const pending: Array<{ signal: AbortSignal; resolve(result: Result): void; reject(error: Error): void }> = [];
+    const request = ({ signal }: { signal: AbortSignal }) => new Promise<Result>((resolve, reject) => pending.push({ signal, resolve, reject }));
+    let remote!: UseMachTableQueryReturn<{ id: string }>;
+    const app = createApp(defineComponent({ setup() {
+      remote = useMachTableQuery({ query: {}, rowKey: "id", request, mode: "manual" });
+      return () => h("div");
+    } }));
+    app.mount(document.createElement("div"));
+    const old = remote.reload();
+    let mounted = true;
+    try {
+      if (action === "dispose") { app.unmount(); mounted = false; }
+      else if (action === "abort") remote.abort();
+      else {
+        const latest = remote.reload();
+        pending[1].resolve({ rows: [{ id: "latest" }], total: 1 });
+        await latest;
+      }
+      expect(pending[0].signal.aborted).toBe(true);
+      expect(await Promise.race([old.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 30))])).toBe(true);
+      pending[0].reject(new Error("late transport failure"));
+      await old;
+      expect(remote.loading.value).toBe(false);
+      expect(remote.error.value).toBeNull();
+      expect(remote.rows.value).toEqual(action === "supersede" ? [{ id: "latest" }] : []);
+    } finally {
+      pending[0].reject(new Error("transport cleanup"));
+      await old;
+      if (mounted) app.unmount();
+    }
+  });
+
+  it.each(["page", "preserve", "query"] as const)("rejects duplicate remote keys before changing %s data or selection", async (selectionScope) => {
+    type Row = { id: string | number; name: string };
+    const accepted: Row = { id: "1", name: "accepted" };
+    let result = { rows: [accepted], total: 40 };
+    const onSuccess = vi.fn(), onError = vi.fn();
+    let remote!: UseMachTableQueryReturn<Row>;
+    const table = shallowRef<{ getApi(): GridApi<Row> | null } | null>(null);
+    const columnDefs: ColDef<Row>[] = [{ field: "name" }];
+    const host = document.createElement("div"); document.body.append(host);
+    const app = createApp(defineComponent({ setup() {
+      remote = useMachTableQuery({ query: {}, rowKey: "id", request: async () => result, mode: "manual", selectionScope, onSuccess, onError });
+      return () => h(MachTable, { ...remote.bindings.value, columnDefs, rowSelection: "multiple", ref: table });
+    } }));
+    app.mount(host);
+    try {
+      const api = table.value!.getApi()!;
+      await api.whenReady();
+      await remote.reload();
+      if (selectionScope === "preserve") remote.selectAllMatching();
+      else remote.applySelectionState({ mode: "explicit", selectedKeys: ["1"] });
+      const selection = remote.selectionState.value;
+      result = { rows: [{ id: 1, name: "first" }, { id: "1", name: "second" }], total: 60 };
+      await remote.reload();
+      expect(remote.error.value).toEqual(expect.objectContaining({ message: expect.stringMatching(/duplicate.*key/i) }));
+      expect(remote.rows.value).toEqual([accepted]);
+      expect(remote.total.value).toBe(40);
+      expect(remote.selectionState.value).toEqual(selection);
+      expect(remote.selectedRows.value).toEqual([accepted]);
+      expect(api.rows.getAt(0)?.data).toEqual(accepted);
+      expect(api.selection.getRows()).toEqual([accepted]);
+      expect(onSuccess).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledOnce();
+      const recovered = { id: "1", name: "recovered" };
+      result = { rows: [recovered], total: 41 };
+      await remote.retry();
+      expect(remote.error.value).toBeNull();
+      expect(remote.rows.value).toEqual([recovered]);
+      expect(remote.selectedRows.value).toEqual([recovered]);
+      expect(api.selection.getRows()).toEqual([recovered]);
+    } finally { app.unmount(); }
   });
 
   it("drives server pagination and preserves selected rows across pages", async () => {
@@ -1144,6 +1267,12 @@ describe("Vue adapter", () => {
       excludedKeys: ["1"],
     });
     expect(remote!.selectedRows.value).toEqual([{ id: "2" }]);
+    const excluded = remote!.selectionState.value;
+    remote!.bindings.value.onSelectionChanged?.({ selectedRows: [] } as any);
+    expect(remote!.selectionState.value).toEqual({ mode: "allMatching", excludedKeys: ["1", "2"] });
+    remote!.bindings.value.onSelectionChanged?.({ selectedRows: [{ id: "1" }, { id: "2" }] } as any);
+    expect(remote!.selectionState.value).toEqual({ mode: "allMatching", excludedKeys: [] });
+    expect(excluded).toEqual({ mode: "allMatching", excludedKeys: ["1"] });
 
     remote!.applySelectionState({ mode: "explicit", selectedKeys: ["1"] });
     expect(remote!.selectionState.value).toEqual({
@@ -1151,6 +1280,15 @@ describe("Vue adapter", () => {
       selectedKeys: ["1"],
     });
     expect(remote!.selectedKeys.value).toEqual(["1"]);
+    if (remote!.selectionState.value.mode === "explicit") {
+      expect(remote!.selectionState.value.selectedKeys).not.toBe(remote!.selectedKeys.value);
+    }
+    const compatibleKeys = [1, false, "001"];
+    remote!.applySelectionState({ mode: "explicit", selectedKeys: compatibleKeys as unknown as string[] });
+    expect(remote!.selectionState.value).toEqual({ mode: "explicit", selectedKeys: ["1", "false", "001"] });
+    expect(compatibleKeys).toEqual([1, false, "001"]);
+    remote!.applySelectionState({ mode: "allMatching", excludedKeys: compatibleKeys as unknown as string[] });
+    expect(remote!.selectionState.value).toEqual({ mode: "allMatching", excludedKeys: ["1", "false", "001"] });
     app.unmount();
   });
 
@@ -1250,6 +1388,7 @@ describe("Vue adapter", () => {
     );
     app.mount(host);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(remote!.rows.value).toHaveLength(1));
     remote!.bindings.value.onPaginationChanged?.({
       page: 1,
       pageSize: 20,

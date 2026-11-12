@@ -150,36 +150,40 @@ export interface GridDataWorkerScope {
 
 /** Installs the standard field-path protocol in a dedicated Worker module. */
 export function installGridDataWorker(scope: GridDataWorkerScope): void {
-  const cancelled = new Set<number>();
+  // Track only active work: a cancel can arrive after its result has already left the worker.
+  const active = new Map<number, boolean>();
   scope.addEventListener("message", (event) => {
     const message = event.data;
     if (message.type === "mach-table:cancel") {
-      cancelled.add(message.requestId);
+      if (active.has(message.requestId)) active.set(message.requestId, true);
       return;
     }
     const { requestId } = message;
-    cancelled.delete(requestId);
+    active.set(requestId, false);
     void processFieldDataRequest(message.payload, {
-      isCancelled: () => cancelled.has(requestId)
+      isCancelled: () => active.get(requestId) === true
     }).then((result) => {
-      if (!cancelled.has(requestId)) {
+      if (!active.get(requestId)) {
         scope.postMessage({ type: "mach-table:result", requestId, rowIds: result.rowIds });
       }
     }).catch((error) => {
-      if (!cancelled.has(requestId)) {
+      if (!active.get(requestId)) {
         scope.postMessage({
           type: "mach-table:error",
           requestId,
           message: error instanceof Error ? error.message : String(error)
         });
       }
-    }).finally(() => cancelled.delete(requestId));
+    }).finally(() => active.delete(requestId));
   });
 }
 
 function abortError(reason?: unknown): Error {
   return createAbortError(reason, "Data processing aborted");
 }
+
+// A host may keep one worker across processor owners; IDs must survive those owners.
+let workerRequestId = 0;
 
 /**
  * Adapts a dedicated Web Worker to GridDataProcessor without Blob URLs or eval.
@@ -192,7 +196,6 @@ export function createWorkerDataProcessor<TData = any>(
   options: WorkerDataProcessorOptions = {}
 ): GridDataProcessor<TData> {
   let worker: Worker | null = null;
-  let sequence = 0;
   let destroyed = false;
   const pending = new Map<number, {
     resolve: (result: GridDataProcessorResult) => void;
@@ -201,8 +204,15 @@ export function createWorkerDataProcessor<TData = any>(
     abort: () => void;
   }>();
 
-  const settleAll = (reason: unknown) => {
-    for (const entry of pending.values()) {
+  const cancelRequest = (requestId: number) => {
+    try {
+      worker?.postMessage({ type: "mach-table:cancel", requestId } satisfies GridWorkerCancelMessage);
+    } catch { /* A lost worker cannot prevent local cancellation and listener cleanup. */ }
+  };
+
+  const settleAll = (reason: unknown, cancelPending = false) => {
+    for (const [requestId, entry] of pending) {
+      if (cancelPending) cancelRequest(requestId);
       entry.signal.removeEventListener("abort", entry.abort);
       entry.reject(reason);
     }
@@ -247,13 +257,13 @@ export function createWorkerDataProcessor<TData = any>(
   return {
     process(request) {
       if (request.signal.aborted) return Promise.reject(abortError(request.signal.reason));
-      const requestId = ++sequence;
+      const requestId = ++workerRequestId;
       return new Promise<GridDataProcessorResult>((resolve, reject) => {
         const abort = () => {
           const entry = pending.get(requestId);
           if (!entry) return;
           pending.delete(requestId);
-          worker?.postMessage({ type: "mach-table:cancel", requestId } satisfies GridWorkerCancelMessage);
+          cancelRequest(requestId);
           reject(abortError(request.signal.reason));
         };
         pending.set(requestId, { resolve, reject, signal: request.signal, abort });
@@ -276,7 +286,7 @@ export function createWorkerDataProcessor<TData = any>(
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      settleAll(abortError("Worker data processor destroyed"));
+      settleAll(abortError("Worker data processor destroyed"), options.terminateOnDestroy === false);
       if (worker) {
         const current = worker;
         detachWorker(current);

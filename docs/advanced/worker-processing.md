@@ -53,4 +53,6 @@ Processor 只在以下条件同时满足时启用：本地数据量达到阈值�
 
 每次模型变化都会中止上一任务。标准桥接向 Worker 发送 `mach-table:cancel`，字段处理器每 2,000 行协作让出事件循环并检查取消状态；迟到结果还会由 RowModel 序号二次隔离。业务自定义 Processor 必须监听 `request.signal`，不要把取消当作错误提示给用户。
 
+同一模块创建的 processor 使用不重复的数字请求 ID。宿主设置 `terminateOnDestroy: false` 并复用 Worker 时，旧任务结果不会命中新 processor 的请求；释放原实例会取消其未完成任务并移除监听。Worker 只保存活动任务的取消状态，已完成或未知请求的迟到取消不会积累记录。多个独立 bundle 或 realm 共享同一 Worker 的协议由宿主负责隔离。
+
 Worker 会复制数据，收益取决于行对象体积和计算强度。请用真实列与设备比较主线程卡顿、总耗时和复制内存；仅几千行时 Worker 通常得不偿失。

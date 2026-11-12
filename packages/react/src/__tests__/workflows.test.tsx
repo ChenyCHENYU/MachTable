@@ -419,6 +419,140 @@ describe("React B-side workflows", () => {
     await act(async () => root.unmount());
   });
 
+  it.each([[0.5, 20], [1.5, 1]])("normalizes fractional initial paging %s to valid page and size", async (input, expectedSize) => {
+    let query!: UseMachTableQueryReturn<{ id: string }>;
+    const request = vi.fn(async (params: unknown) => { void params; return { rows: [] as { id: string }[], total: 0 }; });
+    const criteria = {};
+    const host = document.createElement("div"); document.body.append(host);
+    const root = createRoot(host);
+    function Harness() {
+      query = useMachTableQuery({
+        query: criteria, rowKey: "id", request, mode: "manual", initialPage: input, pageSize: input,
+        pageSizeOptions: [0.5, 1.5, 2.9, Number.NaN, Infinity, -1, true as unknown as number]
+      });
+      return null;
+    }
+    await act(async () => root.render(createElement(Harness)));
+    try {
+      expect(query.page).toBe(1);
+      expect(query.pageSize).toBe(expectedSize);
+      expect(query.bindings.pagination).toEqual(expect.objectContaining({
+        page: 1, pageSize: expectedSize, pageSizeOptions: expectedSize === 20 ? [1, 2, 20] : [1, 2]
+      }));
+      await act(async () => query.reload());
+      expect(request).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ page: 1, pageSize: expectedSize }));
+    } finally { await act(async () => root.unmount()); }
+  });
+
+  it.each(["path", "function"] as const)("normalizes %s row keys consistently while preserving empty-key errors", async (kind) => {
+    type Row = { meta: { key: unknown } };
+    const rowKey = kind === "path" ? "meta.key" : (row: Row) => row.meta.key as string | number;
+    let query!: UseMachTableQueryReturn<Row>;
+    const criteria = {};
+    const host = document.createElement("div"); document.body.append(host);
+    const root = createRoot(host);
+    function Harness() {
+      query = useMachTableQuery({ query: criteria, rowKey, mode: "manual", request: async () => ({ rows: [], total: 0 }) });
+      return null;
+    }
+    await act(async () => root.render(createElement(Harness)));
+    try {
+      const identify = query.bindings.rowKey;
+      if (typeof identify !== "function") throw new Error("Expected the normalized row-key binding");
+      for (const key of [0, false, "001", "0", "1"]) expect(identify({ meta: { key } })).toBe(String(key));
+      for (const key of [null, undefined, ""]) {
+        expect(() => identify({ meta: { key } })).toThrow(`[MachTable] useMachTableQuery rowKey "${String(rowKey)}" returned an empty value.`);
+      }
+    } finally { await act(async () => root.unmount()); }
+  });
+
+  it.each(["abort", "dispose", "supersede"] as const)("settles a non-cooperative request on %s and observes its late rejection", async (action) => {
+    type Result = { rows: { id: string }[]; total: number };
+    const pending: Array<{ signal: AbortSignal; resolve(result: Result): void; reject(error: Error): void }> = [];
+    const request = ({ signal }: { signal: AbortSignal }) => new Promise<Result>((resolve, reject) => pending.push({ signal, resolve, reject }));
+    let query!: UseMachTableQueryReturn<{ id: string }>;
+    const criteria = {};
+    const host = document.createElement("div"); document.body.append(host);
+    const root = createRoot(host);
+    function Harness() {
+      query = useMachTableQuery({ query: criteria, rowKey: "id", request, mode: "manual" });
+      return null;
+    }
+    await act(async () => root.render(createElement(Harness)));
+    let old!: Promise<void>;
+    act(() => { old = query.reload(); });
+    let mounted = true;
+    try {
+      if (action === "dispose") { await act(async () => root.unmount()); mounted = false; }
+      else if (action === "abort") act(() => query.abort());
+      else await act(async () => {
+        const latest = query.reload();
+        pending[1].resolve({ rows: [{ id: "latest" }], total: 1 });
+        await latest;
+      });
+      expect(pending[0].signal.aborted).toBe(true);
+      expect(await Promise.race([old.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 30))])).toBe(true);
+      await act(async () => {
+        pending[0].reject(new Error("late transport failure"));
+        await old;
+      });
+      if (mounted) expect(query.loading).toBe(false);
+      expect(query.error).toBeNull();
+      expect(query.rows).toEqual(action === "supersede" ? [{ id: "latest" }] : []);
+    } finally {
+      await act(async () => {
+        pending[0].reject(new Error("transport cleanup"));
+        await old;
+        if (mounted) root.unmount();
+      });
+    }
+  });
+
+  it.each(["page", "preserve", "query"] as const)("rejects duplicate remote keys before changing %s data or selection", async (selectionScope) => {
+    type Row = { id: string | number; name: string };
+    const accepted: Row = { id: "1", name: "accepted" };
+    let result = { rows: [accepted], total: 40 };
+    const onSuccess = vi.fn(), onError = vi.fn();
+    let query!: UseMachTableQueryReturn<Row>;
+    const criteria = {};
+    const apiRef = { current: null as GridApi<Row> | null };
+    const columnDefs = [{ field: "name" }];
+    const host = document.createElement("div"); document.body.append(host);
+    const root = createRoot(host);
+    function Harness() {
+      query = useMachTableQuery({ query: criteria, rowKey: "id", request: async () => result, mode: "manual", selectionScope, onSuccess, onError });
+      return createElement(MachTable<Row>, { ...query.bindings, columnDefs, rowSelection: "multiple", apiRef });
+    }
+    await act(async () => root.render(createElement(Harness)));
+    try {
+      await act(async () => query.reload());
+      const api = apiRef.current!;
+      act(() => {
+        if (selectionScope === "preserve") query.selectAllMatching();
+        else query.applySelectionState({ mode: "explicit", selectedKeys: ["1"] });
+      });
+      const selection = query.selectionState;
+      result = { rows: [{ id: 1, name: "first" }, { id: "1", name: "second" }], total: 60 };
+      await act(async () => query.reload());
+      expect(query.error).toEqual(expect.objectContaining({ message: expect.stringMatching(/duplicate.*key/i) }));
+      expect(query.rows).toEqual([accepted]);
+      expect(query.total).toBe(40);
+      expect(query.selectionState).toEqual(selection);
+      expect(query.selectedRows).toEqual([accepted]);
+      expect(api.rows.getAt(0)?.data).toEqual(accepted);
+      expect(api.selection.getRows()).toEqual([accepted]);
+      expect(onSuccess).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledOnce();
+      const recovered = { id: "1", name: "recovered" };
+      result = { rows: [recovered], total: 41 };
+      await act(async () => query.retry());
+      expect(query.error).toBeNull();
+      expect(query.rows).toEqual([recovered]);
+      expect(query.selectedRows).toEqual([recovered]);
+      expect(api.selection.getRows()).toEqual([recovered]);
+    } finally { await act(async () => root.unmount()); }
+  });
+
   it("handles React query errors, reset, compact selection and cancellation", async () => {
     const steps: Array<(signal: AbortSignal) => Promise<{ rows: { id: string }[]; total: number }>> = [
       async () => { throw new Error("offline"); },

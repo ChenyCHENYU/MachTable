@@ -8,6 +8,11 @@ type ErrorContext = Pick<GridCore<any>, "reportError">;
 type CellValueContext = Pick<GridCore<any>, "api" | "readCellValue" | "reportError">;
 type CellRenderContext = CellValueContext & Pick<GridCore<any>, "gridOptions" | "resolveCellRenderer">;
 
+/** Shared identity/value payload for style, class, editability and span callbacks. */
+export function createCellValueParams(core: Pick<CellValueContext, "api">, node: RowNode<any>, column: Column, value: any, rowIndex = node.rowIndex): CellClassParams {
+  return { api: core.api, colDef: column.colDef, column, node, data: node.data, value, rowIndex };
+}
+
 export function defaultFormat(value: any): string {
   if (value == null) return "";
   if (value instanceof Date) return value.toLocaleDateString();
@@ -128,15 +133,7 @@ export function applyCellStyle(core: CellValueContext, cell: HTMLElement, node: 
   if (typeof rule === "function") {
     const value = core.readCellValue(node, column);
     try {
-      styles = rule({
-        api: core.api,
-        colDef: column.colDef,
-        column,
-        node,
-        data: node.data,
-        value,
-        rowIndex: node.rowIndex
-      });
+      styles = rule(createCellValueParams(core, node, column, value));
     } catch (error) {
       core.reportError(error, "cellStyle", { colId: column.id, rowId: node.id });
       styles = null;
@@ -235,10 +232,7 @@ function appendConfiguredClasses(
     classes.push(...rule);
     return;
   }
-  const params: CellClassParams = {
-    api: core.api, colDef: column.colDef, column, node,
-    data: node.data, value, rowIndex: node.rowIndex
-  };
+  const params = createCellValueParams(core, node, column, value);
   try {
     const result = rule(params);
     if (typeof result === "string") classes.push(result);

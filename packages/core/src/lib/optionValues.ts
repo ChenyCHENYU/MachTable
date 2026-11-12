@@ -11,6 +11,11 @@ export function normalizeFinite(value: unknown, min: number, integer = false): n
   return integer ? Math.floor(value) : value;
 }
 
+/** Initial values and restored state share the same numeric bounds and fallback. */
+export function finiteAtLeast(value: unknown, fallback: number, min: number, integer = false): number {
+  return normalizeFinite(value, min, integer) ?? fallback;
+}
+
 /** 严格正数用于列宽及 flex；零仍可通过 normalizeFinite 单独保留。 */
 export function normalizePositive(value: unknown): number | undefined {
   return normalizeFinite(value, 0) || undefined;

@@ -155,3 +155,42 @@ test("repeated mount and destroy does not accumulate grid roots", async ({ page,
   expect(await page.locator("#host > .mach-root").count()).toBe(1);
   expect(await page.locator("#host .mach-row").count()).toBeLessThan(100);
 });
+
+test("100k wrapped rows use bounded exact measurements and cached layout", async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== "chromium", "Performance budgets use one stable browser engine.");
+  await page.goto("http://127.0.0.1:4176");
+  const result = await page.evaluate(async () => {
+    const api = (window as any).__MACH_BENCH__.api;
+    const rows = Array.from({ length: 100_000 }, (_, index) => ({
+      id: `r${index}`, text: "manufacturing scheduling accountability production ".repeat(3) + index
+    }));
+    const started = performance.now();
+    api.updateOptions({
+      columnDefs: [{ field: "text", width: 160, wrapText: true, autoHeight: true, sortable: false, filter: false }],
+      rowData: rows
+    });
+    const measuredMs = performance.now() - started;
+    const cached = performance.now();
+    api.view.refreshLayout();
+    const cachedMs = performance.now() - cached;
+    api.view.scrollToRow(99_999, "bottom");
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    const cell = document.querySelector<HTMLElement>("#host .mach-row[data-id='r99999'] .mach-cell")!;
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    return {
+      measuredMs, cachedMs,
+      cells: document.querySelectorAll("#host .mach-cell").length,
+      measureCells: document.querySelectorAll("#host .mach-cell[aria-hidden='true']").length,
+      lastText: cell.textContent,
+      clipped: Math.max(0, range.getBoundingClientRect().bottom - cell.getBoundingClientRect().bottom)
+    };
+  });
+  await testInfo.attach("100k-auto-height-metrics", { body: JSON.stringify(result), contentType: "application/json" });
+  expect(result.measuredMs).toBeLessThan(process.env.CI ? 10_000 : 5_000);
+  expect(result.cachedMs).toBeLessThan(process.env.CI ? 500 : 200);
+  expect(result.cells).toBeLessThan(100);
+  expect(result.measureCells).toBe(1);
+  expect(result.lastText).toContain("99999");
+  expect(result.clipped).toBeLessThanOrEqual(1);
+});

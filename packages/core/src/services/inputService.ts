@@ -2,6 +2,7 @@ import type { GridCore } from "../core/gridCore";
 import type { RowNode } from "../types/row";
 import type { Column } from "./column";
 import type { RowEditValidationResult } from "../types/options";
+import { isPromise } from "../lib/abortable";
 
 type InputContext = Pick<GridCore<any>,
   | "bodyRenderer" | "columnModel" | "editingService" | "api" | "readCellValue"
@@ -20,11 +21,6 @@ export interface InputError { colId: string; message: string }
 export interface ValidatedInputRow { changes: readonly InputChange[]; current: () => boolean }
 export interface InputRowResult { applied: boolean; errors: InputError[] }
 type MaybeAsync<T> = T | Promise<T>;
-
-/** Preserve synchronous input when every configured validator is synchronous. */
-export function isPromise<T>(value: MaybeAsync<T>): value is Promise<T> {
-  return value != null && typeof (value as Promise<T>).then === "function";
-}
 
 /** @internal One validation and commit boundary for editor, clipboard, clear and fill input. */
 export class InputService {

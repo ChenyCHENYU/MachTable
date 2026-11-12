@@ -43,8 +43,7 @@ export function createStatusTagRenderer(config: StatusTagConfig = {}): CellRende
     const label = entry?.label ?? ownEntry(config.labelMap, key) ?? (params.formatted || key);
     const color = entry?.color;
     const variant = resolveTagVariant(color ?? key, color ? undefined : config.variantMap, label);
-    const tag = document.createElement("span");
-    tag.className = `mach-tag mach-tag--${variant}`;
+    const tag = el("span", `mach-tag mach-tag--${variant}`);
     tag.textContent = label;
     if (color && variant !== color) {
       tag.style.color = color;
@@ -217,13 +216,14 @@ interface SurfaceItem {
 }
 
 function makeSurfaceButton(item: SurfaceItem, className: string): HTMLButtonElement {
-  const button = document.createElement("button");
+  const button = el("button", className);
   button.type = "button";
-  button.className = className;
   if (item.variant && item.variant !== "default") button.classList.add(`${className}--${item.variant}`);
   button.disabled = item.disabled === true;
-  if (item.icon && ICON_PATHS[item.icon]) button.innerHTML = `${iconSvg(item.icon, 16)}<span>${item.label}</span>`;
-  else button.textContent = item.label;
+  if (item.icon && ICON_PATHS[item.icon]) {
+    button.innerHTML = iconSvg(item.icon, 16);
+    button.appendChild(el("span")).textContent = item.label;
+  } else button.textContent = item.label;
   button.addEventListener("click", () => item.pick(button));
   return button;
 }
@@ -256,11 +256,10 @@ function showActionDrawer(anchor: HTMLElement, title: string, items: SurfaceItem
   drawer.setAttribute("aria-modal", "true");
   drawer.setAttribute("aria-label", title);
   const header = el("header", "mach-action-drawer__header");
-  const heading = document.createElement("strong");
+  const heading = el("strong");
   heading.textContent = title;
-  const close = document.createElement("button");
+  const close = el("button", "mach-action-drawer__close");
   close.type = "button";
-  close.className = "mach-action-drawer__close";
   close.setAttribute("aria-label", "Close");
   close.title = "Close";
   close.innerHTML = iconSvg("close", 16);
@@ -435,9 +434,8 @@ function createInlineActionButton<TData>(
   params: CellRendererParams<TData>,
   run: ActionRunner<TData>
 ): HTMLButtonElement {
-  const button = document.createElement("button");
+  const button = el("button", "mach-action-btn");
   button.type = "button";
-  button.className = "mach-action-btn";
   const variant = actionVariant(action);
   if (variant !== "default") button.classList.add(`mach-action-btn--${variant}`);
   const title = action.title ?? action.label ?? "Action";
@@ -469,9 +467,8 @@ function createOverflowActionButton<TData>(
   params: CellRendererParams<TData>,
   run: ActionRunner<TData>
 ): HTMLButtonElement {
-  const more = document.createElement("button");
+  const more = el("button", "mach-action-btn mach-action-btn--icon");
   more.type = "button";
-  more.className = "mach-action-btn mach-action-btn--icon";
   const locale = params.api.getOption("locale") ?? {};
   const label = config.moreLabel ?? locale.actionMore ?? DEFAULT_LOCALE.actionMore;
   more.title = label;

@@ -5,7 +5,7 @@ import { applyPortalTheme, bindListeners, clamp, el } from "../lib/dom";
 const DRAG_THRESHOLD = 6;
 type ColumnDragContext = Pick<
   GridCore<any>,
-  "bodyRenderer" | "columnModel" | "moveColumn" | "skeleton"
+  "columnModel" | "headerRenderer" | "moveColumn" | "skeleton"
 >;
 
 interface ColumnDragState {
@@ -67,7 +67,7 @@ export class ColumnDragService {
   private startDrag(e: PointerEvent): void {
     const pending = this.pendingColumnDrag;
     if (!pending) return;
-    const cellEl = this.findHeaderCell(pending.column);
+    const cellEl = this.core.headerRenderer.getCellElement(pending.column.id, this.core.columnModel.paneOf(pending.column));
     if (!cellEl || !cellEl.parentElement) {
       this.cleanup();
       return;
@@ -82,7 +82,7 @@ export class ColumnDragService {
     cellEl.parentElement.appendChild(indicator);
     cellEl.classList.add("mach-header-cell--dragging");
     this.core.skeleton.root.classList.add("mach-root--dragging");
-    const pane = this.core.bodyRenderer.paneForColumn(pending.column);
+    const pane = this.core.columnModel.paneOf(pending.column);
     const container = this.core.skeleton.headerRowContainers[pane];
     const columns = this.core.columnModel.getPaneColumns(pane);
     const offsets = new Float64Array(columns.length + 1);
@@ -109,12 +109,6 @@ export class ColumnDragService {
       ghostHeight: ghostRect.height
     };
     this.applyIndicator(e.clientX, e.clientY);
-  }
-
-  private findHeaderCell(column: Column): HTMLElement | null {
-    const pane = this.core.bodyRenderer.paneForColumn(column);
-    const container = this.core.skeleton.headerRowContainers[pane];
-    return container.querySelector<HTMLElement>(`.mach-header-cell[data-col-id="${cssEscape(column.id)}"]`);
   }
 
   private scheduleIndicator(e: PointerEvent): void {
@@ -186,10 +180,4 @@ export class ColumnDragService {
     this.clearDrag();
     this.pendingColumnDrag = null;
   }
-}
-
-function cssEscape(value: string): string {
-  return typeof CSS !== "undefined" && typeof CSS.escape === "function"
-    ? CSS.escape(value)
-    : value.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
 }

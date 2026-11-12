@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.39.1 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.39.2 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
 本地明细设置 `domLayout="autoHeight" maxBodyHeight={330}` 即可随内容收起，超过 330px 的表体进入虚拟滚动。表内筛选无匹配时可在默认空态中清除筛选。分页继续使用内置分页条。
 

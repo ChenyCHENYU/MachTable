@@ -34,6 +34,30 @@ function host(): HTMLElement {
 }
 
 describe("security hardening", () => {
+  it("accepts a null pagination value from runtime JSON without losing default paging", () => {
+    const options: Record<string, unknown> = JSON.parse('{"pagination":null}');
+    const api = createGrid(host(), { ...options, rowData: [{ id: "one" }], columnDefs: [{ field: "id" }] });
+    expect(api.pagination.getPageSize()).toBe(20);
+    expect(api.pagination.getTotalRowCount()).toBe(1);
+    api.destroy();
+  });
+
+  it("keeps translated loading and error labels as text", () => {
+    const root = host();
+    const label = '<img src=x onerror="alert(1)">';
+    const api = createGrid(root, {
+      columnDefs: [{ field: "id" }], rowData: [], loading: true,
+      locale: { loading: label, requestFailed: label, requestFailedHint: label }
+    });
+    expect(root.querySelector(".mach-loading__label")?.textContent).toBe(label);
+    expect(root.querySelector("img")).toBeNull();
+    api.updateOptions({ loading: false, error: new Error("transport") });
+    expect(root.querySelector(".mach-empty__title")?.textContent).toBe(label);
+    expect(root.querySelector(".mach-empty__hint")?.textContent).toBe(label);
+    expect(root.querySelector("img")).toBeNull();
+    api.destroy();
+  });
+
   it("rejects prototype-polluting field paths", () => {
     const value: Record<string, any> = {};
     expect(setByPath(value, "__proto__.polluted", true)).toBe(false);

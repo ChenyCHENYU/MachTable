@@ -1,5 +1,5 @@
 import type { GridCore } from "../core/gridCore";
-import { bindListeners } from "../lib/dom";
+import { bindListeners, el } from "../lib/dom";
 import type { Column } from "./column";
 
 type ResizeContext = Pick<
@@ -138,11 +138,9 @@ export class ResizeService {
   }
 
   private showFeedback(active: ActiveResize): void {
-    this.guide = document.createElement("div");
-    this.guide.className = "mach-column-resize-guide";
+    this.guide = el("div", "mach-column-resize-guide");
     this.guide.setAttribute("aria-hidden", "true");
-    this.widthLabel = document.createElement("span");
-    this.widthLabel.className = "mach-column-resize-label";
+    this.widthLabel = el("span", "mach-column-resize-label");
     this.guide.appendChild(this.widthLabel);
     this.core.skeleton.root.appendChild(this.guide);
     this.updateFeedback(active);

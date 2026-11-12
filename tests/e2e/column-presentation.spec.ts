@@ -99,6 +99,45 @@ test("wrapped words remain fully visible after font and column width changes", a
   await checkText();
 });
 
+for (const automatic of [false, true]) {
+  test(`late web fonts remeasure wrapped rows ${automatic ? "automatically" : "on explicit layout"}`, async ({ page }) => {
+    const measured = await page.evaluate(async (automatic) => {
+      const api = window.columnPresentationApi;
+      api.updateOptions({
+        rowNumber: false, pagination: false, rowKey: "id",
+        columnDefs: [{ field: "name", width: 160, wrapText: true, autoHeight: true, sortable: false, filter: false }],
+        rowData: [{ id: "font", name: "i".repeat(100) }]
+      });
+      api.view.getRoot()!.style.setProperty("--mach-font-family", "MachLateFont, Arial, sans-serif");
+      api.view.refreshLayout();
+      // Flush the initial ResizeObserver layout so it cannot mask a missing font refresh.
+      for (let frame = 0; frame < 3; frame++) {
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      }
+      const cell = document.querySelector<HTMLElement>(".mach-row[data-id='font'] .mach-cell")!;
+      const before = cell.getBoundingClientRect().height;
+      // Local, commonly available monospace faces keep this test offline on macOS, Linux and Windows.
+      const face = new FontFace("MachLateFont", 'local("Courier New"),local("Liberation Mono"),local("DejaVu Sans Mono"),local("Menlo")');
+      if (automatic) {
+        document.fonts.add(face);
+        await document.fonts.load("12px MachLateFont", "i");
+      } else {
+        await face.load();
+        document.fonts.add(face);
+        api.view.refreshLayout();
+      }
+      await document.fonts.ready;
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      const rect = cell.getBoundingClientRect();
+      return { before, after: rect.height, clipped: Math.max(0, range.getBoundingClientRect().bottom - rect.bottom) };
+    }, automatic);
+    expect(measured.after).toBeGreaterThan(measured.before);
+    expect(measured.clipped).toBeLessThanOrEqual(1);
+  });
+}
+
 test('pointer and keyboard shrinking keep all four header characters visible', async ({ page }) => {
   const header = page.locator('.mach-header-cell[data-col-id="id"]');
   const label = header.locator('.mach-header-label');

@@ -8,8 +8,9 @@
 { field: "desc", headerName: "描述", flex: 1, wrapText: true, autoHeight: true }
 ```
 
-- 复用一个不可见测量单元格，按浏览器实际的字体、列宽和换行规则计算文字高度，包含内边距与边框。
+- 复用单个不可见测量节点，按浏览器实际的字体、列宽和换行规则计算文字高度，包含内边距与边框。
 - 行高按节点缓存。同宽、同文本复用测量节点的排版，超长测量文本立即释放。普通滚动复用行高缓存，文字、列宽和字体变化后重新测量。
+- WebFont 加载完成后自动更新测宽和行高缓存。以代码添加已加载的字体时，调用 `api.view.refreshLayout()` 同步字体变化，无需拖动列宽。
 - 多列 `autoHeight` 取最高结果；与 `getRowHeight` 并存时取两者最大值。自定义渲染器的高度使用 `getRowHeight` 指定。
 
 ## 变高行（getRowHeight 回调，完全控制）
@@ -60,6 +61,8 @@ getRowHeight: (p) => p.data?.heightOverride ?? 36
 
 ::: warning 性能建议
 `getRowHeight` 的结果按节点缓存，保持回调纯净且轻量。只改变行内容的事务会更新受影响行的高度索引；排序、分页等改变行位置时重新计算。回调依赖外部状态或其他行时，调用 `api.updateOptions({ getRowHeight })` 显式更新缓存。
+
+大量唯一长文本的 `autoHeight` 仍需首次排版测量；多列会叠加此成本。普通字段的内容事务只重新测量受影响行，并局部更新高度索引。包含 `valueGetter` / `valueFormatter` 的自动测高列可访问整表，继续使用完整投影与高度失效以保证结果正确。高频更新的大列表优先使用固定行高或轻量 `getRowHeight`。
 :::
 
 ## 限制
@@ -70,3 +73,5 @@ getRowHeight: (p) => p.data?.heightOverride ?? 36
 | 固定首末行 | 跟随 `rowHeight`，暂不支持单独定制 |
 | 行合并（rowSpan/autoRowSpan） | 兼容：合并格高度按被覆盖行的实际高度差计算 |
 | 回调依赖的外部状态变化 | 调 `api.updateOptions({ getRowHeight })`，可传同一函数引用重算。普通布局刷新复用行高缓存 |
+
+动态列与数据一起更新时，先完成列宽布局，再测量换行行高；不会为临时零宽度额外测量一遍。

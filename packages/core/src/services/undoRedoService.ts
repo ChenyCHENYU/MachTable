@@ -51,16 +51,15 @@ export class UndoRedoService {
   }
 
   private push(batch: UndoEntry[]): void {
-    const maxSize = Math.max(0, this.core.gridOptions.undoStackSize);
-    if (maxSize === 0) return;
+    if (this.core.gridOptions.undoStackSize === 0) return;
     this.undoStackEntries.length = this.pointer + 1;
     this.undoStackEntries.push(batch);
-    while (this.undoStackEntries.length > maxSize) this.undoStackEntries.shift();
     this.pointer = this.undoStackEntries.length - 1;
+    this.trimToSize();
   }
 
   trimToSize(): void {
-    const maxSize = Math.max(0, this.core.gridOptions.undoStackSize);
+    const maxSize = this.core.gridOptions.undoStackSize;
     if (maxSize === 0) {
       this.clear();
       return;

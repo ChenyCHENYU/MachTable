@@ -32,7 +32,7 @@ export class ColumnMenuService {
       (() => {
         const root = this.core.skeleton.root;
         const rect = root.getBoundingClientRect();
-        const fake = document.createElement("div");
+        const fake = el("div");
         fake.style.position = "fixed";
         fake.style.left = `${rect.right - 16}px`;
         fake.style.top = `${rect.top + this.core.gridOptions.headerHeight}px`;
@@ -130,9 +130,8 @@ export class ColumnMenuService {
     panel.appendChild(listTitle);
 
     if (!column) {
-      const search = document.createElement("input");
+      const search = el("input", "mach-column-workbench-search");
       search.type = "search";
-      search.className = "mach-column-workbench-search";
       search.placeholder = this.core.getLocaleText("search");
       search.setAttribute("aria-label", this.core.getLocaleText("search"));
       search.value = this.searchText;
@@ -183,7 +182,7 @@ export class ColumnMenuService {
     for (const col of columns) {
       const row = el("div", workbench ? "mach-column-workbench-item" : "mach-filter-set-item");
       const label = el("label", "mach-column-workbench-label");
-      const checkbox = document.createElement("input");
+      const checkbox = el("input");
       checkbox.type = "checkbox";
       checkbox.checked = !col.hide;
       checkbox.disabled = col.hasCheckbox;

@@ -1,14 +1,14 @@
 import type { GridCore } from "../core/gridCore";
 import { el } from "../lib/dom";
-import { DEFAULT_LOCALE, formatText, type MachTableLocaleKey } from "../lib/locale";
+import { formatText, type MachTableLocaleKey } from "../lib/locale";
 import type { StatusBarPanel } from "../types/options";
 
-type AnyLocale = Record<string, string | undefined>;
 type StatusBarContext = Pick<
   GridCore<any>,
   | "bodyRenderer"
   | "columnModel"
   | "eventBus"
+  | "getLocaleText"
   | "readCellValue"
   | "isDisposed"
   | "gridOptions"
@@ -57,11 +57,8 @@ export class StatusBarService {
     this.refresh();
   }
 
-  private text(locale: AnyLocale, key: MachTableLocaleKey, value?: number | string): string {
-    const template = locale[key] ?? DEFAULT_LOCALE[key];
-    if (value === undefined) return template;
-    const numeric = typeof value === "number" ? value : parseFloat(String(value)) || 0;
-    return formatText(template, numeric);
+  private aggregateText(key: MachTableLocaleKey, value: number): string {
+    return formatText(this.core.getLocaleText(key), value || 0);
   }
 
   private updateItem(panel: StatusBarPanel, value: string): void {
@@ -69,15 +66,15 @@ export class StatusBarService {
     if (item && item.textContent !== value) item.textContent = value;
   }
 
-  private rowCountText(locale: AnyLocale): string {
+  private rowCountText(): string {
     const rm = this.core.rowModel;
     const total = rm.getDisplayTotalCount();
     const loaded = rm.paginationActive ? rm.getTotalRowCount() : rm.getDisplayedRowCount();
-    const loadedText = formatText(this.text(locale, "totalRowsLabel"), loaded);
+    const loadedText = formatText(this.core.getLocaleText("totalRowsLabel"), loaded);
     return rm.isInfinite && total > loaded ? `${loadedText} / ${total}` : loadedText;
   }
 
-  private rangeAggregateText(locale: AnyLocale): string {
+  private rangeAggregateText(): string {
     const range = this.core.bodyRenderer.normalizedRange();
     if (!range) return "";
     const flat = this.core.columnModel.getOrderedVisible();
@@ -97,8 +94,8 @@ export class StatusBarService {
     }
     if (count === 0) return "";
     const average = Math.round((sum / count) * 100) / 100;
-    const sumText = Number.isInteger(sum) ? String(sum) : String(Math.round(sum * 100) / 100);
-    return `${this.text(locale, "statusSum", sumText)} · ${this.text(locale, "statusAvg", String(average))} · ${this.text(locale, "statusCount", String(count))}`;
+    const displayedSum = Number.isInteger(sum) ? sum : Math.round(sum * 100) / 100;
+    return `${this.aggregateText("statusSum", displayedSum)} · ${this.aggregateText("statusAvg", average)} · ${this.aggregateText("statusCount", count)}`;
   }
 
   refresh(): void {
@@ -107,13 +104,12 @@ export class StatusBarService {
     this.barEl.style.display = options.statusBarEnabled ? "" : "none";
     if (!options.statusBarEnabled) return;
 
-    const locale: AnyLocale = { ...DEFAULT_LOCALE, ...options.locale };
-    if (this.statusPanelItems.rowCount) this.updateItem("rowCount", this.rowCountText(locale));
+    if (this.statusPanelItems.rowCount) this.updateItem("rowCount", this.rowCountText());
     if (this.statusPanelItems.selectedRowCount) {
       const count = this.core.selectionService.getSelectedNodes().length;
-      this.updateItem("selectedRowCount", formatText(this.text(locale, "statusSelected"), count));
+      this.updateItem("selectedRowCount", formatText(this.core.getLocaleText("statusSelected"), count));
     }
-    if (this.statusPanelItems.rangeAggregate) this.updateItem("rangeAggregate", this.rangeAggregateText(locale));
+    if (this.statusPanelItems.rangeAggregate) this.updateItem("rangeAggregate", this.rangeAggregateText());
   }
 
   destroy(): void {

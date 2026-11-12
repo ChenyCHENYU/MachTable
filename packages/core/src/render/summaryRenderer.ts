@@ -1,12 +1,12 @@
 import type { GridCore } from "../core/gridCore";
 import type { PaneType } from "../services/columnModel";
 import { el } from "../lib/dom";
-import { DEFAULT_LOCALE, formatText } from "../lib/locale";
+import { formatText } from "../lib/locale";
 import { PANES } from "./skeleton";
 
 type SummaryContext = Pick<
   GridCore<any>,
-  "columnModel" | "readCellValue" | "isDisposed" | "gridOptions" | "reportError" | "rowModel" | "skeleton"
+  "columnModel" | "getLocaleText" | "readCellValue" | "isDisposed" | "gridOptions" | "reportError" | "rowModel" | "skeleton"
 >;
 
 /** @internal Summary rendering is owned by Core and never exposed through callbacks. */
@@ -43,7 +43,6 @@ export class SummaryRenderer {
 
     const method = this.core.gridOptions.summaryMethod;
     const masterRows = this.core.rowModel.getDisplayedRows().filter((n) => !n.isDetail && !n.isGroup);
-    const locale = { ...DEFAULT_LOCALE, ...this.core.gridOptions.locale };
 
     for (const pane of PANES) {
       const cols = this.core.columnModel.getPaneColumns(pane);
@@ -80,7 +79,7 @@ export class SummaryRenderer {
             cell.textContent = "";
           }
         } else if (i === 0 && pane === "left") {
-          cell.textContent = formatText(locale.totalRowsLabel, masterRows.length);
+          cell.textContent = formatText(this.core.getLocaleText("totalRowsLabel"), masterRows.length);
         } else {
           cell.textContent = "";
         }

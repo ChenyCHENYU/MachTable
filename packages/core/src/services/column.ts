@@ -64,3 +64,8 @@ export class Column<TData = any> {
 export function isValueColumn(column: Column): boolean {
   return !column.hasCheckbox && !column.isDetailToggle && !column.isAutoRowNumber;
 }
+
+/** Plain fields have row-local heights; value callbacks may depend on the wider grid context. */
+export function hasContextualAutoHeight(column: Column): boolean {
+  return column.colDef.autoHeight === true && !!(column.colDef.valueGetter || column.colDef.valueFormatter);
+}

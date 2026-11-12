@@ -2,6 +2,7 @@ import type { ColumnState, SortModel } from "../types/colDef";
 import type { GridState, GridStateInput, GridStateSection } from "../types/state";
 import { normalizeAdvancedFilterModel, normalizeFilterModel } from "./advancedFilter";
 import { GROUP_ID_PREFIX, MAX_PERSISTED_GROUP_ID_LENGTH } from "./groupIdentity";
+import { finiteAtLeast, normalizePositive } from "./optionValues";
 
 const MAX_COLUMNS = 2_000;
 const MAX_ROW_IDS = 100_000;
@@ -30,20 +31,10 @@ function groupIds(value: unknown): string[] {
   return [...ids];
 }
 
-function positiveInteger(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 1
-    ? Math.floor(value)
-    : fallback;
-}
-
-function positiveNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
-}
-
 function addColumnSizing(state: ColumnState, source: Record<string, unknown>): void {
-  const flex = positiveNumber(source.flex);
+  const flex = normalizePositive(source.flex);
   for (const key of ["width", "contentWidth"] as const) {
-    const width = positiveNumber(source[key]);
+    const width = normalizePositive(source[key]);
     if (width !== undefined) state[key] = width;
   }
   if (source.flex === null) state.flex = null;
@@ -115,8 +106,8 @@ export function normalizeGridState(input: unknown): GridState | null {
       : null,
     pagination: {
       enabled: pagination.enabled === true,
-      page: positiveInteger(pagination.page, 1),
-      pageSize: positiveInteger(pagination.pageSize, 20)
+      page: finiteAtLeast(pagination.page, 1, 1, true),
+      pageSize: finiteAtLeast(pagination.pageSize, 20, 1, true)
     },
     selectedRowIds: stringIds(state.selectedRowIds),
     expandedRowIds: stringIds(state.expandedRowIds),

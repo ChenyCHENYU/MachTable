@@ -2,13 +2,13 @@ import type { GridCore } from "../core/gridCore";
 import type { RowDragIntent } from "../types/events";
 import type { RowNode } from "../types/row";
 import { clamp } from "../lib/dom";
-import { DEFAULT_LOCALE, formatTwo } from "../lib/locale";
+import { formatTwo } from "../lib/locale";
 import { getGridRowDragFactory } from "../lib/adapterLifecycle";
 import type { RowDragDriver, RowDragDriverFactory, RowDragGuard } from "../lib/rowDragDriver";
 import { RowDragSurface, type SurfaceDrop } from "./rowDragSurface";
 import { singleRowDragIntent } from "./rowDragIntent";
 
-type Context = Pick<GridCore<any>, "emit" | "api" | "reportError" | "gridOptions" | "rowModel" | "skeleton" | "columnModel" | "editingService">;
+type Context = Pick<GridCore<any>, "emit" | "api" | "getLocaleText" | "reportError" | "gridOptions" | "rowModel" | "skeleton" | "columnModel" | "editingService">;
 interface Scope { node: RowNode; from: number; guard: RowDragGuard }
 interface Drop extends SurfaceDrop { node: RowNode; intent?: RowDragIntent }
 
@@ -81,7 +81,7 @@ export class RowDragController extends RowDragSurface {
   protected current(): boolean { return this.dragResourceScope?.guard.current() ?? false; }
   protected release(): void { this.dragResourceScope = null; }
   protected sourceContains(id: string): boolean { return this.dragResourceScope?.node.id === id; }
-  protected outsideText(): string { return this.core.gridOptions.locale.rowDragOutside ?? DEFAULT_LOCALE.rowDragOutside; }
+  protected outsideText(): string { return this.core.getLocaleText("rowDragOutside"); }
   protected describe(y: number): Drop | null {
     const index = clamp(this.host.findRowAt(y), 0, this.core.rowModel.getDisplayedRowCount() - 1);
     let node = this.core.rowModel.getDisplayedRow(index);
@@ -98,7 +98,7 @@ export class RowDragController extends RowDragSurface {
     const intent = !this.core.gridOptions.applyRowDrag || policy?.canDrop ? singleRowDragIntent(scope.node, index => this.core.rowModel.getDisplayedRow(index), node, after ? "after" : "before", scope.guard.revision) : undefined;
     const allowed = policy?.canDrop && intent ? this.attempt("canDrop", () => policy.canDrop!({ node: scope.node, api: this.core.api, targetNode: node, intent }), false) : true;
     const valid = allowed === true && this.isLoadedRow(node);
-    const text = typeof allowed === "string" ? allowed : formatTwo(this.core.gridOptions.locale.rowDragPosition ?? DEFAULT_LOCALE.rowDragPosition, scope.from + 1, this.finalIndex(scope.from, boundary) + 1);
+    const text = typeof allowed === "string" ? allowed : formatTwo(this.core.getLocaleText("rowDragPosition"), scope.from + 1, this.finalIndex(scope.from, boundary) + 1);
     return { node, intent, boundary, valid, text, position: after ? "after" : "before" };
   }
   protected commitDrop(drop: SurfaceDrop): boolean {

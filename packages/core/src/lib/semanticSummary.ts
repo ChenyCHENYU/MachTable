@@ -1,3 +1,5 @@
+import { isPromise } from "./abortable";
+
 export type SummaryScope = "page" | "selected" | "query";
 
 export type SemanticSummaryMetric<TData> =
@@ -39,7 +41,7 @@ function safeNumber(value: unknown): number {
 }
 
 function synchronous<T>(value: T): T {
-  if (value != null && typeof (value as { then?: unknown }).then === "function") {
+  if (isPromise(value)) {
     void Promise.resolve(value).catch(() => undefined);
     throw new TypeError("[MachTable] Summary numeric callbacks must return synchronous values.");
   }

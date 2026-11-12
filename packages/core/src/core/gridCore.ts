@@ -36,6 +36,7 @@ import { selectGridStateSections } from "../lib/gridState";
 import { BUILTIN_CELL_RENDERERS, closeGridActionSurface } from "../lib/presetRenderers";
 import { closeGridSelect } from "../lib/selectControl";
 import { ResourceScope } from "../lib/resourceScope";
+import { isPromise } from "../lib/abortable";
 import { validateColumnDefs } from "../lib/validateDefs";
 import { validateGridOptions } from "../lib/validateOptions";
 import { normalizeFeatureRequirements, resolveGridFeatures } from "../lib/featureManifest";
@@ -755,10 +756,10 @@ export class GridCore<TData = any> {
         this.restoringGridState = previous;
       }
     };
-    if (saved && typeof (saved as Promise<unknown>).then === "function") {
+    if (isPromise(saved)) {
       void Promise.resolve(saved).then(apply).catch((error) => this.reportError(error, "gridState.load"));
     } else {
-      apply(saved as GridStateInput | null, beforeRows);
+      apply(saved, beforeRows);
     }
   }
 
@@ -802,7 +803,7 @@ export class GridCore<TData = any> {
       const result = request.store
         ? request.store.save(request.key, request.state)
         : saveGridState(request.key, request.state);
-      if (!result || typeof result.then !== "function") return;
+      if (!isPromise(result)) return;
       this.stateSaveInFlight = true;
       void Promise.resolve(result)
         .catch((error) => this.reportError(error, "gridState.save"))
@@ -933,7 +934,7 @@ export class GridCore<TData = any> {
     else {
       if (request.header) this.headerRenderer.build();
       if (request.pool) this.bodyRenderer.rebuildPool();
-      else if (request.layout) this.relayout();
+      if (request.pool || request.layout) this.relayout();
     }
     this.refreshContentLayout(request);
     if (request.data && !request.pool && !request.columns) this.bodyRenderer.onDataChanged();
@@ -959,7 +960,6 @@ export class GridCore<TData = any> {
     this.bodyRenderer.rebuildPool();
     this.relayout();
     this.pinnedRowsRenderer.rebuild();
-    this.summaryRenderer.refresh();
     this.emit("displayedColumnsChanged", {});
   }
 

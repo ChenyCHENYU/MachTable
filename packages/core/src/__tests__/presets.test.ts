@@ -33,6 +33,25 @@ function cellAt(host: HTMLElement, row: number, colId: string): HTMLElement {
 }
 
 describe("preset renderers", () => {
+  it.each(["menu", "drawer"] as const)("keeps overflow %s action labels as text alongside their icons", (overflow) => {
+    const host = createHost();
+    const label = '<img src=x onerror="alert(1)">';
+    const onClick = vi.fn();
+    const api = createGrid(host, {
+      columnDefs: [{ colId: "op", cellRenderer: createActionButtonsRenderer({
+        max: 0, overflow, actions: [{ label, icon: "view", onClick }]
+      }) }],
+      rowData: [{ id: "one" }]
+    });
+    cellAt(host, 0, "op").querySelector<HTMLButtonElement>("button")!.click();
+    const panel = document.body.querySelector(".mach-action-menu, .mach-action-drawer")!;
+    expect(panel.querySelector("img")).toBeNull();
+    const item = [...panel.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === label)!;
+    expect(item.querySelector("svg")).not.toBeNull();
+    item.click();
+    expect(onClick).toHaveBeenCalledOnce();
+    api.destroy();
+  });
   it("statusTag maps well-known values to semantic variants", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

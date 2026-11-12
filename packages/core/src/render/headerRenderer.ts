@@ -126,6 +126,12 @@ export class HeaderRenderer {
     if (previousFirst !== this.centerFirst || previousLast !== this.centerLastExcl) this.build();
   }
 
+  /** Only currently rendered headers inside the requested pane can own a drag. */
+  getCellElement(colId: string, pane: PaneType): HTMLElement | null {
+    const container = this.core.skeleton.headerRowContainers[pane];
+    return this.leafCells.find(cell => cell.column.id === colId && container.contains(cell.el))?.el ?? null;
+  }
+
   private updateColumnWindowState(): void {
     const columns = this.core.columnModel.getPaneColumns("center");
     const viewport = this.core.skeleton.bodyViewports.center;
@@ -175,9 +181,8 @@ export class HeaderRenderer {
 
   private appendSelectAll(cellEl: HTMLElement, column: Column): HTMLInputElement | undefined {
     if (!column.hasCheckbox || this.core.gridOptions.rowSelection !== "multiple") return undefined;
-    const checkbox = document.createElement("input");
+    const checkbox = el("input", "mach-select-all");
     checkbox.type = "checkbox";
-    checkbox.className = "mach-select-all";
     checkbox.setAttribute("aria-label", "select all rows");
     checkbox.addEventListener("click", (event) => event.stopPropagation());
     checkbox.addEventListener("change", () => {
@@ -212,9 +217,8 @@ export class HeaderRenderer {
     column: Column
   ): Pick<HeaderCell, "filterBtn" | "filterTagEl"> {
     if (!column.filterable) return {};
-    const filterBtn = document.createElement("button");
+    const filterBtn = el("button", "mach-filter-btn");
     filterBtn.type = "button";
-    filterBtn.className = "mach-filter-btn";
     filterBtn.setAttribute("aria-label", `filter ${column.id}`);
     filterBtn.innerHTML = FILTER_ICON;
     filterBtn.addEventListener("click", (event) => {
@@ -229,9 +233,8 @@ export class HeaderRenderer {
 
   private appendColumnMenu(cellEl: HTMLElement, column: Column): void {
     if (!this.core.gridOptions.columnMenu || column.hasCheckbox || column.colDef.suppressColumnMenu) return;
-    const menuBtn = document.createElement("button");
+    const menuBtn = el("button", "mach-menu-btn");
     menuBtn.type = "button";
-    menuBtn.className = "mach-menu-btn";
     const label = column.colDef.headerName ?? column.colDef.field ?? column.id;
     const title = `${label} · ${this.core.getLocaleText("columnSettings")}`;
     menuBtn.setAttribute("aria-label", title);

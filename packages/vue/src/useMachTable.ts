@@ -1,4 +1,4 @@
-import { nextTick, onScopeDispose, ref, shallowRef, watch, type Ref, type ShallowRef } from "vue";
+import { nextTick, onScopeDispose, shallowRef, watch, type Ref, type ShallowRef } from "vue";
 import type { GridApi } from "@agile-team/mach-table";
 import type { MachTableVueExposed } from "./MachTable";
 
@@ -9,7 +9,7 @@ export interface UseMachTableReturn<TData = any> {
 }
 
 export function useMachTable<TData = any>(): UseMachTableReturn<TData> {
-  const componentRef = ref<MachTableVueExposed<TData> | null>(null) as Ref<MachTableVueExposed<TData> | null>;
+  const componentRef = shallowRef<MachTableVueExposed<TData> | null>(null);
   const api = shallowRef<GridApi<TData> | null>(null);
   const ready = shallowRef(false);
   let generation = 0;

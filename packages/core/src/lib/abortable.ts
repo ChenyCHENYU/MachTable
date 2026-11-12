@@ -1,3 +1,8 @@
+/** Keep optional async hooks and synchronous parsers on the same thenable contract. */
+export function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+  return value != null && typeof (value as Promise<T>).then === "function";
+}
+
 /** Preserve transport error identity while supplying each owner's historical fallback. */
 export function createAbortError(reason: unknown, fallback: string): Error {
   if (reason instanceof Error) return reason;

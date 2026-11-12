@@ -1,4 +1,8 @@
 export { equivalentConfigValue, equivalentGridOption } from "./lib/configurationEquality";
+/** Shared cancellation boundary for official adapter workflows. */
+export { abortable } from "./lib/abortable";
+export { rowIdFromKey } from "./core/resolveOptions";
+export { finiteAtLeast } from "./lib/optionValues";
 /** Internal contract consumed by the official Vue and React adapters. */
 export { suspendGrid, resumeGrid, readGridCell, writeGridInput, canReplaceGridData } from "./lib/adapterLifecycle";
 export type { GridInputCell } from "./lib/adapterLifecycle";

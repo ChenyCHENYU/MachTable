@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
-  getByPath,
   normalizeAdvancedFilterModel,
   type AdvancedFilterModel,
   type FilterModel,
@@ -13,6 +12,7 @@ import {
   type SelectionChangedEvent,
   type SortModel
 } from "@agile-team/mach-table";
+import { abortable, finiteAtLeast, rowIdFromKey } from "@agile-team/mach-table/adapter";
 
 export type MachTableQuerySource<TQuery> = TQuery | (() => TQuery);
 
@@ -84,10 +84,6 @@ export interface UseMachTableQueryReturn<TData> {
   applySelectionState(state: MachTableRemoteSelectionState): void;
 }
 
-function positive(value: number | undefined, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-}
-
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException
     ? error.name === "AbortError"
@@ -107,8 +103,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const [rows, setRows] = useState<TData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown | null>(null);
-  const [page, setPage] = useState(positive(options.initialPage, 1));
-  const [pageSize, setPageSize] = useState(positive(options.pageSize, 20));
+  const [page, setPage] = useState(finiteAtLeast(options.initialPage, 1, 1, true));
+  const [pageSize, setPageSize] = useState(finiteAtLeast(options.pageSize, 20, 1, true));
   const [total, setTotal] = useState(0);
   const [sortModel, setSortModel] = useState<SortModel>([]);
   const [filterModel, setFilterModel] = useState<FilterModel>({});
@@ -130,11 +126,12 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
 
   const rowId = useCallback((row: TData): string => {
     const rowKey = optionsRef.current.rowKey;
-    const value = typeof rowKey === "function" ? rowKey(row) : getByPath(row, rowKey);
-    if (value == null || String(value).length === 0) {
+    // Query paths may come from runtime schemas; Core additionally types static field paths.
+    const id = rowIdFromKey(rowKey as NonNullable<GridOptions<TData>["rowKey"]>, row);
+    if (!id) {
       throw new Error(`[MachTable] useMachTableQuery rowKey "${String(rowKey)}" returned an empty value.`);
     }
-    return String(value);
+    return id;
   }, []);
   const selected = useCallback((id: string): boolean => allMatching.current ? !excludedIds.current.has(id) : selectedIds.current.has(id), []);
   const notifySelection = useCallback(() => refreshSelection(), []);
@@ -169,6 +166,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
     const nextRows = [...result.rows];
     const pageRows = new Map(nextRows.map((row) => [rowId(row), row] as const));
+    if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Remote rows contain duplicate row keys.");
     if (optionsRef.current.selectionScope === "page") {
       for (const id of selectedIds.current) {
         if (!pageRows.has(id)) {
@@ -221,7 +219,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
     const current = stateRef.current;
     try {
-      const result = await optionsRef.current.request({
+      const result = await abortable(optionsRef.current.request({
         page: current.page,
         pageSize: current.pageSize,
         query: readQuery(optionsRef.current.query),
@@ -230,7 +228,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
         advancedFilterModel: normalizeAdvancedFilterModel(current.advancedFilterModel),
         quickFilterText: current.quickFilterText,
         signal: controller.signal
-      });
+      }), controller.signal);
       applyPageResult(result, controller, generation);
     } catch (requestError) {
       handleRequestError(requestError, controller, generation);
@@ -383,7 +381,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   }, []);
 
   const pageSizes = useMemo(() => {
-    const values = [...new Set((options.pageSizeOptions ?? [10, 20, 50, 100]).map((value) => positive(value, 0)).filter(Boolean))];
+    const values = [...new Set((options.pageSizeOptions ?? [10, 20, 50, 100]).map((value) => finiteAtLeast(value, 0, 1, true)).filter(Boolean))];
     if (!values.includes(pageSize)) values.push(pageSize);
     return values.sort((left, right) => left - right);
   }, [options.pageSizeOptions, pageSize]);

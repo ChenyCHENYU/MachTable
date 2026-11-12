@@ -95,6 +95,43 @@ describe("polished editing UI", () => {
     api.destroy();
   });
 
+  it.each([
+    { key: "Enter", isComposing: true },
+    { key: "Escape", isComposing: true },
+    { key: "Tab", isComposing: true },
+    { key: "Enter", keyCode: 229 }
+  ])("keeps the full-row draft during IME $key ($keyCode)", async (eventInit) => {
+    const host = createHost();
+    const api = createGrid<Person>(host, {
+      editType: "fullRow",
+      columnDefs: [{ field: "name", editable: true }, { field: "age", editable: true }],
+      rowKey: "id",
+      rowData: [{ id: "1", name: "Before", age: 20, status: "active" }]
+    });
+    try {
+      expect(api.editing.startRow(0)).toBe(true);
+      const input = host.querySelector<HTMLInputElement>(".mach-editor-input")!;
+      input.value = "中文输入未完成";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { ...eventInit, bubbles: true, cancelable: true }));
+      await flush();
+
+      expect(api.editing.isRowActive(0)).toBe(true);
+      expect(host.querySelector(".mach-editor-input")).toBe(input);
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe("中文输入未完成");
+      expect(api.rows.getById("1")?.data?.name).toBe("Before");
+
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      await flush();
+      expect(api.editing.isRowActive()).toBe(false);
+      expect(api.rows.getById("1")?.data?.name).toBe("中文输入未完成");
+    } finally {
+      api.destroy();
+      host.remove();
+    }
+  });
+
   it("commits the active cell before moving to another editable cell", async () => {
     const host = createHost();
     const api = createGrid<Person>(host, {

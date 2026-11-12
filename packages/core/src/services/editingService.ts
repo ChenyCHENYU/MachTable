@@ -3,8 +3,9 @@ import type { Column } from "./column";
 import type { RowNode } from "../types/row";
 import type { ICellEditor } from "../types/params";
 import { createEditor } from "./editors";
-import { cleanupCellContent } from "../render/cellContent";
-import { isPromise, type InputChange } from "./inputService";
+import { cleanupCellContent, createCellValueParams } from "../render/cellContent";
+import type { InputChange } from "./inputService";
+import { isPromise } from "../lib/abortable";
 import { parseColumnValue } from "../lib/columnValues";
 import { el } from "../lib/dom";
 
@@ -64,9 +65,8 @@ const CHECK_PATH = '<path d="M3 8.5 6.4 12 13.5 4"/>';
 const CLOSE_PATH = '<path d="m4 4 8 8m0-8-8 8"/>';
 
 function createEditButton(kind: "confirm" | "cancel", label: string): HTMLButtonElement {
-  const button = document.createElement("button");
+  const button = el("button", `mach-edit-control mach-edit-control--${kind}`);
   button.type = "button";
-  button.className = `mach-edit-control mach-edit-control--${kind}`;
   button.setAttribute("aria-label", label);
   button.title = label;
   button.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${kind === "confirm" ? CHECK_PATH : CLOSE_PATH}</svg>`;
@@ -118,15 +118,7 @@ export class EditingService {
     if (!editable) return false;
     if (typeof editable === "function") {
       try {
-        return editable({
-          api: this.core.api,
-          colDef: column.colDef,
-          column,
-          node,
-          data: node.data,
-          value: this.core.readCellValue(node, column),
-          rowIndex: node.rowIndex
-        });
+        return editable(createCellValueParams(this.core, node, column, this.core.readCellValue(node, column)));
       } catch (error) {
         this.core.reportError(error, "editable", { colId: column.id, rowId: node.id });
         return false;
@@ -669,6 +661,7 @@ export class EditingService {
 
   private onRowEditorKeyDown(event: KeyboardEvent, row: RowEditingState, draft: RowDraft): void {
     if (this.rowEditing !== row) return;
+    if (event.isComposing || event.keyCode === 229) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();

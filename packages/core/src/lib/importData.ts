@@ -4,6 +4,7 @@ import type { InputChange } from "../services/inputService";
 import type { RowNode } from "../types/row";
 import { setByPath } from "./path";
 import { coerceImportedValue } from "./numericText";
+import { isPromise } from "./abortable";
 
 export interface ImportIssue {
   /** Zero-based data-row index, excluding the header. -1 denotes the complete plan. */
@@ -63,7 +64,7 @@ function parseField(core: Context, row: PreparedImportRow, column: Column, colum
   const value = options.parseValue ? options.parseValue({ value: raw, field, rowIndex: row.rowIndex, columnIndex })
     : column.colDef.valueParser ? core.parse(row.node, column, raw, oldValue)
     : coerceImportedValue(raw, options.coerceNumbers !== false);
-  if (value != null && typeof value.then === "function") throw new TypeError("Import parsers must return synchronous values");
+  if (isPromise(value)) throw new TypeError("Import parsers must return synchronous values");
   if (!setByPath(row.data, field, value)) throw new TypeError(`Unsafe import field: ${field}`);
   row.changes.push({ node: row.node, column, oldValue, newValue: value });
 }

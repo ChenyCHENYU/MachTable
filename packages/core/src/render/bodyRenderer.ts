@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { PaneType } from "../services/columnModel";
 import type { Column } from "../services/column";
+import { hasContextualAutoHeight } from "../services/column";
 import type { InputChange } from "../services/inputService";
 import { hasColumnType } from "../core/resolveOptions";
 import { hasOwnOption } from "../lib/optionValues";
@@ -13,9 +14,8 @@ import { ColumnViewportIndex } from "../services/columnViewportIndex";
 import { VariableSizeIndex } from "../services/variableSizeIndex";
 import { VirtualScrollCoordinates } from "./virtualScrollCoordinates";
 import { bindListeners, el, clamp } from "../lib/dom";
-import { DEFAULT_LOCALE } from "../lib/locale";
 import { PANES, showGridOverlay } from "./skeleton";
-import { renderDataCell, cleanupCellContent, applyCellClasses, cellAlignmentClass, formatCellValue, formatCellValueWith, defaultFormat } from "./cellContent";
+import { renderDataCell, cleanupCellContent, applyCellClasses, cellAlignmentClass, formatCellValue, formatCellValueWith, defaultFormat, createCellValueParams } from "./cellContent";
 import {
   getCellRuntimeState,
   setRendererDestroyer,
@@ -34,6 +34,7 @@ type BodyContext = Pick<
   | "emit"
   | "api"
   | "readCellValue"
+  | "getLocaleText"
   | "gridId"
   | "headerRenderer"
   | "isDisposed"
@@ -303,6 +304,8 @@ export class BodyRenderer {
       return;
     }
     if (layout.signature !== this.rowLayoutSignature || this.rowSizes.length !== layout.positionedCount) {
+      // User value callbacks can read row position or other rows through the public API.
+      if (layout.autoHeightColumns.some(hasContextualAutoHeight)) this.invalidateAllRowHeights();
       const positioned = displayed.slice(0, layout.positionedCount);
       this.rowSizes.reset(positioned, (node) => this.resolveRowHeight(node, layout.autoHeightColumns));
       this.completeRowSizeSync(layout);
@@ -472,7 +475,7 @@ export class BodyRenderer {
     }
     const style = window.getComputedStyle(this.measureCell);
     const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const signature = [font, style.lineHeight, style.letterSpacing, style.wordSpacing, style.padding, style.boxSizing].join("|");
+    const signature = [font, style.lineHeight, style.letterSpacing, style.wordSpacing, style.padding, style.boxSizing, this.core.columnSizing.fontRevision].join("|");
     if (signature !== this.measureStyle) {
       this.measureStyle = signature;
       this.invalidateAllRowHeights();
@@ -591,9 +594,8 @@ export class BodyRenderer {
     cell.dataset.colId = column.id;
     cell.setAttribute("role", "gridcell");
     if (column.hasCheckbox) {
-      const input = document.createElement("input");
+      const input = el("input", "mach-row-checkbox");
       input.type = this.core.gridOptions.rowSelection === "single" ? "radio" : "checkbox";
-      input.className = "mach-row-checkbox";
       if (input.type === "radio") input.name = `mach-radio-${this.core.gridId}`;
       input.setAttribute("aria-label", "select row");
       cell.appendChild(input);
@@ -638,7 +640,6 @@ export class BodyRenderer {
     this.clearPool(true);
     this.firstRenderedRow = 0;
     this.renderedRowEndExclusive = -1;
-    this.relayout();
   }
 
   private clearPool(removeRows: boolean): void {
@@ -1015,15 +1016,7 @@ export class BodyRenderer {
     const fn = column.colDef.colSpan;
     if (!fn) return 1;
     try {
-      const span = fn({
-        api: this.core.api,
-        colDef: column.colDef,
-        column,
-        node,
-        data: node.data,
-        value: this.core.readCellValue(node, column),
-        rowIndex
-      });
+      const span = fn(createCellValueParams(this.core, node, column, this.core.readCellValue(node, column), rowIndex));
       return Math.max(1, Math.min(Math.round(span) || 1, remaining));
     } catch (error) {
       this.core.reportError(error, "colSpan", { colId: column.id, rowId: node.id });
@@ -1157,9 +1150,8 @@ export class BodyRenderer {
       this.core.gridOptions.editableIndicator === "none" ||
       !this.core.editingService.isEditable(node, column)
     ) return;
-    const button = document.createElement("button");
+    const button = el("button", `mach-cell-edit-trigger mach-cell-edit-trigger--${this.core.gridOptions.editableIndicator}`);
     button.type = "button";
-    button.className = `mach-cell-edit-trigger mach-cell-edit-trigger--${this.core.gridOptions.editableIndicator}`;
     button.tabIndex = -1;
     button.title = "Edit cell";
     button.setAttribute("aria-label", "Edit cell");
@@ -1214,10 +1206,9 @@ export class BodyRenderer {
         : node.treeLoadError
           ? " mach-detail-toggle--error"
           : "";
-      const toggle = document.createElement("button");
+      const toggle = el("button", "mach-tree-toggle");
       toggle.type = "button";
       toggle.tabIndex = -1;
-      toggle.className = "mach-tree-toggle";
       toggle.setAttribute("aria-label", node.treeLoadError ? "Retry loading children" : expanded ? "Collapse row" : "Expand row");
       toggle.setAttribute("aria-expanded", String(expanded));
       if (node.treeLoadError) toggle.title = "Retry loading children";
@@ -2158,10 +2149,10 @@ export class BodyRenderer {
     handle.value = node.id;
     const decision = this.rowDragController.dragDecision(node);
     handle.disabled = decision !== true;
-    const label = this.core.gridOptions.locale.rowDragHandle ?? DEFAULT_LOCALE.rowDragHandle;
+    const label = this.core.getLocaleText("rowDragHandle");
     handle.setAttribute("aria-label", label);
     handle.title = typeof decision === "string" ? decision
-      : handle.disabled ? this.core.gridOptions.locale.rowDragUnavailable ?? DEFAULT_LOCALE.rowDragUnavailable : label;
+      : handle.disabled ? this.core.getLocaleText("rowDragUnavailable") : label;
     handle.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
     if (handle !== previous) cell.replaceChildren(handle);
   }

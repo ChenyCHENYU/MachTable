@@ -29,6 +29,7 @@ import { normalizeGridState } from "../lib/gridState";
 import { copyOptions, hasOwnOption, normalizeFinite, normalizePersistence } from "../lib/optionValues";
 import { fitColumnWidths } from "../lib/layout";
 import { abortable, createAbortError } from "../lib/abortable";
+import { validateTreeData } from "./rowModel";
 import { createSaveSnapshot, normalizeBatchSaveResult } from "../lib/batchSave";
 import {
   createGridColumnsApi,
@@ -107,8 +108,10 @@ export class GridApiImpl<TData = any> {
 
   setRowData(rows: TData[] | null | undefined): void {
     if (this.core.isDisposed()) return;
-    this.core.gridOptions.rowData = rows ?? [];
-    if (this.core.rowModel.isInfinite) return;
+    if (this.core.rowModel.isInfinite) {
+      this.core.gridOptions.rowData = rows ?? [];
+      return;
+    }
     this.core.rowModel.setRowData(rows);
     this.core.requestUpdate({ data: true });
   }
@@ -179,7 +182,8 @@ export class GridApiImpl<TData = any> {
 
   private requestTransactionRefresh(impact: import("./rowModel").RowTransactionImpact): void {
     if (!impact.pipelineChanged && impact.updatedRowIds.length === 0) return;
-    if (impact.pipelineChanged || this.core.gridOptions.getRowHeight) {
+    if (impact.pipelineChanged || this.core.gridOptions.getRowHeight ||
+      this.core.columnModel.getOrderedVisible().some(column => column.colDef.autoHeight === true)) {
       this.core.requestUpdate({ data: true });
       return;
     }
@@ -510,6 +514,13 @@ export class GridApiImpl<TData = any> {
     this.core.checkWarnings(options);
     options = sanitizeGridOptionPatch(options);
     if (Object.keys(options).length === 0) return;
+    const resolved = this.core.gridOptions;
+    // Reject the complete tree candidate before any option or scheduled effect is changed.
+    if ((options.treeData ?? resolved.treeData) &&
+      (options.rowData !== undefined || options.treeData != null || options.childrenKey != null)) {
+      const rows = hasOwnOption(options, "rowData") ? options.rowData : resolved.rowData;
+      validateTreeData(Array.isArray(rows) ? rows : [], options.childrenKey ?? resolved.childrenKey);
+    }
     this.core.batchUpdates(() => {
       const effects: OptionUpdateEffects = {};
       const previousColumnMenu = this.core.gridOptions.columnMenu;
@@ -550,7 +561,7 @@ export class GridApiImpl<TData = any> {
   private updateEventHandlers(options: Partial<GridOptions<TData>>): void {
     for (const eventKey of EVENT_OPTION_KEYS) {
       const key = eventKey as keyof GridOptions<TData>;
-      if (hasOwnOption(options, key)) Object.assign(this.core.gridOptions, { [key]: options[key] });
+      if (hasOwnOption(options, key)) Reflect.set(this.core.gridOptions, key, options[key]);
     }
   }
 

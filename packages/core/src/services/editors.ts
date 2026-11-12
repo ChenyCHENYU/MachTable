@@ -2,11 +2,11 @@ import type { SelectEditorOption, SelectEditorParams } from "../types/colDef";
 import type { ICellEditor } from "../types/params";
 import { createSelectControl } from "../lib/selectControl";
 import type { Column } from "./column";
+import { el } from "../lib/dom";
 
 function baseInput(type: string, value: any): HTMLInputElement {
-  const input = document.createElement("input");
+  const input = el("input", "mach-editor-input");
   input.type = type;
-  input.className = "mach-editor-input";
   if (value != null && value !== "") {
     input.value = type === "date" ? String(value).slice(0, 10) : String(value);
   }

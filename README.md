@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.39.1-2563eb" alt="Source version 0.39.1" />
+  <img src="https://img.shields.io/badge/source-0.39.2-2563eb" alt="Source version 0.39.2" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -414,7 +414,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.39.1`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
+当前源码版本为 `0.39.2`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

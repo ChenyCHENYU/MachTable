@@ -119,7 +119,7 @@ interface MachTablePageRequest<TQuery> {
 { rows: TData[]; total: number }
 ```
 
-新查询开始时会立即中止旧请求；即使后端或请求库忽略 `AbortSignal`，晚到的旧响应也不会覆盖新数据。返回结构和 `rowKey` 在运行时校验，错误进入 `table.error`，不会制造未处理 Promise。
+新查询开始时会立即中止旧请求；即使后端或请求库忽略 `AbortSignal`，旧 `reload()` 的等待也会结束，晚到的旧响应不会覆盖新数据。接口层仍应使用 `signal` 释放实际网络或计算资源。返回结构、空行 ID 和重复行 ID 在接受结果前校验，错误进入 `table.error`，保留上一份有效结果与选择状态，可通过 `retry()` 恢复。
 
 ## 查询与刷新
 

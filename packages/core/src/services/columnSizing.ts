@@ -9,18 +9,17 @@ import { statusEntry } from "../lib/columnStatus";
 export class ColumnSizing {
   private textMeasureContext?: CanvasRenderingContext2D | null;
   private measurementFont = "";
+  private fontFaces: FontFace[] = [];
+  fontRevision = 0;
   needsContentMeasure = true;
 
   constructor(private core: GridCore) {}
 
   updateContentWidths(scope?: RefreshCellsParams): boolean {
-    const style = getComputedStyle(this.core.skeleton.root);
-    const font = `${style.getPropertyValue("--mach-header-font-weight") || 650} ${style.fontSize} ${style.fontFamily}`;
-    if (font !== this.measurementFont) {
+    if (this.syncFontMetrics()) {
       this.needsContentMeasure = true;
       scope = undefined;
     }
-    this.measurementFont = font;
     const rows = this.needsContentMeasure ? this.sampleRows() : undefined;
     const sampleChanged = rows && sampleIntersects(rows, scope);
     const columns = scope?.columns && new Set(scope.columns);
@@ -38,6 +37,21 @@ export class ColumnSizing {
       }
     }
     this.needsContentMeasure = false;
+    return changed;
+  }
+
+  /** Loaded glyphs can change while the CSS font-family string stays identical. */
+  private syncFontMetrics(): boolean {
+    const faces = Array.from(document.fonts ?? []).filter(face => face.status === "loaded");
+    const facesChanged = faces.length !== this.fontFaces.length || faces.some((face, index) => face !== this.fontFaces[index]);
+    if (facesChanged) {
+      this.fontFaces = faces;
+      this.fontRevision++;
+    }
+    const style = getComputedStyle(this.core.skeleton.root);
+    const font = `${style.getPropertyValue("--mach-header-font-weight") || 650} ${style.fontSize} ${style.fontFamily}`;
+    const changed = font !== this.measurementFont || facesChanged;
+    this.measurementFont = font;
     return changed;
   }
 

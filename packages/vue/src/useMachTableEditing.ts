@@ -63,7 +63,6 @@ export function useMachTableEditing<TData = any>(
     ...(lastSaveResult.value?.conflicts ?? [])
   ]);
   const failedRowIds = computed(() => [...new Set(saveIssues.value.map((issue) => issue.rowId))]);
-  let removeDirtyListener: (() => void) | null = null;
   let generation = 0;
   let resultIsCurrent: (rowId?: string) => boolean = () => false;
 
@@ -78,17 +77,15 @@ export function useMachTableEditing<TData = any>(
     changes.value = api.editing.getChanges();
   };
 
-  watch(table.api, (api) => {
+  watch(table.api, (api, _previous, onCleanup) => {
     generation++;
     saving.value = false;
     saveError.value = null;
     lastSaveResult.value = null;
     resultIsCurrent = () => false;
-    removeDirtyListener?.();
-    removeDirtyListener = null;
     refresh();
     if (!api || api.isDestroyed()) return;
-    removeDirtyListener = api.on("dirtyStateChanged", refresh);
+    onCleanup(api.on("dirtyStateChanged", refresh));
   }, { immediate: true, flush: "sync" });
 
   const saveDetailed = async (
@@ -149,7 +146,6 @@ export function useMachTableEditing<TData = any>(
     if (!result || !conflict || !api || !resultIsCurrent(rowId) || !resolveSaveConflict(api, conflict, strategy)) return false;
     lastSaveResult.value = {
       ...result,
-      failures: result.failures,
       conflicts: result.conflicts.filter((entry) => entry.rowId !== rowId)
     };
     refresh();
@@ -186,8 +182,6 @@ export function useMachTableEditing<TData = any>(
 
   onScopeDispose(() => {
     generation++;
-    removeDirtyListener?.();
-    removeDirtyListener = null;
     if (options.guardBeforeUnload && typeof window !== "undefined") {
       window.removeEventListener("beforeunload", onBeforeUnload);
     }

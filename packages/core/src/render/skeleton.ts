@@ -5,7 +5,7 @@ import { el } from "../lib/dom";
 
 const SIZE_CLASSES: GridSize[] = ["compact", "normal", "large"];
 export const PANES = ["left", "center", "right"] as const;
-type SkeletonContext = Pick<GridCore<any>, "gridOptions" | "relayout" | "reportError">;
+type SkeletonContext = Pick<GridCore<any>, "gridOptions" | "relayout" | "reportError" | "isDisposed">;
 type OverlayContext = Pick<GridCore<any>,
   "gridOptions" | "skeleton" | "buildDefaultLoadingState" | "buildDefaultEmptyState" | "buildDefaultErrorState"
 >;
@@ -134,6 +134,9 @@ export class GridSkeleton {
     );
     container.appendChild(this.root);
 
+    document.fonts?.addEventListener("loading", this.onFontsLoading);
+    if (document.fonts?.status === "loading") this.onFontsLoading();
+
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver((entries) => {
         const rect = entries[entries.length - 1]?.contentRect;
@@ -143,17 +146,26 @@ export class GridSkeleton {
         if (width === this.observedWidth && height === this.observedHeight) return;
         this.observedWidth = width;
         this.observedHeight = height;
-        if (this.resizeRaf) return;
-        this.resizeRaf = requestAnimationFrame(() => {
-          this.resizeRaf = 0;
-          this.core.relayout();
-        });
+        this.scheduleLayout();
       });
       this.resizeObserver.observe(this.root);
     }
 
     this.applyTheme(options.theme);
   }
+
+  /** WebKit can omit loadingdone for local faces; ready still resolves for each loading cycle. */
+  private onFontsLoading = (): void => {
+    void document.fonts.ready.then(this.scheduleLayout);
+  };
+
+  private scheduleLayout = (): void => {
+    if (this.resizeRaf || this.core.isDisposed()) return;
+    this.resizeRaf = requestAnimationFrame(() => {
+      this.resizeRaf = 0;
+      this.core.relayout();
+    });
+  };
 
   applyAriaLabels(options: Pick<ResolvedGridOptions, "ariaLabel" | "ariaLabelledBy" | "ariaDescribedBy">): void {
     if (options.ariaLabelledBy) {
@@ -362,6 +374,7 @@ export class GridSkeleton {
   }
 
   destroy(): void {
+    document.fonts?.removeEventListener("loading", this.onFontsLoading);
     this.themeUnsub?.();
     this.themeUnsub = null;
     this.resizeObserver?.disconnect();

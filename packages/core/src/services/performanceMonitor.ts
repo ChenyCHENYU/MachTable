@@ -99,14 +99,13 @@ export class PerformanceMonitor {
   snapshot(): GridPerformanceSnapshot {
     const durations = this.samples.map((sample) => sample.duration);
     const last = this.samples[this.samples.length - 1];
-    const sorted = [...durations].sort((left, right) => left - right);
     const longTasks = longTaskHub.snapshot();
     return {
       sampleCount: durations.length,
       lastRenderMs: last?.duration ?? 0,
       averageRenderMs: this.average(durations),
-      maxRenderMs: sorted[sorted.length - 1] ?? 0,
-      p95RenderMs: this.percentile(sorted, true),
+      maxRenderMs: Math.max(0, ...durations),
+      p95RenderMs: this.percentile(durations),
       longRenderCount: durations.filter((duration) => duration > LONG_FRAME_MS).length,
       renderedRows: last?.rows ?? 0,
       renderedColumns: last?.columns ?? 0,
@@ -149,9 +148,9 @@ export class PerformanceMonitor {
     return typeof heap === "number" && Number.isFinite(heap) ? heap : null;
   }
 
-  private percentile(values: readonly number[], sortedAlready = false): number {
+  private percentile(values: readonly number[]): number {
     if (values.length === 0) return 0;
-    const sorted = sortedAlready ? values : [...values].sort((left, right) => left - right);
+    const sorted = [...values].sort((left, right) => left - right);
     return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0;
   }
 }

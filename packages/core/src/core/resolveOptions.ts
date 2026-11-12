@@ -2,7 +2,7 @@ import type { GridOptions, GridSize, ResolvedGridOptions } from "../types/option
 import type { ColDef } from "../types/colDef";
 import { getByPath } from "../lib/path";
 import { normalizeAdvancedFilterModel } from "../lib/advancedFilter";
-import { hasOwnOption, normalizeFinite, normalizePersistence } from "../lib/optionValues";
+import { finiteAtLeast, hasOwnOption, normalizeFinite, normalizePersistence } from "../lib/optionValues";
 
 export const DEFAULT_COL_DEF: Partial<ColDef> = {
   align: "center",
@@ -75,22 +75,13 @@ function resolveValueDefaults(options: GridOptions): Pick<ResolvedGridOptions, k
   return values as Pick<ResolvedGridOptions, keyof typeof VALUE_DEFAULTS>;
 }
 
-function finiteAtLeast(value: unknown, fallback: number, min: number, integer = false): number {
-  return normalizeFinite(value, min, integer) ?? fallback;
-}
-
 function resolveSize(value: GridOptions["size"]): GridSize {
   return value && hasOwnOption(GRID_SIZE_PRESETS, value) ? value : "normal";
 }
 
-function resolveTheme(options: GridOptions): ResolvedGridOptions["theme"] {
-  if (options.theme === "light" || options.theme === "dark" || options.theme === "auto") return options.theme;
-  return "light";
-}
-
 function resolvePageSizeOptions<TData>(options: GridOptions<TData>, pageSize: number): number[] {
   const requested =
-    typeof options.pagination === "object" && Array.isArray(options.pagination.pageSizeOptions)
+    typeof options.pagination === "object" && Array.isArray(options.pagination?.pageSizeOptions)
       ? options.pagination.pageSizeOptions
       : undefined;
   const values = requested
@@ -105,26 +96,17 @@ export function rowIdFromKey<TData>(rowKey: NonNullable<GridOptions<TData>["rowK
   return value == null ? "" : String(value);
 }
 
-function resolveRowIdentity<TData>(options: GridOptions<TData>): Pick<ResolvedGridOptions<TData>, "resolveRowId" | "rowKey"> {
-  const rowKey = options.rowKey;
-  const resolveRowId = rowKey
-    ? ({ data }: { data: TData }) => rowIdFromKey(rowKey, data)
-    : undefined;
-  return {
-    ...(resolveRowId ? { resolveRowId } : {}),
-    ...(rowKey ? { rowKey } : {})
-  };
-}
-
 function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize) {
   const preset = GRID_SIZE_PRESETS[size];
+  const rowKey = options.rowKey;
   return {
     columnDefs: Array.isArray(options.columnDefs) ? options.columnDefs : [],
     rowData: Array.isArray(options.rowData) ? options.rowData : [],
     defaultColDef: { ...DEFAULT_COL_DEF, ...(options.defaultColDef ?? {}) },
     columnTypes: options.columnTypes ?? {},
-    ...resolveRowIdentity(options),
+    ...(rowKey ? { resolveRowId: ({ data }: { data: TData }) => rowIdFromKey(rowKey, data), rowKey } : {}),
     rowHeight: finiteAtLeast(options.rowHeight, preset.rowHeight, 1),
+    detailRowHeight: finiteAtLeast(options.detailRowHeight, 240, 1),
     headerHeight: finiteAtLeast(options.headerHeight, preset.headerHeight, 1),
     rowBuffer: finiteAtLeast(options.rowBuffer, 8, 0, true),
     columnLayout: options.columnLayout === "fit" ? "fit" as const : "normal" as const,
@@ -138,32 +120,6 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
     size,
     pinnedTopRowData: Array.isArray(options.pinnedTopRowData) ? options.pinnedTopRowData : [],
     pinnedBottomRowData: Array.isArray(options.pinnedBottomRowData) ? options.pinnedBottomRowData : []
-  };
-}
-
-function resolveAppearance(options: GridOptions) {
-  return {
-    rowStyleRules: Array.isArray(options.rowStyleRules) ? options.rowStyleRules : [],
-    theme: resolveTheme(options),
-  };
-}
-
-function resolveEditingAndHistory(options: GridOptions) {
-  return {
-    editType: options.editType === "fullRow" ? "fullRow" as const : "cell" as const,
-    editableIndicator:
-      options.editableIndicator === "always" || options.editableIndicator === "none"
-        ? options.editableIndicator
-        : "hover" as const,
-    rowDragPolicy: options.rowDragPolicy,
-    undoStackSize: finiteAtLeast(options.undoStackSize, 100, 0, true),
-    asyncTransactionWaitMillis: finiteAtLeast(options.asyncTransactionWaitMillis, 16, 0, true)
-  };
-}
-
-function resolveHierarchy(options: GridOptions) {
-  return {
-    detailRowHeight: finiteAtLeast(options.detailRowHeight, 240, 1),
   };
 }
 
@@ -188,14 +144,11 @@ function resolvePagination<TData>(options: GridOptions<TData>) {
 }
 
 export function resolveWatermark(options: GridOptions) {
+  const watermarkConfig = options.watermark == null || options.watermark === false
+    ? null : options.watermark === true ? { text: "MachTable" } : options.watermark;
   return {
-    watermarkEnabled: options.watermark != null && options.watermark !== false,
-    watermarkConfig:
-      options.watermark == null || options.watermark === false
-        ? null
-        : options.watermark === true
-          ? { text: "MachTable" }
-          : options.watermark
+    watermarkEnabled: watermarkConfig !== null,
+    watermarkConfig
   };
 }
 
@@ -274,31 +227,19 @@ const OPTIONAL_OPTION_KEYS = [
   "dataProcessor"
 ] as const;
 
-function copyOptionalOptions<TData>(
-  source: GridOptions<TData>,
-  target: ResolvedGridOptions<TData>
-): void {
-  for (const key of OPTIONAL_OPTION_KEYS) {
-    if (source[key]) Reflect.set(target, key, source[key]);
-  }
-}
-
-function copyEventHandlers<TData>(source: GridOptions<TData>, target: ResolvedGridOptions<TData>): void {
-  for (const key of Object.keys(source) as (keyof GridOptions<TData>)[]) {
-    if (key.startsWith("on") && typeof source[key] === "function") {
-      Reflect.set(target, key, source[key]);
-    }
-  }
-}
-
 export function resolveOptions<TData>(userOptions: GridOptions<TData>): ResolvedGridOptions<TData> {
   const size = resolveSize(userOptions.size);
   const resolved = {
     ...resolveValueDefaults(userOptions),
     ...resolveDataAndLayout(userOptions, size),
-    ...resolveAppearance(userOptions),
-    ...resolveEditingAndHistory(userOptions),
-    ...resolveHierarchy(userOptions),
+    rowStyleRules: Array.isArray(userOptions.rowStyleRules) ? userOptions.rowStyleRules : [],
+    theme: userOptions.theme === "dark" || userOptions.theme === "auto" ? userOptions.theme : "light",
+    editType: userOptions.editType === "fullRow" ? "fullRow" : "cell",
+    editableIndicator: userOptions.editableIndicator === "always" || userOptions.editableIndicator === "none"
+      ? userOptions.editableIndicator : "hover",
+    rowDragPolicy: userOptions.rowDragPolicy,
+    undoStackSize: finiteAtLeast(userOptions.undoStackSize, 100, 0, true),
+    asyncTransactionWaitMillis: finiteAtLeast(userOptions.asyncTransactionWaitMillis, 16, 0, true),
     ...resolvePagination(userOptions),
     ...resolveWatermark(userOptions),
     ...resolveInteraction(userOptions),
@@ -306,8 +247,12 @@ export function resolveOptions<TData>(userOptions: GridOptions<TData>): Resolved
     features: Array.isArray(userOptions.features) ? userOptions.features : []
   } as ResolvedGridOptions<TData>;
 
-  copyOptionalOptions(userOptions, resolved);
-  copyEventHandlers(userOptions, resolved);
+  for (const key of OPTIONAL_OPTION_KEYS) {
+    if (userOptions[key]) Reflect.set(resolved, key, userOptions[key]);
+  }
+  for (const key of Object.keys(userOptions) as (keyof GridOptions<TData>)[]) {
+    if (key.startsWith("on") && typeof userOptions[key] === "function") Reflect.set(resolved, key, userOptions[key]);
+  }
 
   return resolved;
 }

@@ -1,4 +1,5 @@
 import type { GridCore } from "../core/gridCore";
+import { hasContextualAutoHeight } from "./column";
 import { createAbortError } from "../lib/abortable";
 import type { RowNode } from "../types/row";
 import type { FilterModel } from "../types/colDef";
@@ -46,6 +47,20 @@ function readChildren(data: unknown, key: string): unknown[] | undefined {
   if (data == null || typeof data !== "object") return undefined;
   const value = (data as Record<string, unknown>)[key];
   return Array.isArray(value) ? value : undefined;
+}
+
+/** @internal Bound recursive projections; ancestor tracking permits shared, acyclic objects. */
+export function validateTreeData(rows: readonly unknown[], key: string, depth = 0, ancestors = new Set<unknown>()): void {
+  for (const data of rows) {
+    if (data == null) continue;
+    if (depth >= 256) throw new RangeError("[MachTable] Tree data exceeds 256 levels.");
+    if (ancestors.has(data)) throw new TypeError("[MachTable] Tree data contains a cyclic object graph.");
+    const children = readChildren(data, key);
+    if (!children?.length) continue;
+    ancestors.add(data);
+    validateTreeData(children, key, depth + 1, ancestors);
+    ancestors.delete(data);
+  }
 }
 
 export interface RowTransactionImpact {
@@ -608,11 +623,9 @@ export class RowModel<TData = any> {
   }
 
   setRowData(rows: TData[] | null | undefined): void {
-    this.beginDataReplacement();
-    this.cancelTreeLoads();
-    this.core.changeTracker.clear();
     const resolveRowId = this.core.gridOptions.resolveRowId;
     const childrenKey = this.core.gridOptions.childrenKey;
+    if (this.isTree) validateTreeData(rows ?? [], childrenKey);
     const next: RowNode<TData>[] = [];
     const roots: RowNode<TData>[] = [];
     const byId = new Map<string, RowNode<TData>>();
@@ -656,6 +669,11 @@ export class RowModel<TData = any> {
       if (data != null) buildNode(data, 0, null);
     });
 
+    // Preparation can fail without cancelling the active editor, history or old requests.
+    this.core.gridOptions.rowData = rows ?? [];
+    this.beginDataReplacement();
+    this.cancelTreeLoads();
+    this.core.changeTracker.clear();
     this.loadedRowNodes = next;
     this.roots = roots;
     this.childIds = childIds;
@@ -758,7 +776,7 @@ export class RowModel<TData = any> {
       removed.add(childId);
       stack.push(...this.getChildrenIds(childId));
     }
-    this.validateTreeChildren(children, removed);
+    this.validateTreeChildren(children, removed, this.getTreeDepth(parent) + 1);
     for (const childId of removed) {
       this.treeLoadControllers.get(childId)?.abort();
       this.treeLoadControllers.delete(childId);
@@ -777,21 +795,17 @@ export class RowModel<TData = any> {
     this.refreshRows();
   }
 
-  private validateTreeChildren(children: readonly TData[], replacedIds: ReadonlySet<string>): void {
+  private validateTreeChildren(children: readonly TData[], replacedIds: ReadonlySet<string>, depth: number): void {
+    validateTreeData(children, this.core.gridOptions.childrenKey, depth);
     const resolveRowId = this.core.gridOptions.resolveRowId;
     const reserved = resolveRowId
       ? new Set([...this.nodesById.keys()].filter((id) => !replacedIds.has(id)))
       : null;
-    const seenObjects = new WeakSet<object>();
     const stack = [...children];
     let index = 0;
     while (stack.length > 0) {
       const data = stack.pop()!;
       if (data == null) continue;
-      if (typeof data === "object") {
-        if (seenObjects.has(data)) throw new TypeError("[MachTable] Lazy tree children contain a cyclic object graph.");
-        seenObjects.add(data);
-      }
       if (resolveRowId && reserved) {
         const id = resolveRowId({ data, index: index++, api: this.core.api });
         if (typeof id !== "string" || id.length === 0) {
@@ -806,6 +820,7 @@ export class RowModel<TData = any> {
   }
 
   applyTransaction(transaction: RowTransaction<TData>, refresh = true): RowTransactionImpact {
+    if (this.isTree && transaction.add?.length) validateTreeData(transaction.add, this.core.gridOptions.childrenKey);
     const resolveRowId = this.core.gridOptions.resolveRowId;
     const replacements: RowReplacement<TData>[] = [];
     const externallyReplacedIds: string[] = [];
@@ -936,7 +951,7 @@ export class RowModel<TData = any> {
     if (this.isTree || this.core.gridOptions.masterDetail || this.shouldUseDataProcessor()) return null;
     const columns = this.core.columnModel.getOrderedVisible();
     if (columns.some((column) =>
-      column.colDef.autoHeight === true || column.colDef.autoRowSpan === true || column.colDef.rowSpan != null
+      hasContextualAutoHeight(column) || column.colDef.autoRowSpan === true || column.colDef.rowSpan != null
     )) return null;
     const filtering = !this.core.gridOptions.manualFiltering;
     return projectionFields({ columns, customAggregates: this.core.gridOptions.aggFuncs,
@@ -1297,8 +1312,9 @@ export class RowModel<TData = any> {
   }
 
   restorePagination(page: number, pageSize: number): void {
-    this.core.gridOptions.paginationPageSize = Math.max(1, Math.round(pageSize) || 1);
-    this.activePageNumber = Math.max(1, Math.round(page) || 1);
+    // Both callers supply values normalized at the options/state boundary.
+    this.core.gridOptions.paginationPageSize = pageSize;
+    this.activePageNumber = page;
     this.core.gridOptions.paginationPage = this.activePageNumber;
   }
 

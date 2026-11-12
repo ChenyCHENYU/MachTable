@@ -1,11 +1,11 @@
 import type { GridCore } from "../core/gridCore";
-import { el } from "../lib/dom";
-import { DEFAULT_LOCALE, formatText, formatTwo } from "../lib/locale";
+import { el, textButton } from "../lib/dom";
+import { formatText, formatTwo } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
 type PaginationContext = Pick<
   GridCore<any>,
-  "eventBus" | "isDisposed" | "gridOptions" | "rowModel" | "skeleton"
+  "eventBus" | "getLocaleText" | "isDisposed" | "gridOptions" | "rowModel" | "skeleton"
 >;
 
 /** @internal Pagination DOM ownership stays in Core; the public API delegates through closures. */
@@ -28,26 +28,19 @@ export class PaginationBar {
     this.barEl.style.display = "none";
     this.barEl.setAttribute("role", "navigation");
 
-    const mkBtn = (cls: string, label: string, text: string): HTMLButtonElement => {
-      const btn = el("button", `mach-pagination-btn ${cls}`);
-      btn.type = "button";
+    const mkBtn = (cls: string, label: string, text: string, action: () => void): HTMLButtonElement => {
+      const btn = textButton(`mach-pagination-btn ${cls}`, text, action);
       btn.title = label;
       btn.setAttribute("aria-label", label);
-      btn.textContent = text;
       return btn;
     };
 
     this.totalEl = el("span", "mach-pagination-total");
-    this.firstBtn = mkBtn("mach-pagination-first", this.t("pageFirst"), "«");
-    this.prevBtn = mkBtn("mach-pagination-prev", this.t("pagePrev"), "‹");
+    this.firstBtn = mkBtn("mach-pagination-first", this.core.getLocaleText("pageFirst"), "«", () => this.core.rowModel.setPage(1));
+    this.prevBtn = mkBtn("mach-pagination-prev", this.core.getLocaleText("pagePrev"), "‹", () => this.core.rowModel.setPage(this.core.rowModel.getCurrentPage() - 1));
     this.pageEl = el("span", "mach-pagination-page");
-    this.nextBtn = mkBtn("mach-pagination-next", this.t("pageNext"), "›");
-    this.lastBtn = mkBtn("mach-pagination-last", this.t("pageLast"), "»");
-
-    this.firstBtn.addEventListener("click", () => this.core.rowModel.setPage(1));
-    this.prevBtn.addEventListener("click", () => this.core.rowModel.setPage(this.core.rowModel.getCurrentPage() - 1));
-    this.nextBtn.addEventListener("click", () => this.core.rowModel.setPage(this.core.rowModel.getCurrentPage() + 1));
-    this.lastBtn.addEventListener("click", () => this.core.rowModel.setPage(this.core.rowModel.getPageCount()));
+    this.nextBtn = mkBtn("mach-pagination-next", this.core.getLocaleText("pageNext"), "›", () => this.core.rowModel.setPage(this.core.rowModel.getCurrentPage() + 1));
+    this.lastBtn = mkBtn("mach-pagination-last", this.core.getLocaleText("pageLast"), "»", () => this.core.rowModel.setPage(this.core.rowModel.getPageCount()));
 
     this.barEl.append(this.totalEl, this.firstBtn, this.prevBtn, this.pageEl, this.nextBtn, this.lastBtn);
 
@@ -88,13 +81,9 @@ export class PaginationBar {
       options.sort((a, b) => a - b);
     }
     this.sizeControl?.setOptions(
-      options.map((size) => ({ value: String(size), label: formatText(this.t("perPage"), size) })),
+      options.map((size) => ({ value: String(size), label: formatText(this.core.getLocaleText("perPage"), size) })),
       String(current)
     );
-  }
-
-  private t(key: Parameters<GridCore<any>["getLocaleText"]>[0]): string {
-    return this.core.gridOptions.locale?.[key] ?? DEFAULT_LOCALE[key];
   }
 
   rebuild(): void {
@@ -131,9 +120,9 @@ export class PaginationBar {
     const pageCount = rm.getPageCount();
 
     if (this.totalEl && this.core.gridOptions.paginationShowTotal) {
-      this.setText(this.totalEl, formatText(this.t("paginationTotal"), total));
+      this.setText(this.totalEl, formatText(this.core.getLocaleText("paginationTotal"), total));
     }
-    this.setText(this.pageEl, formatTwo(this.t("paginationPage"), page, pageCount));
+    this.setText(this.pageEl, formatTwo(this.core.getLocaleText("paginationPage"), page, pageCount));
     this.refreshNavigation(page, pageCount);
     if (this.sizeSelect && Number(this.sizeSelect.value) !== this.core.gridOptions.paginationPageSize) {
       this.sizeControl?.setValue(String(this.core.gridOptions.paginationPageSize));

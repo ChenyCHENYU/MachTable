@@ -231,7 +231,7 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
     native.replaceChildren();
     listbox.replaceChildren();
     items = options.map((option, index) => {
-      const nativeOption = document.createElement("option");
+      const nativeOption = el("option");
       nativeOption.value = option.value;
       nativeOption.textContent = option.label;
       nativeOption.disabled = option.disabled === true;

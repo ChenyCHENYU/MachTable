@@ -1,4 +1,5 @@
 import { FILTER_MATCHES } from "./filterMatches";
+import { normalizeFinite } from "./optionValues";
 import type { ColumnFilter } from "../types/colDef";
 import type {
   AdvancedFilterCondition,
@@ -40,16 +41,12 @@ function conditionValues(
   type: "text" | "number" | "date"
 ): Record<string, unknown> {
   const value = type === "number"
-    ? finiteNumber(condition.value)
+    ? normalizeFinite(condition.value, -Infinity)
     : typeof condition.value === "string" ? condition.value : undefined;
   const value2 = type === "number"
-    ? finiteNumber(condition.value2)
+    ? normalizeFinite(condition.value2, -Infinity)
     : typeof condition.value2 === "string" ? condition.value2 : undefined;
   return { ...(value !== undefined ? { value } : {}), ...(value2 !== undefined ? { value2 } : {}) };
-}
-
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function normalizedConditions(
