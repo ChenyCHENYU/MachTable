@@ -4,11 +4,11 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.39.2 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.40.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
 
-本地明细设置 `dom-layout="autoHeight" :max-body-height="330"` 即可随内容收起，超过 330px 的表体进入虚拟滚动。表内筛选无匹配时可在默认空态中清除筛选。分页继续使用内置分页条。
+不传 `preset` 默认主列表 `list`；小明细只加 `preset="detail"`，保留序号、纯文字表头、默认只读、不分页，按内容收起，表体超过 330px 后虚拟滚动。主题与密度继续共享，无需先写配置文件。
 
 ```bash
 pnpm add @agile-team/mach-table-vue
@@ -27,13 +27,10 @@ import "@agile-team/mach-table-vue/styles.css";
 import { h, ref } from "vue";
 import {
   MachTable,
-  defineVueColumns,
-  defineVueTableConfig,
-  useMachTable,
+  defineVueColumns
 } from "@agile-team/mach-table-vue";
 
 interface Row { id: string; name: string; status: "enabled" | "disabled" }
-const table = useMachTable<Row>();
 const rows = ref<Row[]>([{ id: "1", name: "MachTable", status: "enabled" }]);
 const columns = defineVueColumns<Row>([
   { field: "name", flex: 1, editable: true },
@@ -43,31 +40,24 @@ const columns = defineVueColumns<Row>([
     render: (row) => h("span", { class: `status-${row.status}` }, row.status === "enabled" ? "启用" : "停用")
   }
 ]);
-const tableConfig = defineVueTableConfig<Row>({
-  rowKey: "id",
-  enableColumnResize: true,
-  stripedRows: true,
-  persistence: { key: "customers:list", sections: ["columns"] }
-});
 </script>
 
 <template>
   <div style="height: 520px">
     <MachTable
-      v-bind="tableConfig"
-      :ref="table.ref"
       :row-data="rows"
       :column-defs="columns"
+      row-key="id"
     />
   </div>
 </template>
 ```
 
-默认显示序号和内置分页，可通过 `:row-number="false"`、`:pagination="false"` 分别关闭。需要定制序号时直接声明 `indexColumn()`。
+默认 `list` 显示序号和内置分页，可通过 `:row-number="false"`、`:pagination="false"` 分别关闭。需要定制序号时直接声明 `indexColumn()`。
 
 后端同时返回列定义和数据时，绑定 `column-defs` 与 `row-data`，一次替换查询结果。只刷新数据时复用列定义，搜索、表单和弹窗可用项目已有的组件，查询、选中和保存由页面控制器统一组织。动态字段与分组表头见[报表接口示例](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/schema-driven.md)。
 
-业务列优先用 `defineVueColumns()` 的 `render(row, index, params)` 返回 VNode；它保留 Vue 应用上下文、支持原位刷新，并遵循全局、表格和单列对齐配置。复杂页面编排仍可使用 `#cell-*` 具名插槽，具名插槽会显式覆盖同列 `render`。多个稳定表格参数推荐放进页面 `data.ts` 或共享配置模块，模板通过一次 `v-bind="tableConfig"` 注入；`rowData`、`columnDefs` 和实例 `ref` 保持显式，便于看清数据来源。
+业务列优先用 `defineVueColumns()` 的 `render(row, index, params)` 返回 VNode；它保留 Vue 应用上下文、支持原位刷新，并遵循全局、表格和单列对齐配置。复杂页面编排仍可使用 `#cell-*` 具名插槽，具名插槽会显式覆盖同列 `render`。常规场景只需列、数据与场景选择。业务确有较多实例参数时，可用一次 `v-bind="tableConfig"` 注入；`rowData`、`columnDefs` 和实例 `ref` 保持显式，便于看清数据来源。
 
 未声明 `#loading` / `#empty` 时会直接使用 Core 的紧凑骨架加载态与插画空态；只有产品确实需要品牌化呈现时才提供 slot，避免每个页面重复维护同类状态组件。
 
@@ -82,9 +72,8 @@ const tableConfig = defineVueTableConfig<Row>({
 ```ts
 import { createApp } from "vue";
 import { MachTablePlugin } from "@agile-team/mach-table-vue";
-import machTableConfig from "@/config/mach-table.config";
 
-createApp(App).use(MachTablePlugin, machTableConfig).mount("#app");
+createApp(App).use(MachTablePlugin).mount("#app");
 ```
 
 需要减少首屏代码时改用异步全局插件：
@@ -92,32 +81,35 @@ createApp(App).use(MachTablePlugin, machTableConfig).mount("#app");
 ```ts
 import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
 
-app.use(AsyncMachTablePlugin, machTableConfig);
+app.use(AsyncMachTablePlugin);
 void preloadMachTable(); // 可选：路由 hover 时预取
 ```
 
-推荐把约定集中到独立文件：
+只有项目存在统一差异时，再增加一个可选配置文件：
 
 ```ts
 // src/config/mach-table.config.ts
-import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-vue";
+import { createMachTablePreset, defineMachTableConfig } from "@agile-team/mach-table-vue";
 
 export default defineMachTableConfig({
-  defaults: {
-    size: "compact",
-    columnLayout: "fit",
-    enableColumnResize: true,
-    defaultColDef: { sortable: true, filter: true, resizable: true }
-  },
-  defaultPreset: "list",
+  defaults: { theme: "auto", size: "compact", stripedRows: true },
   presets: {
-    list: defineMachTablePreset({ stripedRows: true }),
-    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+    detail: createMachTablePreset("detail", { maxBodyHeight: 240 })
   }
 });
 ```
 
-布局或路由可用响应式 `provideMachTableConfig()` 叠加配置，表格 props 始终拥有最高优先级。
+有配置时再传给 `app.use(MachTablePlugin, machTableConfig)`。已有同名自定义 preset 完整优先；要继承内置场景后改差异，使用上面的 composer。布局或路由可用 `provideMachTableConfig()` 叠加公共约定，单表 props 始终最高优先级。
+
+## 同页主表与多张明细
+
+```vue
+<MachTable :column-defs="orderColumns" :row-data="orders" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketA" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketB" row-key="id" />
+```
+
+场景按用途选择，不随行数变化。业务列可显式 `editable: true`，单表可覆盖 `maxBodyHeight` 等差异；只读默认不替代权限校验。全局 `defaultPreset: false` 或单表 `:preset="false"` 可退出，`detail → list/false` 会回退场景字段。切换列配置仍按原有生命周期重建编辑器，先保存或放弃未提交草稿。详见[场景与配置](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/configuration.md)。
 
 ## 按需子入口
 

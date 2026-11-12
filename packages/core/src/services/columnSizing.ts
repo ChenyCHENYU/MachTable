@@ -4,6 +4,7 @@ import type { Column } from "./column";
 import type { RefreshCellsParams } from "../types/api";
 import { formatCellValueWith } from "../render/cellContent";
 import { statusEntry } from "../lib/columnStatus";
+import { el } from "../lib/dom";
 
 /** @internal 每表实例缓存测量结果；只取已加载数据，绝不为测宽请求远程行或挂载 renderer。 */
 export class ColumnSizing {
@@ -63,7 +64,7 @@ export class ColumnSizing {
   }
 
   textWidth(value: string, font?: string): number {
-    if (this.textMeasureContext === undefined) this.textMeasureContext = document.createElement("canvas").getContext("2d");
+    if (this.textMeasureContext === undefined) this.textMeasureContext = el("canvas").getContext("2d");
     if (!this.textMeasureContext) return font ? Infinity : value.replace(/[^\x00-\xff]/g, "mm").length * 7;
     this.textMeasureContext.font = font ?? this.measurementFont;
     return this.textMeasureContext.measureText(value).width;

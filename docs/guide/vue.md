@@ -22,13 +22,11 @@ import "@agile-team/mach-table-vue/styles.css";
 import { h } from "vue";
 import {
   MachTable,
-  defineVueColumns,
-  defineVueTableConfig,
-  useMachTable,
+  defineVueColumns
 } from "@agile-team/mach-table-vue";
 
 interface Order { id: string; product: string; amount: number; status: "paid" | "pending" }
-const table = useMachTable<Order>();
+const rows: Order[] = [{ id: "SO-001", product: "卷材", amount: 12800, status: "pending" }];
 const columns = defineVueColumns<Order>([
   { field: "product", headerName: "产品", flex: 1, editable: true },
   { field: "amount", headerName: "金额", width: 140, filter: "number" },
@@ -38,20 +36,14 @@ const columns = defineVueColumns<Order>([
     render: (row) => h("span", { class: `order-status--${row.status}` }, row.status === "paid" ? "已支付" : "待支付")
   }
 ]);
-const tableConfig = defineVueTableConfig<Order>({
-  rowKey: "id",
-  enableColumnResize: true,
-  stripedRows: true
-});
 </script>
 
 <template>
   <div style="height: 600px">
     <MachTable
-      v-bind="tableConfig"
-      :ref="table.ref"
       :column-defs="columns"
       :row-data="rows"
+      row-key="id"
     />
   </div>
 </template>
@@ -66,9 +58,8 @@ const tableConfig = defineVueTableConfig<Order>({
 ```ts
 import { createApp } from "vue";
 import { MachTablePlugin } from "@agile-team/mach-table-vue";
-import machTableConfig from "@/config/mach-table.config";
 
-createApp(App).use(MachTablePlugin, machTableConfig).mount("#app");
+createApp(App).use(MachTablePlugin).mount("#app");
 ```
 
 ### 异步全局插件
@@ -79,7 +70,6 @@ createApp(App).use(MachTablePlugin, machTableConfig).mount("#app");
 import AsyncMachTablePlugin, { preloadMachTable } from "@agile-team/mach-table-vue/async";
 
 app.use(AsyncMachTablePlugin, {
-  ...machTableConfig,
   asyncComponentOptions: {
     loadingComponent: GridLoading,
     errorComponent: GridLoadError,
@@ -98,26 +88,23 @@ void preloadMachTable();
 
 样式仍应同步引入，避免异步组件首次出现无样式闪烁。
 
-## 专用配置文件
+## 按需统一项目差异
+
+通常不需要配置文件。项目确有统一差异时，再定义一次：
 
 ```ts
 // src/config/mach-table.config.ts
-import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-vue";
+import { createMachTablePreset, defineMachTableConfig } from "@agile-team/mach-table-vue";
 
 export default defineMachTableConfig({
-  defaults: {
-    size: "compact",
-    columnLayout: "fit",
-    enableColumnResize: true,
-    defaultColDef: { sortable: true, filter: true, resizable: true }
-  },
-  defaultPreset: "list",
+  defaults: { theme: "auto", size: "compact", stripedRows: true },
   presets: {
-    list: defineMachTablePreset({ stripedRows: true }),
-    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+    detail: createMachTablePreset("detail", { maxBodyHeight: 240 })
   }
 });
 ```
+
+将这个文件导入应用入口，作为 `app.use(MachTablePlugin, machTableConfig)` 的第二个参数；基础接入不需要它。
 
 路由或布局可以响应式叠加：
 
@@ -129,6 +116,18 @@ provideMachTableConfig(() => ({
 
 优先级为应用配置 → 路由/布局配置 → 命名预设 → 当前表格 props。详见[配置中心](/guide/configuration)。
 
+## 同页选择不同场景
+
+```vue
+<MachTable :column-defs="orderColumns" :row-data="orders" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketA" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketB" row-key="id" />
+```
+
+默认 `list` 保留序号、分页与表头工具；`detail` 保留序号、默认纯文字表头和只读、不分页，表体高度最多 330px，超过后虚拟滚动。主题、密度、斑马纹与宽度布局独立于场景；数据增减不会自动切换。已有同名自定义 preset 完整优先，要继承内置再修改时使用 `createMachTablePreset("detail", overrides)`。
+
+单表 props 或单列 `editable: true` 可覆盖业务差异，只读不替代权限校验。全局 `defaultPreset: false` 或单表 `:preset="false"` 可退出场景。动态切换会回退场景字段，不主动清空排序、筛选或选择；改变列配置仍遵循已有编辑器重建规则，先保存或放弃未提交草稿。
+
 ## Props、事件和暴露实例
 
 - 所有 `GridOptions` 都可作为 props；模板使用 kebab-case。
@@ -136,7 +135,7 @@ provideMachTableConfig(() => ({
 - Core 事件以 Vue kebab-case 监听，如 `@selection-changed`。
 - 组件暴露 `getApi()`、`getResolvedConfig()` 与 `explainOption()`。
 
-页面属性较多时，不要在模板逐项展开。把稳定行为放进页面的 `data.ts` 或共享配置模块，使用 Vue 原生对象绑定；高频数据仍保持显式：
+业务确有较多实例属性时，把稳定行为放进页面的 `data.ts` 或共享配置模块，使用 Vue 原生对象绑定；高频数据仍保持显式：
 
 ```vue
 <MachTable
@@ -156,7 +155,6 @@ provideMachTableConfig(() => ({
   :row-data="rows"
   row-key="id"
   row-selection="multiple"
-  enable-column-resize
   :persistence="{ key: 'tenant:user:orders' }"
   @selection-changed="onSelectionChanged"
   @grid-error="reportGridError"

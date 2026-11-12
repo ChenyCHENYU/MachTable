@@ -35,7 +35,6 @@ export function Employees({ rows }: { rows: Employee[] }) {
         rowData={rows}
         rowKey="id"
         rowSelection="multiple"
-        enableColumnResize
         persistence={{ key: "tenant:user:employees" }}
         onSelectionChanged={(event) => console.log(event.selectedRows.length)}
       />
@@ -58,36 +57,44 @@ export function Employees({ rows }: { rows: Employee[] }) {
 
 对象型列定义和配置建议使用 `useMemo` 保持引用稳定。适配器会比较 Option 值，仅把实际变化合并为一次 `updateOptions()`；事件调用始终读取最新闭包。组件卸载与 StrictMode 重挂载会安全销毁实例。
 
-## 应用与路由配置
+## 可选的应用与路由配置
 
-React 不提供全局组件注册，使用类型安全的 Provider 管理应用约定：
+普通页面直接使用组件即可。项目需要统一主题、密度或某个场景差异时，再用 Provider 管理约定：
 
 ```ts
 // src/config/mach-table.config.ts
-import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-react";
+import { createMachTablePreset, defineMachTableConfig } from "@agile-team/mach-table-react";
 
 export default defineMachTableConfig({
-  defaults: {
-    size: "compact",
-    columnLayout: "fit",
-    enableColumnResize: true,
-    defaultColDef: { sortable: true, filter: true, resizable: true }
-  },
-  defaultPreset: "list",
+  defaults: { theme: "auto", size: "compact", stripedRows: true },
   presets: {
-    list: defineMachTablePreset({ stripedRows: true }),
-    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+    detail: createMachTablePreset("detail", { maxBodyHeight: 240 })
   }
 });
 ```
 
 ```tsx
+import { MachTableProvider } from "@agile-team/mach-table-react";
+import machTableConfig from "@/config/mach-table.config";
+
 <MachTableProvider config={machTableConfig}>
   <App />
 </MachTableProvider>
 ```
 
 Provider 可以按路由/布局嵌套，最近一层覆盖外层，表格 props 优先级最高。配置对象放在模块级或用 `useMemo` 稳定引用。详见[配置中心](/guide/configuration)。
+
+## 同页主表与明细
+
+```tsx
+<MachTable columnDefs={orderColumns} rowData={orders} rowKey="id" />
+<MachTable preset="detail" columnDefs={materialColumns} rowData={basketA} rowKey="id" />
+<MachTable preset="detail" columnDefs={materialColumns} rowData={basketB} rowKey="id" />
+```
+
+场景按用途选择，不根据数据行数猜测。`list` 默认表头工具和分页，`detail` 默认纯文字表头、只读、内容高度与 330px 表体上限，两者都保留序号。单列 `editable: true` 或表格 props 可覆盖差异；只读不承担权限校验。
+
+全局 `defaultPreset: false` 或单表 `preset={false}` 可退出。切换会回退高度、分页和工具默认值，不额外清除业务排序、筛选或选择；改变列配置仍按既有生命周期重建编辑器，应先完成保存或放弃草稿。完整规则见[场景与配置](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/configuration.md)。
 
 ## 路由级按需加载
 

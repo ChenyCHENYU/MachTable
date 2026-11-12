@@ -1,5 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import type { WatermarkConfig } from "../types/options";
+import { el } from "../lib/dom";
 
 type WatermarkContext = Pick<GridCore<any>, "isDisposed" | "gridOptions" | "skeleton">;
 
@@ -10,8 +11,7 @@ export class WatermarkService {
   constructor(private core: WatermarkContext) {}
 
   init(): void {
-    this.overlay = document.createElement("div");
-    this.overlay.className = "mach-watermark";
+    this.overlay = el("div", "mach-watermark");
     this.overlay.setAttribute("aria-hidden", "true");
     this.overlay.style.pointerEvents = "none";
     this.core.skeleton.root.appendChild(this.overlay);
@@ -38,7 +38,7 @@ export class WatermarkService {
 
   private buildTile(config: WatermarkConfig): string | null {
     try {
-      const canvas = document.createElement("canvas");
+      const canvas = el("canvas");
       const ctx = canvas.getContext("2d");
       if (!ctx) return null;
       const fontSize = config.fontSize ?? 14;

@@ -4,9 +4,9 @@
 
 # @agile-team/mach-table-react
 
-MachTable 0.39.2 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
+MachTable 0.40.0 的官方 React 18+ 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、应用/路由配置、按需工作流、StrictMode 安全清理和最新闭包事件处理。
 
-本地明细设置 `domLayout="autoHeight" maxBodyHeight={330}` 即可随内容收起，超过 330px 的表体进入虚拟滚动。表内筛选无匹配时可在默认空态中清除筛选。分页继续使用内置分页条。
+不传 `preset` 默认主列表 `list`；小明细只加 `preset="detail"`，保留序号、纯文字表头、默认只读、不分页，按内容收起，表体超过 330px 后虚拟滚动。无需先配置 Provider，主题与密度继续共享。
 
 ```bash
 pnpm add @agile-team/mach-table-react
@@ -22,12 +22,11 @@ import "@agile-team/mach-table-react/styles.css";
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, type ColDef } from "@agile-team/mach-table-react";
 
 interface Row { id: string; name: string }
 
 export function Customers({ rows }: { rows: Row[] }) {
-  const table = useMachTable<Row>();
   const columns = useMemo<ColDef<Row>[]>(
     () => [{ field: "name", flex: 1, editable: true }],
     []
@@ -36,12 +35,9 @@ export function Customers({ rows }: { rows: Row[] }) {
   return (
     <div style={{ height: 520 }}>
       <MachTable<Row>
-        apiRef={table.apiRef}
         rowData={rows}
         columnDefs={columns}
         rowKey="id"
-        enableColumnResize
-        persistence={{ key: "customers:list", sections: ["columns"] }}
       />
     </div>
   );
@@ -50,38 +46,46 @@ export function Customers({ rows }: { rows: Row[] }) {
 
 对象型列和配置建议用 `useMemo` 保持引用稳定。`useMachTable()` 同时提供 `apiRef`、响应式 `api` 与 `ready`。
 
-默认显示序号和内置分页，可通过 `rowNumber={false}`、`pagination={false}` 分别关闭。需要定制序号时直接声明 `indexColumn()`。
+默认 `list` 显示序号和内置分页，可通过 `rowNumber={false}`、`pagination={false}` 分别关闭。需要定制序号时直接声明 `indexColumn()`。
 
-## 应用配置
+## 可选的应用配置
 
 ```ts
 // src/config/mach-table.config.ts
-import { defineMachTableConfig, defineMachTablePreset } from "@agile-team/mach-table-react";
+import { createMachTablePreset, defineMachTableConfig } from "@agile-team/mach-table-react";
 
 export default defineMachTableConfig({
-  defaults: {
-    size: "compact",
-    columnLayout: "fit",
-    enableColumnResize: true,
-    defaultColDef: { sortable: true, filter: true, resizable: true }
-  },
-  defaultPreset: "list",
+  defaults: { theme: "auto", size: "compact", stripedRows: true },
   presets: {
-    list: defineMachTablePreset({ stripedRows: true }),
-    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
+    detail: createMachTablePreset("detail", { maxBodyHeight: 240 })
   }
 });
 ```
 
 ```tsx
+import { MachTableProvider } from "@agile-team/mach-table-react";
+import machTableConfig from "@/config/mach-table.config";
+
 <MachTableProvider config={machTableConfig}>
   <App />
 </MachTableProvider>
 ```
 
-Provider 可按路由/布局嵌套，最近一层覆盖外层，表格 props 优先级最高。
+直接使用组件即可获得默认场景；只有项目存在统一差异时才使用上面的 Provider。已有同名自定义 preset 完整优先，继承内置场景用 composer。Provider 可按路由/布局嵌套，最近一层覆盖外层，单表 props 优先级最高。
 
 编辑、粘贴、清空和填充复用已有列与整行校验。`useMachTableEditing()` 隔离重挂载或数据替换前的保存结果、错误和冲突；查询工作流在 StrictMode 下保留 `immediate: false`，重复设置相同搜索值不会重新请求。
+
+## 同页主表与明细
+
+```tsx
+<MachTable columnDefs={orderColumns} rowData={orders} rowKey="id" />
+<MachTable preset="detail" columnDefs={materialColumns} rowData={basketA} rowKey="id" />
+<MachTable preset="detail" columnDefs={materialColumns} rowData={basketB} rowKey="id" />
+```
+
+场景按用途选择，不根据数据行数猜测。`list` 默认表头工具和分页，`detail` 默认纯文字表头、只读、内容高度与 330px 表体上限，两者都保留序号。单列 `editable: true` 或表格 props 可覆盖差异；只读不承担权限校验。
+
+全局 `defaultPreset: false` 或单表 `preset={false}` 可退出。切换会回退高度、分页和工具默认值，不额外清除业务排序、筛选或选择；改变列配置仍按既有生命周期重建编辑器，应先完成保存或放弃草稿。完整规则见[场景与配置](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/guide/configuration.md)。
 
 ## 按需加载
 
@@ -114,7 +118,7 @@ const query = useMachTableQuery({
   mode: "manual"
 });
 
-<MachTable<Row> apiRef={table.apiRef} columnDefs={columns} {...query.bindings} />;
+<MachTable<Row> columnDefs={columns} {...query.bindings} />;
 ```
 
 该包自动依赖 `@agile-team/mach-table` 并重导出 Core 类型；宿主只需提供 `react` 和 `react-dom >= 18`。

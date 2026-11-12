@@ -204,6 +204,7 @@ export class HeaderRenderer {
     }
     if (output instanceof HTMLElement) output = { el: output };
     const label = el("span", "mach-header-label");
+    if (!column.sortable && !column.movable) label.style.cursor = "default";
     if (output && typeof output === "object" && output.el instanceof HTMLElement) {
       label.classList.add("mach-header-label--custom");
       label.appendChild(output.el);
@@ -415,13 +416,13 @@ export class HeaderRenderer {
 
   refreshSortIndicators(): void {
     const model = this.core.columnModel.getSortModel();
-    const multi = model.length > 1;
     for (const hc of this.leafCells) {
       const idx = model.findIndex((s) => s.colId === hc.column.id);
       if (idx >= 0) {
         const dir = model[idx].direction;
-        const badge = multi ? `<span class="mach-sort-badge">${idx + 1}</span>` : "";
-        hc.sortEl.innerHTML = (dir === "asc" ? SORT_ASC_ICON : SORT_DESC_ICON) + badge;
+        hc.sortEl.innerHTML = hc.column.sortable
+          ? (dir === "asc" ? SORT_ASC_ICON : SORT_DESC_ICON) + (model.length > 1 ? `<span class="mach-sort-badge">${idx + 1}</span>` : "")
+          : "";
         hc.el.setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
         hc.el.classList.add("mach-header-cell--sorted");
       } else {

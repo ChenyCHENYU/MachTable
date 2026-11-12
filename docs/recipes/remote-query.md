@@ -4,78 +4,50 @@
 
 ## 标准页面
 
+下面假定项目接口 `getOrderPageApi` 已返回 `{ rows, total }`，并接收查询工作流的参数。已有接口形态不同时，在项目接口层转换一次，见下方请求协议。
+
 ```vue
 <script setup lang="ts">
 import { reactive } from "vue";
-import { selectionColumn, type ColDef } from "@agile-team/mach-table-vue";
+import { MachTable, type ColDef } from "@agile-team/mach-table-vue";
 import { useMachTableQuery } from "@agile-team/mach-table-vue/workflows";
+import { getOrderPageApi } from "@/api/orders";
 
-interface Order {
-  orderId: string;
-  customer: string;
-  amount: number;
-}
-
+interface Order { orderId: string; customer: string; amount: number }
 const query = reactive({ keyword: "", status: "" });
 const table = useMachTableQuery<Order, typeof query>({
   query,
   rowKey: "orderId",
-  pageSize: 20,
-  pageSizeOptions: [20, 50, 100, 200],
-  debounceMs: 200,
-  selectionScope: "preserve",
-  request: async ({ page, pageSize, query, sortModel, filterModel, advancedFilterModel, signal }) => {
-    const response = await orderApi.page({
-      ...query,
-      page,
-      size: pageSize,
-      sort: sortModel,
-      filters: filterModel,
-      expression: advancedFilterModel
-    }, { signal });
-    return { rows: response.records, total: response.total };
-  },
-  onError: (error) => telemetry.captureException(error)
+  request: getOrderPageApi
 });
-
-// 在模板中 v-bind 时先解构，Vue 会自动解包 computed。
-const { bindings, error, retry } = table;
-
+const { bindings } = table;
 const columns: ColDef<Order>[] = [
-  selectionColumn(),
   { field: "orderId", headerName: "订单号", pinned: "left" },
   { field: "customer", headerName: "客户", flex: 1 },
-  { field: "amount", headerName: "金额", type: "money" }
+  { field: "amount", headerName: "金额" }
 ];
 </script>
 
 <template>
-  <MachTable preset="list" v-bind="bindings" :column-defs="columns">
-    <template #empty>
-      <AppError
-        v-if="error"
-        :error="error"
-        @retry="retry"
-      />
-      <AppEmpty v-else description="暂无订单" />
-    </template>
-  </MachTable>
+  <div style="height: 560px">
+    <MachTable v-bind="bindings" :column-defs="columns" />
+  </div>
 </template>
 ```
 
-页面不再需要 `grid-ready`、`gridApi`、外部分页器、手动 `loading` 或请求序号。
+默认就是 `list`，无需声明场景、外部分页器、手动 `loading` 或请求序号。`bindings` 连接服务端分页、排序、过滤、加载和错误状态，表格继续使用内置 Overlay；标准页面不需要重复写 `#empty` 插槽。查询失败后可调用 `table.retry()`；内置错误文案不代表自动提供了重试按钮。
 
-如果不想写 `#empty` 插槽，可直接配置统一错误/空态；错误工厂会收到可调用的 `retry()`：
+需要防抖时再加 `debounceMs`；需要不同页大小时再加 `pageSize/pageSizeOptions`。品牌化空态或就地重试按钮也按需提供：
 
 ```ts
 useMachTableQuery({
-  // ...
+  // ...query、rowKey、request
   emptyOverlay: "暂无订单",
   errorOverlay: ({ retry }) => createRequestErrorPanel({ onRetry: retry })
 });
 ```
 
-`bindings` 会自动把 loading、空态和错误态交给表格 Overlay；业务也仍可读取 `error`/`retry` 自定义整页状态。
+这里的 `createRequestErrorPanel` 是项目自己的 UI 函数。请求库、错误提示组件和业务权限都不植入表格包。若显式提供 `#error` 或 `#empty`，对应 slot 会按既有规则优先使用。
 
 ## 自动与手动查询
 
@@ -119,6 +91,27 @@ interface MachTablePageRequest<TQuery> {
 { rows: TData[]; total: number }
 ```
 
+例如项目的 `getOrdersApi` 实际返回 `{ records, total }`，则在接口层完成映射。下面只示意这个已声明的响应结构；如果 HTTP 客户端还包了一层 `data`，应在项目现有请求层按真实协议解包。
+
+```ts
+import type { MachTablePageRequest } from "@agile-team/mach-table-vue/workflows";
+
+export async function getOrderPageApi(params: MachTablePageRequest<OrderFilters>) {
+  const response = await getOrdersApi({
+    ...params.query,
+    page: params.page,
+    size: params.pageSize,
+    sort: params.sortModel,
+    filters: params.filterModel,
+    expression: params.advancedFilterModel,
+    quickFilter: params.quickFilterText
+  }, { signal: params.signal });
+  return { rows: response.records, total: response.total };
+}
+```
+
+应用已有接口若直接满足 `{ rows, total }`，直接传给 `request`，不再加一层转换。
+
 新查询开始时会立即中止旧请求；即使后端或请求库忽略 `AbortSignal`，旧 `reload()` 的等待也会结束，晚到的旧响应不会覆盖新数据。接口层仍应使用 `signal` 释放实际网络或计算资源。返回结构、空行 ID 和重复行 ID 在接受结果前校验，错误进入 `table.error`，保留上一份有效结果与选择状态，可通过 `retry()` 恢复。
 
 ## 查询与刷新
@@ -140,7 +133,7 @@ table.selectedRows.value; // 已加载过的对应业务对象
 table.clearSelection();
 ```
 
-设置 `"page"` 时，翻页后的新选择会替换上一页选择。百万级“全选当前查询”使用紧凑规则，不会把所有 ID 下载到浏览器：
+需要复选框时，在业务列加入 `selectionColumn()`，并为表格声明 `rowSelection: "multiple"`；场景不会替业务开启多选。设置 `"page"` 时，接受新页后只保留该页仍存在的已选 ID，同页刷新保留相同 ID。百万级“全选当前查询”使用紧凑规则，不会把所有 ID 下载到浏览器：
 
 ```ts
 const table = useMachTableQuery({

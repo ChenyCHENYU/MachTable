@@ -241,7 +241,7 @@ export class FilterPopupService {
         if (q && !text.toLowerCase().includes(q)) continue;
         const key = setValueKey(v);
         const label = el("label", "mach-filter-set-item");
-        const cb = document.createElement("input");
+        const cb = el("input");
         cb.type = "checkbox";
         cb.checked = selected.has(key);
         cb.addEventListener("change", () => {

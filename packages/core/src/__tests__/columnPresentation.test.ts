@@ -14,6 +14,26 @@ function grid(options: Parameters<typeof createGrid>[1]) {
 const width = (api: GridApi, id: string) => api.columns.getState().find(col => col.colId === id)!.width!;
 afterEach(() => { grids.splice(0).forEach(api => api.destroy()); document.body.replaceChildren(); vi.restoreAllMocks(); });
 
+it("keeps noninteractive headers plain without clearing programmatic sort state", () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const api = createGrid<{ id: string; name: string }>(host, {
+    rowKey: "id", columnMenu: false, enableColumnResize: false,
+    defaultColDef: { sortable: false, filter: false, movable: false },
+    columnDefs: [{ field: "name", headerName: "实绩项目" }],
+    rowData: [{ id: "a", name: "A" }, { id: "b", name: "B" }]
+  });
+  grids.push(api);
+  api.sorting.setModel([{ colId: "name", direction: "desc" }]);
+  const header = host.querySelector<HTMLElement>(".mach-header-cell[data-col-id='name']")!;
+  expect(api.sorting.getModel()).toEqual([{ colId: "name", direction: "desc" }]);
+  expect(api.rows.getAt(0)?.data?.name).toBe("B");
+  expect(header.getAttribute("aria-sort")).toBe("descending");
+  expect(header.querySelector(".mach-sort-indicator")?.textContent).toBe("");
+  expect(header.querySelector(".mach-sort-indicator svg, .mach-filter-btn, .mach-menu-btn, .mach-header-resize")).toBeNull();
+  expect(header.querySelector<HTMLElement>(".mach-header-label")!.style.cursor).toBe("default");
+});
+
 it("defaults to bounded content widths, preserving declared, disabled and manually resized widths", () => {
   const { api } = grid({
     columnDefs: [

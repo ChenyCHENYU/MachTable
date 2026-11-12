@@ -3,10 +3,46 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.39.2
+pnpm up @agile-team/mach-table-vue@^0.40.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.39.2
+pnpm up @agile-team/mach-table-react@^0.40.0
 ```
+
+## 0.39.2 → 0.40.0
+
+### 默认主列表与内置明细
+
+Vue/React 不传 `preset` 时改为内置 `list`：保留原有序号和分页，新增默认列筛选、列设置与列宽调整。不会自动加入复选框、状态条或右键菜单。主表不用新增 `preset="list"`、配置文件或二次组件外壳。
+
+同页小明细只需 `preset="detail"`：保留序号、纯文字表头、默认只读、不分页，按内容高度收起，表体超过 330px 后虚拟滚动。主题、密度、边框、斑马纹和 `columnLayout` 不随场景强制改变。单列 `editable: true`、单表 props 仍可覆盖业务差异；只读默认不是权限校验。
+
+### 旧项目保留原有表头默认
+
+未声明过 preset 的旧页面会获得新的默认表头能力。需要先维持原有交互时，在项目配置中显式退出：
+
+```ts
+defineMachTableConfig({ defaultPreset: false });
+```
+
+单张表使用 Vue `:preset="false"` 或 React `preset={false}`，仍继承应用 defaults 和显式 props。`false` 与空预设数组都不会退回默认 `list`。
+
+已有同名自定义 `list/detail` 完整优先，不会自动叠加新场景。希望继承内置再统一修改时：
+
+```ts
+presets: {
+  detail: createMachTablePreset("detail", { maxBodyHeight: 240 })
+}
+```
+
+优先级为原生基底 → 合并后的公共 defaults → 选中的场景/自定义预设 → 单表 props。公共 `columnMenu` 等场景行为会被选中的场景覆盖；统一改某个场景时使用上面的显式继承，通用主题和密度继续放在 defaults。
+
+### 切换与数据边界
+
+`detail → list/false` 会明确回退场景负责的高度、分页、工具和默认列配置，避免旧开关粘留。场景不会额外清空业务排序、筛选或选择；非交互表头即使保留程序化排序，也按纯文字呈现并保留排序的可访问语义。配置变化仍遵循既有生命周期：列配置重建会取消未提交的编辑草稿，应在业务确认保存或放弃后切换用途，不把场景切换当作编辑保存。
+
+裸 Core `createGrid()` 的低层默认不变。显式使用场景时调用 `createGrid(host, createMachTablePreset("list", options))`，同样支持 `"detail"`。原有纯对象 composer 调用保持兼容。
+
+数据与请求继续由 `rowData` 或现有 `/workflows` 组合，不新增 HTTP、字典耦合，也不按记录数量自动猜场景。细节见[场景与配置](/guide/configuration)和[远程查询](/recipes/remote-query)。
 
 ## 0.39.1 → 0.39.2
 

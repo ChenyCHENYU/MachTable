@@ -1,6 +1,6 @@
 # 企业级项目接入手册
 
-本文面向真实 B 端项目落地，覆盖依赖、目录、全局约定、页面封装、远程查询、编辑保存、状态、监控、测试和上线。示例以 `0.28.x` 为基线。
+本文面向 0.40.x 的 B 端项目接入。先直接使用组件和已有工作流，再按实际需要增加统一约定；不要求先写配置文件或二次封装表格。
 
 ## 1. 接入前决策
 
@@ -13,7 +13,7 @@
 | 连续向下加载的日志/动态 | 默认 `datasourceMode: "sequential"` |
 | 百万级、滚动条任意跳转 | `datasourceMode: "block"` + 已知总量 |
 | 组织、目录、物料分类 | `treeData` + `loadTreeChildren` |
-| 小型详情表、无需虚拟滚动 | `domLayout: "autoHeight"` |
+| 同页多张本地小明细表 | `preset="detail"`，内容高度与 330px 表体上限已内置 |
 
 不要把服务端分页、无限追加、随机块和懒加载树混在同一个实例中。优先选择满足需求的最小模型。
 
@@ -22,9 +22,9 @@
 业务只安装一个框架适配包：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.29.2
+pnpm add @agile-team/mach-table-vue@^0.40.0
 # 或
-pnpm add @agile-team/mach-table-react@^0.29.2
+pnpm add @agile-team/mach-table-react@^0.40.0
 ```
 
 适配包自动安装匹配的 Core。Vue 项目只需提供 `vue >= 3.2`；React 项目提供 `react/react-dom >= 18`。
@@ -36,93 +36,50 @@ pnpm add @agile-team/mach-table-react@^0.29.2
 - 在预发布环境跑关键表格的业务回归与浏览器矩阵。
 - 主题 CSS 只在应用入口导入一次。
 
-## 3. 推荐目录
+## 3. 按业务组织代码
 
 ```text
 src/
-├─ config/
-│  └─ mach-table.config.ts       # 全局约定、预设、语义列
-├─ components/table/
-│  ├─ AppTable.vue|tsx           # 可选：组织级薄封装
-│  ├─ table-errors.ts            # 错误与遥测映射
-│  └─ table-permissions.ts       # 操作策略
-├─ api/
-│  └─ orders.ts                  # 服务端接口
+├─ api/orders.ts              # 使用项目既有 HTTP 客户端，必要时转换响应
 ├─ views/orders/
-│  ├─ columns.ts                 # 业务列
-│  ├─ OrdersPage.vue|tsx
-│  └─ orders.types.ts
+│  ├─ columns.ts              # 业务列、显示与校验
+│  └─ OrdersPage.vue|tsx      # 搜索、表格和业务操作的组合
+├─ config/mach-table.config.ts # 可选：只有项目统一差异才需要
 └─ main.ts|tsx
 ```
 
-组织级封装应保持“薄”：统一容器、空状态、错误遥测和少量强约定即可。不要二次复制全部 `GridOptions`，也不要隐藏 `GridApi` 的领域结构。
+组件已提供主题、加载/空态、分页与配置覆盖。使用 `<MachTable>` 组合项目已有搜索、表单、弹窗和按钮即可；不必再造 `AppTable` 来转发一遍全部参数。
 
-## 4. 应用配置中心
+## 4. 默认场景与可选统一约定
+
+Vue/React 不传 `preset` 就是 `list`，主表只传列和数据；小明细只加 `preset="detail"`，同页可以并排多张。场景不根据行数猜测，不会因为异步加载先返回零行而改变模式。
+
+```vue
+<MachTable :column-defs="orderColumns" :row-data="orders" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketA" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketB" row-key="id" />
+```
+
+主表默认保留序号、分页、筛选、列设置与列宽调整，不自动添加复选框。明细保留序号，默认纯文字表头、只读、不分页，按内容收起，表体超过 330px 后虚拟滚动。业务列的 `editable: true` 或单表 props 可覆盖默认行为；只读不承担权限校验。
+
+同项目希望统一密度、主题或明细高度时，再配置一次：
 
 ```ts
-// src/config/mach-table.config.ts
-import {
-  createBusinessColumnTypes,
-  defineMachTableConfig,
-  defineMachTablePreset
-} from "@agile-team/mach-table-vue"; // React 项目改为 -react
+import { createMachTablePreset, defineMachTableConfig } from "@agile-team/mach-table-vue";
 
 export default defineMachTableConfig({
-  defaults: {
-    size: "compact",
-    theme: "auto",
-    columnLayout: "fit",
-    enableColumnResize: true,
-    defaultColDef: {
-      minWidth: 100,
-      sortable: true,
-      resizable: true,
-      movable: true,
-      filter: true
-    },
-    pagination: {
-      pageSize: 20,
-      pageSizeOptions: [20, 50, 100],
-      showTotal: true,
-      showPageSizeSelector: true
-    },
-    onGridError: ({ code, error, source }) => {
-      telemetry.captureException(error, { tags: { code, source } });
-    }
-  },
-  defaultPreset: "list",
+  defaults: { theme: "auto", size: "compact", stripedRows: true },
   presets: {
-    list: defineMachTablePreset({ stripedRows: true, columnMenu: true }),
-    crud: defineMachTablePreset({
-      rowSelection: "multiple",
-      editType: "fullRow",
-      enableRangeSelection: true,
-      statusBar: true
-    }),
-    picker: defineMachTablePreset({ rowSelection: "multiple" })
-  },
-  columnTypes: createBusinessColumnTypes({
-    locale: "zh-CN",
-    currency: "CNY",
-    timeZone: "Asia/Shanghai"
-  }),
-  onConfigWarning: (warning) => telemetry.captureMessage(warning.message)
+    detail: createMachTablePreset("detail", { maxBodyHeight: 240 })
+  }
 });
 ```
 
-实例数据、列、请求状态、初始状态和持久化身份不能放进 defaults/preset。严格配置会尽早报错，避免跨租户串状态。
+React 使用 `-react` 包的同名 API。已有项目的同名自定义 preset 完整优先；需要继承内置场景时使用上面的 composer，不会把一份旧自定义预设悄悄变为另一套行为。
 
-Vue 安装：
+Vue 可直接 `app.use(MachTablePlugin)`，有统一约定才传第二个配置参数。React 可以直接使用组件，有统一约定才增加 `MachTableProvider`。公共 defaults、选中的场景和单表 props 从低到高覆盖；主题、密度、斑马纹、边框和宽度布局独立于场景。全局 `defaultPreset: false` 或单表 `preset={false}` 可退出默认场景，Vue 对应 `:preset="false"`。
 
-```ts
-app.use(MachTablePlugin, machTableConfig);
-```
-
-React 安装：
-
-```tsx
-<MachTableProvider config={machTableConfig}><App /></MachTableProvider>
-```
+数据、列、请求状态、初始状态和持久化身份属于表格实例，不进入公共 defaults/preset。完整配置边界见[配置中心](/guide/configuration)。
 
 ## 5. 稳定行身份
 
@@ -155,117 +112,69 @@ import {
 export const orderColumns = defineColumns<Order>([
   { field: "orderNo", headerName: "订单号", width: 150, pinned: "left" },
   { field: "customerName", headerName: "客户", minWidth: 180, flex: 1, filter: "text" },
-  { field: "amount", headerName: "金额", type: "currency", editable: canEditAmount },
+  { field: "amount", headerName: "金额", type: "money", editable: canEditAmount },
   { field: "status", headerName: "状态", type: "status" },
   rowActionsColumn({
-    onView: ({ data }) => router.push(`/orders/${data.id}`),
+    onView: ({ data }) => openOrderDetail(data),
     onEdit: permissions.can("order.edit") ? openEdit : undefined,
     onDelete: permissions.can("order.delete") ? remove : undefined,
     overflow: "drawer",
-    actions: domainActions
+    extraActions: domainActions
   })
 ]);
 ```
 
-高频查看/编辑/删除使用内置图标；更多动作进入菜单或抽屉。没有通用动作的页面可以只传 `actions`，不会出现空占位按钮。
+高频查看/编辑/删除使用内置图标，详情弹窗由项目的 `openOrderDetail` 提供；更多动作进入菜单或抽屉。`type: "money"` 等语义列需在项目配置中注册 `createBusinessColumnTypes()`；无统一列类型时直接使用普通字段和通用 formatter。
 
 前端可见性不是安全边界，后端必须再次校验权限。
 
-## 7. Vue 页面模板
+## 7. Vue 标准远程页面
+
+假定项目的 `getOrderPageApi` 已返回 `{ rows, total }`；协议不同只在接口层转换一次。
 
 ```vue
 <script setup lang="ts">
+import { reactive } from "vue";
 import { MachTable } from "@agile-team/mach-table-vue";
-import { useMachTableController } from "@agile-team/mach-table-vue/workflows";
-import { MachTableToolbar } from "@agile-team/mach-table-vue/ui";
+import { useMachTableQuery } from "@agile-team/mach-table-vue/workflows";
+import { getOrderPageApi } from "@/api/orders";
 import { orderColumns } from "./columns";
 
-const controller = useMachTableController<Order, OrderFilters>({
-  query: {
-    query: () => filters.value,
-    rowKey: "id",
-    request: orderApi.page,
-    mode: "manual",
-    keepPreviousData: true,
-    selectionScope: "query"
-  },
-  editing: { guardBeforeUnload: true }
-});
+const filters = reactive({ keyword: "" });
+const query = useMachTableQuery({ query: filters, rowKey: "id", request: getOrderPageApi });
+const { bindings } = query;
 </script>
 
 <template>
-  <section class="orders-page">
-    <MachTableToolbar
-      v-model="controller.search.value"
-      :api="controller.table.api.value"
-      :commands="controller.commands"
-      :loading="controller.busy.value"
-      :selected-count="controller.selectedCount.value"
-    />
-    <div class="orders-page__grid">
-      <MachTable
-        :ref="controller.table.ref"
-        preset="crud"
-        :column-defs="orderColumns"
-        v-bind="controller.bindings.value"
-        :persistence="{ key: stateKey }"
-      />
-    </div>
-  </section>
+  <div style="height: 560px">
+    <MachTable v-bind="bindings" :column-defs="orderColumns" />
+  </div>
 </template>
-
-<style scoped>
-.orders-page { min-height: 0; height: 100%; display: flex; flex-direction: column; }
-.orders-page__grid { min-height: 0; flex: 1; }
-</style>
 ```
 
-## 8. React 页面模板
+搜索表单直接修改 `filters`；需要“点查询后提交”时再设 `mode: "manual"`，按钮调用 `query.reload({ resetPage: true })`。表格内置分页和 Overlay 直接工作，不重复维护 loading、分页状态或空态模板。
+
+## 8. React 标准远程页面
 
 ```tsx
-import { useMemo } from "react";
 import { MachTable } from "@agile-team/mach-table-react";
-import { useMachTableController, useMachTableQuery } from "@agile-team/mach-table-react/workflows";
-import { MachTableToolbar } from "@agile-team/mach-table-react/ui";
+import { useMachTableQuery } from "@agile-team/mach-table-react/workflows";
+import { getOrderPageApi } from "@/api/orders";
+import { orderColumns } from "./columns";
 
-export function OrdersPage() {
-  const columns = useMemo(() => createOrderColumns(actions), [actions]);
-  const query = useMachTableQuery<Order, OrderFilters>({
-    query: filters,
-    queryKey: filters,
-    rowKey: "id",
-    request: orderApi.page,
-    mode: "manual",
-    keepPreviousData: true,
-    selectionScope: "query"
-  });
-  const controller = useMachTableController<Order>({ query });
-
-  return <section className="orders-page">
-    <MachTableToolbar
-      api={controller.table.api}
-      commands={controller.commands}
-      search={controller.search}
-      onSearchChange={controller.setSearch}
-      loading={controller.busy}
-      selectedCount={controller.selectedCount}
-    />
-    <div className="orders-page__grid">
-      <MachTable<Order>
-        apiRef={controller.table.apiRef}
-        preset="crud"
-        columnDefs={columns}
-        persistence={{ key: stateKey }}
-        {...controller.bindings}
-      />
-    </div>
-  </section>;
+export function OrdersPage({ filters }: { filters: OrderFilters }) {
+  const query = useMachTableQuery({ query: filters, queryKey: filters, rowKey: "id", request: getOrderPageApi });
+  return <div style={{ height: 560 }}>
+    <MachTable columnDefs={orderColumns} {...query.bindings} />
+  </div>;
 }
 ```
 
+React 的 query 对象应保持稳定引用，或用 `queryKey` 明确请求条件变化。已有复杂的编辑、选择和工具栏组合，再使用 `useMachTableController`；它复用同一套查询/编辑工作流，无需增加项目自己的表格状态机。
+
 ## 9. 远程查询协议
 
-`useMachTableQuery` 的请求收到完整且可取消的参数：
+`useMachTableQuery` 的请求收到完整且可取消的参数。以下假定项目 HTTP 客户端直接返回 `{ records, total }`；按真实返回结构解包，不把任意服务端响应当成同一种 envelope：
 
 ```ts
 async function page(params: MachTablePageRequest<OrderFilters>) {
@@ -279,7 +188,7 @@ async function page(params: MachTablePageRequest<OrderFilters>) {
     keyword: params.quickFilterText
   }, { signal: params.signal });
 
-  return { rows: response.items, total: response.total };
+  return { rows: response.records, total: response.total };
 }
 ```
 
@@ -321,7 +230,7 @@ if (result.conflicts.length) {
 
 ## 11. 状态与列宽记忆
 
-列宽交互默认关闭，应用配置可统一开启。持久化只有一个配置入口：
+适配器默认 `list` 已开启列宽交互，`detail` 关闭；Core 裸 `createGrid()` 保留原来的低层默认。持久化只有一个配置入口，不配置就不会写存储：
 
 ```ts
 const stateKey = `${appId}:${tenantId}:${userId}:orders:v2`;
@@ -393,12 +302,8 @@ api.batch((grid) => {
 - 可抽样的 `api.diagnostics.getPerformance()`。
 
 ```ts
-const snapshot = api.diagnostics.get();
-telemetry.gauge("grid.render.p95", snapshot.performance.p95RenderMs, {
-  gridId: snapshot.gridId,
-  rows: snapshot.rowCount,
-  columns: snapshot.columnCount
-});
+const performance = api.diagnostics.getPerformance();
+telemetry.gauge("grid.render.p95", performance.p95RenderMs);
 ```
 
 诊断快照用于排错和测试，不作为业务真相源。
@@ -439,12 +344,12 @@ telemetry.gauge("grid.render.p95", snapshot.performance.p95RenderMs, {
 - [ ] 只安装一个框架适配包并锁定 lockfile
 - [ ] 应用入口只引入一次样式
 - [ ] 每个生产表格提供稳定 `rowKey`
-- [ ] 默认虚拟布局容器具有明确高度和 `min-height: 0`
+- [ ] 主列表虚拟布局容器具有明确高度和 `min-height: 0`，小明细使用 `detail` 或明确高度策略
 - [ ] 实例数据/状态未进入全局 defaults 或 preset
 - [ ] 持久化 key 包含租户、用户、场景和 schema 版本
 - [ ] 远程请求透传 AbortSignal，并校验返回结构
 - [ ] 服务端白名单校验排序、过滤和高级 AST
-- [ ] 编辑失败、冲突、回滚与离页流程已验收
+- [ ] 编辑失败、冲突、回滚与离页流程已验收；改变列配置或场景前处理未提交草稿
 - [ ] 权限在后端再次校验
 - [ ] `gridError` 和核心请求指标进入监控
 - [ ] 关键流程通过浏览器矩阵和路由反复挂载测试
@@ -452,9 +357,9 @@ telemetry.gauge("grid.render.p95", snapshot.performance.p95RenderMs, {
 
 ## 17. 推荐渐进落地
 
-1. 先选择一个典型 CRUD 列表接入配置中心、查询与持久化。
+1. 先选择一个典型 CRUD 列表接入组件和查询，按需要增加持久化与统一配置。
 2. 验证设计系统、权限、监控和错误处理。
-3. 沉淀薄封装、列工厂和请求适配器。
+3. 只将实际重复的业务列、请求协议转换和公共差异沉淀到已有组合点。
 4. 扩展到编辑、树、详情和大数据页面。
 5. 用真实性能与业务证据决定是否启用 Worker 或随机块模型。
 

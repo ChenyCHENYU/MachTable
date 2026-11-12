@@ -4,29 +4,27 @@
 
 # @agile-team/mach-table
 
-MachTable 0.39.2 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。通过 `rowNumber: true` 启用自动序号，内置分页默认开启。
+MachTable 0.40.0 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。裸 `createGrid()` 保留原有低层默认值：分页开启，序号按 `rowNumber: true` 启用。通过 `createMachTablePreset("list" | "detail", options)` 可显式使用与适配器一致的场景。
 
-本地明细使用 `domLayout: "autoHeight"` 随当前页内容收起。加上 `maxBodyHeight: 330`，超过 330px 的表体会使用虚拟滚动。表内筛选无匹配时，默认空态提供清除筛选；业务自定义空态优先。
+`list` 提供序号、列筛选、列设置与列宽调整；`detail` 保留序号、默认只读和纯文字表头，关闭分页并按内容收起，表体超过 330px 后使用虚拟滚动。表内筛选无匹配时，默认空态提供清除筛选；业务自定义空态优先。
 
 ```bash
 pnpm add @agile-team/mach-table
 ```
 
 ```ts
-import { createGrid, indexColumn } from "@agile-team/mach-table";
+import { createGrid, createMachTablePreset } from "@agile-team/mach-table";
 import "@agile-team/mach-table/styles/mach-table.css";
 
-const api = createGrid(document.querySelector("#grid")!, {
+const api = createGrid(document.querySelector("#grid")!, createMachTablePreset("list", {
   columnDefs: [
-    indexColumn({ headerName: "序号" }),
     { field: "id", headerName: "ID", width: 120 },
     { field: "name", headerName: "名称", flex: 1, editable: true }
   ],
   rowData: [{ id: "1", name: "MachTable" }],
   rowKey: "id",
-  enableColumnResize: true,
   persistence: { key: "tenant:user:customers", sections: ["columns"] }
-});
+}));
 
 api.batch((grid) => {
   grid.rows.transact({ update: [{ id: "1", name: "Updated" }] });
@@ -41,6 +39,8 @@ console.info(api.diagnostics.get());
 // 原生宿主卸载时必须销毁；Vue/React 适配器会自动处理。
 api.destroy();
 ```
+
+场景不根据行数猜测，主题和密度独立配置。`createMachTablePreset("detail", { maxBodyHeight: 240 })` 可只改统一差异；业务列仍可显式 `editable: true`，单表 `rowNumber: false` 可关闭序号。只读默认不是权限校验。Vue/React 默认选择 `list`，裸 Core 不会自动选择场景。
 
 `persistence.sections` 同时约束进入 store 的数据与恢复范围；异步 store 写入有序，晚到加载不会覆盖加载期间的用户操作。
 

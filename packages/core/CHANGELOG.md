@@ -1,5 +1,13 @@
 # @agile-team/mach-table
 
+## 0.40.0
+
+### Minor Changes
+
+- 内置主列表与明细展示场景。Vue/React 不传 preset 时默认 list；detail 将纯文字表头、只读默认、原生内容高度与 330px 上限收进包内。主题和密度继续继承通用配置，单表属性优先，同名项目预设保持完整优先；可用既有 createMachTablePreset("detail", overrides) 显式继承，false 可退出场景默认值。
+
+  切换场景时将布局、分页和列默认值明确回退，保留业务排序、筛选与选择；非交互表头不再显示排序图标或手形光标，程序排序与无障碍排序信息保留。
+
 ## 0.39.2
 
 ### Patch Changes

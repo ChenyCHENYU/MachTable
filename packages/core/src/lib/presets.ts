@@ -1,4 +1,5 @@
 import type { GridDataProcessor, GridOptions } from "../types/options";
+import { builtinTablePreset } from "./builtinPresets";
 
 function mergeSwitchableObject<T extends object>(
   base: boolean | T | undefined,
@@ -89,11 +90,23 @@ function mergeOptions<TData>(base: GridOptions<TData>, next: Partial<GridOptions
   return merged;
 }
 
-/** Merges reusable defaults left-to-right with nested defaults handled safely. */
+/** Compose named built-in scenes or existing option objects, left to right. */
+export function createMachTablePreset<TData = any>(
+  scene: "list" | "detail",
+  ...sources: readonly (FactoryPreset<TData> | "list" | "detail")[]
+): FactoryPreset<TData>;
 export function createMachTablePreset<TData>(
-  ...sources: readonly Partial<GridOptions<TData>>[]
+  ...sources: readonly (Partial<GridOptions<TData>> | "list" | "detail")[]
+): GridOptions<TData>;
+export function createMachTablePreset<TData>(
+  ...sources: readonly (Partial<GridOptions<TData>> | "list" | "detail")[]
 ): GridOptions<TData> {
-  return sources.reduce<GridOptions<TData>>(mergeOptions, {});
+  return sources.reduce<GridOptions<TData>>((merged, source) => {
+    if (typeof source !== "string") return mergeOptions(merged, source);
+    const preset = builtinTablePreset(source);
+    if (!preset) throw new TypeError(`[MachTable] Unknown built-in preset "${source}". Use "list" or "detail".`);
+    return mergeOptions(merged, preset);
+  }, {});
 }
 
 /** Recommended defaults for editable enterprise back-office screens. */

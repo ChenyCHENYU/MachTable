@@ -1,5 +1,6 @@
 import { createMachTablePreset } from "./presets";
 import { hasOwnOption } from "./optionValues";
+import { builtinTablePreset } from "./builtinPresets";
 import type { ColDef } from "../types/colDef";
 import type { GridComponents, GridDataProcessor, GridOptions } from "../types/options";
 
@@ -38,9 +39,9 @@ export interface MachTableRuntimeConfig {
   columnTypes?: Readonly<Record<string, Partial<ColDef<any>>>>;
   /** Application-wide renderer/editor registry. Per-table components can override it. */
   components?: GridComponents;
-  /** Named, reusable behavior profiles such as `list`, `crud` or `picker`. */
+  /** Custom presets replace same-name built-ins; use createMachTablePreset(name, overrides) to extend one. */
   presets?: Readonly<Record<string, MachTablePreset>>;
-  /** Preset used when a table does not declare its own preset. Set false to disable. */
+  /** Defaults to the built-in `list` scene. Set false to skip preset defaults. */
   defaultPreset?: MachTablePresetSelection;
   /** Throw on unsafe config-center keys. Defaults to true. */
   strict?: boolean;
@@ -102,7 +103,7 @@ function sanitizeConfigLayer(
   layer: "defaults" | `preset:${string}`
 ): MachTableDefaults {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const output: Record<string, unknown> = {};
+  const output: Record<string, unknown> = Object.create(null);
   for (const [key, optionValue] of Object.entries(value)) {
     if (!INSTANCE_ONLY_OPTIONS.includes(key) && (key !== "dataProcessor" || optionValue == null || typeof optionValue === "function")) {
       output[key] = optionValue;
@@ -135,7 +136,7 @@ export function normalizeMachTableConfig(config: MachTableRuntimeConfig = {}): R
         createMachTablePreset(sanitizeConfigLayer(config, preset, `preset:${name}`)) as MachTablePreset
       ])
     ),
-    defaultPreset: config.defaultPreset ?? false,
+    defaultPreset: config.defaultPreset ?? "list",
     strict: config.strict !== false,
     ...(config.onConfigWarning ? { onConfigWarning: config.onConfigWarning } : {})
   };
@@ -151,9 +152,11 @@ export function mergeMachTableConfig(
     strict: child.strict ?? parent.strict,
     onConfigWarning: child.onConfigWarning ?? parent.onConfigWarning
   });
-  const presets: Record<string, MachTablePreset> = { ...parent.presets };
+  // Spreading defines own data properties, including an explicitly named "__proto__" preset.
+  const presets: Record<string, MachTablePreset> = { ...parent.presets, ...normalizedChild.presets };
   for (const [name, preset] of Object.entries(normalizedChild.presets)) {
-    presets[name] = createMachTablePreset(parent.presets[name] ?? {}, preset) as MachTableDefaults;
+    const previous = hasOwnOption(parent.presets, name) ? parent.presets[name] : {};
+    presets[name] = createMachTablePreset(previous, preset) as MachTableDefaults;
   }
   return {
     defaults: createMachTablePreset(parent.defaults, normalizedChild.defaults) as MachTableDefaults,
@@ -177,7 +180,8 @@ export function resolveMachTableGridOptions<TData>(
     { name: "application defaults", options: config.defaults as Partial<GridOptions<TData>> }
   ];
   for (const name of presetNames(selected)) {
-    const preset = config.presets[name];
+    const custom = hasOwnOption(config.presets, name);
+    const preset = custom ? config.presets[name] : builtinTablePreset(name);
     if (!preset) {
       const warning: MachTableConfigWarning = {
         code: "UNKNOWN_PRESET",
@@ -189,10 +193,21 @@ export function resolveMachTableGridOptions<TData>(
       else console.warn(warning.message);
       continue;
     }
-    layers.push({ name: `preset:${name}`, options: preset as Partial<GridOptions<TData>> });
+    layers.push({ name: custom ? `preset:${name}` : `built-in preset:${name}`, options: preset as Partial<GridOptions<TData>> });
   }
   layers.push({ name: "table props", options: explicit });
-  const options = { rowNumber: true, ...createMachTablePreset(...layers.map((layer) => layer.options)) };
+  // Concrete scene-owned values also reset a mounted grid when a preset is removed.
+  const options = createMachTablePreset({
+    rowNumber: true,
+    domLayout: "normal",
+    maxBodyHeight: undefined,
+    columnMenu: false,
+    enableColumnResize: false,
+    statusBar: false,
+    contextMenu: false,
+    pagination: true,
+    defaultColDef: {}
+  }, ...layers.map((layer) => layer.options));
 
   return {
     options,

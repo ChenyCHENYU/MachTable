@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.39.2-2563eb" alt="Source version 0.39.2" />
+  <img src="https://img.shields.io/badge/source-0.40.0-2563eb" alt="Source version 0.40.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -71,37 +71,22 @@ pnpm add @agile-team/mach-table
 
 ```vue
 <script setup lang="ts">
-import { h, ref } from "vue";
-import { MachTable, defineVueColumns, selectionColumn, useMachTable, type MachTableVueProps } from "@agile-team/mach-table-vue";
+import { ref } from "vue";
+import { MachTable, type ColDef } from "@agile-team/mach-table-vue";
 import "@agile-team/mach-table-vue/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
-
-const table = useMachTable<Order>();
 const rows = ref<Order[]>([{ id: "SO-001", customer: "Acme", amount: 12800 }]);
-const columns = defineVueColumns<Order>([
-  selectionColumn(),
-  { field: "id", headerName: "订单号", width: 130, pinned: "left" },
-  { field: "customer", headerName: "客户", flex: 1, editable: true, filter: "text" },
-  { field: "amount", headerName: "金额", width: 140, filter: "number", render: (row) => h("strong", `¥${row.amount}`) }
-]);
-const tableConfig = {
-  rowKey: "id",
-  rowSelection: "multiple",
-  enableColumnResize: true,
-  persistence: { key: "orders:list" },
-  stripedRows: true
-} satisfies MachTableVueProps<Order>;
+const columns: ColDef<Order>[] = [
+  { field: "id", headerName: "订单号", pinned: "left" },
+  { field: "customer", headerName: "客户" },
+  { field: "amount", headerName: "金额", filter: "number" }
+];
 </script>
 
 <template>
   <div style="height: 560px">
-    <MachTable
-      v-bind="tableConfig"
-      :ref="table.ref"
-      :column-defs="columns"
-      :row-data="rows"
-    />
+    <MachTable :column-defs="columns" :row-data="rows" row-key="id" />
   </div>
 </template>
 ```
@@ -110,60 +95,58 @@ const tableConfig = {
 
 ```tsx
 import { useMemo } from "react";
-import { MachTable, useMachTable, type ColDef } from "@agile-team/mach-table-react";
+import { MachTable, type ColDef } from "@agile-team/mach-table-react";
 import "@agile-team/mach-table-react/styles.css";
 
 interface Order { id: string; customer: string; amount: number }
 
 export function OrdersPage({ rows }: { rows: Order[] }) {
-  const table = useMachTable<Order>();
   const columns = useMemo<ColDef<Order>[]>(() => [
-    { field: "id", headerName: "订单号", width: 130, pinned: "left" },
-    { field: "customer", headerName: "客户", flex: 1, editable: true },
-    { field: "amount", headerName: "金额", width: 140, filter: "number" }
+    { field: "id", headerName: "订单号", pinned: "left" },
+    { field: "customer", headerName: "客户" },
+    { field: "amount", headerName: "金额", filter: "number" }
   ], []);
-
-  return (
-    <div style={{ height: 560 }}>
-      <MachTable<Order>
-        apiRef={table.apiRef}
-        columnDefs={columns}
-        rowData={rows}
-        rowKey="id"
-        enableColumnResize
-        persistence={{ key: "orders:list" }}
-      />
-    </div>
-  );
+  return <div style={{ height: 560 }}>
+    <MachTable<Order> columnDefs={columns} rowData={rows} rowKey="id" />
+  </div>;
 }
 ```
+
+Vue/React 默认使用 `list`：保留序号和内置分页，开启列筛选、列设置与列宽调整。复选框、状态条、右键菜单按业务需要再开启；不用先写配置文件。
+
+### 同页多张小明细
+
+```vue
+<MachTable :column-defs="orderColumns" :row-data="orders" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketA" row-key="id" />
+<MachTable preset="detail" :column-defs="materialColumns" :row-data="basketB" row-key="id" />
+```
+
+`detail` 保留序号，默认纯文字表头、只读、无分页，随内容收起，表体超过 330px 后虚拟滚动。无需每页重复一组开关；主题与 `size` 等视觉设置继续共享。可用单表 props 或业务列覆盖差异。场景不按数据行数自动变化，具体规则见[场景与配置](./docs/guide/configuration.md)。
 
 ### 原生 TypeScript
 
 ```ts
-import { createGrid } from "@agile-team/mach-table";
+import { createGrid, createMachTablePreset } from "@agile-team/mach-table";
 import "@agile-team/mach-table/styles/mach-table.css";
 
-const api = createGrid(document.querySelector("#grid")!, {
-  columnDefs: [{ field: "name", headerName: "名称", flex: 1 }],
-  rowNumber: true,
+const api = createGrid(document.querySelector("#grid")!, createMachTablePreset("list", {
+  columnDefs: [{ field: "name", headerName: "名称" }],
   rowData: [{ id: "1", name: "MachTable" }],
   rowKey: "id"
-});
+}));
 
 // Vue/React 适配器会自动销毁；原生接入由宿主在卸载时调用。
 api.destroy();
 ```
 
-> 默认虚拟布局要求容器具有明确高度。小型详情表可使用 `domLayout: "autoHeight"`，大表或远程无限数据源不要使用自动高度。
-
-自动高度表格随当前页内容收起。明细行数不固定时，设置 `domLayout: "autoHeight", maxBodyHeight: 330`，表体到达 330px 后使用虚拟滚动。空态、加载态和错误态保留必要空间，恢复数据后释放最小高度。表格与后续内容的间距由页面容器设置，例如 `padding-bottom: 8px`。
+裸 `createGrid()` 保留低层原有默认值；命名 factory 才显式应用场景。主列表虚拟布局要求容器有明确高度。小明细用 `detail`，空态、加载态和错误态仍保留必要空间；表格与后续内容的间距由页面容器设置。
 
 多行文字使用列配置 `wrapText: true, autoHeight: true`，按浏览器实际排版测高。业务行高使用 `getRowHeight`；内容事务只更新受影响行的高度索引。接入细节见[变高行与换行](./docs/recipes/variable-height.md)。
 
 本地筛选无匹配时，内置空态提供「清除筛选」，一次清除表内列筛选、高级筛选和快速搜索。自定义空态、手动筛选和服务端查询可继续由应用定义提示及恢复操作。
 
-Vue 和 React 的 `MachTable` 默认显示序号与内置分页。Vue 可分别用 `:row-number="false"`、`:pagination="false"` 关闭，React 使用 `rowNumber={false}`、`pagination={false}`。已有 `indexColumn()` 可继续定制序号列。表头和单元格默认居中，包括数值列。可在业务列上单独覆盖 `align` 或 `headerAlign`。
+Vue 和 React 的默认 `list` 显示序号与内置分页。Vue 可分别用 `:row-number="false"`、`:pagination="false"` 关闭，React 使用 `rowNumber={false}`、`pagination={false}`。已有 `indexColumn()` 可继续定制序号列。表头和单元格默认居中，包括数值列。可在业务列上单独覆盖 `align` 或 `headerAlign`。
 
 ## 行拖拽与条件整行颜色
 
@@ -258,50 +241,30 @@ const summary = summarizeRows(rows, {
 
 `/business` 只提供本地语义合计；scope 声明 page/selected/query，实际只处理传入记录。ratio 先汇总分子分母，精确金额可注入 numeric 策略；服务端全量由后端计算。详情见[业务列与合计](./docs/recipes/business-columns.md)。
 
-## 一份清爽的应用配置
+## 有统一差异时再配置一次
 
-把通用约定集中在 `mach-table.config.ts`。应用入口只负责安装，具体页面通过 props 覆盖；优先级为：应用默认值 → 命名预设 → 表格 props。
+标准主表和小明细已内置。项目希望统一主题、密度或明细上限时，再使用一个可选配置文件：
 
 ```ts
-// src/config/mach-table.config.ts
-import {
-  createBusinessColumnTypes,
-  defineMachTableConfig,
-  defineMachTablePreset
-} from "@agile-team/mach-table-vue";
+import { createMachTablePreset, defineMachTableConfig } from "@agile-team/mach-table-vue";
 
 export default defineMachTableConfig({
-  defaults: {
-    size: "compact",
-    columnLayout: "fit",
-    enableColumnResize: true,
-    defaultColDef: { sortable: true, resizable: true, filter: true },
-    pagination: { pageSize: 20, pageSizeOptions: [20, 50, 100] }
-  },
-  defaultPreset: "list",
+  defaults: { theme: "auto", size: "compact", stripedRows: true },
   presets: {
-    list: defineMachTablePreset({ stripedRows: true, columnMenu: true }),
-    crud: defineMachTablePreset({ rowSelection: "multiple", editType: "fullRow" })
-  },
-  columnTypes: createBusinessColumnTypes({ locale: "zh-CN", currency: "CNY" })
+    detail: createMachTablePreset("detail", { maxBodyHeight: 240 })
+  }
 });
 ```
 
-```ts
-// Vue main.ts
-app.use(MachTablePlugin, machTableConfig);
-```
+Vue 全局插件可直接 `app.use(MachTablePlugin)`，有配置才传第二个参数；React 对应可选的 `MachTableProvider`。应用 defaults → 选中的场景 → 单表 props 依次覆盖；已有同名自定义 preset 完整优先，显式继承内置时使用上面的 composer。
 
-```tsx
-// React root.tsx
-<MachTableProvider config={machTableConfig}><App /></MachTableProvider>
-```
+全局 `defaultPreset: false` 或单表 `preset={false}`（Vue 为 `:preset="false"`）可退出默认场景。场景切换会回退高度、分页与工具默认值，不额外清空业务排序、筛选或选择；改变列配置仍遵循原来的编辑器重建规则，应先保存或放弃未提交草稿。只读呈现不替代业务权限校验。
 
-`rowData`、`columnDefs`、请求状态、初始状态和 `persistence` 属于具体实例，配置中心默认严格拒绝它们进入 defaults/preset，避免跨页面数据或身份串用；应用级 `components`、`columnTypes` 使用配置对象顶层专用字段。详见[配置中心](./docs/guide/configuration.md)。
+`rowData`、`columnDefs`、请求状态、初始状态和 `persistence` 属于具体实例，不进入公共 defaults/preset。共享 `components`、`columnTypes` 使用配置对象顶层字段。详见[场景与配置](./docs/guide/configuration.md)。
 
 ## 领域化 API：找到能力，不记方法海洋
 
-0.28 只保留一套公共命令模型。根级仅负责生命周期、配置、事件和批处理；业务命令进入 12 个职责明确的领域。
+公共命令使用一套领域模型。根级仅负责生命周期、配置、事件和批处理；业务命令进入 12 个职责明确的领域。
 
 ```ts
 api.batch((grid) => {
@@ -347,11 +310,10 @@ Vue 可按项目覆盖率选择局部导入、同步全局插件或异步全局�
 
 ## 可控的列宽与状态记忆
 
-列宽交互默认关闭。开启 `enableColumnResize` 后支持鼠标/触控拖动、双击自动宽度和键盘调整；不配置 `persistence` 时不会写入存储。
+Vue/React 默认 `list` 已开启列宽交互，`detail` 关闭；裸 Core 保留原有低层默认。列宽交互支持鼠标/触控拖动、双击自动宽度和键盘调整；不配置 `persistence` 时不会写入存储。
 
 ```ts
 const options = {
-  enableColumnResize: true,
   // 只保存列宽、顺序、显隐和固定；排序使用独立 "sort" 区段
   persistence: { key: "tenant:user:orders", sections: ["columns"] }
 };
@@ -414,7 +376,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.39.2`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
+当前源码版本为 `0.40.0`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
