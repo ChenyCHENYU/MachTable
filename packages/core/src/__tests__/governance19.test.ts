@@ -37,6 +37,13 @@ describe("0.19 indexed virtualization", () => {
     columns[20].currentWidth = 75;
     expect(index.update(columns as any)).toBe(true);
     expect(index.totalWidth()).toBe(5_025);
+    expect(index.offsetAt(21)).toBe(1_075);
+    expect(index.update(columns as any)).toBe(false);
+    expect(index.update(columns.slice(0, 2) as any)).toBe(true);
+    expect(index.totalWidth()).toBe(100);
+    expect(index.indexAt(99)).toBe(1);
+    expect(index.update([])).toBe(true);
+    expect(index.indexAt(0)).toBe(-1);
   });
 
   it("updates one variable row height in logarithmic indexed storage", () => {

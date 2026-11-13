@@ -115,4 +115,4 @@ canvas 平铺斜纹、`pointer-events: none` 不影响任何交互、覆盖表�
 
 ## 滚动条
 
-细 10px 圆角拖拽手柄（视觉 4px）、透明轨道、悬停主色渐显、按住加深——精致但不抢焦点。Firefox 走 `scrollbar-width: thin` 原生方案。颜色可调：`--mach-scrollbar-thumb`。
+Chromium / WebKit 使用 10px 原生轨道、淡主题底色与圆角手柄，悬停主色渐显、按住加深。轨道占用表体空间，不压住末列和末行；内容型表格会计入横向轨道高度，同时遵守 `maxBodyHeight`。Firefox 保留 `scrollbar-width: thin` 与系统滚动条偏好。颜色可调：`--mach-scrollbar-thumb`。页面使用固定工作区时，应让表格撑满分栏并设置 `min-height: 0`，保证横向轨道留在可见的分栏底部。

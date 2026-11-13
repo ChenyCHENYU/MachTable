@@ -154,15 +154,6 @@ describe("EventBus", () => {
     expect(count).toBe(2);
   });
 
-  it("supports once", () => {
-    const bus = new EventBus();
-    let count = 0;
-    bus.once("evt", () => count++);
-    bus.emit("evt");
-    bus.emit("evt");
-    expect(count).toBe(1);
-  });
-
   it("isolates listener errors", () => {
     const bus = new EventBus();
     const errors: unknown[] = [];

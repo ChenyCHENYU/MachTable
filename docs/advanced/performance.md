@@ -132,7 +132,7 @@ const metrics = api.diagnostics.getPerformance();
 | Optional import planning | 4 KiB (4096 bytes) |
 | Workbench CSS | 3 KiB (3072 bytes) |
 | Server-side CSS | 1 KiB (1024 bytes) |
-| Core createGrid consumer | 80.5 KiB (82432 bytes) |
+| Core createGrid consumer | 81 KiB (82944 bytes) |
 | Vue initial adapter | 6.75 KiB (6912 bytes) |
 | Vue B-side workflows | 5 KiB (5120 bytes) |
 | Vue optional editors | 3 KiB (3072 bytes) |

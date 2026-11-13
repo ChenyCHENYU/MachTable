@@ -88,7 +88,7 @@ describe("polished editing UI", () => {
     expect(input.value).toBe("Typing stays active");
     expect(api.rows.getById("1")?.data?.name).toBe("Before");
 
-    cell.querySelector<HTMLButtonElement>(".mach-edit-control--confirm")!.click();
+    host.querySelector<HTMLButtonElement>(".mach-edit-control--confirm")!.click();
     await flush();
     expect(cell.querySelector(".mach-editor-input")).toBeNull();
     expect(api.rows.getById("1")?.data?.name).toBe("Typing stays active");

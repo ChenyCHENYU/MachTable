@@ -576,6 +576,7 @@ export class GridApiImpl<TData = any> {
     }
     if (options.columnLayout != null && options.columnLayout !== resolved.columnLayout) {
       resolved.columnLayout = options.columnLayout === "fit" ? "fit" : "normal";
+      this.core.columnModel.preserveWidths = false;
       effects.layout = true;
     }
     if (options.domLayout != null && options.domLayout !== resolved.domLayout) {

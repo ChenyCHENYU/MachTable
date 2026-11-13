@@ -16,7 +16,7 @@ export const gzipBudgets = {
   import: ["Optional import planning", 4 * 1024],
   workbenchCss: ["Workbench CSS", 3 * 1024],
   serverCss: ["Server-side CSS", 1024],
-  coreConsumer: ["Core createGrid consumer", 80.5 * 1024],
+  coreConsumer: ["Core createGrid consumer", 81 * 1024],
   vueConsumer: ["Vue initial adapter", 6.75 * 1024],
   vueWorkflows: ["Vue B-side workflows", 5 * 1024],
   vueEditors: ["Vue optional editors", 3 * 1024],

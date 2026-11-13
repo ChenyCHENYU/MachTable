@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table
 
-MachTable 0.40.1 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。裸 `createGrid()` 保留原有低层默认值：分页开启，序号按 `rowNumber: true` 启用。通过 `createMachTablePreset("list" | "detail", options)` 可显式使用与适配器一致的场景。
+MachTable 0.40.2 的框架无关 TypeScript Core，零运行时依赖。提供行列双虚拟化、编辑、树与分组、随机访问远程数据和区段隔离状态持久化。裸 `createGrid()` 保留原有低层默认值：分页开启，序号按 `rowNumber: true` 启用。通过 `createMachTablePreset("list" | "detail", options)` 可显式使用与适配器一致的场景。
 
 `list` 提供序号、列筛选、列设置与列宽调整；`detail` 保留序号、默认只读和纯文字表头，关闭分页并按内容收起，表体超过 330px 后使用虚拟滚动。表内筛选无匹配时，默认空态提供清除筛选；业务自定义空态优先。
 
@@ -50,7 +50,7 @@ api.destroy();
 
 编辑、粘贴、清空和填充共用已有列校验与整行校验，批量输入按行提交并合并撤销记录，异步校验不会写回已替换的数据。随机块缓存淘汰后，未保存行仍可通过编辑 API 保存或回滚；完整替换数据与重新查询会清理旧作用域的状态。
 
-`loading: true` 默认展示轻量表格骨架与本地化状态文案，空数据默认展示内置插画；需要品牌化时再通过 `overlayLoadingTemplate`、`overlayNoRowsTemplate` 覆盖，基础页面无需重复实现 loading/empty DOM。
+`loading: true` 默认展示主题色数据条的小型错峰动效与本地化文案，减少动画设置下静止展示；空数据使用内置插画。需要品牌化时再通过 `overlayLoadingTemplate`、`overlayNoRowsTemplate` 覆盖，基础页面无需重复实现 loading/empty DOM。
 
 内置空态使用适配亮暗主题的淡蓝表格卡片与放大镜插画；`locale.emptyRows` 和 `locale.emptyRowsHint` 分别配置标题、说明，均按纯文本呈现。静态 SVG 不依赖远端资源或共享 id，多表并排不会互相影响。
 
@@ -173,7 +173,7 @@ const columns = [
 
 `status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
 
-普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽、列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
+普通布局尊重显式 `width` 和拖动后的宽度；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽只改变目标列，其他列保持当前宽度及自动模式；容器实际宽度、列结构或测量内容变化时再重新分配。列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 
 表头默认完整展示，不省略。初始布局、fit、列宽恢复、API、鼠标和 Alt+方向键统一以完整标题及排序/筛选/列工具控件为最小宽度；显式 width/minWidth/maxWidth 不能把标题压窄，空间不足时表格内部横向滚动。360px 上限仅作用于数据内容的首选宽度，不截断表头。复杂自定义表头请显式提供 minWidth。
 

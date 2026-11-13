@@ -1,15 +1,11 @@
-import { sanitizeFormulaCell } from "./csv";
+import { csvEscape, sanitizeFormulaCell } from "./csv";
 
 /** Clipboard cells intentionally follow JavaScript text coercion after an explicit serializer. */
 export function clipboardText(value: any): string { return value == null ? "" : String(value); }
 
 function escapeCell(value: any, protectFormulas: boolean): string {
-  const safe = protectFormulas ? sanitizeFormulaCell(value) : value;
-  const s = clipboardText(safe);
-  if (/["\t\n\r]/.test(s)) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
+  // TSV uses the same quoting rules as CSV, with its own tab delimiter.
+  return csvEscape(protectFormulas ? sanitizeFormulaCell(value) : value, "\t");
 }
 
 export function toTsv(rows: any[][], protectFormulas = true): string {

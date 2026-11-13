@@ -166,6 +166,25 @@ describe("consistent user input", () => {
     expect(api.rows.getById("2")?.data?.lower).toBe(2);
   });
 
+  it("keeps mixed synchronous and asynchronous row validation in one undo batch", async () => {
+    const pending = deferred<true>();
+    const { core, api } = grid({ columnDefs: [
+      { field: "lower", editable: true, validate: (_value, { data }) => data.id === "1" ? pending.promise : true },
+      { field: "upper", editable: true, validate: () => true }
+    ] });
+    core.pasteText("3\t7\n4\t9", 0, 0);
+    expect(api.rows.getById("1")?.data).toMatchObject({ lower: 1, upper: 5 });
+    expect(api.rows.getById("2")?.data).toMatchObject({ lower: 2, upper: 8 });
+    pending.resolve(true);
+    await flush();
+    expect(api.rows.getById("1")?.data).toMatchObject({ lower: 3, upper: 7 });
+    expect(api.rows.getById("2")?.data).toMatchObject({ lower: 4, upper: 9 });
+    expect(api.editing.undo()).toBe(true);
+    expect(api.rows.getById("1")?.data).toMatchObject({ lower: 1, upper: 5 });
+    expect(api.rows.getById("2")?.data).toMatchObject({ lower: 2, upper: 8 });
+    expect(api.editing.canUndo()).toBe(false);
+  });
+
   it.each(["escape", "undo", "redo", "newInput", "startEditor", "replace", "remove", "destroy", "mutate"])("ignores late validation after %s", async (action) => {
     const pending = deferred<true>();
     const changed = vi.fn();

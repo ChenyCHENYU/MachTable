@@ -336,7 +336,7 @@ describe("opt-in column resizing", () => {
     second.destroy();
   });
 
-  it("keeps a dragged column exact in fit layout and lets untouched columns fill the remainder", () => {
+  it("keeps a dragged column exact and lets automatic columns respond to a later container resize", () => {
     let stored: GridState | null = null;
     const store: GridStateStore = {
       load: () => stored,
@@ -361,7 +361,7 @@ describe("opt-in column resizing", () => {
       widthMode: "manual"
     });
     expect(first.columns.getState().find((state) => state.colId === "amount")).toMatchObject({
-      width: 300,
+      width: 360,
       widthMode: "auto"
     });
     first.destroy();
@@ -379,6 +379,125 @@ describe("opt-in column resizing", () => {
     expect(second.columns.getState().find((state) => state.colId === "name")?.width).toBe(300);
     expect(second.columns.getState().find((state) => state.colId === "amount")?.width).toBe(500);
     second.destroy();
+  });
+
+  it.each(["normal", "fit"] as const)("isolates manual width changes in %s layout without freezing other columns' modes", async columnLayout => {
+    vi.useFakeTimers();
+    const host = createHost();
+    const api = createGrid(host, {
+      rowNumber: false, rowData: rows, pagination: false, enableColumnResize: true, columnLayout,
+      columnDefs: [
+        { field: "id", colId: "left", width: 100, pinned: "left" },
+        { field: "name", width: 120, maxWidth: 420 },
+        { field: "amount", width: 180, flex: 1 },
+        { field: "id", colId: "right", width: 100, pinned: "right" }
+      ]
+    });
+    setViewportWidth(host, 800);
+    api.view.refreshLayout();
+    const width = (id: string) => api.columns.getState().find(column => column.colId === id)!.width!;
+    const untouched = [width("left"), width("amount"), width("right")];
+    const start = width("name");
+    const handle = resizeHandle(host);
+    handle.dispatchEvent(pointer("pointerdown", start));
+    window.dispatchEvent(pointer("pointermove", start + 60));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(width("name")).toBe(start + 60);
+    expect([width("left"), width("amount"), width("right")]).toEqual(untouched);
+    window.dispatchEvent(pointer("pointerup", start + 60));
+    api.view.refreshLayout();
+    expect([width("left"), width("amount"), width("right")]).toEqual(untouched);
+    api.columns.setWidth("name", start + 90);
+    expect([width("left"), width("amount"), width("right")]).toEqual(untouched);
+    expect(api.columns.getState().find(column => column.colId === "amount")).toMatchObject({ flex: 1, widthMode: "auto" });
+
+    setViewportWidth(host, 1000);
+    api.view.refreshLayout();
+    expect(width("name")).toBe(start + 90);
+    expect(width("amount")).toBeGreaterThan(untouched[1]);
+    api.columns.fit();
+    expect(width("name") + width("amount") + width("left") + width("right")).toBeCloseTo(1000);
+    api.destroy();
+  });
+
+  it.each(["pointercancel", "Escape", "return"])("restores the exact flex allocation on resize %s", async reason => {
+    vi.useFakeTimers();
+    const host = createHost();
+    const api = createGrid(host, { rowNumber: false, columnDefs: defs, rowData: rows, pagination: false, enableColumnResize: true });
+    setViewportWidth(host, 800);
+    api.view.refreshLayout();
+    const before = api.columns.getState();
+    const start = before.find(column => column.colId === "amount")!.width!;
+    const handle = resizeHandle(host, "amount");
+    handle.dispatchEvent(pointer("pointerdown", start));
+    window.dispatchEvent(pointer("pointermove", start - 60));
+    await vi.advanceTimersByTimeAsync(20);
+    if (reason === "Escape") window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    else window.dispatchEvent(pointer(reason === "return" ? "pointerup" : "pointercancel", reason === "return" ? start : start - 60));
+    expect(api.columns.getState()).toEqual(before);
+    expect(host.querySelector(".mach-root--resizing")).toBeNull();
+    api.view.refreshLayout();
+    expect(api.columns.getState()).toEqual(before);
+    api.destroy();
+  });
+
+  it.each(["normal", "fit"] as const)("remeasures automatic content and honors explicit fit/autosize after a manual %s resize", columnLayout => {
+    const host = createHost();
+    const api = createGrid(host, {
+      rowNumber: false, pagination: false, rowKey: "id", columnLayout,
+      columnDefs: [{ field: "name", width: 120 }, { field: "note", headerName: "备注" }],
+      rowData: [{ id: "1", name: "Alpha", note: "A" }]
+    });
+    setViewportWidth(host, 800);
+    api.view.refreshLayout();
+    const before = api.columns.getState();
+    const target = before.find(column => column.colId === "name")!.width! + 40;
+    api.columns.setWidth("name", target);
+    expect(api.columns.getState().find(column => column.colId === "note")!.width).toBe(before.find(column => column.colId === "note")!.width);
+    api.rows.transact({ update: [{ id: "1", name: "Alpha", note: "工艺说明".repeat(1000) }] });
+    const automatic = api.columns.getState().find(column => column.colId === "note")!;
+    expect(automatic.contentWidth).toBe(360);
+    expect(automatic.width).toBe(columnLayout === "fit" ? 800 - target : 360);
+    expect(api.columns.getState().find(column => column.colId === "name")!.width).toBe(target);
+
+    api.columns.fit();
+    expect(api.columns.getState().reduce((sum, column) => sum + column.width!, 0)).toBeCloseTo(800);
+    api.columns.autoSize("name");
+    expect(api.columns.getState().find(column => column.colId === "name")!.widthMode).toBe(columnLayout === "fit" ? "auto" : "manual");
+    api.destroy();
+  });
+
+  it("releases the manual layout snapshot when columnLayout is explicitly changed", () => {
+    const host = createHost(600);
+    const api = createGrid(host, {
+      columnDefs: [{ field: "name", width: 200 }, { field: "amount", width: 200 }],
+      rowData: rows, pagination: false, columnLayout: "normal"
+    });
+    setViewportWidth(host, 600);
+    api.view.refreshLayout();
+    api.columns.setWidth("name", 240);
+    const amountWidth = () => api.columns.getState().find(column => column.colId === "amount")!.width;
+    expect(amountWidth()).toBe(200);
+    api.updateOptions({ columnLayout: "fit" });
+    expect(amountWidth()).toBe(360);
+    api.updateOptions({ columnLayout: "normal" });
+    expect(amountWidth()).toBe(200);
+    expect(api.columns.getState().find(column => column.colId === "name")!.width).toBe(240);
+    api.destroy();
+  });
+
+  it("does not treat scrollbar occupancy after a manual resize as a container resize", () => {
+    const host = createHost();
+    const api = createGrid(host, { rowNumber: false, columnDefs: defs, rowData: rows, pagination: false });
+    setViewportWidth(host, 800);
+    api.view.refreshLayout();
+    const before = api.columns.getState().find(column => column.colId === "amount")!.width;
+    api.columns.setWidth("name", 200);
+    const viewport = host.querySelector(".mach-body-viewport--scroll")!;
+    Object.defineProperties(viewport, { offsetWidth: { value: 600 }, clientWidth: { value: 585 } });
+    api.view.refreshLayout();
+    expect(api.columns.getState().find(column => column.colId === "amount")!.width).toBe(before);
+    api.destroy();
   });
 
   it("offers a safe single-column API independent from pointer resizing", () => {

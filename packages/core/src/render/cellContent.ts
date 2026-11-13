@@ -219,8 +219,7 @@ function appendConfiguredClasses(
   core: CellValueContext,
   classes: string[],
   node: RowNode<any>,
-  column: Column,
-  value: any
+  column: Column
 ): void {
   const rule = column.colDef.cellClass;
   if (!rule) return;
@@ -232,7 +231,7 @@ function appendConfiguredClasses(
     classes.push(...rule);
     return;
   }
-  const params = createCellValueParams(core, node, column, value);
+  const params = createCellValueParams(core, node, column, core.readCellValue(node, column));
   try {
     const result = rule(params);
     if (typeof result === "string") classes.push(result);
@@ -249,9 +248,8 @@ function appendRuntimeClasses(classes: string[], cell: HTMLElement, column: Colu
 }
 
 export function applyCellClasses(core: CellValueContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
-  const value = core.readCellValue(node, column);
   const classes = ["mach-cell", cellAlignmentClass(column)];
-  appendConfiguredClasses(core, classes, node, column, value);
+  appendConfiguredClasses(core, classes, node, column);
   appendRuntimeClasses(classes, cell, column);
   const className = classes.join(" ");
   if (cell.className !== className) cell.className = className;

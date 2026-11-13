@@ -617,13 +617,21 @@
   scrollbar-color: var(--mach-scrollbar-thumb) transparent;
 }
 
+/* Standard scrollbar overrides suppress WebKit's themed, space-reserving tracks. */
+@supports selector(::-webkit-scrollbar) {
+  .mach-body-viewport--scroll {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+
 .mach-body-viewport--scroll::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 .mach-body-viewport--scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--mach-header-bg);
 }
 
 .mach-body-viewport--scroll::-webkit-scrollbar-thumb {
@@ -1454,66 +1462,44 @@ input.mach-select-all {
   max-width: min(100%, 320px);
 }
 
-.mach-loading {
-  display: grid;
-  justify-items: center;
-  gap: 14px;
-  min-width: 172px;
-  padding: 20px 24px;
-}
+.mach-overlay-content:has(> .mach-empty) { height: 100%; }
 
-.mach-loading__visual {
-  position: relative;
-  display: grid;
-  gap: 8px;
-  width: 132px;
-  padding: 14px 16px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--mach-header-bg) 82%, var(--mach-body-bg));
-  border: 1px solid var(--mach-border-color);
+.mach-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 10px;
+  color: var(--mach-primary);
+  border: 1px solid color-mix(in srgb, currentColor 14%, var(--mach-border-color));
   border-radius: var(--mach-radius-lg);
+  background: var(--mach-body-bg);
   box-shadow: var(--mach-shadow-sm);
 }
 
-.mach-loading__visual::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    100deg,
-    transparent 20%,
-    color-mix(in srgb, var(--mach-primary) 11%, transparent) 50%,
-    transparent 80%
-  );
-  animation: mach-loading-sweep 1.35s ease-in-out infinite;
+.mach-loading__visual {
+  display: grid;
+  gap: 4px;
+  width: 26px;
+  padding: 9px 7px;
+  flex: none;
+  background: color-mix(in srgb, currentColor 7%, var(--mach-body-bg));
+  border-radius: var(--mach-radius);
 }
 
 .mach-loading__row {
-  height: 7px;
+  height: 3px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--mach-primary) 13%, var(--mach-border-color));
+  background: currentColor;
+  animation: mach-loading-pulse 1.5s ease-in-out infinite;
 }
 
-.mach-loading__row:nth-child(2) { width: 82%; }
-.mach-loading__row:nth-child(3) { width: 92%; }
-.mach-loading__row:nth-child(4) { width: 66%; }
-
-.mach-loading__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--mach-header-fg);
-  font-size: var(--mach-font-size-sm);
-}
-
-.mach-loading__spinner {
-  width: 14px;
-  height: 14px;
-}
+.mach-loading__row:nth-child(2) { width: 70%; animation-delay: .15s; }
+.mach-loading__row:nth-child(3) { width: 88%; animation-delay: .3s; }
 
 .mach-loading__label {
-  line-height: 1;
+  color: var(--mach-header-fg);
+  font-size: var(--mach-font-size-sm);
+  line-height: 1.5;
 }
 
 .mach-spinner {
@@ -1531,10 +1517,9 @@ input.mach-select-all {
   }
 }
 
-@keyframes mach-loading-sweep {
-  to {
-    transform: translateX(100%);
-  }
+@keyframes mach-loading-pulse {
+  0%, 100% { opacity: .25; }
+  50% { opacity: .8; }
 }
 
 .mach-filter-panel {
@@ -2168,20 +2153,18 @@ input.mach-select-all {
   align-items: center;
   width: 100%;
   min-width: 0;
-  gap: 5px;
 }
 
-.mach-cell-editor-shell > .mach-editor-input,
-.mach-cell-editor-shell > .mach-editor-select-control,
-.mach-cell-editor-shell > :not(.mach-cell-editor-controls),
+.mach-cell-editor-shell > *,
 .mach-row-editor-shell > * {
   flex: 1 1 auto;
   min-width: 0;
 }
 
 .mach-cell-editor-controls {
+  position: absolute;
+  z-index: 8;
   display: inline-flex;
-  flex: 0 0 auto;
   align-items: center;
   gap: 2px;
   padding: 2px;
@@ -2377,8 +2360,10 @@ input.mach-select-all {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 32px 16px;
-  min-height: 160px;
+  padding: 8px 16px;
+  height: 100%;
+  box-sizing: border-box;
+  min-height: 0;
   text-align: center;
   color: var(--mach-body-fg);
   font-size: 12px;
@@ -2386,7 +2371,7 @@ input.mach-select-all {
   overflow-wrap: anywhere;
 }
 
-.mach-empty__icon { fill: var(--mach-body-bg); margin-bottom: 6px; width: 96px; height: 84px; stroke: #8b98ff; stroke-linecap: round; }
+.mach-empty__icon { fill: var(--mach-body-bg); margin-bottom: 6px; width: 96px; height: 84px; min-height: 0; stroke: #8b98ff; stroke-linecap: round; }
 
 .mach-empty__title {
   font-size: 14px;
@@ -2398,8 +2383,8 @@ input.mach-select-all {
 
 @media (prefers-reduced-motion: reduce) {
   .mach-spinner,
-  .mach-loading__visual::before {
-    animation-duration: 2.4s;
+  .mach-loading__row {
+    animation: none;
   }
 }
 

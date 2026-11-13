@@ -19,7 +19,7 @@ import { indexColumn } from "../lib/presetColumns";
 export type PaneType = "left" | "center" | "right";
 
 export const DETAIL_TOGGLE_COL_ID = "__rg_detail_toggle__";
-type ColumnModelContext = Pick<GridCore<any>, "gridOptions">;
+type ColumnModelContext = Pick<GridCore<any>, "gridOptions" | "skeleton">;
 type ColumnTree = (ColumnGroup<any> | Column<any>)[];
 
 function isPositiveFiniteNumber(value: unknown): value is number {
@@ -65,6 +65,8 @@ export class ColumnModel {
   private headerDepth = 1;
   private flatIndexById = new Map<string, number>();
   viewportWidth = 0;
+  /** Manual resizing preserves neighbouring widths until an automatic layout input changes. */
+  preserveWidths = false;
 
   constructor(private core: ColumnModelContext) {}
 
@@ -159,6 +161,7 @@ export class ColumnModel {
   }
 
   private regroup(): void {
+    this.preserveWidths = false;
     const visible = this.leafColumns.filter((c) => !c.hide);
     this.leftPaneColumns = visible.filter((c) => c.pinned === "left");
     this.rightPaneColumns = visible.filter((c) => c.pinned === "right");
@@ -217,15 +220,17 @@ export class ColumnModel {
   }
 
   computeLayout(viewportWidth: number): void {
-    this.viewportWidth = viewportWidth;
+    const containerWidth = this.core.skeleton.bodyEl.clientWidth;
+    const preserve = this.preserveWidths && containerWidth === this.viewportWidth;
+    this.viewportWidth = containerWidth;
 
     let available = viewportWidth;
     const scalable: Column[] = [];
     const inputs: ReturnType<ColumnModel["widthInputOf"]>[] = [];
     for (const column of this.getOrderedVisible()) {
       const input = this.widthInputOf(column);
-      if (column.pinned != null || column.colDef.suppressSizeToFit || column.manualWidth != null) {
-        column.currentWidth = clampWidth(input.width ?? DEFAULT_COLUMN_WIDTH, input);
+      if (preserve || column.pinned != null || column.colDef.suppressSizeToFit || column.manualWidth != null) {
+        column.currentWidth = clampWidth(preserve ? column.manualWidth ?? column.currentWidth : input.width ?? DEFAULT_COLUMN_WIDTH, input);
         available -= column.currentWidth;
       } else {
         scalable.push(column);
@@ -252,6 +257,7 @@ export class ColumnModel {
 
   setColumnWidth(column: Column, width: number | undefined): boolean {
     if (!isPositiveFiniteNumber(width)) return false;
+    this.preserveWidths = true;
     column.manualWidth = clampWidth(width, this.widthInputOf(column));
     column.flex = null;
     return true;
@@ -259,6 +265,7 @@ export class ColumnModel {
 
   setContentWidth(column: Column, width: number): boolean {
     if (!isPositiveFiniteNumber(width)) return false;
+    this.preserveWidths = false;
     column.resetWidth();
     column.contentWidth = clampWidth(width, this.widthInputOf(column));
     return true;

@@ -130,6 +130,63 @@ describe("0.18 runtime API governance", () => {
     api.destroy();
     expect(destroy).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    { name: "default", cellClass: undefined },
+    { name: "static string", cellClass: "business-value" },
+    { name: "static array", cellClass: ["business-value", "highlight"] }
+  ])("reads each value once per refresh for $name classes", ({ cellClass }) => {
+    const valueGetter = vi.fn(({ data }: { data: Row | null }) => data?.amount);
+    const element = host();
+    const data = { ...rows[0] };
+    const api = createGrid<Row>(element, {
+      columnDefs: [{ field: "amount", width: 180, valueGetter, cellClass }],
+      rowData: [data], rowKey: "id", rowNumber: false, pagination: false
+    });
+    const cell = element.querySelector<HTMLElement>('.mach-cell[data-col-id="amount"]')!;
+    for (const amount of [100, 200]) {
+      data.amount = amount;
+      valueGetter.mockClear();
+      api.view.refreshCells({ rowIds: [data.id], columns: ["amount"] });
+      expect(valueGetter).toHaveBeenCalledTimes(1);
+      expect(cell.textContent).toBe(String(amount));
+      if (cellClass) expect(cell.classList).toContain("business-value");
+    }
+    api.destroy();
+  });
+
+  it("keeps fresh function classes and style callbacks ordered after renderer refresh", () => {
+    const calls: string[] = [];
+    const element = host();
+    const content = document.createElement("span");
+    const data = { ...rows[0] };
+    const refresh = vi.fn(({ value }: { value: number }) => {
+      calls.push(`renderer:${value}`);
+      content.textContent = String(value);
+      return true;
+    });
+    const api = createGrid<Row>(element, {
+      columnDefs: [{
+        field: "amount", width: 180,
+        valueGetter: ({ data }) => { calls.push("getter"); return data?.amount; },
+        cellRenderer: () => ({ el: content, refresh }),
+        cellClass: ({ value }) => { calls.push(`class:${value}`); return value > 150 ? "high" : "low"; },
+        cellStyle: ({ value }) => { calls.push(`style:${value}`); return { color: value > 150 ? "red" : "green" }; }
+      }],
+      rowData: [data], rowKey: "id", rowNumber: false, pagination: false
+    });
+    const cell = element.querySelector<HTMLElement>('.mach-cell[data-col-id="amount"]')!;
+    for (const amount of [100, 200]) {
+      data.amount = amount;
+      calls.length = 0;
+      api.view.refreshCells({ rowIds: [data.id], columns: ["amount"] });
+      expect(calls).toEqual(["getter", `renderer:${amount}`, "getter", `class:${amount}`, "getter", `style:${amount}`]);
+      expect(cell.textContent).toBe(String(amount));
+      expect(cell.classList).toContain(amount > 150 ? "high" : "low");
+      expect(cell.style.color).toBe(amount > 150 ? "red" : "green");
+    }
+    api.destroy();
+  });
 });
 
 describe("0.17 advanced filters and saved views", () => {

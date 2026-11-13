@@ -833,19 +833,14 @@ export class GridCore<TData = any> {
 
     const visual = el("div", "mach-loading__visual");
     visual.setAttribute("aria-hidden", "true");
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 3; index += 1) {
       const row = el("span", "mach-loading__row");
       visual.appendChild(row);
     }
 
-    const status = el("div", "mach-loading__status");
-    const spinner = el("span", "mach-spinner mach-loading__spinner");
-    spinner.setAttribute("aria-hidden", "true");
     const label = el("span", "mach-loading__label");
     label.textContent = this.getLocaleText("loading");
-    status.append(spinner, label);
-
-    loading.append(visual, status);
+    loading.append(visual, label);
     return loading;
   }
 
@@ -889,7 +884,7 @@ export class GridCore<TData = any> {
   checkWarnings(inputOptions?: Partial<GridOptions<any>> | Record<string, unknown>): void {
     if (this.gridOptions.suppressWarnings || this.disposedState) return;
     if (inputOptions) {
-      for (const issue of validateGridOptions(inputOptions)) {
+      for (const issue of validateGridOptions({ rowKey: this.gridOptions.rowKey, ...inputOptions })) {
         const signature = `${issue.code}:${issue.option ?? ""}:${issue.message}`;
         if (this.issuedWarningSignatures.has(signature)) continue;
         this.issuedWarningSignatures.add(signature);

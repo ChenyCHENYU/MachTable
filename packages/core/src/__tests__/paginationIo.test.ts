@@ -328,7 +328,8 @@ describe("loading state", () => {
     });
     const loading = host.querySelector(".mach-loading") as HTMLElement;
     expect(loading).toBeTruthy();
-    expect(loading.querySelectorAll(".mach-loading__row")).toHaveLength(4);
+    expect(loading.querySelectorAll(".mach-loading__row")).toHaveLength(3);
+    expect(loading.querySelector(".mach-spinner")).toBeNull();
     expect(loading.textContent).toContain("加载中");
     expect(host.querySelector(".mach-root")?.getAttribute("aria-busy")).toBe("true");
     api.destroy();

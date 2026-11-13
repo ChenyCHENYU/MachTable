@@ -17,20 +17,17 @@ export class ColumnViewportIndex {
   private columnStartOffsets = new Float64Array(1);
 
   update(columns: readonly Column[]): boolean {
-    let total = 0;
     let changed = this.columnStartOffsets.length !== columns.length + 1;
+    if (changed) this.columnStartOffsets = new Float64Array(columns.length + 1);
+    // Width-only updates reuse storage and refresh changed prefixes in one pass.
+    let total = 0;
     for (let index = 0; index < columns.length; index++) {
       total += columns[index].currentWidth;
-      if (!changed && this.columnStartOffsets[index + 1] !== total) changed = true;
+      if (this.columnStartOffsets[index + 1] === total) continue;
+      this.columnStartOffsets[index + 1] = total;
+      changed = true;
     }
-    if (!changed) return false;
-
-    const offsets = new Float64Array(columns.length + 1);
-    for (let index = 0; index < columns.length; index++) {
-      offsets[index + 1] = offsets[index] + columns[index].currentWidth;
-    }
-    this.columnStartOffsets = offsets;
-    return true;
+    return changed;
   }
 
   totalWidth(): number {

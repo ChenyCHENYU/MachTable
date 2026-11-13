@@ -224,6 +224,19 @@ describe("status bar with pagination", () => {
 });
 
 describe("grid option validation", () => {
+  it("uses the current identity when a remote pagination patch omits rowKey", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const api = createGrid(createHost(), {
+      columnDefs: [{ field: "id" }], rowData: rows, rowKey: "id",
+      pagination: { mode: "server", total: 36 }
+    });
+    api.updateOptions({ pagination: { mode: "server", total: 37 } });
+    expect(warning).not.toHaveBeenCalledWith(expect.stringContaining("MISSING_STABLE_ROW_ID"));
+    api.updateOptions({ pagination: { mode: "server", total: -1 } });
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("INVALID_OPTION_VALUE"));
+    api.destroy();
+  });
+
   it("suggests misspelled options and reports unsafe combinations", () => {
     expect(validateGridOptions({ rowHight: 40 } as any)).toEqual([
       expect.objectContaining({ code: "UNKNOWN_OPTION", option: "rowHight", suggestion: "rowHeight" })

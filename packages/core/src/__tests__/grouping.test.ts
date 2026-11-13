@@ -36,6 +36,37 @@ function groupedDefs(): ColDef<Row>[] {
 }
 
 describe("row grouping and aggregation", () => {
+  it("resets checkbox eligibility when a collapsed group reuses a disabled leaf slot", () => {
+    const host = createHost();
+    const defs = groupedDefs();
+    defs[0].selectable = ({ data }) => data?.id !== "1";
+    const api = createGrid<Row>(host, {
+      columnDefs: defs, rowSelection: "multiple", rowKey: "id", pagination: false, domLayout: "autoHeight",
+      rowData: [
+        { id: "1", region: "A", product: "A", amount: 10 },
+        { id: "2", region: "B", product: "B", amount: 20 }
+      ]
+    });
+    const checkbox = (index: number) => host.querySelector<HTMLInputElement>(`.mach-row[data-index="${index}"] .mach-row-checkbox`)!;
+    api.hierarchy.setAllGroupsExpanded(true);
+    expect(checkbox(1).disabled).toBe(true);
+
+    api.hierarchy.setAllGroupsExpanded(false);
+    expect(checkbox(1).disabled).toBe(false);
+    checkbox(1).click();
+    expect(api.selection.getIds()).toEqual(["2"]);
+    expect(checkbox(1).checked).toBe(true);
+    expect(checkbox(1).indeterminate).toBe(false);
+
+    api.hierarchy.setAllGroupsExpanded(true);
+    expect(checkbox(1).disabled).toBe(true);
+    expect(checkbox(1).checked).toBe(false);
+    expect(checkbox(1).indeterminate).toBe(false);
+    expect(checkbox(3).disabled).toBe(false);
+    expect(checkbox(3).checked).toBe(true);
+    api.destroy();
+  });
+
   it("builds collapsed group rows with aggregated values", () => {
     const host = createHost();
     const api: GridApi<Row> = createGrid<Row>(host, {

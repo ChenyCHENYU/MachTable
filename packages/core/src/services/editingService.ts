@@ -7,7 +7,7 @@ import { cleanupCellContent, createCellValueParams } from "../render/cellContent
 import type { InputChange } from "./inputService";
 import { isPromise } from "../lib/abortable";
 import { parseColumnValue } from "../lib/columnValues";
-import { el } from "../lib/dom";
+import { clamp, el } from "../lib/dom";
 
 type EditingContext = Pick<
   GridCore<any>,
@@ -25,6 +25,7 @@ type EditingContext = Pick<
   | "reportError"
   | "resolveCellEditor"
   | "rowModel"
+  | "skeleton"
   | "statusBarService"
   | "summaryRenderer"
   | "undoService"
@@ -38,7 +39,6 @@ interface MountedEditor {
 }
 
 interface CellEditingState extends MountedEditor {
-  shell: HTMLElement;
   node: RowNode<any>;
   column: Column;
   oldValue: any;
@@ -70,10 +70,6 @@ function createEditButton(kind: "confirm" | "cancel", label: string): HTMLButton
   button.setAttribute("aria-label", label);
   button.title = label;
   button.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${kind === "confirm" ? CHECK_PATH : CLOSE_PATH}</svg>`;
-  button.addEventListener("mousedown", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-  });
   return button;
 }
 
@@ -154,21 +150,26 @@ export class EditingService {
     const editor = this.createCellEditor(node, column, rowIndex, oldValue, keyPress);
     if (!editor) return false;
 
-    const controls = el("div", "mach-cell-editor-controls");
+    const controls = el("div", "mach-cell-editor-controls", { role: "group" });
     const confirmButton = createEditButton("confirm", "Confirm edit");
     const cancelButton = createEditButton("cancel", "Cancel edit");
     controls.append(confirmButton, cancelButton);
-    const shell = this.mountEditor(editor, cell, controls);
+    this.mountEditor(editor, cell, true);
+    this.core.skeleton.root.appendChild(controls);
 
     const keydown = this.onCellEditorKeyDown;
     editor.el.addEventListener("keydown", keydown);
-    confirmButton.addEventListener("click", (event) => {
+    controls.addEventListener("mousedown", (event) => {
+      event.preventDefault();
       event.stopPropagation();
-      void this.stopAsync(false);
     });
-    cancelButton.addEventListener("click", (event) => {
+    controls.addEventListener("click", (event) => {
       event.stopPropagation();
-      void this.stopAsync(true);
+      const button = (event.target as Element).closest("button");
+      if (button) void this.stopAsync(button === cancelButton);
+    });
+    controls.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") this.onCellEditorKeyDown(event);
     });
 
     this.cellEditing = {
@@ -177,11 +178,11 @@ export class EditingService {
       editor,
       oldValue,
       cell,
-      shell,
       keydown,
       confirmButton,
       cancelButton
     };
+    this.positionCellControls();
     this.focusEditor(editor, column, node);
     this.core.emit("cellEditingStarted", { rowIndex, colId: column.id, rowNode: node });
     return true;
@@ -393,6 +394,7 @@ export class EditingService {
       }
     }
     this.cellEditing = null;
+    editing.confirmButton.parentElement?.remove();
     if (changed) this.core.notifyCellValueChanged(editing.node, editing.column, editing.oldValue, newValue);
     this.destroyMountedEditor(editing);
 
@@ -482,16 +484,41 @@ export class EditingService {
     return true;
   }
 
-  private mountEditor(editor: ICellEditor, cell: HTMLElement, controls?: HTMLElement): HTMLElement {
+  private mountEditor(editor: ICellEditor, cell: HTMLElement, cellEdit = false): void {
     cleanupCellContent(this.core, cell);
-    const shell = el("div", controls ? "mach-cell-editor-shell" : "mach-row-editor-shell");
+    const shell = el("div", cellEdit ? "mach-cell-editor-shell" : "mach-row-editor-shell");
     shell.appendChild(editor.el);
-    if (controls) shell.appendChild(controls);
     cell.replaceChildren(shell);
     cell.classList.add("mach-cell--editing");
-    if (!controls) cell.classList.add("mach-cell--row-editing");
+    if (!cellEdit) cell.classList.add("mach-cell--row-editing");
     cell.removeAttribute("title");
-    return shell;
+  }
+
+  /** Existing layout/scroll passes place the one active toolbar; idle grids read no DOM here. */
+  positionCellControls(): void {
+    if (!this.cellEditing) return;
+    const { cell, column, confirmButton } = this.cellEditing;
+    const root = this.core.skeleton.root;
+    // Structural column changes can replace the original pooled cell during validation.
+    if (!root.contains(cell)) { void this.stopAsync(true); return; }
+    const controls = confirmButton.parentElement!;
+    const viewport = this.core.skeleton.bodyViewports[column.pinned ?? "center"];
+    const anchor = cell.getBoundingClientRect();
+    const clip = viewport.getBoundingClientRect();
+    const bounds = root.getBoundingClientRect();
+    const size = controls.getBoundingClientRect();
+    const right = clip.left + viewport.clientWidth;
+    const bottom = clip.top + viewport.clientHeight;
+    const top = anchor.top - size.height - 2 >= clip.top ? anchor.top - size.height - 2 : anchor.bottom + 2;
+    // A natural one-row grid can grow a small action footer; its row spacer/cap stays unchanged.
+    const flow = this.core.gridOptions.domLayout === "autoHeight" && top + size.height > bottom;
+    controls.style.position = flow ? "static" : "";
+    controls.style.justifyContent = flow ? "flex-end" : "";
+    const width = controls.getBoundingClientRect().width;
+    controls.style.visibility = (flow || width <= viewport.clientWidth && top + size.height <= bottom) &&
+      anchor.right > clip.left && anchor.left < right && anchor.bottom > clip.top && anchor.top < bottom ? "" : "hidden";
+    controls.style.left = `${clamp(anchor.right - width, clip.left, Math.max(clip.left, right - width)) - bounds.left - root.clientLeft}px`;
+    controls.style.top = `${top - bounds.top - root.clientTop}px`;
   }
 
   private unmountRowDraft(draft: RowDraft): void {
@@ -597,7 +624,6 @@ export class EditingService {
     this.setEditorBusy(editing.editor.el, busy);
     editing.confirmButton.disabled = busy;
     editing.cancelButton.disabled = false;
-    editing.shell.classList.toggle("mach-editor-shell--busy", busy);
   }
 
   private setRowBusy(row: RowEditingState, busy: boolean): void {
@@ -639,39 +665,25 @@ export class EditingService {
   }
 
   private onCellEditorKeyDown = (event: KeyboardEvent): void => {
-    if (!this.cellEditing) return;
-    if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      event.stopPropagation();
-      void this.stopAsync(false);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      void this.stopAsync(true);
-    } else if (event.key === "Tab") {
-      event.preventDefault();
-      event.stopPropagation();
+    if (!this.cellEditing || event.isComposing || event.keyCode === 229) return;
+    if (event.key !== "Enter" && event.key !== "Escape" && event.key !== "Tab") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Tab") {
       const current = this.cellEditing;
       const next = this.core.keyboardService.nextEditable(current.node.rowIndex, current.column.id, event.shiftKey ? -1 : 1);
       if (next) this.start(next.rowIndex, next.column, null, true);
       else void this.stopAsync(false);
-    }
+    } else void this.stopAsync(event.key === "Escape");
   };
 
   private onRowEditorKeyDown(event: KeyboardEvent, row: RowEditingState, draft: RowDraft): void {
     if (this.rowEditing !== row) return;
     if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === "Escape") {
+    if (event.key === "Escape" || (event.key === "Enter" && !event.shiftKey)) {
       event.preventDefault();
       event.stopPropagation();
-      void this.stopRowAsync(true);
-      return;
-    }
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      event.stopPropagation();
-      void this.stopRowAsync(false);
+      void this.stopRowAsync(event.key === "Escape");
       return;
     }
     if (event.key !== "Tab") return;

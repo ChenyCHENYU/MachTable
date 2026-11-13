@@ -19,14 +19,6 @@ export class EventBus<TEvents extends object = Record<string, any>> {
     };
   }
 
-  once<K extends EventKey<TEvents>>(type: K, listener: Listener<TEvents[K]>): () => void {
-    const off = this.on(type, (event) => {
-      off();
-      listener(event);
-    });
-    return off;
-  }
-
   emit<K extends EventKey<TEvents>>(type: K, payload?: TEvents[K]): void {
     const set = this.listeners.get(type);
     if (!set) return;

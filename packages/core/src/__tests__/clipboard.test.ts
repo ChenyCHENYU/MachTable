@@ -59,6 +59,13 @@ describe("tsv codec", () => {
     expect(parseTsv("solo")).toEqual([["solo"]]);
     expect(parseTsv("")).toEqual([]);
   });
+
+  it.each([false, true])("preserves coercion and quoting with formula protection %s", (protectFormulas) => {
+    const values = [null, undefined, false, 0, -4.5, "000123", "=SUM(A1:A2)", "\r", "多行\n值", 'a"b', "end"];
+    expect(parseTsv(toTsv([values], protectFormulas))).toEqual([[
+      "", "", "false", "0", "-4.5", "000123", `${protectFormulas ? "'" : ""}=SUM(A1:A2)`, "\r", "多行\n值", 'a"b', "end"
+    ]]);
+  });
 });
 
 describe("range selection", () => {

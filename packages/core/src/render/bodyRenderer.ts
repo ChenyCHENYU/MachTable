@@ -408,14 +408,27 @@ export class BodyRenderer {
   }
 
   private applyDomLayoutHeight(totalHeight: number): void {
-    const { bodyEl, bodyViewports } = this.core.skeleton;
+    const { bodyEl, bodyViewports, rowContainers } = this.core.skeleton;
     const { domLayout, maxBodyHeight } = this.core.gridOptions;
     const auto = domLayout === "autoHeight";
-    const height = Math.min(totalHeight, maxBodyHeight ?? totalHeight);
-    this.expandsWithRows = auto && height === totalHeight;
+    const maximum = maxBodyHeight ?? Infinity;
+    const viewport = bodyViewports.center;
+    let height = Math.min(totalHeight, maximum);
+    let scrollbar = 0;
+    if (auto) {
+      // Measure this layout's horizontal overflow, rather than the previous column window.
+      rowContainers.center.style.width = `${this.columnViewport.totalWidth()}px`;
+      viewport.style.overflowY = totalHeight <= maximum ? "hidden" : "auto";
+    }
     bodyEl.style.height = auto ? `${height}px` : "";
-    bodyViewports.center.style.overflowY = auto && !this.expandsWithRows ? "auto" : "";
-    if (this.expandsWithRows && bodyViewports.center.scrollTop) bodyViewports.center.scrollTop = 0;
+    if (auto && totalHeight <= maximum) {
+      scrollbar = Math.max(0, viewport.offsetHeight - viewport.clientHeight);
+      height = Math.min(totalHeight + scrollbar, maximum);
+      bodyEl.style.height = `${height}px`;
+    }
+    this.expandsWithRows = auto && height === totalHeight + scrollbar;
+    viewport.style.overflowY = auto && !this.expandsWithRows ? "auto" : "";
+    if (this.expandsWithRows && viewport.scrollTop) viewport.scrollTop = 0;
   }
 
   invalidateAllRowHeights(): void {
@@ -750,7 +763,9 @@ export class BodyRenderer {
 
   updateRange(force = false, checkColumnWindow = true): void {
     const startedAt = this.core.performanceMonitor.start();
-    if (!this.updateRangeInner(force, checkColumnWindow)) return;
+    const updated = this.updateRangeInner(force, checkColumnWindow);
+    this.core.editingService.positionCellControls();
+    if (!updated) return;
     const rows = Math.max(0, this.renderedRowEndExclusive - this.firstRenderedRow);
     if (this.rowPoolItems.length > Math.max(32, rows * 2)) {
       const size = rows + rows % 2 + 8;
@@ -1124,13 +1139,7 @@ export class BodyRenderer {
       cell.classList.add("mach-cell--detail-toggle");
       this.resetSpanStyle(cell);
     } else if (kind === "checkbox") {
-      const input = cell.querySelector<HTMLInputElement>(".mach-row-checkbox");
-      if (input) {
-        input.checked = node.selected;
-        input.indeterminate = this.core.selectionService.isIndeterminate(node.id);
-        input.disabled = !this.core.selectionService.isSelectable(node);
-      }
-      if (cell.className !== "mach-cell mach-cell--selection") cell.className = "mach-cell mach-cell--selection";
+      this.renderSelectionCell(cell, node);
       this.resetSpanStyle(cell);
     } else if (kind === "drag") {
       this.renderDragHandle(cell, node);
@@ -1272,7 +1281,7 @@ export class BodyRenderer {
 
   private renderGroupCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
     if (column.hasCheckbox) {
-      this.renderGroupCheckbox(cell, node);
+      this.renderSelectionCell(cell, node);
       return;
     }
     if (column.isDetailToggle) {
@@ -1288,16 +1297,17 @@ export class BodyRenderer {
     this.clearGroupCell(cell);
   }
 
-  private renderGroupCheckbox(cell: HTMLElement, node: RowNode<any>): void {
+  private renderSelectionCell(cell: HTMLElement, node: RowNode<any>): void {
     const input = cell.querySelector<HTMLInputElement>(".mach-row-checkbox");
     if (input) {
-      const state = this.core.selectionService.getGroupSelectionState(node);
-      input.checked = state.all;
-      input.indeterminate = state.some && !state.all;
+      const selection = this.core.selectionService;
+      const group = node.isGroup ? selection.getGroupSelectionState(node) : null;
+      input.checked = group?.all ?? node.selected;
+      input.indeterminate = group ? group.some && !group.all : selection.isIndeterminate(node.id);
+      // A pooled checkbox can move between disabled leaves and group rows.
+      input.disabled = !selection.isSelectable(node);
     }
-    if (cell.className !== "mach-cell mach-cell--selection") {
-      cell.className = "mach-cell mach-cell--selection";
-    }
+    if (cell.className !== "mach-cell mach-cell--selection") cell.className = "mach-cell mach-cell--selection";
   }
 
   private renderGroupLabel(cell: HTMLElement, node: RowNode<any>): void {

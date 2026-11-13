@@ -21,6 +21,7 @@ interface ActiveResize {
   startManualWidth: number | null;
   startWidth: number;
   startX: number;
+  startPreserveWidths: boolean;
 }
 
 /** @internal Resize interaction ownership stays with Core. */
@@ -48,7 +49,8 @@ export class ResizeService {
       startFlex: column.flex,
       startManualWidth: column.manualWidth,
       startWidth,
-      startX: event.clientX
+      startX: event.clientX,
+      startPreserveWidths: this.core.columnModel.preserveWidths
     };
 
     this.bindResizeEvents(handle, true);
@@ -69,8 +71,7 @@ export class ResizeService {
     this.clearFrame();
     this.bindResizeEvents(active.handle, false);
     if (restore) {
-      active.column.manualWidth = active.startManualWidth;
-      active.column.flex = active.startFlex;
+      this.restoreWidth(active);
       this.core.relayoutColumns();
     }
     this.core.skeleton.root.classList.remove("mach-root--resizing");
@@ -106,13 +107,25 @@ export class ResizeService {
     this.cancelResize();
   };
 
+  private onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    this.cancelResize();
+  };
+
+  private restoreWidth(active: ActiveResize): void {
+    active.column.manualWidth = active.startManualWidth;
+    active.column.flex = active.startFlex;
+    active.column.currentWidth = active.startWidth;
+    this.core.columnModel.preserveWidths = active.startPreserveWidths;
+  }
+
   private finishResize(active: ActiveResize): void {
     this.activeColumnResize = null;
     this.clearFrame();
     if (active.didResize) {
       if (Math.abs(this.pendingWidth - active.startWidth) < 0.5) {
-        active.column.manualWidth = active.startManualWidth;
-        active.column.flex = active.startFlex;
+        this.restoreWidth(active);
       } else {
         this.core.columnModel.setColumnWidth(active.column, this.pendingWidth);
       }
@@ -184,7 +197,7 @@ export class ResizeService {
   private bindResizeEvents(handle: HTMLElement, active: boolean): void {
     bindListeners(window, active, { pointermove: this.onMove });
     // Capture phase finalizes before the browser's normal lostpointercapture event.
-    bindListeners(window, active, { pointerup: this.onUp, pointercancel: this.onCancel }, true);
+    bindListeners(window, active, { pointerup: this.onUp, pointercancel: this.onCancel, keydown: this.onKeyDown }, true);
     bindListeners(handle, active, { lostpointercapture: this.onLostPointerCapture });
   }
 

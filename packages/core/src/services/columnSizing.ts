@@ -38,6 +38,7 @@ export class ColumnSizing {
       }
     }
     this.needsContentMeasure = false;
+    if (changed) this.core.columnModel.preserveWidths = false;
     return changed;
   }
 
