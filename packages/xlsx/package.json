@@ -1,12 +1,21 @@
 {
   "name": "@agile-team/mach-table-xlsx",
-  "version": "0.40.2",
+  "version": "0.41.0",
   "description": "Optional, engine-agnostic XLSX import and export extension for MachTable",
-  "keywords": ["data-grid", "xlsx", "excel", "import", "export", "typescript"],
+  "keywords": [
+    "data-grid",
+    "xlsx",
+    "excel",
+    "import",
+    "export",
+    "typescript"
+  ],
   "author": "ChenyCHENYU (Agile Team)",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/ChenyCHENYU/MachTable#readme",
-  "bugs": { "url": "https://github.com/ChenyCHENYU/MachTable/issues" },
+  "bugs": {
+    "url": "https://github.com/ChenyCHENYU/MachTable/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ChenyCHENYU/MachTable.git",
@@ -16,15 +25,27 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "engines": { "node": ">=18.0.0" },
-  "publishConfig": { "access": "public" },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
@@ -33,5 +54,7 @@
     "test:coverage": "vitest run --coverage",
     "prepublishOnly": "node ../../scripts/check-publish-agent.mjs"
   },
-  "dependencies": { "@agile-team/mach-table": "workspace:*" }
+  "dependencies": {
+    "@agile-team/mach-table": "workspace:*"
+  }
 }

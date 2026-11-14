@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
     <script type="module">
     import {createGrid,indexColumn} from '/@fs${root}/dist/index.js';
     window.columnPresentationApi=createGrid(document.getElementById('grid'),{
-      pagination:false,enableColumnResize:true,columnMenu:true,size:'compact',showCellBorders:true,
+      pagination:false,enableColumnResize:true,columnLayout:"normal",columnMenu:true,size:'compact',showCellBorders:true,
       columnDefs:[indexColumn(),{field:'id',headerName:'生产计划',width:240,filter:true},
         {field:'note',headerName:'备注'},{field:'status',headerName:'状态',status:{S1B:{label:'待复核',color:'danger'},S1C:{label:'已完成',color:'success'}}}],
       rowData:[{id:'P001',note:'异常长的备注'.repeat(1000),status:'S1B'},{id:'P002',note:'普通备注',status:'S1C'}]

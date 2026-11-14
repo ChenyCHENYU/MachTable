@@ -237,6 +237,15 @@ export class ColumnModel {
         inputs.push(input);
       }
     }
+    // 默认只扩张内容基准；明确的 flex 权重继续由使用方控制。
+    if (this.core.gridOptions.columnLayout === "auto" && !inputs.some(input => input.flex)) {
+      scalable.forEach((column, index) => {
+        if (column.colDef.autoWidth !== false && (column.colDef.width == null || column.contentWidth != null)) {
+          const input = inputs[index];
+          input.flex = clampWidth(input.width ?? DEFAULT_COLUMN_WIDTH, input);
+        }
+      });
+    }
     const widths = this.core.gridOptions.columnLayout === "fit"
       ? fitColumnWidths(inputs, Math.max(0, available))
       : computeColumnWidths(inputs, Math.max(0, available));

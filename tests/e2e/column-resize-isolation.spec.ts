@@ -72,3 +72,61 @@ for (const columnLayout of ["normal", "fit"] as const) {
     expect(await page.evaluate(() => window.resizeIsolation.columns.getState().find(column => column.colId === "amount")?.widthMode)).toBe("auto");
   });
 }
+
+for (const scenario of [
+  { name: "vertical pointer movement", width: 800, deltaX: 0, maxWidth: undefined, nextWidth: 1000 },
+  { name: "minimum width", width: 300, deltaX: -30, maxWidth: undefined, nextWidth: 700 },
+  { name: "maximum width", width: 800, deltaX: 30, maxWidth: 340, nextWidth: 300 }
+]) {
+  test(`zero-effect resize at ${scenario.name} retains automatic sizing`, async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    const url = new URL("/__resize-zero-effect", info.project.use.baseURL ?? "http://127.0.0.1:4173").href;
+    await page.route(url, route => route.fulfill({ contentType: "text/html", body: `<!doctype html>
+      <link rel="stylesheet" href="/@fs${core}/styles/mach-table.css">
+      <style>#grid{width:${scenario.width}px;height:220px}</style><div id="grid"></div><output id="resize-events">0</output>
+      <script type="module">
+      import{createGrid}from'/@fs${core}/src/index.ts';
+      window.resizeIsolation=createGrid(document.getElementById('grid'),{
+        rowNumber:false,pagination:false,enableColumnResize:true,columnLayout:'normal',
+        columnDefs:[{field:'name',headerName:'计划',width:130},
+          {field:'amount',headerName:'规格',minWidth:170,flex:1,maxWidth:${JSON.stringify(scenario.maxWidth)}}],
+        rowData:[{name:'计划一',amount:12.5}]
+      });
+      let events=0;
+      window.resizeIsolation.on('columnResized',()=>document.getElementById('resize-events').textContent=String(++events));
+      </script>` }));
+    await page.goto(url);
+    const handle = page.locator('.mach-header-cell[data-col-id="amount"] .mach-header-resize');
+    await expect(handle).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const before = await page.evaluate(() => window.resizeIsolation.columns.getState());
+    const initial = before.find(column => column.colId === "amount")!.width!;
+    const box = (await handle.boundingBox())!;
+    // Stay inside the clipped edge handle when min widths create a two-pixel overflow.
+    await page.mouse.move(box.x + 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(page.locator(".mach-column-resize-guide")).toBeVisible();
+    await page.mouse.move(box.x + 2 + scenario.deltaX, box.y + box.height / 2 + 18, { steps: 3 });
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(await page.evaluate(() => window.resizeIsolation.columns.getState())).toEqual(before);
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.resizeIsolation.columns.getState())).toEqual(before);
+    await expect(page.locator("#resize-events")).toHaveText("0");
+    await expect(page.locator(".mach-column-resize-guide")).toHaveCount(0);
+
+    await page.locator("#grid").evaluate((element, width) => { (element as HTMLElement).style.width = `${width}px`; }, scenario.nextWidth);
+    const width = () => page.evaluate(() => window.resizeIsolation.columns.getState().find(column => column.colId === "amount")!.width!);
+    await expect.poll(width).not.toBe(initial);
+    if (scenario.maxWidth) {
+      const narrower = await width();
+      await page.locator("#grid").evaluate(element => { (element as HTMLElement).style.width = "420px"; });
+      await expect.poll(width).toBeGreaterThan(narrower);
+    }
+    expect(await page.evaluate(() => window.resizeIsolation.columns.getState().find(column => column.colId === "amount")))
+      .toMatchObject({ flex: 1, widthMode: "auto" });
+    await expect(page.locator("#resize-events")).toHaveText("0");
+    expect(errors).toEqual([]);
+  });
+}

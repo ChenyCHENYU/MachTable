@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-react",
-  "version": "0.40.2",
+  "version": "0.41.0",
   "description": "Official React 18+ adapter for the MachTable enterprise data grid",
   "keywords": [
     "react",

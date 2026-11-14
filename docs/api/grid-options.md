@@ -42,7 +42,7 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 | `rowHeight` / `headerHeight` | `number` | 随密度 | 行高/单层表头高度 |
 | `getRowHeight` | `(params) => number` | — | 可变行高 |
 | `rowBuffer` | `number` | `8` | 视口上下预渲染行数 |
-| `columnLayout` | `"normal" \| "fit"` | `"normal"` | `fit` 持续填满容器 |
+| `columnLayout` | `"auto" \| "normal" \| "fit"` | `"auto"` | 少列按基准比例铺满，多列保留基准横滚；`normal` 为纯内容布局，`fit` 持续填满 |
 | `enableColumnResize` | `boolean` | `false` | 开启鼠标、触控、双击和键盘列宽调整 |
 | `domLayout` | `"normal" \| "autoHeight"` | `"normal"` | 自动高度只用于小型本地表 |
 | `maxBodyHeight` | `number` | 未设上限 | 自动高度模式下表体的像素上限，超过后虚拟滚动 |

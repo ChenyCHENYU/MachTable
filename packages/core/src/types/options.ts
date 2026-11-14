@@ -143,7 +143,7 @@ export type EventHandlers<TData = any> = {
 
 export type RowSelectionMode = "none" | "single" | "multiple";
 export type GridSize = "compact" | "normal" | "large";
-export type ColumnLayoutMode = "normal" | "fit";
+export type ColumnLayoutMode = "auto" | "normal" | "fit";
 export type DomLayoutMode = "normal" | "autoHeight";
 export type ThemeMode = "light" | "dark" | "auto";
 export type GridEditType = "cell" | "fullRow";
@@ -259,7 +259,7 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   rowHeight?: number;
   headerHeight?: number;
   rowBuffer?: number;
-  /** `fit` continuously fills the container without grid-ready glue code. */
+  /** 默认 `auto` 按内容基准比例扩张，空间不足保留横滚；`normal` 保留自然宽，`fit` 可按比例收缩。 */
   columnLayout?: ColumnLayoutMode;
   /** Enables pointer, double-click and Alt+Arrow column resizing. Disabled by default. */
   enableColumnResize?: boolean;

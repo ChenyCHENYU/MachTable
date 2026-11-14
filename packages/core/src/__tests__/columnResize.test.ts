@@ -218,6 +218,81 @@ describe("opt-in column resizing", () => {
     api.destroy();
   });
 
+  const boundedDrags = [
+    { name: "vertical movement", viewport: 800, delta: 0, maxWidth: undefined, nextViewport: 1000 },
+    { name: "minimum width", viewport: 300, delta: -30, maxWidth: undefined, nextViewport: 700 },
+    { name: "maximum width", viewport: 800, delta: 30, maxWidth: 340, nextViewport: 300 }
+  ];
+
+  it.each(boundedDrags.flatMap(scenario => [false, true].map(flushFrame => ({ ...scenario, flushFrame }))))(
+    "ignores a zero-effect flex drag at $name (animation frame: $flushFrame)",
+    async ({ viewport, delta, maxWidth, nextViewport, flushFrame }) => {
+      vi.useFakeTimers();
+      const save = vi.fn();
+      const resized = vi.fn();
+      const host = createHost(viewport);
+      const api = createGrid(host, {
+        rowNumber: false, rowData: rows, pagination: false, enableColumnResize: true,
+        columnDefs: [{ field: "name", width: 130 }, { field: "amount", minWidth: 170, maxWidth, flex: 1 }],
+        persistence: columnPersistence("bounded-orders", { load: () => null, save })
+      });
+      setViewportWidth(host, viewport);
+      api.view.refreshLayout();
+      api.on("columnResized", resized);
+      const before = api.columns.getState();
+      const start = before.find(column => column.colId === "amount")!.width!;
+      resizeHandle(host, "amount").dispatchEvent(pointer("pointerdown", start));
+      const move = pointer("pointermove", start + delta);
+      Object.defineProperty(move, "clientY", { value: 30 });
+      window.dispatchEvent(move);
+      if (flushFrame) await vi.advanceTimersByTimeAsync(20);
+      window.dispatchEvent(pointer("pointerup", start + delta));
+      await vi.advanceTimersByTimeAsync(20);
+
+      expect(api.columns.getState()).toEqual(before);
+      expect(resized).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
+      expect(host.querySelector(".mach-column-resize-guide")).toBeNull();
+      setViewportWidth(host, nextViewport);
+      api.view.refreshLayout();
+      expect(api.columns.getState().find(column => column.colId === "amount")).toMatchObject({
+        flex: 1, widthMode: "auto", width: nextViewport - 130
+      });
+      api.destroy();
+    }
+  );
+
+  it.each(boundedDrags)("restores flex mode after a real drag returns to $name", async ({ viewport, delta, maxWidth }) => {
+    vi.useFakeTimers();
+    const save = vi.fn();
+    const resized = vi.fn();
+    const host = createHost(viewport);
+    const api = createGrid(host, {
+      rowNumber: false, rowData: rows, pagination: false, enableColumnResize: true,
+      columnDefs: [{ field: "name", width: 130 }, { field: "amount", minWidth: 170, maxWidth, flex: 1 }],
+      persistence: columnPersistence("returning-orders", { load: () => null, save })
+    });
+    setViewportWidth(host, viewport);
+    api.view.refreshLayout();
+    api.on("columnResized", resized);
+    const before = api.columns.getState();
+    const start = before.find(column => column.colId === "amount")!.width!;
+    resizeHandle(host, "amount").dispatchEvent(pointer("pointerdown", start));
+    window.dispatchEvent(pointer("pointermove", start + (maxWidth ? -50 : 50)));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(api.columns.getState().find(column => column.colId === "amount")?.widthMode).toBe("manual");
+    window.dispatchEvent(pointer("pointermove", start + delta));
+    await vi.advanceTimersByTimeAsync(20);
+    window.dispatchEvent(pointer("pointerup", start + delta));
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(api.columns.getState()).toEqual(before);
+    expect(resized.mock.calls.map(([event]) => event.finished)).toEqual([false, false, true]);
+    expect(resized).toHaveBeenLastCalledWith(expect.objectContaining({ colId: "amount", width: start }));
+    expect(save).toHaveBeenCalledTimes(1);
+    api.destroy();
+  });
+
   it("debounces full GridState only after a resize is finished", () => {
     vi.useFakeTimers();
     const save = vi.fn();

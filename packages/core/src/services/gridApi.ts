@@ -248,7 +248,7 @@ export class GridApiImpl<TData = any> {
     const fitted = fitColumnWidths(cols.map(col => ({
       width: col.currentWidth, minWidth: col.colDef.minWidth, maxWidth: col.colDef.maxWidth
     })), Math.max(0, target - fixedWidth));
-    const responsive = this.core.gridOptions.columnLayout === "fit" && width === undefined;
+    const responsive = this.core.gridOptions.columnLayout !== "normal" && width === undefined;
     const changed = cols.filter((col, index) => responsive
       ? this.core.columnModel.setContentWidth(col, fitted[index])
       : this.core.columnModel.setColumnWidth(col, fitted[index]));
@@ -265,7 +265,7 @@ export class GridApiImpl<TData = any> {
 
   private autoSizeColumnInternal(column: Column<TData>): boolean {
     // Display/utility columns keep their configured width in responsive mode.
-    if (this.core.gridOptions.columnLayout === "fit" && column.colDef.suppressSizeToFit) return false;
+    if (this.core.gridOptions.columnLayout !== "normal" && column.colDef.suppressSizeToFit) return false;
     if (column.hasCheckbox || column.isDetailToggle) {
       return this.core.columnModel.setColumnWidth(column, column.isDetailToggle ? 38 : 46);
     }
@@ -274,7 +274,7 @@ export class GridApiImpl<TData = any> {
   }
 
   private setAutoSizeWidth(column: Column<TData>, width: number): boolean {
-    return this.core.gridOptions.columnLayout === "fit"
+    return this.core.gridOptions.columnLayout !== "normal"
       ? this.core.columnModel.setContentWidth(column, width)
       : this.core.columnModel.setColumnWidth(column, width);
   }
@@ -575,7 +575,7 @@ export class GridApiImpl<TData = any> {
       if (key === "headerHeight") effects.header = true;
     }
     if (options.columnLayout != null && options.columnLayout !== resolved.columnLayout) {
-      resolved.columnLayout = options.columnLayout === "fit" ? "fit" : "normal";
+      resolved.columnLayout = options.columnLayout === "fit" || options.columnLayout === "normal" ? options.columnLayout : "auto";
       this.core.columnModel.preserveWidths = false;
       effects.layout = true;
     }

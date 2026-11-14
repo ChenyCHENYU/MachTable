@@ -1,5 +1,6 @@
 import type { GridCore } from "../core/gridCore";
 import { bindListeners, el } from "../lib/dom";
+import { clampWidth } from "../lib/layout";
 import type { Column } from "./column";
 
 type ResizeContext = Pick<
@@ -144,7 +145,8 @@ export class ResizeService {
 
   private applyPendingWidth(): void {
     const active = this.activeColumnResize;
-    if (!active || !this.core.columnModel.setColumnWidth(active.column, this.pendingWidth)) return;
+    // Pointer movement alone must not turn an unchanged automatic column into a manual one.
+    if (!active?.didResize || !this.core.columnModel.setColumnWidth(active.column, this.pendingWidth)) return;
     this.core.relayoutColumns();
     this.updateFeedback(active);
     this.core.emitColumnResize(active.column, false);
@@ -181,7 +183,10 @@ export class ResizeService {
 
   private widthFromPointer(active: ActiveResize, clientX: number): number {
     const pointerX = Number.isFinite(clientX) ? clientX : active.startX;
-    return Math.max(1, active.startWidth + pointerX - active.startX);
+    return clampWidth(Math.max(1, active.startWidth + pointerX - active.startX), {
+      minWidth: active.column.minWidth ?? active.column.colDef.minWidth,
+      maxWidth: active.column.colDef.maxWidth
+    });
   }
 
   private matchActivePointer(event: PointerEvent): ActiveResize | null {

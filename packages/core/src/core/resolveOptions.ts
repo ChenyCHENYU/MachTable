@@ -109,7 +109,7 @@ function resolveDataAndLayout<TData>(options: GridOptions<TData>, size: GridSize
     detailRowHeight: finiteAtLeast(options.detailRowHeight, 240, 1),
     headerHeight: finiteAtLeast(options.headerHeight, preset.headerHeight, 1),
     rowBuffer: finiteAtLeast(options.rowBuffer, 8, 0, true),
-    columnLayout: options.columnLayout === "fit" ? "fit" as const : "normal" as const,
+    columnLayout: options.columnLayout === "fit" || options.columnLayout === "normal" ? options.columnLayout : "auto" as const,
     enableColumnResize: options.enableColumnResize === true,
     domLayout: options.domLayout === "autoHeight" ? "autoHeight" as const : "normal" as const,
     maxBodyHeight: normalizeFinite(options.maxBodyHeight, 1),
@@ -271,7 +271,8 @@ export function mergeColDef<TData>(
   defaults: Partial<ColDef<TData>>,
   columnTypes: Readonly<Record<string, Partial<ColDef<TData>>>> = {}
 ): ColDef<TData> {
-  const typedDefaults: Partial<ColDef<TData>> = {};
+  const typedDefaults: Partial<ColDef<TData>> = colDef.checkboxSelection || colDef.rowDrag || hasColumnType(colDef, "index")
+    ? { resizable: false, suppressSizeToFit: true } : {};
   for (const name of columnTypeNames(colDef.type)) {
     if (name === "rightAligned") typedDefaults.align = "right";
     const definition = columnTypes[name];
