@@ -3,11 +3,10 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.40.1
+pnpm up @agile-team/mach-table-vue@^0.41.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.40.1
+pnpm up @agile-team/mach-table-react@^0.41.0
 ```
-
 
 ## 0.41 默认智能列宽
 
