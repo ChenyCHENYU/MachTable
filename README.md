@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.41.0-2563eb" alt="Source version 0.41.0" />
+  <img src="https://img.shields.io/badge/source-0.41.1-2563eb" alt="Source version 0.41.1" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -378,7 +378,7 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.41.0`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
+当前源码版本为 `0.41.1`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 
@@ -405,7 +405,7 @@ const columns = [
 
 `status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
 
-默认 `columnLayout: "auto"`：自动业务列空间充足时按表头与内容基准比例铺满，列多时保留基准宽度并横向滚动；序号、多选和操作等结构列保持紧凑。显式 `normal` 保留按内容呈现，`fit` 保留整表比例分配。显式 `width` 和拖动后的宽度保持用户偏好；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽只改变目标列，其他列保持当前宽度及自动模式；容器实际宽度、列结构或测量内容变化时再重新分配。列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
+默认 `columnLayout: "auto"`：自动业务列空间充足时按表头与内容基准比例铺满，列多时保留基准宽度并横向滚动；序号、多选和操作等结构列保持紧凑。显式 `normal` 保留按内容呈现，`fit` 保留整表比例分配。显式 `width` 和拖动后的宽度保持用户偏好；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽只改变目标列，其他列保持当前宽度及自动模式；纯文本缩窄后保留开头并在尾部省略，完整内容可通过提示查看，行背景持续覆盖中心可用区；容器实际宽度、列结构或测量内容变化时再重新分配。列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 
 表头默认完整展示，不省略。初始布局、fit、列宽恢复、API、鼠标和 Alt+方向键统一以完整标题及排序/筛选/列工具控件为最小宽度；显式 width/minWidth/maxWidth 不能把标题压窄，空间不足时表格内部横向滚动。360px 上限仅作用于数据内容的首选宽度，不截断表头。复杂自定义表头请显式提供 minWidth。
 

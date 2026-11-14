@@ -46,6 +46,22 @@ function width(api: GridApi<Row>, colId: string): number {
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 
 describe("responsive column width budget", () => {
+  it("fills the center row background after manual shrinking without deducting pinned panes twice", () => {
+    const { host, api } = grid();
+    api.columns.setWidth("name", 100);
+    api.columns.setWidth("note", 140);
+    const container = host.querySelector<HTMLElement>(".mach-pane--center .mach-row-container")!;
+    expect(container.style.width).toBe("580px");
+    resize(host, api, 1200, 10);
+    expect(container.style.width).toBe("970px");
+    // Long manual columns must retain horizontal scrolling, including zero available center space.
+    api.columns.setWidth("note", 1000);
+    expect(container.style.width).toBe("1100px");
+    resize(host, api, 200);
+    expect(container.style.width).toBe("1100px");
+    api.destroy();
+  });
+
   it("subtracts pinned widths once and excludes only the vertical scrollbar", () => {
     const { host, api } = grid();
     expect(width(api, "name") + width(api, "note")).toBeCloseTo(580);

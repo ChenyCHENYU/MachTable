@@ -2,7 +2,9 @@ import type { GridCore } from "../core/gridCore";
 import type { RowNode } from "../types/row";
 import type { Column } from "../services/column";
 import type { CellClassParams, CellRendererParams } from "../types/params";
+import type { CellRendererFn } from "../types/colDef";
 import { getCellRuntimeState, peekCellRuntimeState } from "./runtimeState";
+import { el } from "../lib/dom";
 
 type ErrorContext = Pick<GridCore<any>, "reportError">;
 type CellValueContext = Pick<GridCore<any>, "api" | "readCellValue" | "reportError">;
@@ -152,12 +154,21 @@ export function applyCellStyle(core: CellValueContext, cell: HTMLElement, node: 
   state.styleKeys = keys;
 }
 
+/** Keep a shrinkable text item across refreshes; rich renderers retain ownership of their DOM. */
+function renderTextContent(cell: HTMLElement, value: string): void {
+  const previous = cell.firstElementChild;
+  const label = previous?.className === "mach-cell-text" ? previous : el("span", "mach-cell-text");
+  if (label.textContent !== value) label.textContent = value;
+  cell.replaceChildren(label);
+}
+
 export function renderCellContent(core: CellRenderContext, cell: HTMLElement, node: RowNode<any>, column: Column): void {
   const value = core.readCellValue(node, column);
   const formatted = formatCellValueWith(core, node, column, value);
   const rendererDef = column.colDef.cellRenderer;
   const renderer =
     typeof rendererDef === "string" ? core.resolveCellRenderer(rendererDef) : rendererDef;
+  let out: ReturnType<CellRendererFn> = formatted;
 
   if (renderer) {
     const params: CellRendererParams = {
@@ -176,35 +187,31 @@ export function renderCellContent(core: CellRenderContext, cell: HTMLElement, no
       return;
     }
     cleanupCellContent(core, cell);
-    let out: ReturnType<typeof renderer>;
     try {
       out = renderer(params);
     } catch (error) {
       core.reportError(error, "cellRenderer", { colId: column.id, rowId: node.id });
-      cell.textContent = formatted;
-      return;
-    }
-    if (typeof out === "string") {
-      cell.textContent = out;
-    } else if (out instanceof HTMLElement) {
-      cell.replaceChildren(out);
-    } else if (out && typeof out === "object" && out.el instanceof HTMLElement) {
-      const result = out;
-      cell.replaceChildren(result.el);
-      const state = getCellRuntimeState(cell);
-      state.destroy = result.destroy;
-      if (result.refresh) {
-        state.refresh = (next) => result.refresh!(next);
-        state.rendererDefinition = renderer;
-        state.rendererRowId = node.id;
-        state.rendererColumnId = column.id;
-      }
-    } else {
-      cell.textContent = "";
     }
   } else {
     cleanupCellContent(core, cell);
-    cell.textContent = formatted;
+  }
+  if (typeof out === "string") {
+    renderTextContent(cell, out);
+  } else if (out instanceof HTMLElement) {
+    cell.replaceChildren(out);
+  } else if (out && typeof out === "object" && out.el instanceof HTMLElement) {
+    const result = out;
+    cell.replaceChildren(result.el);
+    const state = getCellRuntimeState(cell);
+    state.destroy = result.destroy;
+    if (result.refresh) {
+      state.refresh = (next) => result.refresh!(next);
+      state.rendererDefinition = renderer;
+      state.rendererRowId = node.id;
+      state.rendererColumnId = column.id;
+    }
+  } else {
+    cell.textContent = "";
   }
   updateCellTooltip(core, cell, node, column, value, formatted);
 }

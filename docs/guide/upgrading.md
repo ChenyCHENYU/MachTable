@@ -3,10 +3,16 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.41.0
+pnpm up @agile-team/mach-table-vue@^0.41.1
 # 或
-pnpm up @agile-team/mach-table-react@^0.41.0
+pnpm up @agile-team/mach-table-react@^0.41.1
 ```
+
+## 0.41.0 → 0.41.1
+
+- 手动缩列后中心行背景覆盖完整可用区，不重复扣除左右固定区宽度。
+- 纯文本及字符串渲染结果在窄列中保留开头并尾部省略，提示仍显示完整内容；复用文本节点，自定义渲染器、树和编辑器保持原有结构。
+- 无新增配置项，沿用 81 KiB 消费端体积预算与原有性能门槛。
 
 ## 0.41 默认智能列宽
 

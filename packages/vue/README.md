@@ -4,7 +4,7 @@
 
 # @agile-team/mach-table-vue
 
-MachTable 0.41.0 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
+MachTable 0.41.1 的官方 Vue 3 适配包。一个依赖即可获得 Core、泛型 `<MachTable>`、原生 slots、应用/路由配置、按需工作流、异步组件边界和自动生命周期清理。
 
 按 key 切换表格场景时，`useMachTable()` / `useMachTableController()` 会重新绑定当前实例并等待其就绪。模板中的行拖拽事件使用 `@row-drag-end="handleRowDragEnd"`，也可在 `v-bind` 配置对象中传入 `onRowDragEnd`。
 
@@ -235,7 +235,7 @@ const columns = [
 
 `status` 复用主题标签，支持 `success/warning/danger/info/neutral` 及 CSS 颜色；未知代码保持中性，`0/false` 保留。formatter 的文字可参与默认语义匹配；显式 renderer 优先。状态配置只控制展示，导出继续遵循原有列值政策。
 
-默认 `columnLayout: "auto"`：自动业务列空间充足时按表头与内容基准比例铺满，列多时保留基准宽度并横向滚动；序号、多选和操作等结构列保持紧凑。显式 `normal` 保留按内容呈现，`fit` 保留整表比例分配。显式 `width` 和拖动后的宽度保持用户偏好；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽只改变目标列，其他列保持当前宽度及自动模式；容器实际宽度、列结构或测量内容变化时再重新分配。列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
+默认 `columnLayout: "auto"`：自动业务列空间充足时按表头与内容基准比例铺满，列多时保留基准宽度并横向滚动；序号、多选和操作等结构列保持紧凑。显式 `normal` 保留按内容呈现，`fit` 保留整表比例分配。显式 `width` 和拖动后的宽度保持用户偏好；`autoWidth: false` 保留原默认 150px。显式选择 `columnLayout: "fit"` 时仍按首选宽度比例铺满，360px 限制的是内容首选宽度，实际铺满仍遵循显式 minWidth/maxWidth；配置 `flex` 则主动允许本列吸收余量。手动调宽只改变目标列，其他列保持当前宽度及自动模式；纯文本缩窄后保留开头并在尾部省略，完整内容可通过提示查看，行背景持续覆盖中心可用区；容器实际宽度、列结构或测量内容变化时再重新分配。列状态恢复及主动 `columns.fit()` 不受自动默认上限限制。更新数据或刷新单元格会重新测量，普通布局刷新复用结果。
 
 表头默认完整展示，不省略。初始布局、fit、列宽恢复、API、鼠标和 Alt+方向键统一以完整标题及排序/筛选/列工具控件为最小宽度；显式 width/minWidth/maxWidth 不能把标题压窄，空间不足时表格内部横向滚动。360px 上限仅作用于数据内容的首选宽度，不截断表头。复杂自定义表头请显式提供 minWidth。
 

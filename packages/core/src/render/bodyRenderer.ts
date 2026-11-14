@@ -345,8 +345,8 @@ export class BodyRenderer {
     const logicalTop = this.scrollCoordinates.read(viewport.scrollTop);
     const wasCompressed = this.scrollCoordinates.compressed;
     this.scrollCoordinates.configure(totalHeight, viewport.clientHeight, !this.expandsWithRows);
-    const centerAvailable = Math.max(0, viewport.clientWidth - widths.left - widths.right);
-    const centerWidth = Math.max(widths.center, centerAvailable);
+    // The center viewport already excludes the fixed panes; fill its remaining row background once.
+    const centerWidth = Math.max(widths.center, viewport.clientWidth);
     for (const pane of PANES) {
       const container = sk.rowContainers[pane];
       container.style.height = `${this.scrollCoordinates.height}px`;

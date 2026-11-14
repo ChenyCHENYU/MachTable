@@ -699,6 +699,12 @@
   line-height: calc(var(--mach-row-h) - 2px);
 }
 
+.mach-cell-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mach-cell--loading {
   pointer-events: none;
 }
