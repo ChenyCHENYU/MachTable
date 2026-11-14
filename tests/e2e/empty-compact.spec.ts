@@ -6,21 +6,19 @@ declare global { interface Window { emptyCompactFixture: GridApi } }
 const core = resolve(import.meta.dirname, "../../packages/core");
 
 async function fits(root: Locator): Promise<void> {
-  const parts = await root.locator(".mach-empty").evaluate(empty => {
-    const root = empty.closest(".mach-root")!;
+  // Overlay replacement is frame-scheduled; measure from the stable root so a
+  // detached previous overlay cannot race the geometry assertion.
+  await expect.poll(() => root.evaluate(root => {
+    const empty = root.querySelector(".mach-empty");
+    if (!empty?.children.length) return false;
     const bounds = root.getBoundingClientRect();
-    return [...empty.children].map(child => {
+    return [...empty.children].every(child => {
       const box = child.getBoundingClientRect();
       const hit = root.ownerDocument.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-      return { name: child.classList.value, inside: box.top >= bounds.top && box.bottom <= bounds.bottom && box.left >= bounds.left && box.right <= bounds.right,
-        height: box.height, hit: hit === child || child.contains(hit) };
+      return box.top >= bounds.top && box.bottom <= bounds.bottom && box.left >= bounds.left && box.right <= bounds.right &&
+        box.height > 0 && (hit === child || child.contains(hit));
     });
-  });
-  for (const part of parts) {
-    expect(part.inside, `${part.name} must stay inside root`).toBe(true);
-    expect(part.height, `${part.name} must remain visible`).toBeGreaterThan(0);
-    expect(part.hit, `${part.name} must be hit-testable`).toBe(true);
-  }
+  })).toBe(true);
 }
 
 for (const height of [120, 150, 360]) {

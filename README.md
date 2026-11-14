@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.41.1-2563eb" alt="Source version 0.41.1" />
+  <img src="https://img.shields.io/badge/source-0.42.0-2563eb" alt="Source version 0.42.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>
@@ -378,7 +378,9 @@ pnpm test:e2e
 
 ## 版本与授权
 
-当前源码版本为 `0.41.1`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
+当前源码版本为 `0.42.0`。Vue 和 React 组件默认显示序号，数值列默认居中。异步加载列时可恢复已保存的布局，动态变更列时保留用户偏好并清理已删除列的筛选。接入见[动态报表示例](./docs/recipes/schema-driven.md)，版本迁移见[升级指南](./docs/guide/upgrading.md)。
+
+选中行默认显示最左侧主题色标识，斑马纹与条件行色保留正确的选中反馈；勾选和半选使用白色前景。紧凑布局只需 `size: "compact"`，行/表头为 30/34px，显式 `rowHeight/headerHeight` 优先。全选匹配数据时传递 `selectionState` 给后端，`selectedRows` 只保留最后成功页的行快照；普通显式跨页选择保持原有语义。多单元格编辑按事务合并脏状态通知。
 
 Copyright © 2026 ChenyCHENYU (Agile Team). All rights reserved.
 

@@ -88,6 +88,7 @@ export interface UseMachTableQueryReturn<TData> {
   filterModel: ShallowRef<FilterModel>;
   advancedFilterModel: ShallowRef<AdvancedFilterModel | null>;
   selectedKeys: Ref<string[]>;
+  /** Explicit selections retain loaded snapshots; allMatching contains only selected rows from the last accepted page. */
   selectedRows: ShallowRef<TData[]>;
   selectionState: ComputedRef<MachTableRemoteSelectionState>;
   bindings: ComputedRef<GridOptions<TData>>;
@@ -166,7 +167,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     const ids = allMatching.value ? [...selectedById.keys()] : selectedKeys.value;
     selectedRows.value = ids.flatMap((id) => {
       const row = selectedById.get(id);
-      return row === undefined || excludedIds.has(id) ? [] : [row];
+      // Every cache write is gated by the selection rule; exclusions never
+      // retain snapshots, including when a visible selection event is handled.
+      return row === undefined ? [] : [row];
     });
   };
 
@@ -194,13 +197,16 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     loading.value = false;
   };
 
-  const applyPageResult = async (
+  const applyPageResult = (
     result: MachTablePageResult<TData>,
     acceptedPage: number
   ): Promise<void> => {
     const nextRows = [...result.rows];
     const pageRows = new Map(nextRows.map((row) => [rowId(row), row] as const));
     if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Duplicate remote row keys.");
+    // The query rule owns allMatching selection; retain only this page's row
+    // snapshots so visiting more pages cannot grow the cache indefinitely.
+    if (allMatching.value) selectedById.clear();
     if (selectionScope === "page") {
       for (const id of selectedIds) {
         if (!pageRows.has(id)) {
@@ -218,7 +224,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
     updateSelectedRefs();
     options.onSuccess?.(result);
-    await nextTick(syncVisibleSelection);
+    return nextTick(syncVisibleSelection);
   };
 
   const load = async (): Promise<void> => {
@@ -311,28 +317,32 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const onSelectionChanged = (event: SelectionChangedEvent<TData>): void => {
     if (suppressSelectionEvents) return;
     if (allMatching.value) {
+      selectedById.clear();
       const nextVisibleIds = new Set(event.selectedRows.map(rowId));
       for (const row of rows.value) {
         const id = rowId(row);
-        if (nextVisibleIds.has(id)) excludedIds.delete(id);
-        else {
+        if (nextVisibleIds.has(id)) {
+          excludedIds.delete(id);
+          selectedById.set(id, row);
+        } else {
           excludedIds.add(id);
+        }
+      }
+    } else {
+      if (selectionScope === "page") {
+        clearSelectionCache();
+      } else {
+        for (const row of rows.value) {
+          const id = rowId(row);
+          selectedIds.delete(id);
           selectedById.delete(id);
         }
       }
-    } else if (selectionScope === "page") {
-      clearSelectionCache();
-    } else {
-      for (const row of rows.value) {
+      for (const row of event.selectedRows) {
         const id = rowId(row);
-        selectedIds.delete(id);
-        selectedById.delete(id);
+        selectedIds.add(id);
+        selectedById.set(id, row);
       }
-    }
-    for (const row of event.selectedRows) {
-      const id = rowId(row);
-      if (!allMatching.value) selectedIds.add(id);
-      selectedById.set(id, row);
     }
     updateSelectedRefs();
   };
@@ -451,7 +461,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     excludedIds.clear();
     selectedIds.clear();
     for (const id of keys) selectedIds.add(String(id));
-    for (const id of [...selectedById.keys()]) {
+    for (const id of selectedById.keys()) {
       if (!selectedIds.has(id)) selectedById.delete(id);
     }
     for (const row of rows.value) {

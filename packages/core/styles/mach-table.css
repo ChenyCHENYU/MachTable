@@ -30,6 +30,8 @@
 
   --mach-row-hover-bg: #f6f8fa;
   --mach-row-selected-bg: #eff6ff;
+  --mach-row-selected-marker-width: 2px;
+  --mach-selection-fg: #fff;
   --mach-zebra-bg: #fafbfd;
   --mach-cell-focus-color: #2563eb;
   --mach-focus-width: 1.5px;
@@ -749,13 +751,13 @@
   z-index: auto;
 }
 
-.mach-row--hover,
-.mach-row--hover .mach-cell {
+.mach-root .mach-row.mach-row--hover,
+.mach-root .mach-row.mach-row--hover .mach-cell {
   background: var(--mach-row-hover-bg);
 }
 
-.mach-row--selected,
-.mach-row--selected .mach-cell {
+.mach-root .mach-row.mach-row--selected,
+.mach-root .mach-row.mach-row--selected .mach-cell {
   background: var(--mach-row-selected-bg);
 }
 
@@ -765,14 +767,93 @@
   filter: brightness(0.985);
 }
 
-input.mach-row-checkbox,
-input.mach-select-all {
+/* Paint only the leading visible pane; sticky keeps the marker at the viewport
+   edge without extra row elements, measurements or scroll listeners. */
+.mach-body > .mach-pane--left:not(.mach-pane--hidden) .mach-row--selected::after,
+.mach-body > .mach-pane--left.mach-pane--hidden + .mach-pane--center .mach-row--selected::after {
+  content: "";
+  position: sticky;
+  left: 0;
+  top: 0;
+  width: var(--mach-row-selected-marker-width);
+  height: 100%;
+  flex: none;
+  background: var(--mach-primary);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Keep native input semantics, but do not let the OS choose a black checkmark
+   on a light brand color. The same control covers rows, headers and popups. */
+:is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"]) {
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-content: center;
   width: 13px;
   height: 13px;
   margin: 0;
-  accent-color: var(--mach-primary);
+  border: 1px solid var(--mach-scrollbar-thumb);
+  border-radius: 3px;
+  background: var(--mach-body-bg);
+  color: var(--mach-selection-fg);
   cursor: pointer;
   flex-shrink: 0;
+}
+
+:is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"]):is(:checked, :indeterminate) {
+  border-color: var(--mach-primary);
+  background: var(--mach-primary);
+}
+
+:is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"])::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='m2 6 2.5 2.5L10 3'/%3E%3C/svg%3E") center / contain no-repeat;
+  visibility: hidden;
+}
+
+:is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"]):checked::before {
+  visibility: visible;
+}
+
+:is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"]):indeterminate::before {
+  width: 7px;
+  height: 2px;
+  mask: none;
+  visibility: visible;
+}
+
+.mach-root input.mach-row-checkbox[type="radio"] {
+  border-radius: 50%;
+}
+
+.mach-root input.mach-row-checkbox[type="radio"]::before {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  mask: none;
+}
+
+:is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"]):focus-visible {
+  outline: 2px solid var(--mach-primary);
+  outline-offset: 2px;
+}
+
+:is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"]):disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (forced-colors: active) {
+  :is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"]) {
+    appearance: auto;
+  }
+  :is(.mach-root, .mach-portal) :is(input.mach-row-checkbox, input.mach-select-all, .mach-filter-set-item input, .mach-server-cell input[type="checkbox"])::before {
+    content: none;
+  }
 }
 
 .mach-detail-row {

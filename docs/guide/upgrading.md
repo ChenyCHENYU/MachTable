@@ -3,10 +3,17 @@
 MachTable 尚处于 0.x，minor 版本可能包含有意的契约整理。升级前阅读本页与各包 Changelog，并在业务预发布环境回归。
 
 ```bash
-pnpm up @agile-team/mach-table-vue@^0.41.1
+pnpm up @agile-team/mach-table-vue@^0.42.0
 # 或
-pnpm up @agile-team/mach-table-react@^0.41.1
+pnpm up @agile-team/mach-table-react@^0.42.0
 ```
+
+## 0.41.1 → 0.42.0
+
+- `/workflows` 查询全选模式的 `selectedRows` 现在仅包含最后成功页中的选中行，避免访问页数增加导致快照无限累积。普通显式跨页选择继续保留已选行快照；服务端跨页批量操作使用 `selectionState`，不能用 `selectedRows.length` 推断全选数量。
+- 多单元格修改、整行提交和撤销/重做按同步事务合并脏状态通知，单格修改和逐格值变更事件仍保持同步。
+- 选中行默认在最左侧可见分区显示 2px 主题色标识；选择控件使用白色前景，支持半选、键盘、明暗主题与系统高对比模式。
+- 紧凑布局继续使用 `size: "compact"`（行 30px、表头 34px）；显式 `rowHeight/headerHeight` 优先，不新增重复密度属性。
 
 ## 0.41.0 → 0.41.1
 

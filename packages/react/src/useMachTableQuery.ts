@@ -72,6 +72,7 @@ export interface UseMachTableQueryReturn<TData> {
   quickFilterText: string | null;
   setQuickFilterText: (value: string | null) => void;
   selectedKeys: string[];
+  /** Explicit selections retain loaded snapshots; allMatching contains only selected rows from the last accepted page. */
   selectedRows: TData[];
   selectionState: MachTableRemoteSelectionState;
   bindings: GridOptions<TData>;
@@ -168,6 +169,9 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     const nextRows = [...result.rows];
     const pageRows = new Map(nextRows.map((row) => [rowId(row), row] as const));
     if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Duplicate remote row keys.");
+    // The query rule owns allMatching selection; retain only this page's row
+    // snapshots so visiting more pages cannot grow the cache indefinitely.
+    if (allMatching.current) selectedById.current.clear();
     if (optionsRef.current.selectionScope === "page") {
       for (const id of selectedIds.current) {
         if (!pageRows.has(id)) {
@@ -306,22 +310,34 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   }, [clearSelection, scheduleLoad]);
   const onSelectionChanged = useCallback((event: SelectionChangedEvent<TData>): void => {
     if (suppressSelection.current) return;
-    const visibleIds = stateRef.current.rows.map(rowId);
-    const nextVisible = new Set(event.selectedRows.map(rowId));
     if (allMatching.current) {
-      for (const id of visibleIds) {
-        if (nextVisible.has(id)) excludedIds.current.delete(id);
-        else { excludedIds.current.add(id); selectedById.current.delete(id); }
+      selectedById.current.clear();
+      const nextVisible = new Set(event.selectedRows.map(rowId));
+      for (const row of stateRef.current.rows) {
+        const id = rowId(row);
+        if (nextVisible.has(id)) {
+          excludedIds.current.delete(id);
+          selectedById.current.set(id, row);
+        } else {
+          excludedIds.current.add(id);
+        }
       }
-    } else {
-      if ((optionsRef.current.selectionScope ?? "preserve") === "page") {
-        selectedIds.current.clear(); selectedById.current.clear();
-      } else {
-        for (const id of visibleIds) { selectedIds.current.delete(id); selectedById.current.delete(id); }
-      }
-      for (const row of event.selectedRows) selectedIds.current.add(rowId(row));
+      notifySelection();
+      return;
     }
-    for (const row of event.selectedRows) selectedById.current.set(rowId(row), row);
+    if ((optionsRef.current.selectionScope ?? "preserve") === "page") {
+      selectedIds.current.clear(); selectedById.current.clear();
+    } else {
+      for (const row of stateRef.current.rows) {
+        const id = rowId(row);
+        selectedIds.current.delete(id); selectedById.current.delete(id);
+      }
+    }
+    for (const row of event.selectedRows) {
+      const id = rowId(row);
+      selectedIds.current.add(id);
+      selectedById.current.set(id, row);
+    }
     notifySelection();
   }, [notifySelection, rowId]);
 

@@ -3,6 +3,7 @@ import type { RowNode } from "../types/row";
 import type { Column } from "./column";
 import type { RowEditValidationResult } from "../types/options";
 import { isPromise } from "../lib/abortable";
+import { refreshEditedRows } from "../lib/editRefresh";
 
 type InputContext = Pick<GridCore<any>,
   | "bodyRenderer" | "columnModel" | "editingService" | "api" | "readCellValue"
@@ -184,9 +185,7 @@ export class InputService {
       });
     } finally { this.core.undoService.endBatch(); }
     if (changedRows.size && active()) {
-      this.core.bodyRenderer.refreshRows([...changedRows]);
-      this.core.summaryRenderer.refresh();
-      this.core.statusBarService.refresh();
+      refreshEditedRows(this.core, [...changedRows]);
     }
     return results;
   }

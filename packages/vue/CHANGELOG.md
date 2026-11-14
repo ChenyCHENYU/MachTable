@@ -1,5 +1,16 @@
 # @agile-team/mach-table-vue
 
+## 0.42.0
+
+### Minor Changes
+
+- Bound all-matching query row snapshots to the accepted page, batch dirty notifications for multi-cell edits and undo/redo, and unify selected-row markers and white selection controls across themes. Explicit cross-page selections retain their original snapshots; server-wide operations continue to use selectionState.
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.42.0
+
 ## 0.41.1
 
 ### Patch Changes

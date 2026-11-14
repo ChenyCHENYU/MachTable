@@ -122,7 +122,7 @@ const metrics = api.diagnostics.getPerformance();
 | Vue ESM artifacts | 11.25 KiB (11520 bytes) |
 | React ESM artifacts | 8 KiB (8192 bytes) |
 | Optional XLSX bridge | 3 KiB (3072 bytes) |
-| Core CSS | 8 KiB (8192 bytes) |
+| Core CSS | 8.5 KiB (8704 bytes) |
 | Optional workbench | 12 KiB (12288 bytes) |
 | Optional preferences | 7 KiB (7168 bytes) |
 | Optional ordering | 9 KiB (9216 bytes) |

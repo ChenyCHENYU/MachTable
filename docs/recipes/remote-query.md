@@ -160,6 +160,17 @@ await orderApi.batchAction({ query, selection: table.selectionState.value });
 
 普通跨页选择使用 `{ mode: "explicit", selectedKeys }`。`applySelectionState()` 可恢复两种状态。业务查询、列过滤或快速过滤变化时默认清空选择，避免把旧查询的规则误用于新数据；确有跨查询保留需求时可设 `clearSelectionOnQueryChange: false`。服务端必须再次按当前用户权限解析查询，不能信任前端提交的 ID 或规则。
 
+`selectedRows` 是已加载的行对象快照，含义取决于选择模式（Vue 使用 `.value`，React 直接读取）：
+
+| 模式 | `selectedKeys` | `selectedRows` |
+| --- | --- | --- |
+| `explicit` | 显式选中的 ID | 按 `selectionScope` 保存已选行的已加载快照；恢复尚未加载的 ID 不会自动请求行对象 |
+| `allMatching` | 空数组 | 仅最近一次成功接受的页面中未排除的行，按该页顺序返回 |
+
+全选查询后翻页会替换行快照，连续访问 20 个每页 100 行的页面只保留最后一页最多 100 个快照，不累积 2000 个对象。排除 ID 仍跨页保存在 `selectionState.excludedKeys` 中；返回旧页时会继续应用排除规则，并使用新响应的行对象。请求失败或响应失效不会替换最近成功页面的快照。`selectionScope: "page"` 只限制显式选择，全选查询仍使用完整查询与排除规则。
+
+批量操作、计数和远程导出应使用查询条件与 `selectionState`；`allMatching` 下的 `selectedRows` 只适合展示当前已加载页面的选中行，不能代表完整结果集。行快照占用与最后接受的页面行数相关，排除规则占用与用户取消选择的 ID 数量相关；显式跨页选择的快照仍随实际选择数量增长。
+
 ## Core 的受控服务端分页
 
 不使用 Vue composable 时也可直接控制：

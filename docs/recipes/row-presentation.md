@@ -2,6 +2,10 @@
 
 Core、Vue 和 React 使用相同的配置。两项能力独立启用，无需逐列写 renderer 或 CSS。
 
+选中行默认在最左侧可见分区显示 2px 主色标识，并保留条件颜色；固定列不会重复绘制标识。用表格实例上的 `--mach-row-selected-marker-width: 0px` 可隐藏，`--mach-selection-fg` 可覆盖默认白色勾选前景。标识复用现有选择状态，无需业务逐行添加样式或监听滚动。原生选择控件保留键盘、半选与禁用语义，系统高对比模式使用原生外观。
+
+密度沿用 `size: "compact" | "normal" | "large"`；紧凑模式为行 30px、表头 34px。单表显式 `rowHeight/headerHeight` 优先，详情表自动高度与密度独立，不需要再建一套紧凑配置。
+
 ## 拖拽调整顺序
 
 ```ts

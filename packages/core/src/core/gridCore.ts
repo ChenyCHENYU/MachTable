@@ -409,10 +409,10 @@ export class GridCore<TData = any> {
   }
 
   /** Emits the shared value-change side effects after a caller has written data transactionally. */
-  notifyCellValueChanged(node: RowNode<any>, column: Column, oldValue: any, newValue: any): void {
+  notifyCellValueChanged(node: RowNode<any>, column: Column, oldValue: any, newValue: any, replay?: "undo" | "rollback"): void {
     this.bodyRenderer.invalidateRowHeight(node);
-    this.bodyRenderer.queueFlash([node.rowIndex], [column.id]);
-    this.undoService.record({ nodeId: node.id, columnId: column.id, oldValue, newValue });
+    if (replay !== "rollback") this.bodyRenderer.queueFlash([node.rowIndex], [column.id]);
+    if (!replay) this.undoService.record({ rowId: node.id, colId: column.id, oldValue, newValue });
     this.emit("cellValueChanged", {
       oldValue,
       newValue,

@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { GridChange } from "../types/api";
 import type { CellValueChangedEvent } from "../types/events";
+import { refreshEditedRows } from "../lib/editRefresh";
 
 type ChangeTrackingContext = Pick<
   GridCore<any>,
@@ -8,6 +9,7 @@ type ChangeTrackingContext = Pick<
   | "columnModel"
   | "emit"
   | "eventBus"
+  | "notifyCellValueChanged"
   | "readCellValue"
   | "rowModel"
   | "statusBarService"
@@ -26,9 +28,18 @@ interface CellChange {
 export class ChangeTrackingService<TData = any> {
   private trackedCellChanges = new Map<string, CellChange>();
   private rollingBack = false;
+  private dirtyBatchDepth = 0;
+  private pendingDirtyChange = false;
   private disposeChangeSubscription: (() => void) | null = null;
 
   constructor(private core: ChangeTrackingContext) {}
+
+  /** Synchronous commit scopes nest; async validation completes before entering. */
+  beginBatch(): void { this.dirtyBatchDepth++; }
+
+  endBatch(): void {
+    if (--this.dirtyBatchDepth === 0 && this.pendingDirtyChange) this.emitChanged();
+  }
 
   init(): void {
     this.disposeChangeSubscription = this.core.eventBus.on("cellValueChanged", (event) => {
@@ -37,16 +48,17 @@ export class ChangeTrackingService<TData = any> {
   }
 
   private record(event: CellValueChangedEvent<TData>): void {
-    const key = `${event.rowNode.id}\u0000${event.column.id}`;
+    const { rowNode, column, oldValue, newValue } = event;
+    const key = `${rowNode.id}\u0000${column.id}`;
     const existing = this.trackedCellChanges.get(key);
-    const originalValue = existing ? existing.originalValue : event.oldValue;
-    if (Object.is(event.newValue, originalValue)) this.trackedCellChanges.delete(key);
+    const originalValue = existing ? existing.originalValue : oldValue;
+    if (Object.is(newValue, originalValue)) this.trackedCellChanges.delete(key);
     else {
       this.trackedCellChanges.set(key, {
-        rowId: event.rowNode.id,
-        colId: event.column.id,
+        rowId: rowNode.id,
+        colId: column.id,
         originalValue,
-        value: event.newValue
+        value: newValue
       });
     }
     this.emitChanged();
@@ -61,10 +73,10 @@ export class ChangeTrackingService<TData = any> {
   getChanges(): GridChange<TData>[] {
     const byRow = new Map<string, GridChange<TData>>();
     for (const change of this.trackedCellChanges.values()) {
-      const node = this.core.rowModel.getNodeById(change.rowId);
-      if (!node?.data) continue;
       let row = byRow.get(change.rowId);
       if (!row) {
+        const node = this.core.rowModel.getNodeById(change.rowId);
+        if (!node?.data) continue;
         row = { rowId: change.rowId, data: node.data, cells: [] };
         byRow.set(change.rowId, row);
       }
@@ -117,10 +129,10 @@ export class ChangeTrackingService<TData = any> {
 
   rollback(rowIds?: readonly string[]): boolean {
     const ids = rowIds ? new Set(rowIds) : null;
-    const targets = [...this.trackedCellChanges.entries()].filter(([, change]) => !ids || ids.has(change.rowId));
-    if (targets.length === 0) return false;
+    const targets = [...this.trackedCellChanges].filter(([, change]) => !ids || ids.has(change.rowId));
+    if (!targets.length) return false;
     const refresh = new Set<number>();
-    const completed = new Set<string>();
+    const completed: string[] = [];
     this.rollingBack = true;
     try {
       for (const [key, change] of targets) {
@@ -128,52 +140,39 @@ export class ChangeTrackingService<TData = any> {
         const column = this.core.columnModel.getColumn(change.colId);
         if (!node || !column || node.data == null) continue;
         const current = this.core.readCellValue(node, column);
-        if (Object.is(current, change.originalValue)) {
-          completed.add(key);
-          continue;
+        if (!Object.is(current, change.originalValue)) {
+          if (!this.core.writeValue(node, column, change.originalValue, current)) continue;
+          if (node.rowIndex >= 0) refresh.add(node.rowIndex);
+          this.core.notifyCellValueChanged(node, column, current, change.originalValue, "rollback");
         }
-        if (!this.core.writeValue(node, column, change.originalValue, current)) continue;
-        completed.add(key);
-        this.core.bodyRenderer.invalidateRowHeight(node);
-        if (node.rowIndex >= 0) refresh.add(node.rowIndex);
-        this.core.emit("cellValueChanged", {
-          oldValue: current,
-          newValue: change.originalValue,
-          rowNode: node,
-          rowIndex: node.rowIndex,
-          column,
-          colDef: column.colDef,
-          data: node.data
-        });
+        completed.push(key);
       }
     } finally {
       this.rollingBack = false;
     }
     for (const key of completed) this.trackedCellChanges.delete(key);
-    if (refresh.size > 0) this.core.bodyRenderer.refreshRows([...refresh]);
-    this.core.summaryRenderer.refresh();
-    this.core.statusBarService.refresh();
+    refreshEditedRows(this.core, [...refresh]);
     this.emitChanged();
-    return completed.size > 0;
+    return completed.length > 0;
   }
 
   clearRows(rowIds: readonly string[]): void {
-    if (rowIds.length > 0) this.markSaved(rowIds);
+    if (rowIds.length) this.markSaved(rowIds);
   }
 
   clear(): void {
-    if (this.trackedCellChanges.size === 0) return;
-    this.trackedCellChanges.clear();
-    this.emitChanged();
+    if (this.trackedCellChanges.size) this.markSaved();
   }
 
   destroy(): void {
     this.disposeChangeSubscription?.();
     this.disposeChangeSubscription = null;
     this.trackedCellChanges.clear();
+    this.pendingDirtyChange = false;
   }
 
   private emitChanged(): void {
-    this.core.emit("dirtyStateChanged", { dirtyRowIds: this.getDirtyRowIds() });
+    this.pendingDirtyChange = this.dirtyBatchDepth > 0;
+    if (!this.pendingDirtyChange) this.core.emit("dirtyStateChanged", { dirtyRowIds: this.getDirtyRowIds() });
   }
 }

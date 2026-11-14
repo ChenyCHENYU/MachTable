@@ -8,6 +8,7 @@ import type { InputChange } from "./inputService";
 import { isPromise } from "../lib/abortable";
 import { parseColumnValue } from "../lib/columnValues";
 import { clamp, el } from "../lib/dom";
+import { refreshEditedRows } from "../lib/editRefresh";
 
 type EditingContext = Pick<
   GridCore<any>,
@@ -407,7 +408,8 @@ export class EditingService {
       oldValue: editing.oldValue,
       newValue: changed ? newValue : editing.oldValue
     });
-    this.refreshEditRow(editing.node.rowIndex);
+    const rowIndex = editing.node.rowIndex;
+    refreshEditedRows(this.core, rowIndex >= 0 ? [rowIndex] : []);
     return true;
   }
 
@@ -432,14 +434,8 @@ export class EditingService {
       cancelled,
       changes
     });
-    this.refreshEditRow(rowIndex);
+    refreshEditedRows(this.core, rowIndex >= 0 ? [rowIndex] : []);
     return true;
-  }
-
-  private refreshEditRow(rowIndex: number): void {
-    if (rowIndex >= 0) this.core.bodyRenderer.refreshRows([rowIndex]);
-    this.core.summaryRenderer.refresh();
-    this.core.statusBarService.refresh();
   }
 
   private commitRowDrafts(

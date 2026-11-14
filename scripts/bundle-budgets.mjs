@@ -6,7 +6,7 @@ export const gzipBudgets = {
   vue: ["Vue ESM artifacts", 11.25 * 1024],
   react: ["React ESM artifacts", 8 * 1024],
   xlsx: ["Optional XLSX bridge", 3 * 1024],
-  css: ["Core CSS", 8 * 1024],
+  css: ["Core CSS", 8.5 * 1024],
   workbench: ["Optional workbench", 12 * 1024],
   preferences: ["Optional preferences", 7 * 1024],
   ordering: ["Optional ordering", 9 * 1024],
