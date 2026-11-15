@@ -31,8 +31,9 @@ export function createEditor(column: Column, value: any, keyPress?: string | nul
   const name = typeof def.cellEditor === "string" ? def.cellEditor : inferEditorType(value, def.cellEditorParams);
 
   if (name === "date") {
-    const input = baseInput("date", value);
-    const raw = value == null ? "" : String(value);
+    // 与 schema 日期展示共用 ISO 语义；Date.toString() 不是原生日期输入的有效值。
+    const raw = value instanceof Date ? value.toISOString() : value == null ? "" : String(value);
+    const input = baseInput("date", raw);
     const timeMatch = raw.match(/T(\d{2}:\d{2})/);
     return {
       el: input,

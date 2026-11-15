@@ -1,3 +1,4 @@
+import { ICON_PATHS, iconSvg, type BuiltInActionIcon } from "./actionIcons";
 import { ownEntry, statusEntry } from "./columnStatus";
 import type { CellRendererParams } from "../types/params";
 import type { CellRendererFn } from "../types/colDef";
@@ -5,6 +6,8 @@ import type { ActionPolicyContext } from "../types/options";
 import type { GridChange } from "../types/api";
 import { applyPortalTheme, el, positionAnchoredPortal } from "./dom";
 import { DEFAULT_LOCALE } from "./locale";
+
+export type { BuiltInActionIcon } from "./actionIcons";
 
 export type TagVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
@@ -85,27 +88,6 @@ export function linkRenderer(params: CellRendererParams): string | HTMLElement {
   const link = el("span", "mach-link");
   link.textContent = params.formatted || String(params.value);
   return link;
-}
-
-const ICON_PATHS = {
-  edit: '<path d="M11.5 2.5l2 2L5 13H3v-2l8.5-8.5z"/>',
-  delete: '<path d="M3 5h10M6 5V3h4v2M5 5l.7 8h4.6L11 5"/>',
-  view: '<path d="M1.5 8s2.4-4.2 6.5-4.2S14.5 8 14.5 8s-2.4 4.2-6.5 4.2S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="1.8"/>',
-  copy: '<rect x="5" y="5" width="8" height="8" rx="1"/><path d="M3 11V3h8"/>',
-  download: '<path d="M8 2v8m0 0l-3-3m3 3l3-3M2.5 13.5h11"/>',
-  refresh: '<path d="M13 3v4h-4M3 13V9h4"/><path d="M13 7a5.5 5.5 0 00-9.7-2.6M3 9a5.5 5.5 0 009.7 2.6"/>',
-  close: '<path d="M3.5 3.5l9 9m0-9l-9 9"/>',
-  check: '<path d="M2.5 8.5l3.5 3.5 7.5-8"/>',
-  plus: '<path d="M8 2.5v11M2.5 8h11"/>',
-  search: '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/>',
-  more: '<circle cx="3" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r=".9" fill="currentColor" stroke="none"/>'
-} as const;
-
-export type BuiltInActionIcon = keyof typeof ICON_PATHS;
-
-function iconSvg(name: BuiltInActionIcon, size = 14): string {
-  const path = ICON_PATHS[name] ?? "";
-  return `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 }
 
 export type ActionVariant = "default" | "primary" | "warning" | "success" | "danger";
@@ -221,7 +203,7 @@ function makeSurfaceButton(item: SurfaceItem, className: string): HTMLButtonElem
   if (item.variant && item.variant !== "default") button.classList.add(`${className}--${item.variant}`);
   button.disabled = item.disabled === true;
   if (item.icon && ICON_PATHS[item.icon]) {
-    button.innerHTML = iconSvg(item.icon, 16);
+    button.innerHTML = iconSvg(ICON_PATHS[item.icon], 16);
     button.appendChild(el("span")).textContent = item.label;
   } else button.textContent = item.label;
   button.addEventListener("click", () => item.pick(button));
@@ -262,7 +244,7 @@ function showActionDrawer(anchor: HTMLElement, title: string, items: SurfaceItem
   close.type = "button";
   close.setAttribute("aria-label", "Close");
   close.title = "Close";
-  close.innerHTML = iconSvg("close", 16);
+  close.innerHTML = iconSvg(ICON_PATHS.close, 16);
   close.addEventListener("click", () => closeActionSurface(true));
   header.append(heading, close);
   const body = el("div", "mach-action-drawer__body");
@@ -447,7 +429,7 @@ function createInlineActionButton<TData>(
     button.classList.add("mach-action-btn--loading");
   }
   if (action.icon && ICON_PATHS[action.icon]) {
-    button.innerHTML = iconSvg(action.icon);
+    button.innerHTML = iconSvg(ICON_PATHS[action.icon]);
     button.classList.add("mach-action-btn--icon");
   } else {
     button.textContent = action.label ?? title;
@@ -475,7 +457,7 @@ function createOverflowActionButton<TData>(
   more.setAttribute("aria-label", label);
   more.setAttribute("aria-haspopup", mode === "drawer" ? "dialog" : "menu");
   more.setAttribute("aria-expanded", "false");
-  more.innerHTML = `${iconSvg("more", 16)}<span class="mach-sr-only">⋯</span>`;
+  more.innerHTML = `${iconSvg(ICON_PATHS.more, 16)}<span class="mach-sr-only">⋯</span>`;
   more.addEventListener("mousedown", (event) => event.stopPropagation());
   more.addEventListener("click", (event) => {
     event.stopPropagation();

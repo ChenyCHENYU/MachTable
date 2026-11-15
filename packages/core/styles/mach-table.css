@@ -2250,6 +2250,7 @@
 
 .mach-cell-editor-controls {
   position: absolute;
+  align-self: flex-end;
   z-index: 8;
   display: inline-flex;
   align-items: center;

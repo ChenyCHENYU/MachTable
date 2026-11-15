@@ -1,5 +1,11 @@
 # @agile-team/mach-table-xlsx
 
+## 0.42.1
+
+### Patch Changes
+
+- 固定版本组同步至 0.42.1，依赖 Core 0.42.1；XLSX 公开接口与数据格式保持不变。
+
 ## 0.42.0
 
 ### Minor Changes

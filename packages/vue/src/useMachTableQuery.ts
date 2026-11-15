@@ -442,11 +442,6 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     scheduleLoad();
   };
 
-  watch(
-    () => resolveSource<TQuery>(options.query),
-    onCriteriaChanged,
-    { deep: true, immediate: automatic && options.immediate !== false }
-  );
   watch(quickFilterText, (value) => {
     // A mounted grid can report the changed prop before gridReady. Give its
     // event the first chance to load, while keeping headless query use working.
@@ -475,6 +470,13 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     abort();
     api = null;
   });
+
+  // 先建立内部观察与清理归属；首次 request 可能同步销毁当前作用域。
+  watch(
+    () => resolveSource<TQuery>(options.query),
+    onCriteriaChanged,
+    { deep: true, immediate: automatic && options.immediate !== false }
+  );
 
   return {
     rows,

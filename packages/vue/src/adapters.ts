@@ -43,7 +43,7 @@ function mountComponent(
   host: HTMLElement,
   appContext?: AppContext
 ): () => void {
-  const Root = { setup: () => () => h(component, { ...props }) };
+  const Root = { render: () => h(component, { ...props }) };
   const vnode = h(Root);
   if (appContext) vnode.appContext = appContext;
   render(vnode, host);
@@ -59,7 +59,7 @@ function mountSlot(
 ): () => void {
   const Root = {
     name: "MachTableSlot",
-    setup: () => () => renderSlot({ default: slot }, "default", props())
+    render: () => renderSlot({ default: slot }, "default", props())
   };
   const vnode = h(Root);
   if (appContext) vnode.appContext = appContext;
@@ -116,7 +116,7 @@ export function vueRenderCell<TData = any, TValue = any>(
     const reactiveParams = shallowReactive({ ...params }) as CellRendererParams<TData, TValue>;
     const Root = {
       name: "MachTableRenderCell",
-      setup: () => () => reactiveParams.data == null
+      render: () => reactiveParams.data == null
         ? reactiveParams.formatted
         : renderCell(reactiveParams.data, reactiveParams.rowIndex, reactiveParams)
     };

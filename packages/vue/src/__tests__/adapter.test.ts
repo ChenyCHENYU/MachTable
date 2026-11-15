@@ -702,6 +702,144 @@ describe("Vue adapter", () => {
     app.unmount();
   });
 
+  it("updates same-name cell, header and overlay slots without rebuilding the columns or grid", async () => {
+    const columnDefs = [{ field: "name" }];
+    const rows = shallowRef([{ name: "Ada" }]);
+    const alternate = ref(false), loading = ref(false);
+    let table!: UseMachTableReturn;
+    const host = document.createElement("div");
+    const original = () => h("b", { class: "same-slot" }, "Original");
+    const updated = () => h("b", { class: "same-slot" }, "Updated");
+    const app = createApp(defineComponent({
+      setup() {
+        table = useMachTable();
+        return () => h(MachTable, {
+          ref: table.ref, columnDefs, rowData: rows.value, loading: loading.value, pagination: false
+        }, {
+          "cell-name": alternate.value ? updated : original,
+          "header-name": alternate.value ? updated : original,
+          empty: alternate.value ? updated : original,
+          loading: alternate.value ? updated : original
+        });
+      }
+    }));
+    app.mount(host);
+    await nextTick();
+    const api = table.api.value!;
+    const resolvedColumns = api.getOption("columnDefs");
+    const text = (selector: string) => host.querySelector(`${selector} .same-slot`)?.textContent;
+    expect(text(".mach-cell[data-col-id='name']")).toBe("Original");
+    alternate.value = true;
+    await nextTick();
+    expect(text(".mach-cell[data-col-id='name']")).toBe("Updated");
+    expect(text(".mach-header-cell[data-col-id='name']")).toBe("Updated");
+    expect(api.getOption("columnDefs")).toBe(resolvedColumns);
+    rows.value = [];
+    await nextTick();
+    alternate.value = false;
+    await nextTick();
+    expect(text(".mach-overlay")).toBe("Original");
+    loading.value = true;
+    await nextTick();
+    alternate.value = true;
+    await nextTick();
+    expect(text(".mach-overlay")).toBe("Updated");
+    expect(api.getOption("columnDefs")).toBe(resolvedColumns);
+    expect(table.api.value).toBe(api);
+    app.unmount();
+  });
+
+  it("updates stable reactive slots without remounting an active editor on host updates", async () => {
+    const mounted = vi.fn(), unmounted = vi.fn();
+    const Editor = defineComponent({
+      props: { modelValue: String },
+      emits: ["update:modelValue"],
+      setup(props, { emit }) {
+        mounted();
+        onUnmounted(unmounted);
+        return () => h("input", {
+          class: "stable-editor", value: props.modelValue,
+          onInput: (event: Event) => emit("update:modelValue", (event.target as HTMLInputElement).value)
+        });
+      }
+    });
+    const label = ref("Original"), gridClassName = ref("before");
+    const columnDefs = [{ field: "name", editable: true }];
+    const rowData = [{ name: "Ada" }, { name: "Bob" }];
+    const slots = {
+      "cell-name": ({ value }: { value: string }) => h("b", { class: "stable-cell" }, `${value}: ${label.value}`),
+      "editor-name": ({ value, setValue }: { value: string; setValue(value: string): void }) =>
+        h(Editor, { modelValue: value, "onUpdate:modelValue": setValue })
+    };
+    const host = document.createElement("div");
+    const app = createApp(defineComponent({
+      setup: () => () => h(MachTable, { columnDefs, rowData, gridClassName: gridClassName.value, pagination: false }, slots)
+    }));
+    app.mount(host);
+    await nextTick();
+    host.querySelector(".mach-cell[data-col-id='name']")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const input = host.querySelector<HTMLInputElement>(".stable-editor")!;
+    input.value = "draft";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    label.value = "Updated";
+    gridClassName.value = "after";
+    await nextTick();
+    expect(host.querySelector(".stable-cell")?.textContent).toBe("Bob: Updated");
+    expect(host.querySelector(".stable-editor")).toBe(input);
+    expect(input.value).toBe("draft");
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(unmounted).not.toHaveBeenCalled();
+    app.unmount();
+    expect(unmounted).toHaveBeenCalledOnce();
+  });
+
+  it("disposes active slots before their removal and handles same-tick restoration without Vue errors", async () => {
+    const included = ref(true), label = ref("first");
+    const unmounted = vi.fn(), errors = vi.fn(), warnings = vi.fn();
+    let table!: UseMachTableReturn;
+    const rowData = [{ name: "Ada" }];
+    const columnDefs = [{ field: "name", editable: true }];
+    const Editor = defineComponent({
+      setup() {
+        onUnmounted(unmounted);
+        return () => h("input", { class: "removable-editor", value: "draft" });
+      }
+    });
+    const app = createApp(defineComponent({
+      setup() {
+        table = useMachTable();
+        return () => h(MachTable, { ref: table.ref, rowData, columnDefs, pagination: false }, included.value ? {
+          "cell-name": () => h("b", { class: "removable-cell" }, label.value),
+          "editor-name": () => h(Editor)
+        } : {});
+      }
+    }));
+    app.config.errorHandler = errors;
+    app.config.warnHandler = warnings;
+    const host = document.createElement("div");
+    app.mount(host);
+    await nextTick();
+    table.api.value!.editing.startCell({ rowIndex: 0, colId: "name" });
+    await nextTick();
+    expect(host.querySelector(".removable-editor")).not.toBeNull();
+    included.value = false;
+    await nextTick();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(unmounted).toHaveBeenCalledOnce();
+    expect(host.querySelector(".removable-editor")).toBeNull();
+    expect(host.querySelector(".removable-cell")).toBeNull();
+    included.value = true;
+    await nextTick();
+    included.value = false;
+    included.value = true;
+    label.value = "latest";
+    await nextTick();
+    expect(host.querySelector(".removable-cell")?.textContent).toBe("latest");
+    expect(errors).not.toHaveBeenCalled();
+    expect(warnings).not.toHaveBeenCalled();
+    app.unmount();
+  });
+
   it("reactively forwards structural options, datasource and inner grid class", async () => {
     const datasource = ref<any>(undefined);
     const gridClassName = ref("before");

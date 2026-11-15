@@ -1,3 +1,4 @@
+import { iconSvg, EDIT_ICON_PATH } from "../lib/actionIcons";
 import type { GridCore } from "../core/gridCore";
 import type { PaneType } from "../services/columnModel";
 import type { Column } from "../services/column";
@@ -559,6 +560,7 @@ export class BodyRenderer {
     if (needed > this.rowPoolItems.length) this.growPool(needed);
     this.applyCellLayout();
     this.updateRange(true, false);
+    if (this.core.isDisposed()) return;
     this.refreshOverlays();
   }
 
@@ -671,9 +673,8 @@ export class BodyRenderer {
   applyCellLayout(): void {
     const variableHeights = this.hasVariableRowHeights();
     for (const pane of PANES) {
-      const allPaneCols = this.core.columnModel.getPaneColumns(pane);
       const columns = this.activePaneColumns(pane);
-      const lefts = this.paneColumnLefts(pane, columns, allPaneCols);
+      const lefts = this.paneColumnLefts(pane, columns);
       this.layoutPoolPane(pane, columns, lefts, variableHeights);
     }
     this.applyDetailRowHeight();
@@ -683,9 +684,8 @@ export class BodyRenderer {
     return this.core.gridOptions.masterDetail || this.core.gridOptions.getRowHeight != null || this.hasAnyAutoHeight;
   }
 
-  private paneColumnLefts(pane: PaneType, columns: Column[], allPaneColumns: Column[]): number[] {
+  private paneColumnLefts(pane: PaneType, columns: Column[]): number[] {
     if (pane === "center") {
-      this.columnViewport.update(allPaneColumns);
       const leftCount = this.core.columnModel.getPaneColumns("left").length;
       return columns.map((column) => this.columnViewport.offsetAt(this.core.columnModel.getFlatIndex(column.id) - leftCount));
     }
@@ -757,6 +757,7 @@ export class BodyRenderer {
   updateRange(force = false, checkColumnWindow = true): void {
     const startedAt = this.core.performanceMonitor.start();
     const updated = this.updateRangeInner(force, checkColumnWindow);
+    if (this.core.isDisposed()) return;
     this.core.editingService.positionCellControls();
     if (!updated) return;
     const rows = Math.max(0, this.renderedRowEndExclusive - this.firstRenderedRow);
@@ -924,7 +925,7 @@ export class BodyRenderer {
       if (!row) continue;
       this.applyMasterRowState(row, node, index, y, h, state);
       applyRowAppearance(row, appearance);
-      this.renderPaneCells(slot, node, pane);
+      if (!this.renderPaneCells(slot, node, pane)) return;
     }
     if (this.focusedCell && this.focusedCell.rowIndex === index) {
       this.applyFocusClass();
@@ -986,10 +987,10 @@ export class BodyRenderer {
     else row.removeAttribute("aria-level");
   }
 
-  private renderPaneCells(slot: RowSlot, node: RowNode<any>, pane: PaneType): void {
+  private renderPaneCells(slot: RowSlot, node: RowNode<any>, pane: PaneType, force?: boolean, columns?: ReadonlySet<string> | null): boolean {
     const cols = this.activePaneColumns(pane);
     const cells = slot.cells[pane];
-    if (!cells) return;
+    if (!cells) return true;
     const index = slot.index;
     const model = this.core.columnModel;
     const hasColSpan = pane === "center" && this.centerHasSpans;
@@ -1000,26 +1001,37 @@ export class BodyRenderer {
     for (let i = 0; i < cols.length; i++) {
       const col = cols[i];
       const cell = cells[i];
+      if (!cell) continue;
 
       if (hasColSpan) {
         const start = model.getFlatIndex(col.id) - leftCount;
         const span = start < coveredUntil ? 0 : this.resolveColSpan(node, col, index, this.centerSource!.length - start);
         if (span > 0) coveredUntil = start + span;
         if (span === 0 || coveredUntil <= this.centerFirst) {
-          cleanupCellContent(this.core, cell);
-          cell.setAttribute("aria-hidden", "true");
-          cell.style.display = "none";
+          if (!this.releaseHiddenSpanEditor(slot, node, col, cell, cols)) return false;
           continue;
         }
-        if (span > 1 || cell.hasAttribute("aria-colspan")) this.applySpanWidth(cell, start, span);
+        this.applySpanWidth(cell, start, span);
       }
 
       if (cell.style.display === "none") cell.style.display = "";
       cell.removeAttribute("aria-hidden");
-      if (this.core.editingService.renderEditor(index, node, col, cell)) continue;
-      this.renderCell(cell, node, col);
-      this.applyRangeClass(cell, index, col);
+      if (!this.renderCell(cell, node, col, index, force, columns)) return false;
     }
+    return true;
+  }
+
+  /** A cell stop synchronously refreshes its row; do not paint over that pass or a callback's new owner. */
+  private releaseHiddenSpanEditor(slot: RowSlot, node: RowNode<any>, column: Column, cell: HTMLElement, columns: Column[]): boolean {
+    const index = slot.index;
+    const repainted = this.core.editingService.releaseCell(index, column.id, cell);
+    if (repainted || this.core.isDisposed() || this.centerColumns !== columns ||
+      slot.index !== index || this.core.rowModel.getDisplayedRow(index) !== node) return false;
+    cleanupCellContent(this.core, cell);
+    if (cell.firstChild) cell.replaceChildren();
+    cell.setAttribute("aria-hidden", "true");
+    cell.style.display = "none";
+    return true;
   }
 
   private resolveColSpan(node: RowNode<any>, column: Column, rowIndex: number, remaining: number): number {
@@ -1035,6 +1047,7 @@ export class BodyRenderer {
   }
 
   private applySpanWidth(cell: HTMLElement, start: number, span: number): void {
+    if (span === 1 && !cell.hasAttribute("aria-colspan")) return;
     const width = `${this.columnViewport.offsetAt(start + span) - this.columnViewport.offsetAt(start)}px`;
     if (cell.style.width !== width) cell.style.width = width;
     if (span > 1) cell.setAttribute("aria-colspan", String(span));
@@ -1079,7 +1092,8 @@ export class BodyRenderer {
     row.textContent = "";
   }
 
-  private renderCell(cell: HTMLElement, node: RowNode<any>, column: Column): void {
+  private renderCell(cell: HTMLElement, node: RowNode<any>, column: Column, rowIndex: number, force?: boolean, columns?: ReadonlySet<string> | null): boolean {
+    if (this.core.editingService.renderEditor(rowIndex, node, column, cell)) return true;
     if (node.loading) {
       cleanupCellContent(this.core, cell);
       cell.className = "mach-cell mach-cell--loading";
@@ -1089,21 +1103,31 @@ export class BodyRenderer {
       bar.style.width = `${34 + (column.id.length * 13 + node.rowIndex * 7) % 44}%`;
       cell.replaceChildren(bar);
       this.resetSpanStyle(cell);
-      return;
+    } else {
+      if (force && (columns == null || columns.has(column.id))) {
+        const data = node.data;
+        cleanupCellContent(this.core, cell);
+        // A destroy callback may synchronously replace the grid, rows or pooled cell.
+        if (this.core.isDisposed() || node.data !== data || this.core.rowModel.getDisplayedRow(node.rowIndex) !== node ||
+          this.core.columnModel.getColumn(column.id) !== column || this.getCellElement(node.rowIndex, column.id) !== cell) return false;
+      }
+      cell.removeAttribute("aria-busy");
+      const editable = this.core.editingService.isEditable(node, column);
+      cell.setAttribute("aria-readonly", editable ? "false" : "true");
+      cell.removeAttribute("aria-expanded");
+      cell.removeAttribute("aria-level");
+      const kind = this.cellRenderKind(node, column);
+      if (kind !== "standard") {
+        cleanupCellContent(this.core, cell);
+        this.renderStructuralCell(kind, cell, node, column);
+      } else {
+        renderDataCell(this.core, cell, node, column);
+        this.applyCellSpanStyle(cell, node, column);
+        this.appendEditableIndicator(cell, node, column, editable);
+      }
     }
-    cell.removeAttribute("aria-busy");
-    cell.setAttribute("aria-readonly", this.core.editingService.isEditable(node, column) ? "false" : "true");
-    cell.removeAttribute("aria-expanded");
-    cell.removeAttribute("aria-level");
-    const kind = this.cellRenderKind(node, column);
-    if (kind !== "standard") {
-      cleanupCellContent(this.core, cell);
-      this.renderStructuralCell(kind, cell, node, column);
-      return;
-    }
-    renderDataCell(this.core, cell, node, column);
-    this.applyCellSpanStyle(cell, node, column);
-    this.appendEditableIndicator(cell, node, column);
+    this.applyRangeClass(cell, rowIndex, column);
+    return true;
   }
 
   private cellRenderKind(node: RowNode<any>, column: Column): CellRenderKind {
@@ -1148,18 +1172,18 @@ export class BodyRenderer {
     }
   }
 
-  private appendEditableIndicator(cell: HTMLElement, node: RowNode<any>, column: Column): void {
+  private appendEditableIndicator(cell: HTMLElement, node: RowNode<any>, column: Column, editable: boolean): void {
     if (
       this.core.gridOptions.editType !== "cell" ||
       this.core.gridOptions.editableIndicator === "none" ||
-      !this.core.editingService.isEditable(node, column)
+      !editable
     ) return;
     const button = el("button", `mach-cell-edit-trigger mach-cell-edit-trigger--${this.core.gridOptions.editableIndicator}`);
     button.type = "button";
     button.tabIndex = -1;
     button.title = "Edit cell";
     button.setAttribute("aria-label", "Edit cell");
-    button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10.8 2.7 2.5 2.5L5.5 13H3v-2.5z"/><path d="m9.5 4 2.5 2.5"/></svg>';
+    button.innerHTML = iconSvg(EDIT_ICON_PATH);
     button.addEventListener("mousedown", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1359,7 +1383,7 @@ export class BodyRenderer {
         if (row) this.applyRowSelectionState(row, node);
         const cells = slot.cells[pane];
         if (!cells) continue;
-        this.renderPaneCells(slot, node, pane);
+        if (!this.renderPaneCells(slot, node, pane)) break;
       }
     }
     this.applyFocusClass();
@@ -1406,8 +1430,10 @@ export class BodyRenderer {
     for (const pane of PANES) {
       const row = slot.rows[pane];
       if (row) applyRowAppearance(row, appearance);
-      if (refreshPane) this.renderPaneCells(slot, node, pane);
-      else this.refreshPaneCells(slot, node, pane, columns, force);
+      if (refreshPane) {
+        if (!this.renderPaneCells(slot, node, pane, force, columns)) return;
+      }
+      else if (!this.refreshPaneCells(slot, node, pane, columns, force)) return;
     }
   }
 
@@ -1417,20 +1443,18 @@ export class BodyRenderer {
     pane: PaneType,
     columns: ReadonlySet<string>,
     force: boolean
-  ): void {
+  ): boolean {
     const paneColumns = this.activePaneColumns(pane);
     const cells = slot.cells[pane];
-    if (!cells) return;
+    if (!cells) return true;
     for (let index = 0; index < paneColumns.length; index++) {
       const column = paneColumns[index];
       if (!columns.has(column.id)) continue;
       const cell = cells[index];
       if (!cell) continue;
-      if (this.core.editingService.renderEditor(slot.index, node, column, cell)) continue;
-      if (force) cleanupCellContent(this.core, cell);
-      this.renderCell(cell, node, column);
-      this.applyRangeClass(cell, slot.index, column);
+      if (!this.renderCell(cell, node, column, slot.index, force)) return false;
     }
+    return true;
   }
 
   onDataChanged(): void {

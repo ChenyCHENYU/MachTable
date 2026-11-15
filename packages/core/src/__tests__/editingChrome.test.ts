@@ -47,7 +47,7 @@ describe("cell editing chrome", () => {
       if (this === root) return rect(100, 200, 600, height + 40);
       if (this === viewport) return rect(250, 240, 400, viewportHeight);
       if (this === cell) return rect(300, 240, 116, height);
-      if (this.classList.contains("mach-cell-editor-controls")) return rect(0, 0, this.style.position === "static" ? 600 : 52, 28);
+      if (this.classList.contains("mach-cell-editor-controls")) return rect(0, 0, 52, 28);
       return original.call(this);
     });
     api.editing.startCell({ rowIndex: 0, colId: "value" });

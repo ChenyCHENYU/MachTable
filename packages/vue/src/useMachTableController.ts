@@ -49,23 +49,16 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
     get: () => quickFilterText.value ?? "",
     set: (value: string) => { quickFilterText.value = value.trim() ? value : null; }
   });
-  const query = options.query
-    ? useMachTableQuery({
-        ...options.query,
-        quickFilterText
-      })
-    : null;
   const editing = useMachTableEditing(table, options.editing);
-  const selectedRows = shallowRef<TData[]>([]);
+  const localSelectedRows = shallowRef<TData[]>([]);
 
   const syncSelection = (): void => {
-    selectedRows.value = query?.selectedRows.value ?? table.api.value?.selection.getRows() ?? [];
+    localSelectedRows.value = table.api.value?.selection.getRows() ?? [];
   };
-  watch(table.api, (api, _previous, onCleanup) => {
+  if (!options.query) watch(table.api, (api, _previous, onCleanup) => {
     if (api && !api.isDestroyed()) onCleanup(api.on("selectionChanged", syncSelection));
     syncSelection();
   }, { immediate: true });
-  if (query) watch(query.selectedRows, syncSelection);
 
   const reload = async (): Promise<void> => {
     if (query) await query.reload();
@@ -76,7 +69,7 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
     }
   };
   const commands = createMachTableCommands<TData>({ getApi: () => table.api.value, reload });
-  if (query) commands.search = (text) => { search.value = text ?? ""; };
+  if (options.query) commands.search = (text) => { search.value = text ?? ""; };
   const bindings = computed<MachTableVueProps<TData>>(() => {
     const value: MachTableVueProps<TData> = {
       ...options.config,
@@ -106,6 +99,12 @@ export function useMachTableController<TData, TQuery = Record<string, unknown>>(
   const busy = computed(() => resolveSource(options.loading) === true || query?.loading.value === true || editing.saving.value);
   const error = computed(() => query?.error.value ?? editing.saveError.value ?? null);
 
-  if (!query) watch(quickFilterText, (value) => commands.search(value));
+  if (!options.query) watch(quickFilterText, (value) => commands.search(value));
+
+  // 先归属所有监听资源，再启动可能同步销毁作用域的首次远程请求。
+  const query = options.query
+    ? useMachTableQuery({ ...options.query, quickFilterText })
+    : null;
+  const selectedRows = query?.selectedRows ?? localSelectedRows;
   return { table, query, editing, bindings, search, selectedRows, selectedCount, busy, error, commands, reload };
 }

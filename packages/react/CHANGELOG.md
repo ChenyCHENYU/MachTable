@@ -1,5 +1,12 @@
 # @agile-team/mach-table-react
 
+## 0.42.1
+
+### Patch Changes
+
+- 移除已被选项元数据排除的事件过滤分支与冗余 Set，事件桥继续读取最新回调。
+- 同步 Core 0.42.1 的编辑几何、虚拟释放、清理重入与强制刷新修复，现有 props 与工作流保持兼容。
+
 ## 0.42.0
 
 ### Minor Changes

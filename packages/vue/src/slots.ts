@@ -32,38 +32,39 @@ export interface MachTableVueSlots<TData = any> {
   [name: `editor-${string}`]: ((props: CellEditorParams<TData>) => any) | undefined;
 }
 
-function namedSlot(slots: Slots, prefix: string, id: string): Slot | undefined {
-  return slots[`${prefix}-${id}`] ?? slots[`${prefix}-${id.replace(/[.\s]+/g, "-")}`];
+/** Stable proxies observe same-name slot replacements without rebuilding Core columns. */
+function liveSlot(slots: Slots, name: string): Slot | undefined {
+  if (!slots[name]) name = name.replace(/[.\s]+/g, "-");
+  return slots[name] ? (props) => slots[name]!(props) : undefined;
 }
 
 function enhanceColumns<TData>(
   definitions: readonly (ColDef<TData> | ColDefGroup<TData>)[],
   slots: Slots,
-  appContext?: AppContext
+  context: { appContext?: AppContext }
 ): (ColDef<TData> | ColDefGroup<TData>)[] {
   return definitions.map((definition, index) => {
     if (Array.isArray((definition as ColDefGroup<TData>).children)) {
       const group = definition as ColDefGroup<TData>;
-      return { ...group, children: enhanceColumns(group.children, slots, appContext) };
+      return { ...group, children: enhanceColumns(group.children, slots, context) };
     }
     const column = definition as VueColDef<TData>;
     const id = column.colId ?? column.field ?? `col_${index}`;
-    const namedCell = namedSlot(slots, "cell", id) ?? (id === "op" ? slots.actions : undefined);
-    const fallbackCell = slots.cell;
-    const header = namedSlot(slots, "header", id) ?? slots.header;
-    const editor = namedSlot(slots, "editor", id) ?? slots.editor;
     const { render, ...coreColumn } = column;
+    // Named slots override render; the general cell slot is only a fallback.
+    const cell = liveSlot(slots, `cell-${id}`) ?? (id === "op" ? liveSlot(slots, "actions") : undefined)
+      ?? (render ? undefined : liveSlot(slots, "cell"));
+    const header = liveSlot(slots, `header-${id}`) ?? liveSlot(slots, "header");
+    const editor = liveSlot(slots, `editor-${id}`) ?? liveSlot(slots, "editor");
     return {
       ...coreColumn,
-      ...(namedCell
-        ? { cellRenderer: vueCellSlotRenderer(namedCell, { appContext }) }
+      ...(cell
+        ? { cellRenderer: vueCellSlotRenderer(cell, context) }
         : render
-          ? { cellRenderer: vueRenderCell(render, { appContext }) }
-          : fallbackCell
-            ? { cellRenderer: vueCellSlotRenderer(fallbackCell, { appContext }) }
-            : {}),
-      ...(header ? { headerComponent: vueHeaderSlotRenderer(header, { appContext }) } : {}),
-      ...(editor ? { cellEditor: vueCellEditorSlot(editor, { appContext }) } : {})
+          ? { cellRenderer: vueRenderCell(render, context) }
+          : {}),
+      ...(header ? { headerComponent: vueHeaderSlotRenderer(header, context) } : {}),
+      ...(editor ? { cellEditor: vueCellEditorSlot(editor, context) } : {})
     };
   });
 }
@@ -78,6 +79,7 @@ export function applyVueSlots<TData>(
 
 /** Creates a stable enhancer so unrelated reactive prop updates do not rebuild columns. */
 export function createVueSlotEnhancer<TData>(slots: Slots, appContext?: AppContext) {
+  const context = { appContext };
   let previousDefinitions: GridOptions<TData>["columnDefs"];
   let enhancedDefinitions: GridOptions<TData>["columnDefs"];
   let previousSlots = "";
@@ -88,15 +90,16 @@ export function createVueSlotEnhancer<TData>(slots: Slots, appContext?: AppConte
     if (options.columnDefs !== previousDefinitions || slotKeys !== previousSlots) {
       previousDefinitions = options.columnDefs;
       enhancedDefinitions = options.columnDefs
-        ? enhanceColumns(options.columnDefs, slots, appContext)
+        ? enhanceColumns(options.columnDefs, slots, context)
         : options.columnDefs;
     }
     if (slotKeys !== previousSlots) {
       previousSlots = slotKeys;
       templates = {};
-      if (slots.detail) templates.detailRowRenderer = vueDetailSlotRenderer<TData>(slots.detail, { appContext });
-      if (slots.loading) templates.overlayLoadingTemplate = vueOverlaySlot(slots.loading, { appContext });
-      if (slots.empty) templates.overlayNoRowsTemplate = vueOverlaySlot(slots.empty, { appContext });
+      const detail = liveSlot(slots, "detail"), loading = liveSlot(slots, "loading"), empty = liveSlot(slots, "empty");
+      if (detail) templates.detailRowRenderer = vueDetailSlotRenderer<TData>(detail, context);
+      if (loading) templates.overlayLoadingTemplate = vueOverlaySlot(loading, context);
+      if (empty) templates.overlayNoRowsTemplate = vueOverlaySlot(empty, context);
     }
     return {
       ...options,

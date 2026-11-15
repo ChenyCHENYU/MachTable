@@ -1,4 +1,4 @@
-import { defineComponent, getCurrentInstance, h, onActivated, onBeforeUnmount, onBeforeUpdate, onDeactivated, onMounted, ref, watch, type DefineComponent } from "vue";
+import { defineComponent, getCurrentInstance, h, onActivated, onBeforeUnmount, onBeforeUpdate, onDeactivated, onMounted, ref, shallowReactive, watch, type DefineComponent } from "vue";
 import {
   createGrid,
   EVENT_TYPES
@@ -43,12 +43,11 @@ export interface MachTableVueComponent extends DefineComponent<MachTableVueProps
 }
 
 const HOST_PROPS = {
-  gridClassName: "className", gridAriaLabel: "ariaLabel",
-  gridAriaLabelledBy: "ariaLabelledBy", gridAriaDescribedBy: "ariaDescribedBy"
+  className: "gridClassName", ariaLabel: "gridAriaLabel",
+  ariaLabelledBy: "gridAriaLabelledBy", ariaDescribedBy: "gridAriaDescribedBy"
 } as const;
 const HOST_PROP_ENTRIES = Object.entries(HOST_PROPS);
-const INNER_OPTION_KEYS = new Set<string>(Object.values(HOST_PROPS));
-const ADAPTER_OPTION_KEYS = GRID_OPTION_KEYS.filter(key => !INNER_OPTION_KEYS.has(key));
+const ADAPTER_OPTION_KEYS = GRID_OPTION_KEYS.filter(key => !(key in HOST_PROPS));
 
 const PROP_TYPES: Readonly<Record<string, unknown>> = {
   boolean: Boolean, number: Number, array: Array, function: Function,
@@ -58,7 +57,7 @@ const runtimeProps: Record<string, { type?: any; default: undefined }> = {};
 for (const key of ADAPTER_OPTION_KEYS) {
   runtimeProps[key] = { type: PROP_TYPES[GRID_OPTION_META[key].kind], default: undefined };
 }
-for (const key of ["className", ...Object.keys(HOST_PROPS)]) {
+for (const key of ["className", ...Object.values(HOST_PROPS)]) {
   runtimeProps[key] = { type: String, default: undefined };
 }
 runtimeProps.preset = { type: [String, Array, Boolean], default: undefined };
@@ -77,10 +76,13 @@ const MachTableImpl = defineComponent({
     const host = ref<HTMLDivElement | null>(null);
     let api: GridApi | null = null;
     const config = useMachTableConfig();
-    const enhanceVueSlots = createVueSlotEnhancer<any>(slots, getCurrentInstance()?.appContext);
-    const slotKeys = ref("");
-    // Vue updates dynamic slots before this hook, even when table props stay stable.
-    onBeforeUpdate(() => { slotKeys.value = Object.keys(slots).join("\0"); });
+    const currentSlots = shallowReactive({ ...slots });
+    const enhanceVueSlots = createVueSlotEnhancer<any>(currentSlots, getCurrentInstance()?.appContext);
+    // Vue updates slots before this hook; stable proxies update slot roots without rebuilding columns.
+    onBeforeUpdate(() => {
+      for (const key in currentSlots) if (!(key in slots)) delete currentSlots[key];
+      Object.assign(currentSlots, slots);
+    });
     let lastResolution: ResolvedMachTableGridOptions<any> | null = null;
     const reportedWarnings = new Set<string>();
 
@@ -90,7 +92,7 @@ const MachTableImpl = defineComponent({
         const value = props[key];
         if (value !== undefined) explicit[key] = value;
       }
-      for (const [prop, key] of HOST_PROP_ENTRIES) {
+      for (const [key, prop] of HOST_PROP_ENTRIES) {
         if (props[prop] !== undefined) explicit[key] = props[prop];
       }
       const resolution = resolveMachTableGridOptions(
@@ -157,7 +159,6 @@ const MachTableImpl = defineComponent({
 
     watch(
       () => {
-        void slotKeys.value;
         const options = collectOptions() as Record<string, unknown>;
         return GRID_OPTION_KEYS.map((key) => options[key]);
       },

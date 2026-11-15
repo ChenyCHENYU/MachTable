@@ -10,7 +10,7 @@ interface Row {
   id: string;
   name: string;
   score: number;
-  at?: string;
+  at?: string | Date;
   note?: string;
 }
 
@@ -213,6 +213,45 @@ describe("fixes round 2", () => {
     api.editing.stop();
     expect(data[0].at).toBe("2024-06-07T08:30");
     api.destroy();
+  });
+
+  it("normalizes an inferred Date input without changing the documented date editor result", async () => {
+    const host = createHost();
+    const original = new Date("2026-11-15T08:30:45.123Z");
+    const data: Row[] = [{ id: "date", name: "date", score: 0, at: original }];
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "at", editable: true }], rowData: data, rowKey: "id"
+    });
+    try {
+      expect(api.editing.startCell({ rowIndex: 0, colId: "at" })).toBe(true);
+      const input = host.querySelector<HTMLInputElement>(".mach-editor-input")!;
+      expect(input.type).toBe("date");
+      expect(input.value).toBe("2026-11-15");
+      await api.editing.stop({ cancel: true });
+      expect(data[0].at).toBe(original);
+      api.editing.startCell({ rowIndex: 0, colId: "at" });
+      host.querySelector<HTMLInputElement>(".mach-editor-input")!.value = "2026-11-16";
+      await api.editing.stop();
+      expect(data[0].at).toBe("2026-11-16T08:30");
+    } finally { api.destroy(); }
+  });
+
+  it("reports an invalid Date before mounting an editor without clearing its data", () => {
+    const host = createHost();
+    const invalid = new Date(Number.NaN);
+    const errors: unknown[] = [];
+    const data: Row[] = [{ id: "invalid-date", name: "date", score: 0, at: invalid }];
+    const api = createGrid<Row>(host, {
+      columnDefs: [{ field: "at", editable: true }], rowData: data, rowKey: "id",
+      onGridError: event => errors.push(event.error)
+    });
+    try {
+      expect(api.editing.startCell({ rowIndex: 0, colId: "at" })).toBe(false);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toBeInstanceOf(RangeError);
+      expect(host.querySelector(".mach-editor-input")).toBeNull();
+      expect(data[0].at).toBe(invalid);
+    } finally { api.destroy(); }
   });
 
   it("csv export protects formula injection by default", () => {

@@ -59,9 +59,11 @@ const columns = defineVueColumns<Row>([
 
 业务列优先用 `defineVueColumns()` 的 `render(row, index, params)` 返回 VNode；它保留 Vue 应用上下文、支持原位刷新，并遵循全局、表格和单列对齐配置。复杂页面编排仍可使用 `#cell-*` 具名插槽，具名插槽会显式覆盖同列 `render`。常规场景只需列、数据与场景选择。业务确有较多实例参数时，可用一次 `v-bind="tableConfig"` 注入；`rowData`、`columnDefs` 和实例 `ref` 保持显式，便于看清数据来源。
 
+同名插槽的内容或函数替换会更新对应 Vue 内容，不要求重新传列或调用刷新；稳定插槽的响应式更新不会重建正在编辑的输入。查询与组合控制器也统一归属当前作用域，首次请求中同步退出页面会立即取消并清理监听。
+
 未声明 `#loading` / `#empty` 时直接使用 Core 的主题色数据条动效与插画空态；减少动画设置下静止展示。需要品牌化时再提供 slot，无需每页重复维护状态组件。
 
-单元格编辑在用户点击对勾/取消或执行 Enter、Escape、Tab 键盘命令前保持挂载，焦点变化和中文输入法组合输入不会提前提交。整行事务请设置 `edit-type="fullRow"` 并增加 `rowActionsColumn()`，该操作列会自动切换编辑、保存和取消状态。
+可见单元格编辑在用户点击对勾/取消或执行 Enter、Escape、Tab 键盘命令前保持挂载，焦点变化和中文输入法组合输入不会提前提交。超宽输入随可见分区定位，横滚与调宽保留焦点；完全离开虚拟视区时按[编辑释放规则](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/editing.md)处理。整行事务请设置 `edit-type="fullRow"` 并增加 `rowActionsColumn()`，该操作列会自动切换编辑、保存和取消状态。
 
 粘贴、清空和填充会复用相同的列与整行校验配置。`useMachTableEditing()` 将保存结果与提交时的实例和行数据关联，重挂载或替换数据后，旧请求的结果、错误与冲突不会影响新记录。
 

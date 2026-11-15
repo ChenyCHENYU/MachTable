@@ -16,18 +16,15 @@ function findBoundary(values: Float64Array, target: number, afterEqual = false):
 export class ColumnViewportIndex {
   private columnStartOffsets = new Float64Array(1);
 
-  update(columns: readonly Column[]): boolean {
-    let changed = this.columnStartOffsets.length !== columns.length + 1;
-    if (changed) this.columnStartOffsets = new Float64Array(columns.length + 1);
+  update(columns: readonly Column[]): void {
+    if (this.columnStartOffsets.length !== columns.length + 1) this.columnStartOffsets = new Float64Array(columns.length + 1);
     // Width-only updates reuse storage and refresh changed prefixes in one pass.
     let total = 0;
     for (let index = 0; index < columns.length; index++) {
       total += columns[index].currentWidth;
       if (this.columnStartOffsets[index + 1] === total) continue;
       this.columnStartOffsets[index + 1] = total;
-      changed = true;
     }
-    return changed;
   }
 
   totalWidth(): number {

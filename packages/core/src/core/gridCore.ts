@@ -974,6 +974,7 @@ export class GridCore<TData = any> {
     this.skeleton.root.setAttribute("aria-colcount", String(this.columnModel.getOrderedVisible().length));
     this.headerRenderer.applyLayout();
     this.bodyRenderer.relayout();
+    if (this.disposedState) return;
     this.pinnedRowsRenderer.applyLayout();
     this.summaryRenderer.refresh();
     this.performanceMonitor.recordLayout(startedAt);
@@ -1002,6 +1003,7 @@ export class GridCore<TData = any> {
     this.bodyRenderer.applyContainerSizes();
     this.bodyRenderer.applyCellLayout();
     this.bodyRenderer.updateRange(true);
+    if (this.disposedState) return;
     this.pinnedRowsRenderer.applyLayout();
     this.summaryRenderer.refresh();
   }

@@ -29,20 +29,21 @@ describe("0.19 indexed virtualization", () => {
   it("finds horizontal windows without scanning every column", () => {
     const index = new ColumnViewportIndex();
     const columns = Array.from({ length: 100 }, (_, i) => ({ id: `c${i}`, currentWidth: 50 }));
-    expect(index.update(columns as any)).toBe(true);
-    expect(index.update(columns as any)).toBe(false);
+    index.update(columns as any);
+    index.update(columns as any);
     expect(index.totalWidth()).toBe(5_000);
     expect(index.indexAt(1_025)).toBe(20);
     expect(index.visibleRange(1_000, 200, 1)).toEqual({ first: 19, lastExcl: 25 });
     columns[20].currentWidth = 75;
-    expect(index.update(columns as any)).toBe(true);
+    index.update(columns as any);
     expect(index.totalWidth()).toBe(5_025);
     expect(index.offsetAt(21)).toBe(1_075);
-    expect(index.update(columns as any)).toBe(false);
-    expect(index.update(columns.slice(0, 2) as any)).toBe(true);
+    index.update(columns as any);
+    expect(index.offsetAt(21)).toBe(1_075);
+    index.update(columns.slice(0, 2) as any);
     expect(index.totalWidth()).toBe(100);
     expect(index.indexAt(99)).toBe(1);
-    expect(index.update([])).toBe(true);
+    index.update([]);
     expect(index.indexAt(0)).toBe(-1);
   });
 

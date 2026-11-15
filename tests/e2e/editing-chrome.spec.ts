@@ -38,6 +38,11 @@ for (const rowHeight of [30, 52]) for (const pagination of [false, true]) {
     const controls = root.locator(".mach-cell-editor-controls");
     await expect(controls).toBeVisible();
     await expect(controls).toHaveCSS("position", "static");
+    await expect(controls).toHaveCSS("align-self", "flex-end");
+    const footer = await controls.boundingBox();
+    const gridBounds = await root.boundingBox();
+    expect(footer!.width).toBeLessThan(80);
+    expect(Math.abs(footer!.x + footer!.width - gridBounds!.x - gridBounds!.width)).toBeLessThanOrEqual(2);
     await expect(body).toHaveCSS("height", `${rowHeight}px`);
     const overlap = await controls.evaluate(actions => {
       const rect = actions.getBoundingClientRect();

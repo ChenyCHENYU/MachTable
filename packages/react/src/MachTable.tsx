@@ -16,8 +16,6 @@ function handlerNameOf(eventType: string): string {
   return `on${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
 }
 
-const EVENT_HANDLER_KEYS = new Set(EVENT_TYPES.map(handlerNameOf));
-
 function effectiveInputsEqual(
   current: readonly unknown[],
   previous: readonly unknown[]
@@ -26,7 +24,6 @@ function effectiveInputsEqual(
   return current.every((value, index) => {
     if (index < 2) return Object.is(value, previous[index]);
     const key = GRID_OPTION_KEYS[index - 2];
-    if (EVENT_HANDLER_KEYS.has(key)) return true;
     if (key === "rowData" || key === "columnDefs") return Object.is(value, previous[index]);
     return equivalentConfigValue(value, previous[index]);
   });
@@ -80,10 +77,7 @@ export function MachTable<TData = any>(props: MachTableReactProps<TData>) {
     config,
     props.preset,
     ...GRID_OPTION_KEYS.map((key) => {
-      // Event bridges read propsRef/effectiveRef at dispatch time. Treating an
-      // inline React callback as a grid-option change would rebuild merged
-      // object options and can tear down an active editor during a host render.
-      if (EVENT_HANDLER_KEYS.has(key)) return undefined;
+      // GRID_OPTION_KEYS 已排除事件；事件桥在派发时读取最新回调。
       return key === "className"
         ? props.gridClassName
         : key === "ariaLabel"

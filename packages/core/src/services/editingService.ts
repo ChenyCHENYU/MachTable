@@ -1,3 +1,4 @@
+import { iconSvg, CHECK_ICON_PATH, CLOSE_ICON_PATH } from "../lib/actionIcons";
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
 import type { RowNode } from "../types/row";
@@ -62,15 +63,12 @@ interface RowEditingState {
   validating: boolean;
 }
 
-const CHECK_PATH = '<path d="M3 8.5 6.4 12 13.5 4"/>';
-const CLOSE_PATH = '<path d="m4 4 8 8m0-8-8 8"/>';
-
 function createEditButton(kind: "confirm" | "cancel", label: string): HTMLButtonElement {
   const button = el("button", `mach-edit-control mach-edit-control--${kind}`);
   button.type = "button";
   button.setAttribute("aria-label", label);
   button.title = label;
-  button.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${kind === "confirm" ? CHECK_PATH : CLOSE_PATH}</svg>`;
+  button.innerHTML = iconSvg(kind === "confirm" ? CHECK_ICON_PATH : CLOSE_ICON_PATH);
   return button;
 }
 
@@ -221,6 +219,7 @@ export class EditingService {
     }
     const first = drafts.values().next().value;
     const target = (preferredColId ? drafts.get(preferredColId) : undefined) ?? first;
+    this.positionCellControls();
     if (target?.mounted) this.focusEditor(target.mounted.editor, target.column, node);
     this.core.emit("rowEditingStarted", { rowIndex, rowNode: node, data: node.data });
     return true;
@@ -243,13 +242,13 @@ export class EditingService {
     return true;
   }
 
-  /** Captures a staged value before a pooled/virtual cell is reused. */
-  releaseCell(rowIndex: number, colId: string, cell: HTMLElement): void {
+  /** Captures a virtual draft; true means stopping a cell editor already repainted the row. */
+  releaseCell(rowIndex: number, colId: string, cell: HTMLElement): boolean {
     const row = this.rowEditing;
     if (row && this.currentRowIndex(row) === rowIndex) {
       const draft = row.drafts.get(colId);
       if (draft?.mounted?.cell === cell) this.unmountRowDraft(draft);
-      return;
+      return false;
     }
     if (this.cellEditing?.cell === cell) {
       const editing = this.cellEditing;
@@ -257,7 +256,9 @@ export class EditingService {
       // A pooled cell cannot safely retain an editor while async validation is pending.
       // Synchronous commits have already completed; pending editors are cancelled cleanly.
       if (this.cellEditing === editing) void this.stopAsync(true);
+      return true;
     }
+    return false;
   }
 
   stop(cancel = false): void {
@@ -388,13 +389,17 @@ export class EditingService {
     const changed = !cancel && newValue !== undefined && !Object.is(editing.oldValue, newValue);
     if (changed) {
       const failure = this.core.inputService.commitChanges([change], () => !this.core.isDisposed());
+      // A public valueSetter can synchronously cancel this edit and open another.
+      if (this.cellEditing !== editing) return false;
       if (failure) {
         this.setCellBusy(editing, false);
         this.showError(editing.editor, failure.message);
         return false;
       }
     }
+    // User callbacks below may open a new editor and submit its own stop task.
     this.cellEditing = null;
+    this.stopPromise = null;
     editing.confirmButton.parentElement?.remove();
     if (changed) this.core.notifyCellValueChanged(editing.node, editing.column, editing.oldValue, newValue);
     this.destroyMountedEditor(editing);
@@ -416,13 +421,14 @@ export class EditingService {
   private finishRowStop(row: RowEditingState, cancelled: boolean, values: readonly InputChange[] = []): boolean {
     if (this.rowEditing !== row) return false;
     const changes = cancelled ? [] : this.commitRowDrafts(row, values);
-    if (changes == null) return false;
+    if (changes == null || this.rowEditing !== row) return false;
+    // Detach this session before cleanup can cancel or replace it synchronously.
+    this.rowEditing = null;
+    this.stopPromise = null;
     for (const draft of row.drafts.values()) {
       // Canonical changes were validated separately; raw drafts may have been remounted meanwhile.
-      if (draft.mounted) this.destroyMountedEditor(draft.mounted);
-      draft.mounted = null;
+      this.unmountRowDraft(draft, false);
     }
-    this.rowEditing = null;
 
     if (this.core.isDisposed()) return true;
 
@@ -490,8 +496,34 @@ export class EditingService {
     cell.removeAttribute("title");
   }
 
-  /** Existing layout/scroll passes place the one active toolbar; idle grids read no DOM here. */
+  /** Keep a wide editor readable without changing its logical cell width or popup containing block. */
+  private fitEditorShell(cell: HTMLElement, viewport: HTMLElement, anchor: DOMRect, clip: DOMRect): void {
+    const shell = cell.firstElementChild as HTMLElement;
+    if (anchor.width > viewport.clientWidth || anchor.left < clip.left) {
+      const style = getComputedStyle(cell);
+      shell.style.maxWidth = `${Math.max(0, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))}px`;
+      shell.style.marginLeft = `${Math.max(0, clip.left - anchor.left)}px`;
+      shell.style.marginRight = "auto";
+    } else if (shell.style.maxWidth) {
+      shell.style.maxWidth = shell.style.marginRight = shell.style.marginLeft = "";
+    }
+  }
+
+  private positionRowEditors(row: RowEditingState): void {
+    // Virtualization bounds this set; do not walk drafts for every editable column while scrolling.
+    for (const shell of this.core.skeleton.root.querySelectorAll<HTMLElement>(".mach-row--editing .mach-row-editor-shell")) {
+      const cell = shell.parentElement!;
+      const draft = row.drafts.get(cell.dataset.colId!);
+      if (draft?.mounted?.cell !== cell) continue;
+      const viewport = this.core.skeleton.bodyViewports[draft.column.pinned ?? "center"];
+      if (parseFloat(cell.style.width) <= viewport.clientWidth && parseFloat(cell.style.left) >= viewport.scrollLeft && !shell.style.maxWidth) continue;
+      this.fitEditorShell(cell, viewport, cell.getBoundingClientRect(), viewport.getBoundingClientRect());
+    }
+  }
+
+  /** Existing layout/scroll passes fit only mounted editors; idle grids read no DOM here. */
   positionCellControls(): void {
+    if (this.rowEditing) this.positionRowEditors(this.rowEditing);
     if (!this.cellEditing) return;
     const { cell, column, confirmButton } = this.cellEditing;
     const root = this.core.skeleton.root;
@@ -501,6 +533,7 @@ export class EditingService {
     const viewport = this.core.skeleton.bodyViewports[column.pinned ?? "center"];
     const anchor = cell.getBoundingClientRect();
     const clip = viewport.getBoundingClientRect();
+    this.fitEditorShell(cell, viewport, anchor, clip);
     const bounds = root.getBoundingClientRect();
     const size = controls.getBoundingClientRect();
     const right = clip.left + viewport.clientWidth;
@@ -509,25 +542,27 @@ export class EditingService {
     // A natural one-row grid can grow a small action footer; its row spacer/cap stays unchanged.
     const flow = this.core.gridOptions.domLayout === "autoHeight" && top + size.height > bottom;
     controls.style.position = flow ? "static" : "";
-    controls.style.justifyContent = flow ? "flex-end" : "";
-    const width = controls.getBoundingClientRect().width;
+    // The footer keeps the toolbar's intrinsic width; switching positioning needs no second layout read.
+    const width = size.width;
     controls.style.visibility = (flow || width <= viewport.clientWidth && top + size.height <= bottom) &&
       anchor.right > clip.left && anchor.left < right && anchor.bottom > clip.top && anchor.top < bottom ? "" : "hidden";
     controls.style.left = `${clamp(anchor.right - width, clip.left, Math.max(clip.left, right - width)) - bounds.left - root.clientLeft}px`;
     controls.style.top = `${top - bounds.top - root.clientTop}px`;
   }
 
-  private unmountRowDraft(draft: RowDraft): void {
-    if (!draft.mounted) return;
-    this.captureRowDraft(draft);
-    this.destroyMountedEditor(draft.mounted);
+  private unmountRowDraft(draft: RowDraft, capture = true): void {
+    const mounted = draft.mounted;
+    // Value/error callbacks can stop the row while this virtual cell is released.
     draft.mounted = null;
+    if (!mounted) return;
+    if (capture) this.captureRowDraft(draft, mounted);
+    this.destroyMountedEditor(mounted);
   }
 
-  private captureRowDraft(draft: RowDraft): void {
-    if (!draft.mounted) return;
+  private captureRowDraft(draft: RowDraft, mounted = draft.mounted): void {
+    if (!mounted) return;
     try {
-      const next = draft.mounted.editor.getValue();
+      const next = mounted.editor.getValue();
       if (next !== undefined) draft.value = next;
     } catch (error) {
       this.core.reportError(error, "cellEditor.getValue", {
@@ -648,12 +683,15 @@ export class EditingService {
     mounted.editor.el.removeEventListener("keydown", mounted.keydown);
     if (mounted.input) mounted.editor.el.removeEventListener("input", mounted.input);
     this.setEditorBusy(mounted.editor.el, false);
+    // Another editor may already own a remaining draft's reused cell.
+    if (mounted.cell.contains(mounted.editor.el)) {
+      mounted.cell.classList.remove("mach-cell--editing", "mach-cell--row-editing", "mach-cell--error");
+    }
     try {
       mounted.editor.destroy?.();
     } catch (error) {
       this.core.reportError(error, "cellEditor.destroy", { colId: mounted.cell.dataset.colId });
     }
-    mounted.cell.classList.remove("mach-cell--editing", "mach-cell--row-editing", "mach-cell--error");
   }
 
   private currentRowIndex(row: RowEditingState): number {

@@ -24,11 +24,6 @@ export interface VueCellEditorOptions<TData = any, TValue = any> {
   className?: string;
 }
 
-function currentAppContext(explicit?: AppContext): AppContext | undefined {
-  if (explicit) return explicit;
-  return getCurrentInstance()?.appContext;
-}
-
 function mountEditor(component: Component, host: HTMLElement, appContext?: AppContext): () => void {
   if (appContext) {
     const vnode = h(component);
@@ -46,19 +41,19 @@ export function vueCellEditor<TData = any, TValue = any>(
   component: Component,
   options: VueCellEditorOptions<TData, TValue> = {}
 ): CellEditorFactory {
-  const appContext = currentAppContext(options.appContext);
+  const appContext = options.appContext ?? getCurrentInstance()?.appContext;
   const valueProp = options.valueProp ?? "modelValue";
   const updateEvent = options.updateEvent ?? "onUpdate:modelValue";
   return (params: CellEditorParams<TData, TValue>) => {
     const state = shallowReactive<{ value: TValue }>({ value: params.value });
+    const setValue = (value: TValue) => { state.value = value; };
     const host = document.createElement("div");
     host.className = `mach-cell-vue mach-cell-vue--editor${options.className ? ` ${options.className}` : ""}`;
     host.style.width = "100%";
     const Root = {
       name: "MachTableVueCellEditor",
-      setup: () => () => {
+      render: () => {
         const suppliedProps = typeof options.props === "function" ? options.props(params) : options.props;
-        const setValue = (value: TValue) => { state.value = value; };
         return h(component, {
           ...(suppliedProps ?? {}),
           [valueProp]: state.value,
