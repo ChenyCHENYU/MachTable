@@ -18,6 +18,7 @@ export default defineConfig({
   use: {
     ...devices["Desktop Chrome"],
     viewport: { width: 1280, height: 800 },
+    launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] },
     // 长时间 trace 本身会改变保留对象与资源；只保存标量测量附件。
     trace: "off",
     screenshot: "only-on-failure",

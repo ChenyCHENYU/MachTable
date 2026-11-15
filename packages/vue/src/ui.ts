@@ -15,5 +15,5 @@ export const MachTableUiPlugin = {
 };
 
 export { MachTableToolbar };
-export type { MachTableToolbarFeatures } from "./MachTableToolbar";
+export type { MachTableToolbarFeatures, MachTableToolbarProps } from "./MachTableToolbar";
 export default MachTableUiPlugin;

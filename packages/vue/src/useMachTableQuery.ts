@@ -6,8 +6,7 @@ import {
   shallowRef,
   watch,
   type ComputedRef,
-  type Ref,
-  type ShallowRef
+  type Ref
 } from "vue";
 import {
   normalizeAdvancedFilterModel,
@@ -78,18 +77,18 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
 }
 
 export interface UseMachTableQueryReturn<TData> {
-  rows: ShallowRef<TData[]>;
+  rows: Ref<TData[]>;
   loading: Ref<boolean>;
-  error: ShallowRef<unknown | null>;
+  error: Ref<unknown | null>;
   page: Ref<number>;
   pageSize: Ref<number>;
   total: Ref<number>;
-  sortModel: ShallowRef<SortModel>;
-  filterModel: ShallowRef<FilterModel>;
-  advancedFilterModel: ShallowRef<AdvancedFilterModel | null>;
+  sortModel: Ref<SortModel>;
+  filterModel: Ref<FilterModel>;
+  advancedFilterModel: Ref<AdvancedFilterModel | null>;
   selectedKeys: Ref<string[]>;
   /** Explicit selections retain loaded snapshots; allMatching contains only selected rows from the last accepted page. */
-  selectedRows: ShallowRef<TData[]>;
+  selectedRows: Ref<TData[]>;
   selectionState: ComputedRef<MachTableRemoteSelectionState>;
   bindings: ComputedRef<GridOptions<TData>>;
   reload(options?: { resetPage?: boolean }): Promise<void>;

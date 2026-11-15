@@ -5,8 +5,7 @@ import {
   shallowRef,
   watch,
   type ComputedRef,
-  type Ref,
-  type ShallowRef
+  type Ref
 } from "vue";
 import type {
   GridBatchSaveResult,
@@ -28,12 +27,12 @@ export interface UseMachTableEditingOptions<TData = any> {
 }
 
 export interface UseMachTableEditingReturn<TData = any> {
-  changes: ShallowRef<GridChange<TData>[]>;
+  changes: Ref<GridChange<TData>[]>;
   dirtyRowIds: Ref<string[]>;
   dirty: ComputedRef<boolean>;
   saving: Ref<boolean>;
-  saveError: ShallowRef<unknown | null>;
-  lastSaveResult: ShallowRef<GridBatchSaveResult<TData> | null>;
+  saveError: Ref<unknown | null>;
+  lastSaveResult: Ref<GridBatchSaveResult<TData> | null>;
   saveIssues: ComputedRef<Array<SaveChangeIssue | SaveChangeConflict<TData>>>;
   failedRowIds: ComputedRef<string[]>;
   save(handler: SaveChangesHandler<TData>, rowIds?: readonly string[]): Promise<GridChange<TData>[]>;

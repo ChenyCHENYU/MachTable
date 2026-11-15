@@ -8,7 +8,6 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/source-0.42.0-2563eb" alt="Source version 0.42.0" />
   <a href="https://www.npmjs.com/package/@agile-team/mach-table"><img src="https://img.shields.io/npm/v/@agile-team/mach-table?label=npm&color=3178c6" alt="npm version" /></a>
   <a href="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml"><img src="https://github.com/ChenyCHENYU/MachTable/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-authorization%20required-dc2626" alt="Authorization required" /></a>

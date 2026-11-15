@@ -3,11 +3,63 @@
   "registry": "https://registry.npmjs.org",
   "jsdom": "30.0.1",
   "cases": [
-    { "id": "vue-minimum", "framework": "vue", "version": "3.2.0", "role": "minimum peer" },
-    { "id": "vue-project", "framework": "vue", "version": "3.5.42", "role": "project lockfile" },
-    { "id": "vue-current", "framework": "vue", "version": "3.5.45", "role": "registry stable at checkedOn" },
-    { "id": "react-minimum", "framework": "react", "version": "18.0.0", "runtimeVersion": "18.0.0-fc46dba67-20220329", "role": "minimum peer" },
-    { "id": "react-project", "framework": "react", "version": "18.3.1", "role": "project lockfile" },
-    { "id": "react-current", "framework": "react", "version": "19.3.1", "role": "registry stable at checkedOn" }
-  ]
+    {
+      "id": "vue-minimum",
+      "framework": "vue",
+      "version": "3.2.0",
+      "role": "minimum peer"
+    },
+    {
+      "id": "vue-3.2-patch-types",
+      "framework": "vue",
+      "version": "3.2.47",
+      "role": "3.2 declaration boundary (full SFC/ESM/CJS)"
+    },
+    {
+      "id": "vue-project",
+      "framework": "vue",
+      "version": "3.5.42",
+      "role": "project lockfile"
+    },
+    {
+      "id": "vue-current",
+      "framework": "vue",
+      "version": "3.5.45",
+      "role": "registry stable at checkedOn"
+    },
+    {
+      "id": "react-minimum",
+      "framework": "react",
+      "version": "18.0.0",
+      "runtimeVersion": "18.0.0-fc46dba67-20220329",
+      "role": "minimum peer"
+    },
+    {
+      "id": "react-project",
+      "framework": "react",
+      "version": "18.3.1",
+      "role": "project lockfile"
+    },
+    {
+      "id": "react-current",
+      "framework": "react",
+      "version": "19.3.1",
+      "role": "registry stable at checkedOn"
+    }
+  ],
+  "typescript": [
+    "5.7.3",
+    "5.9.3"
+  ],
+  "vueTsc": "3.0.0",
+  "reactTypes": {
+    "18": {
+      "react": "18.3.31",
+      "reactDom": "18.3.7"
+    },
+    "19": {
+      "react": "19.3.0",
+      "reactDom": "19.3.0"
+    }
+  }
 }

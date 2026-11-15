@@ -8,6 +8,12 @@ pnpm up @agile-team/mach-table-vue@^0.42.0
 pnpm up @agile-team/mach-table-react@^0.42.0
 ```
 
+## 未发布候选：Vue 声明兼容修正
+
+0.42.0 的运行时支持 Vue 3.2，但部分生成声明引用了 Vue 3.5 的内部类型。候选修正使用稳定的 `Ref<T>` 和显式工具栏 props 描述公开契约；实际返回值仍由 `shallowRef()` 创建，响应方式、深浅追踪和调用写法不变。不需要在业务侧补类型声明或修改表格配置。
+
+完整 SFC 与 ESM/CJS 声明检查分别记录最低版本与框架自身限制；Vue 3.2.0 在现代 TypeScript 下的上游声明错误不能归为 MachTable 已验证通过。正式包版本及本轮验收范围见 [1.0 就绪评估](/advanced/release-readiness)。
+
 ## 0.41.1 → 0.42.0
 
 - `/workflows` 查询全选模式的 `selectedRows` 现在仅包含最后成功页中的选中行，避免访问页数增加导致快照无限累积。普通显式跨页选择继续保留已选行快照；服务端跨页批量操作使用 `selectionState`，不能用 `selectedRows.length` 推断全选数量。

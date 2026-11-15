@@ -209,8 +209,14 @@ describe("colSpan", () => {
     });
     const viewport = host.querySelector<HTMLElement>(".mach-body-viewport--scroll")!;
     Object.defineProperty(viewport, "clientWidth", { value: 400 });
+    const anchor = cellAt(host, 0, "c0");
+    const widthChanges = new MutationObserver(() => {});
+    widthChanges.observe(anchor, { attributes: true, attributeFilter: ["style"], attributeOldValue: true });
     viewport.scrollLeft = 100 * 80;
     api.view.refreshLayout();
+    // 最终宽度正确还不够：中途收窄会使 WebKit 把编辑输入的滚动位置拉回起点。
+    expect(widthChanges.takeRecords().some(record => /(?:^|;)\s*width:\s*80px(?:;|$)/.test(record.oldValue ?? ""))).toBe(false);
+    widthChanges.disconnect();
 
     const row = host.querySelector(".mach-pane--center .mach-row[data-index='0']")!;
     const cell = (id: string) => row.querySelector<HTMLElement>(`[data-col-id="${id}"]`)!;
@@ -240,6 +246,11 @@ describe("colSpan", () => {
     expect(cell("c0").style.display).toBe("");
     expect(cell("c0").getAttribute("aria-colspan")).toBe("2");
     expect(root.getAttribute("aria-activedescendant")).toBe(cell("c0").id);
+    api.rows.transact({ update: [{ id: "wide", c0: "Anchor", span: 1 }] });
+    expect(cell("c0").style.width).toBe("80px");
+    expect(cell("c0").getAttribute("aria-colspan")).toBeNull();
+    api.columns.setWidth("c0", 100);
+    expect(cell("c0").style.width).toBe("100px");
     api.destroy();
   });
 });

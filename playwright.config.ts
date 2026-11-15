@@ -39,7 +39,11 @@ export default defineConfig({
     }
   ],
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "chromium", use: {
+      ...devices["Desktop Chrome"],
+      // 保留真实原生轨道；headless 默认隐藏会掩盖占位和拖动边界。
+      launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] }
+    } },
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } }
   ]

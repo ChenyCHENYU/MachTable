@@ -1,4 +1,4 @@
-import { computed, ref, shallowRef, watch, type ComputedRef, type Ref, type ShallowRef } from "vue";
+import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from "vue";
 import { resolveSource } from "./source";
 import { createMachTableCommands, type GridOptions, type MachTableCommands } from "@agile-team/mach-table";
 import type { MachTableVueProps } from "./MachTable";
@@ -30,7 +30,7 @@ export interface UseMachTableControllerReturn<TData> {
   editing: UseMachTableEditingReturn<TData>;
   bindings: ComputedRef<MachTableVueProps<TData>>;
   search: Ref<string>;
-  selectedRows: ShallowRef<TData[]>;
+  selectedRows: Ref<TData[]>;
   selectedCount: ComputedRef<number>;
   busy: ComputedRef<boolean>;
   error: ComputedRef<unknown | null>;

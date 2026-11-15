@@ -55,6 +55,8 @@ pnpm changeset
 
 Core、Vue、React、XLSX 四个发布包采用 fixed 版本联动。`0.x` 阶段破坏性变化使用 minor，并必须提供升级说明。
 
+生成发布版本使用 `pnpm version:packages`。它先执行 Changesets，再核对四包一致并同步私有根包版本；不要仅运行 `changeset version` 后遗漏根版本。正式发布前仍须更新当前版本说明、执行 `pnpm verify`、浏览器回归和隔离 tarball 消费检查。该命令只准备版本，不执行 npm 发布。
+
 ## Pull Request 清单
 
 - [ ] 改动范围单一且说明了原因

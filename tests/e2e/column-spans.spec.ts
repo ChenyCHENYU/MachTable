@@ -38,6 +38,8 @@ test("wide merged cells preserve their editor and width across the virtual viewp
   const mounted = await editor.elementHandle();
 
   await viewport.evaluate((element) => { element.scrollLeft = 8_005; });
+  // 先验证真实滚动位置，避免虚拟列缺失时误判为合并单元格渲染失败。
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBe(8_005);
   await expect(row.locator('[data-col-id="c100"]')).toHaveAttribute("aria-hidden", "true");
   await expect.poll(() => anchor.evaluate((element) => element.style.width)).toBe("8800px");
   expect(await row.locator(".mach-cell").count()).toBeLessThan(15);

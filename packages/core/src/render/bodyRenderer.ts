@@ -235,14 +235,6 @@ export class BodyRenderer {
     if (verticalChanged) this.core.rowModel.checkInfiniteScroll(this.renderedRowEndExclusive - 1);
   }
 
-  private paneWidths(): Record<PaneType, number> {
-    const widths: Record<PaneType, number> = { left: 0, center: 0, right: 0 };
-    for (const pane of PANES) {
-      widths[pane] = this.core.columnModel.getPaneColumns(pane).reduce((a, c) => a + c.currentWidth, 0);
-    }
-    return widths;
-  }
-
   private lastMinRowHeight = 0;
   private rowHeightCache = new WeakMap<RowNode<any>, number>();
   private dirtyHeightNodes = new Set<RowNode<any>>();
@@ -257,15 +249,14 @@ export class BodyRenderer {
 
   applyContainerSizes(): void {
     const sk = this.core.skeleton;
-    const widths = this.paneWidths();
     this.columnViewport.update(this.core.columnModel.getPaneColumns("center"));
-    widths.center = this.columnViewport.totalWidth();
+    const contentWidth = this.columnViewport.totalWidth();
     const displayed = this.core.rowModel.getDisplayedRows();
     const layout = this.resolveRowLayout(displayed.length);
     this.syncRowSizeIndex(displayed, layout);
     const totalHeight = this.totalRowLayoutHeight(layout);
     this.applyDomLayoutHeight(totalHeight);
-    this.applyRowContainerDimensions(widths, totalHeight);
+    this.applyRowContainerDimensions(contentWidth, totalHeight);
     sk.root.setAttribute("aria-rowcount", String(layout.rowCount + sk.getHeaderRowCount()));
   }
 
@@ -339,14 +330,14 @@ export class BodyRenderer {
     return positionedHeight + Math.max(0, layout.rowCount - layout.positionedCount) * layout.rowHeight;
   }
 
-  private applyRowContainerDimensions(widths: Record<PaneType, number>, totalHeight: number): void {
+  private applyRowContainerDimensions(contentWidth: number, totalHeight: number): void {
     const sk = this.core.skeleton;
     const viewport = sk.bodyViewports.center;
     const logicalTop = this.scrollCoordinates.read(viewport.scrollTop);
     const wasCompressed = this.scrollCoordinates.compressed;
     this.scrollCoordinates.configure(totalHeight, viewport.clientHeight, !this.expandsWithRows);
     // The center viewport already excludes the fixed panes; fill its remaining row background once.
-    const centerWidth = Math.max(widths.center, viewport.clientWidth);
+    const centerWidth = Math.max(contentWidth, viewport.clientWidth);
     for (const pane of PANES) {
       const container = sk.rowContainers[pane];
       container.style.height = `${this.scrollCoordinates.height}px`;
@@ -721,9 +712,11 @@ export class BodyRenderer {
       const count = Math.min(columns.length, cells.length);
       for (let index = 0; index < count; index++) {
         const column = columns[index];
-        cells[index].style.width = `${column.currentWidth}px`;
-        cells[index].style.left = `${lefts[index]}px`;
-        cells[index].setAttribute("aria-colindex", String(this.core.columnModel.getFlatIndex(column.id) + 1));
+        const cell = cells[index];
+        // 合并宽度由 renderPaneCells 更新；临时收窄会触发 WebKit 原生焦点滚动。
+        if (!cell.hasAttribute("aria-colspan")) cell.style.width = `${column.currentWidth}px`;
+        cell.style.left = `${lefts[index]}px`;
+        cell.setAttribute("aria-colindex", String(this.core.columnModel.getFlatIndex(column.id) + 1));
       }
     }
   }
@@ -803,7 +796,7 @@ export class BodyRenderer {
 
     if (!force && !colWindowChanged && first === this.firstRenderedRow && lastExcl === this.renderedRowEndExclusive) {
       if (offsetChanged) this.positionVisibleRows();
-      return colWindowChanged || offsetChanged;
+      return offsetChanged;
     }
     this.hideOutsideRange(first, lastExcl);
     this.firstRenderedRow = first;

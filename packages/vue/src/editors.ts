@@ -26,7 +26,7 @@ export interface VueCellEditorOptions<TData = any, TValue = any> {
 
 function currentAppContext(explicit?: AppContext): AppContext | undefined {
   if (explicit) return explicit;
-  try { return getCurrentInstance()?.appContext; } catch { return undefined; }
+  return getCurrentInstance()?.appContext;
 }
 
 function mountEditor(component: Component, host: HTMLElement, appContext?: AppContext): () => void {

@@ -1,4 +1,4 @@
-import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType, type VNodeChild } from "vue";
+import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType, type VNodeChild, type DefineComponent } from "vue";
 import type { GridApi, GridSize, MachTableCommands } from "@agile-team/mach-table";
 import { createSelectControl, type SelectControl } from "@agile-team/mach-table/adapter";
 
@@ -10,6 +10,21 @@ export interface MachTableToolbarFeatures {
   export?: boolean;
   undoRedo?: boolean;
   fullscreen?: boolean;
+}
+
+/** 固定公开 props 契约，避免构建时 Vue 的内部泛型泄露到最低支持版本。 */
+export interface MachTableToolbarProps {
+  api?: GridApi<any> | null;
+  commands?: MachTableCommands | null;
+  modelValue?: string;
+  loading?: boolean;
+  selectedCount?: number;
+  searchPlaceholder?: string;
+  exportFilename?: string;
+  features?: MachTableToolbarFeatures;
+  "onUpdate:modelValue"?: (value: string) => void;
+  onRefresh?: () => void;
+  onClearSelection?: () => void;
 }
 
 const DEFAULT_FEATURES: Required<MachTableToolbarFeatures> = {
@@ -177,4 +192,4 @@ export const MachTableToolbar = defineComponent({
       "aria-label": "表格工具栏"
     }, [renderMain(), renderAside()]);
   }
-});
+}) as unknown as DefineComponent<MachTableToolbarProps>;
