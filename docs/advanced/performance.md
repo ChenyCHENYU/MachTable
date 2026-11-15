@@ -108,6 +108,23 @@ const metrics = api.diagnostics.getPerformance();
 
 `api.diagnostics.get().performance` 返回同一份指标，适合接入内部诊断面板。它是轻量观测，不替代 Chrome trace、内存 profile 或真实业务 UAT。绝对耗时受硬件、浏览器、renderer 与数据形态影响，请在目标设备用业务列模型复测，不把 README 数字当 SLA。
 
+### 独立长稳验证
+
+```bash
+pnpm build:release
+pnpm check:stability
+# 30 秒短检，只验证夹具与断言。
+MACH_SOAK_SECONDS=30 MACH_SOAK_SAMPLE_SECONDS=2 pnpm test:stability
+# 默认 30 分钟，12 个暖机周期不计入测量时间。
+pnpm test:stability
+```
+
+负载交替远程块、动态列、固定/调宽、选择、编辑、撤销/回滚、查询切换与销毁。通过 Chromium CDP 显式 GC 后记录堆、DOM、监听、弱引用销毁 root、缓存和传输计数；不把原始 `performance.memory > 0` 当作释放证明。探针只位于测试夹具，不进入发布入口。
+
+三个暖机后样本与最后三个样本分别取堆中位数，增长预算为 8 MiB、峰值相对基线预算为 16 MiB；DOM 节点和监听器只允许少量固定波动。已销毁 root、未结束传输及内部错误分别作硬断言。结果包含实际时长、周期和每个样本，不能以短检通过替代 30 分钟记录。固定预算用于发现回归，不构成对任意自定义 renderer、真实接口或无限运行时间的无泄漏保证。
+
+长检有独立周检/手动工作流，普通 E2E 不因此增长 30 分钟。浏览器启动遵守执行环境权限；macOS Codex seatbelt 必须在启动前通过执行工具对具体命令使用 `require_escalated`。实际执行日志与 JSON 附件才是通过证据。
+
 ## 发布体积预算
 
 `pnpm check:size` 在构建后检查 gzip 消费体积；`pnpm check:release-artifacts` 检查解压产物并阻止 sourcemap 进入 npm 发布包。CI/本地 `pnpm verify` 使用相同门槛；下表由 `scripts/bundle-budgets.mjs` 生成，`pnpm check:budgets` 阻止文档与实际门禁漂移：

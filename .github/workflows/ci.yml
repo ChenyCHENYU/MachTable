@@ -64,6 +64,8 @@ jobs:
   package:
     name: Package integrity
     runs-on: ubuntu-latest
+    outputs:
+      framework-cases: ${{ steps.framework-matrix.outputs.cases }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -77,6 +79,49 @@ jobs:
         env:
           CI: true
       - run: pnpm quality:package
+      - id: framework-matrix
+        run: |
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; const matrix = JSON.parse(readFileSync("tests/compatibility/cases.json", "utf8")); console.log("cases=" + JSON.stringify(matrix.cases.map(item => item.id)));' >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: framework-candidate-dist
+          path: packages/*/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  compatibility:
+    name: Framework compatibility (${{ matrix.case }})
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        case: ${{ fromJSON(needs.package.outputs.framework-cases) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          CI: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: framework-candidate-dist
+          path: packages
+      - run: pnpm test:compatibility --case ${{ matrix.case }} --report test-results/framework-${{ matrix.case }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: framework-${{ matrix.case }}
+          path: test-results/framework-${{ matrix.case }}.json
+          if-no-files-found: warn
+          retention-days: 7
 
   docs:
     name: Documentation and examples
@@ -114,10 +159,23 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test:e2e
+      - run: pnpm test:stability
+        env:
+          MACH_SOAK_SECONDS: '30'
+          MACH_SOAK_SAMPLE_SECONDS: '2'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stability-smoke
+          path: |
+            test-results/stability-results.json
+            test-results/stability/
+          if-no-files-found: warn
+          retention-days: 7
 
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [static, unit, package, docs, e2e]
+    needs: [static, unit, package, docs, e2e, compatibility]
     runs-on: ubuntu-latest
     permissions:
       contents: write

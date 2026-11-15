@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, relative, resolve } from "node:path";
+import { checkDocumentedJsx } from "./quality/documented-jsx.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const documentationRoot = join(projectRoot, "docs");
@@ -46,10 +47,14 @@ function importedNames(clause) {
 }
 
 const failures = [];
+let checkedJsxBlocks = 0;
 const importPattern = /\bimport\s+((?:type\s+)?(?:\{[^}]*\}|[A-Za-z_$][\w$]*(?:\s*,\s*\{[^}]*\})?|\*\s+as\s+[A-Za-z_$][\w$]*))\s+from\s+["'](@agile-team\/mach-table(?:-(?:vue|react|xlsx))?(?:\/[^"']+)*)["']/g;
 for (const source of [...new Set(inputs)]) {
   const markdown = readFileSync(source, "utf8");
   const label = relative(projectRoot, source);
+  const jsx = checkDocumentedJsx(markdown, label);
+  checkedJsxBlocks += jsx.blocks;
+  failures.push(...jsx.failures);
   const bareImports = /\bimport\s*(?:\(\s*)?["'](@agile-team\/mach-table(?:-(?:vue|react|xlsx))?(?:\/[^"']+)*)["']/g;
   for (const match of markdown.matchAll(bareImports)) {
     if (!surfaces.has(match[1]) && !styleImports.has(match[1])) {
@@ -75,8 +80,8 @@ for (const source of [...new Set(inputs)]) {
 }
 
 if (failures.length > 0) {
-  console.error("Invalid documented package imports:\n" + failures.map((item) => `- ${item}`).join("\n"));
+  console.error("Invalid documented package imports or JSX syntax:\n" + failures.map((item) => `- ${item}`).join("\n"));
   process.exitCode = 1;
 } else {
-  console.log(`OK   Documented package imports (${new Set(inputs).size} Markdown files)`);
+  console.log(`OK   Documented package imports (${new Set(inputs).size} Markdown files), JSX/TSX syntax (${checkedJsxBlocks} blocks)`);
 }

@@ -34,7 +34,7 @@ MachTable 按运行时成本和职责拆分入口。Vue/React 项目只安装对
 
 ### `@agile-team/mach-table/adapter`
 
-官方 Vue/React 适配器使用的配置归一化和 Option 元数据桥。它用于框架适配开发，不是普通业务页面入口；其兼容级别低于根公共 API。
+官方 Vue/React 适配器使用的配置归一化和 Option 元数据桥，普通业务页面使用根入口或对应框架入口。它是明确导出的受控契约，同样受签名和消费测试约束；不能因属于适配桥就无说明地改变已发布行为。1.0 候选的入口兼容范围见 [API 治理](/advanced/api-governance#入口兼容承诺)。
 
 ### 样式
 

@@ -87,9 +87,11 @@ Provider 可以按路由/布局嵌套，最近一层覆盖外层，表格 props 
 ## 同页主表与明细
 
 ```tsx
-<MachTable columnDefs={orderColumns} rowData={orders} rowKey="id" />
-<MachTable preset="detail" columnDefs={materialColumns} rowData={basketA} rowKey="id" />
-<MachTable preset="detail" columnDefs={materialColumns} rowData={basketB} rowKey="id" />
+<>
+  <MachTable columnDefs={orderColumns} rowData={orders} rowKey="id" />
+  <MachTable preset="detail" columnDefs={materialColumns} rowData={basketA} rowKey="id" />
+  <MachTable preset="detail" columnDefs={materialColumns} rowData={basketB} rowKey="id" />
+</>
 ```
 
 场景按用途选择，不根据数据行数猜测。`list` 默认表头工具和分页，`detail` 默认纯文字表头、只读、内容高度与 330px 表体上限，两者都保留序号。单列 `editable: true` 或表格 props 可覆盖差异；只读不承担权限校验。

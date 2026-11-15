@@ -1,6 +1,6 @@
 # 可访问性与键盘规范
 
-MachTable 0.28 按 WAI-ARIA Grid / Treegrid 交互模型实现语义和键盘基础。业务仍需为页面提供清晰标题、操作说明、颜色对比和可访问的自定义 renderer/editor。
+MachTable 按 WAI-ARIA Grid / Treegrid 交互模型实现语义和键盘基础。业务仍需为页面提供清晰标题、操作说明、颜色对比和可访问的自定义 renderer/editor。自动化覆盖与真实辅助技术验收分别记录，当前发布判断见 [1.0 就绪评估](/advanced/release-readiness)。
 
 ## 可访问名称
 

@@ -31,6 +31,6 @@ MachTable 处于 `0.x` 阶段。安全修复优先发布到最新 minor；使用
 
 ## Development tooling
 
-2026-11-12 的官方 npm 审计在开发依赖链中剩余一项 `minimatch 10.2.6` 的中风险公告 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)。它不进入已发布的运行时产物；Core 保持零运行时依赖。开发工具只使用仓库内受控的 glob 配置，后续跟进上游兼容修复。
+2026-11-15 对当前锁文件的官方 npm 审计没有 high/critical 项，开发依赖链中仍有一项 `minimatch 10.2.6` 的中风险公告 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)，涉及 ESLint、typescript-eslint 与 vue-tsc。它不进入已发布的运行时产物；Core 保持零运行时依赖。开发工具只使用仓库内受控的 glob 配置，后续跟进上游兼容修复；该记录不等于全级别审计零告警。
 
 `minimatch 11` 已改变公开 API、内部匹配类型及部分路径行为，需要随上游依赖升级验证。CI 继续执行现有的 high/critical 审计门禁，完整审计记录应同时保留中低风险项及其实际依赖范围。

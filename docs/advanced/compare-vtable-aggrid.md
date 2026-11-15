@@ -1,5 +1,7 @@
 # MachTable、VTable 与 AG Grid：2026-10 对照
 
+> 本页是 **0.29.2 / 2026-10-02 的历史对照**，保留当时取舍与证据。此后已交付的服务端 Store、筛选/审阅工作台、分析与多范围等不再作为待开发功能；请先阅读[当前能力路线](/advanced/roadmap)和 [1.0 就绪评估](/advanced/release-readiness)。下面的“当前状态”仅指当时基线。
+
 基线为 MachTable 0.29.2 源码、类型和示例，以及 2026-10-02 查阅的厂商官方文档。这是能力与产品边界分析；不同渲染引擎的“百万行”宣传不构成同机性能结论。AG Grid 的 Community 与 Enterprise 能力须分别判断。
 
 | 场景 | MachTable 当前状态 | VTable | AG Grid |

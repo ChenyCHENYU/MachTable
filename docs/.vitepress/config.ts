@@ -108,7 +108,8 @@ export default defineConfig({
             { text: "VTable 与 AG Grid 对照", link: "/advanced/compare-vtable-aggrid" },
             { text: "AG Grid 源码审计", link: "/advanced/ag-grid-source-study" },
             { text: "实施与验收台账", link: "/advanced/implementation-plan" },
-            { text: "路线图与差距分析", link: "/advanced/roadmap" }
+            { text: "当前能力与成熟度路线", link: "/advanced/roadmap" },
+            { text: "1.0 就绪评估", link: "/advanced/release-readiness" }
           ]
         }
       ]

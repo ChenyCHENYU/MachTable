@@ -107,11 +107,10 @@ function OrdersPage({ rows }: { rows: Order[] }) {
     <div style={{ height: 560 }}>
       <MachTable<Order>
         apiRef={controller.table.apiRef}
-        preset="crud"
         columnDefs={columns}
         rowData={rows}
         rowKey="id"
-        :persistence="{ key: 'tenant:user:orders-list' }"
+        persistence={{ key: "tenant:user:orders-list" }}
       />
     </div>
   </>;

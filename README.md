@@ -366,6 +366,8 @@ pnpm test:e2e
 
 门禁覆盖 ESLint、TypeScript、单元与覆盖率、复杂度预算、依赖循环、API 快照、Vue SFC 消费端、ESM/CJS exports、publint、gzip 预算、发布产物、示例与文档构建。当前历史复杂度豁免为 `0`，所有生产函数统一受 `15` 的上限约束。E2E 覆盖 Chromium、Firefox、WebKit，并包含大数据与生命周期性能场景。
 
+框架兼容使用[隔离消费者矩阵](./tests/compatibility/README.md)检查固定 Vue/React 版本的构建产物；[长稳任务](./tests/stability/README.md)独立测量持续混合操作后的保留堆、DOM、监听与缓存。两者都只运行在验证侧。jsdom 生命周期、真实浏览器布局、真实接口和真人读屏分别记录，不把一次自动化通过当作全场景承诺。当前能力及正式版条件见 [1.0 就绪评估](./docs/advanced/release-readiness.md)。
+
 ## 文档地图
 
 | 目标 | 文档 |
@@ -374,7 +376,7 @@ pnpm test:e2e
 | 框架 | [Vue 3](./docs/guide/vue.md) · [React 18+](./docs/guide/react.md) · [SSR](./docs/guide/ssr.md) |
 | API | [GridOptions](./docs/api/grid-options.md) · [GridApi](./docs/api/grid-api.md) · [ColDef](./docs/api/col-def.md) · [Events](./docs/api/events.md) |
 | 高频场景 | [场景示例](./docs/guide/scenarios.md) · [远程查询](./docs/recipes/remote-query.md) · [服务端导出](./docs/recipes/remote-export.md) · [编辑](./docs/recipes/editing.md) · [状态持久化](./docs/recipes/grid-state.md) · [列宽](./docs/recipes/column-state.md) · [行顺序与颜色](./docs/recipes/row-presentation.md) |
-| 工程治理 | [质量门禁](./docs/advanced/quality-gates.md) · [性能](./docs/advanced/performance.md) · [升级指南](./docs/guide/upgrading.md) |
+| 工程治理 | [质量门禁](./docs/advanced/quality-gates.md) · [性能](./docs/advanced/performance.md) · [升级指南](./docs/guide/upgrading.md) · [1.0 就绪评估](./docs/advanced/release-readiness.md) |
 
 ## 版本与授权
 

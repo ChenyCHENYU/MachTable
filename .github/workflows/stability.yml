@@ -1,0 +1,49 @@
+name: Stability soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Measured workload seconds (60–7200, warm-up excluded)"
+        type: number
+        default: 1800
+  schedule:
+    # 独立周检，不延长每次提交和发布的常规门禁。
+    - cron: "0 20 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stability-soak-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.2
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          CI: true
+      - run: pnpm --filter @agile-team/mach-table build
+      - run: pnpm exec tsc --noEmit -p tests/stability/tsconfig.json
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test --config playwright.stability.config.ts
+        env:
+          MACH_SOAK_SECONDS: ${{ inputs.seconds || '1800' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stability-results
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 21

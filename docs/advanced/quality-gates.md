@@ -22,6 +22,7 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 | `pnpm typecheck` / `pnpm check:examples` | 四包及全部四个示例的严格类型 / Vue SFC 检查 |
 | `pnpm test:examples` / `pnpm test:quality` | 固定种子基准数据与构建压缩边界回归 |
 | `pnpm check:budgets` | 从同一字节预算定义核对文档，防止门禁漂移 |
+| `pnpm check:docs` | 本地链接、包名/子入口/导入与 JSX/TSX 语法；不替代完整业务示例类型或运行验证 |
 | `pnpm check:complexity` | 圈复杂度全量门禁（生产函数上限 `15`） |
 | `pnpm check:complexity:update` | 仅用于确认基线仍为空；不得增加历史豁免或放宽上限 |
 | `pnpm check:api` / `pnpm check:api:update` | 校验公开 export、Grid API/Options/Event 成员签名快照 / 评审后更新快照 |
@@ -33,6 +34,9 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 | `pnpm quality:quick` | 推送前的快速代码检查 |
 | `pnpm verify` | 不含浏览器 E2E 的完整仓库验证 |
 | `pnpm test:e2e` | Chromium、Firefox、WebKit 集成测试 |
+| `pnpm test:compatibility` | 在隔离临时项目安装固定框架版本，验证实际打包产物的生命周期与工作流；需要官方 npm 网络 |
+| `pnpm check:stability` | 构建后检查独立长稳夹具、配置和测试的严格类型 |
+| `pnpm test:stability` | 独立 Chromium 长稳，默认测量 30 分钟；短检须显式设置时长，不能记为长稳通过 |
 
 ## 复杂度治理
 
@@ -69,7 +73,23 @@ MachTable 的质量体系遵循一个原则：越靠近开发者的检查越快�
 - 键盘、焦点、编辑、真实浏览器差异和大数据性能变化使用 Playwright；性能专门覆盖 100k×100、500 列、连续滚动和重复挂载/销毁。
 - CI 将重试后才通过的 E2E 视为失败，避免以重试掩盖不稳定测试。
 - 覆盖率阈值、包体积预算、ESM/CJS 导出、真实消费端类型检查和许可证检查不得通过降低阈值绕过。
-- 发布任务只有在静态、单测、包、文档和 E2E 五类任务全部通过后才会启动。
+- 发布任务只有在静态、单测、包、文档、E2E 与框架兼容任务全部通过后才会启动。
+
+### 固定框架兼容矩阵
+
+`tests/compatibility/cases.json` 是版本与 CI 用例名单的事实源；矩阵按 2026-11-15 官方 registry 信息固定，不在执行时解析浮动 `latest`。当前覆盖 Vue **3.2.0 / 3.5.42 / 3.5.45**，React 与 ReactDOM **18.0.0 / 18.3.1 / 19.3.1**，分别对应最低 peer、项目主用和当时稳定版本。
+
+执行器先把 Core 和对应适配器打包，再于隔离临时项目安装；不改变主项目 lockfile、overrides 或框架安装。报告核对 tarball SHA512、完整 dist 摘要、安装版本与实际运行时版本，并记录挂载、编辑/撤销、工作流、动态更新和卸载。React 额外验证 StrictMode 的 setup/cleanup 回放。运行器不读取使用者 npm 凭证，完成后清理临时消费者，保留标量 JSON 证据。
+
+这是 **ESM/jsdom 的生命周期与 API 冒烟**。固定几档版本不代表整个 peer 范围、所有 TypeScript 版本或浏览器布局都已通过。CJS、声明及 Vue SFC 的消费检查仍由原有 exports/consumer 门禁负责。
+
+CI 兼容任务消费包检查任务上传的同一份 dist，六档矩阵全部通过才允许进入发布任务。开发者本地 `verify` 保持不隐式下载多套框架；正式发布前须另外执行兼容矩阵，或核对该候选对应 CI 结果。
+
+### 长稳和组合业务
+
+常规浏览器 CI 在完整 E2E 后执行 30 秒长稳夹具短检，验证负载与资源断言可以运行；独立周检/手动任务默认持续 30 分钟，原始指标和报告分别保存。详细测量边界见[性能指南](/advanced/performance)。测试环境类型显式声明；浏览器包不自动引入 Node 环境全局类型，避免开发工具依赖改变生产源码的环境假设。
+
+RobotAdmin 的独立三浏览器表格任务覆盖真实页面操作、tags 恢复和账号/公司偏好隔离；它消费应用实际锁定的正式 npm 包。示例业务响应仍属本地模拟，不能代替真实接口、多业务 UAT 或真人读屏。发布成熟度按[就绪清单](/advanced/release-readiness)分别记录。
 
 ## 提交规范
 

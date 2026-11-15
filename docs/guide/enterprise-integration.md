@@ -1,6 +1,6 @@
 # 企业级项目接入手册
 
-本文面向 0.40.x 的 B 端项目接入。先直接使用组件和已有工作流，再按实际需要增加统一约定；不要求先写配置文件或二次封装表格。
+本文面向当前 0.42.x 的 B 端项目接入。先直接使用组件和已有工作流，再按实际需要增加统一约定；不要求先写配置文件或二次封装表格。
 
 ## 1. 接入前决策
 
@@ -22,9 +22,9 @@
 业务只安装一个框架适配包：
 
 ```bash
-pnpm add @agile-team/mach-table-vue@^0.40.0
+pnpm add @agile-team/mach-table-vue@^0.42.0
 # 或
-pnpm add @agile-team/mach-table-react@^0.40.0
+pnpm add @agile-team/mach-table-react@^0.42.0
 ```
 
 适配包自动安装匹配的 Core。Vue 项目只需提供 `vue >= 3.2`；React 项目提供 `react/react-dom >= 18`。

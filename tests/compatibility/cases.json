@@ -1,0 +1,13 @@
+{
+  "checkedOn": "2026-11-15",
+  "registry": "https://registry.npmjs.org",
+  "jsdom": "30.0.1",
+  "cases": [
+    { "id": "vue-minimum", "framework": "vue", "version": "3.2.0", "role": "minimum peer" },
+    { "id": "vue-project", "framework": "vue", "version": "3.5.42", "role": "project lockfile" },
+    { "id": "vue-current", "framework": "vue", "version": "3.5.45", "role": "registry stable at checkedOn" },
+    { "id": "react-minimum", "framework": "react", "version": "18.0.0", "runtimeVersion": "18.0.0-fc46dba67-20220329", "role": "minimum peer" },
+    { "id": "react-project", "framework": "react", "version": "18.3.1", "role": "project lockfile" },
+    { "id": "react-current", "framework": "react", "version": "19.3.1", "role": "registry stable at checkedOn" }
+  ]
+}
