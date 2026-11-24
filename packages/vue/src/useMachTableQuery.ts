@@ -18,12 +18,14 @@ import {
   type OverlayContent,
   type OverlayTemplate,
   type PaginationChangedEvent,
-  type SelectionChangedEvent,
   type SortChangedEvent,
   type SortModel
 } from "@agile-team/mach-table";
 import { abortable, finiteAtLeast, rowIdFromKey } from "@agile-team/mach-table/adapter";
 import { resolveSource } from "./source";
+import { useMachTableQuerySelection, type MachTableRemoteSelectionState } from "./useMachTableQuerySelection";
+
+export type { MachTableRemoteSelectionState } from "./useMachTableQuerySelection";
 
 export type MachTableQuerySource<TQuery> =
   | TQuery
@@ -45,10 +47,6 @@ export interface MachTablePageResult<TData> {
   rows: readonly TData[];
   total: number;
 }
-
-export type MachTableRemoteSelectionState =
-  | { mode: "explicit"; selectedKeys: string[] }
-  | { mode: "allMatching"; excludedKeys: string[] };
 
 export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown>> {
   request(params: MachTablePageRequest<TQuery>): Promise<MachTablePageResult<TData>>;
@@ -129,15 +127,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const sortModel = shallowRef<SortModel>([]);
   const filterModel = shallowRef<FilterModel>({});
   const advancedFilterModel = shallowRef<AdvancedFilterModel | null>(null);
-  const selectedKeys = ref<string[]>([]);
-  const selectedRows = shallowRef<TData[]>([]);
-  const selectedIds = new Set<string>();
-  const excludedIds = new Set<string>();
-  const selectedById = new Map<string, TData>();
   const quickFilterText = options.quickFilterText ?? ref<string | null>(null);
-  const selectionScope = options.selectionScope ?? "preserve";
   const automatic = options.mode !== "manual";
-  const allMatching = ref(false);
   const pageSizes = [...new Set([...(options.pageSizeOptions ?? [10, 20, 50, 100]), pageSize.value]
     .map((value) => finiteAtLeast(value, 0, 1, true)).filter(Boolean))].sort((a, b) => a - b);
 
@@ -147,8 +138,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let suppressGridEvents = false;
   let handledQuickFilterText = quickFilterText.value;
-  let suppressSelectionEvents = false;
-  let updatingSelectedRefs = false;
+  let disposed = false;
 
   const rowId = (row: TData): string => {
     // Query paths may come from runtime schemas; Core additionally types static field paths.
@@ -159,33 +149,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     return id;
   };
 
-  const updateSelectedRefs = (): void => {
-    updatingSelectedRefs = true;
-    selectedKeys.value = allMatching.value ? [] : [...selectedIds];
-    updatingSelectedRefs = false;
-    const ids = allMatching.value ? [...selectedById.keys()] : selectedKeys.value;
-    selectedRows.value = ids.flatMap((id) => {
-      const row = selectedById.get(id);
-      // Every cache write is gated by the selection rule; exclusions never
-      // retain snapshots, including when a visible selection event is handled.
-      return row === undefined ? [] : [row];
-    });
-  };
-
-  const isSelectedId = (id: string): boolean => allMatching.value
-    ? !excludedIds.has(id)
-    : selectedIds.has(id);
-
-  const syncVisibleSelection = (): void => {
-    if (!api || api.isDestroyed()) return;
-    const selected = rows.value.filter((row) => isSelectedId(rowId(row)));
-    suppressSelectionEvents = true;
-    try {
-      api.selection.setRows(selected, true);
-    } finally {
-      suppressSelectionEvents = false;
-    }
-  };
+  const selection = useMachTableQuerySelection(rows, rowId, options.selectionScope === "page", () => api);
 
   const abort = (): void => {
     generation++;
@@ -203,30 +167,16 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     const nextRows = [...result.rows];
     const pageRows = new Map(nextRows.map((row) => [rowId(row), row] as const));
     if (pageRows.size !== nextRows.length) throw new Error("[MachTable] Duplicate remote row keys.");
-    // The query rule owns allMatching selection; retain only this page's row
-    // snapshots so visiting more pages cannot grow the cache indefinitely.
-    if (allMatching.value) selectedById.clear();
-    if (selectionScope === "page") {
-      for (const id of selectedIds) {
-        if (!pageRows.has(id)) {
-          selectedIds.delete(id);
-          selectedById.delete(id);
-        }
-      }
-    }
     page.value = acceptedPage;
     rows.value = nextRows;
     total.value = Math.floor(result.total);
-    for (const [id, row] of pageRows) {
-      if (isSelectedId(id)) selectedById.set(id, row);
-      else selectedById.delete(id);
-    }
-    updateSelectedRefs();
+    selection.acceptPage(pageRows);
     options.onSuccess?.(result);
-    return nextTick(syncVisibleSelection);
+    return nextTick(selection.syncVisibleSelection);
   };
 
   const load = async (): Promise<void> => {
+    if (disposed) return;
     abort();
     const activeController = new AbortController();
     controller = activeController;
@@ -276,15 +226,16 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   const scheduleLoad = (): void => {
     page.value = 1;
     abort();
-    if (!automatic) return;
+    if (!automatic || disposed) return;
     const delay = options.debounceMs ?? 0;
     if (delay > 0) debounceTimer = setTimeout(load, delay);
     else void load();
   };
 
   const onGridReady = (event: { api: GridApi<TData> }): void => {
+    if (disposed) return;
     api = event.api;
-    void nextTick(syncVisibleSelection);
+    void nextTick(selection.syncVisibleSelection);
   };
   const onPaginationChanged = (event: PaginationChangedEvent<TData>): void => {
     if (suppressGridEvents) return;
@@ -313,39 +264,6 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     if (quickFilterText.value !== handledQuickFilterText) quickFilterText.value = handledQuickFilterText;
     onCriteriaChanged();
   };
-  const onSelectionChanged = (event: SelectionChangedEvent<TData>): void => {
-    if (suppressSelectionEvents) return;
-    if (allMatching.value) {
-      selectedById.clear();
-      const nextVisibleIds = new Set(event.selectedRows.map(rowId));
-      for (const row of rows.value) {
-        const id = rowId(row);
-        if (nextVisibleIds.has(id)) {
-          excludedIds.delete(id);
-          selectedById.set(id, row);
-        } else {
-          excludedIds.add(id);
-        }
-      }
-    } else {
-      if (selectionScope === "page") {
-        clearSelectionCache();
-      } else {
-        for (const row of rows.value) {
-          const id = rowId(row);
-          selectedIds.delete(id);
-          selectedById.delete(id);
-        }
-      }
-      for (const row of event.selectedRows) {
-        const id = rowId(row);
-        selectedIds.add(id);
-        selectedById.set(id, row);
-      }
-    }
-    updateSelectedRefs();
-  };
-
   const bindings = computed<GridOptions<TData>>(() => ({
     rowData: rows.value,
     loading: loading.value,
@@ -372,7 +290,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     onPaginationChanged,
     onSortChanged,
     onFilterChanged,
-    onSelectionChanged
+    onSelectionChanged: selection.onSelectionChanged
   }));
 
   const reload = (reloadOptions: { resetPage?: boolean } = {}): Promise<void> => {
@@ -388,7 +306,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       advancedFilterModel.value = null;
       handledQuickFilterText = null;
       quickFilterText.value = null;
-      clearSelection();
+      selection.state.clearSelection();
       api?.sorting.setModel(null);
       api?.filtering.setModel(null);
       api?.filtering.setAdvancedModel(null);
@@ -401,44 +319,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     }
     await load();
   };
-  const clearSelectionCache = (): void => {
-    selectedIds.clear();
-    excludedIds.clear();
-    selectedById.clear();
-  };
-  const clearSelection = (): void => {
-    allMatching.value = false;
-    clearSelectionCache();
-    updateSelectedRefs();
-    suppressSelectionEvents = true;
-    try { api?.selection.clear(); } finally { suppressSelectionEvents = false; }
-  };
-  const selectAllMatching = (): void => {
-    applySelectionState({ mode: "allMatching", excludedKeys: [] });
-  };
-  const applySelectionState = (state: MachTableRemoteSelectionState): void => {
-    clearSelectionCache();
-    allMatching.value = state.mode === "allMatching";
-    const ids = state.mode === "allMatching" ? state.excludedKeys : state.selectedKeys;
-    const target = state.mode === "allMatching" ? excludedIds : selectedIds;
-    for (const id of ids) target.add(String(id));
-    for (const row of rows.value) {
-      const id = rowId(row);
-      if (isSelectedId(id)) selectedById.set(id, row);
-    }
-    updateSelectedRefs();
-    syncVisibleSelection();
-  };
-
-  const selectionState = computed<MachTableRemoteSelectionState>(() => {
-    const keys = selectedKeys.value;
-    return allMatching.value
-      ? { mode: "allMatching", excludedKeys: [...excludedIds] }
-      : { mode: "explicit", selectedKeys: [...keys] };
-  });
-
   const onCriteriaChanged = (): void => {
-    if (options.clearSelectionOnQueryChange !== false) clearSelection();
+    if (options.clearSelectionOnQueryChange !== false) selection.state.clearSelection();
     scheduleLoad();
   };
 
@@ -449,24 +331,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     handledQuickFilterText = value;
     onCriteriaChanged();
   }, { flush: automatic ? "post" : "sync" });
-  watch(selectedKeys, (keys) => {
-    if (updatingSelectedRefs) return;
-    allMatching.value = false;
-    excludedIds.clear();
-    selectedIds.clear();
-    for (const id of keys) selectedIds.add(String(id));
-    for (const id of selectedById.keys()) {
-      if (!selectedIds.has(id)) selectedById.delete(id);
-    }
-    for (const row of rows.value) {
-      const id = rowId(row);
-      if (selectedIds.has(id)) selectedById.set(id, row);
-    }
-    syncVisibleSelection();
-    updateSelectedRefs();
-  }, { deep: true, flush: "sync" });
-
   onScopeDispose(() => {
+    disposed = true;
     abort();
     api = null;
   });
@@ -479,6 +345,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   );
 
   return {
+    ...selection.state,
     rows,
     loading,
     error,
@@ -488,16 +355,10 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     sortModel,
     filterModel,
     advancedFilterModel,
-    selectedKeys,
-    selectedRows,
-    selectionState,
     bindings,
     reload,
     retry: load,
     reset,
-    abort,
-    clearSelection,
-    selectAllMatching,
-    applySelectionState
+    abort
   };
 }

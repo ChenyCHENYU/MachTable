@@ -28,6 +28,25 @@ function setup(options: Partial<UseMachTableQueryOptions<Row, { status: string }
 }
 
 describe("Vue remote page recovery", () => {
+  it("does not start a request when the scope is disposed while reset flushes grid criteria", async () => {
+    const scope = effectScope();
+    const request = vi.fn<UseMachTableQueryOptions<Row>["request"]>()
+      .mockResolvedValue({ rows: [{ id: "unexpected" }], total: 1 });
+    const onSuccess = vi.fn();
+    const remote = scope.run(() => useMachTableQuery({
+      query: {}, rowKey: "id", immediate: false, request, onSuccess
+    }))!;
+
+    const pending = remote.reset();
+    scope.stop();
+    await pending;
+
+    expect(request).not.toHaveBeenCalled();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(remote.rows.value).toEqual([]);
+    expect(remote.loading.value).toBe(false);
+  });
+
   it("reloads the last valid page once without publishing an empty page or pruning selection", async () => {
     const { remote, request, onSuccess } = setup({ selectionScope: "page" });
     const existing = { id: "shared" };

@@ -1,5 +1,12 @@
 # @agile-team/mach-table-vue
 
+## 0.42.2
+
+### Patch Changes
+
+- 修复远程表格重置期间卸载页面后仍重新请求数据的问题。Vue 适配器独立管理跨页快照、全选排除项和可见行选择，沿用现有查询与选择契约。
+- @agile-team/mach-table@0.42.2
+
 ## 0.42.1
 
 ### Patch Changes
