@@ -1,5 +1,11 @@
 # @agile-team/mach-table
 
+## 0.42.2
+
+### Patch Changes
+
+- 随 Vue 查询生命周期修复同步固定版本，Core 行为和公开接口沿用 0.42.1。
+
 ## 0.42.1
 
 ### Patch Changes
