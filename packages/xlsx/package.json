@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/mach-table-xlsx",
-  "version": "0.42.2",
+  "version": "0.42.3",
   "description": "Optional, engine-agnostic XLSX import and export extension for MachTable",
   "keywords": [
     "data-grid",

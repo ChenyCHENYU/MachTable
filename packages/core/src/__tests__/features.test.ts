@@ -741,10 +741,16 @@ describe("locale", () => {
     const api: GridApi<Row> = createGrid<Row>(host, {
       columnDefs: [{ field: "name", headerName: "Name", filter: "text" }],
       rowData: [{ id: "1", name: "a" }],
+      columnMenu: true,
       locale: LOCALE_EN,
       rowKey: (row) => row.id
     });
-    const filterBtn = host.querySelector(".mach-filter-btn") as HTMLButtonElement;
+    const filterBtn = host.querySelector<HTMLButtonElement>(".mach-filter-btn")!;
+    const menuBtn = host.querySelector<HTMLButtonElement>(".mach-menu-btn")!;
+    expect(filterBtn.title).toBe("Name · Filter");
+    expect(menuBtn.title).toBe("Name · Column Settings");
+    expect(filterBtn.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(menuBtn.getAttribute("aria-haspopup")).toBe("dialog");
     filterBtn.click();
     const panel = document.querySelector(".mach-filter-panel") as HTMLElement;
     expect(panel).toBeTruthy();
@@ -784,7 +790,8 @@ describe("locale", () => {
       locale: LOCALE_EN,
       rowKey: (row) => row.id
     });
-    host.querySelector<HTMLButtonElement>(".mach-filter-btn")!.click();
+    const filterBtn = host.querySelector<HTMLButtonElement>(".mach-filter-btn")!;
+    filterBtn.click();
     const panel = document.querySelector<HTMLElement>(".mach-filter-panel")!;
     const beta = [...panel.querySelectorAll<HTMLLabelElement>(".mach-filter-set-item")]
       .find((label) => label.textContent === "beta")!;
@@ -799,6 +806,10 @@ describe("locale", () => {
 
     expect(api.filtering.getModel()).toEqual({ name: { type: "set", values: ["alpha", "gamma"] } });
     expect(api.rows.getCount()).toBe(2);
+    expect(filterBtn.title).toBe("Name · Filter active");
+    expect(filterBtn.getAttribute("aria-label")).toBe(filterBtn.title);
+    api.filtering.setModel(null);
+    expect(filterBtn.title).toBe("Name · Filter");
     api.destroy();
   });
 

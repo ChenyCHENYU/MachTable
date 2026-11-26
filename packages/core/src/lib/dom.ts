@@ -40,7 +40,7 @@ export function bindDismissListeners(active: boolean, mouseDown: (event: MouseEv
   bindListeners(document, active, { mousedown: mouseDown, keydown: keyDown }, true);
 }
 
-/** Keeps body-mounted overlays visually scoped to their owning grid instance. */
+/** Keeps portalled overlays visually scoped to their owning grid instance. */
 export function applyPortalTheme(portal: HTMLElement, source: HTMLElement | null): void {
   portal.classList.add("mach-portal");
   if (!source) return;
@@ -58,14 +58,31 @@ export function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
 }
 
-/** Place a measured body portal below its anchor, flipping above when space runs out. */
-export function positionAnchoredPortal(panel: HTMLElement, anchor: Element, gap = 4): void {
+/** Keep interactive overlays in the modal's stacking and focus scope. */
+export function mountPortal(panel: HTMLElement, anchor: Element, source: HTMLElement | null): void {
+  applyPortalTheme(panel, source);
+  const modal = '[aria-modal="true"],dialog[open]';
+  (anchor.closest(modal) ?? source?.closest(modal) ?? document.body).appendChild(panel);
+}
+
+/** Measure from the fixed containing block's origin, which can be inside a transformed modal. */
+export function positionAnchoredPortal(panel: HTMLElement, anchor: Element, gap = 4, fit = false): void {
+  const style = panel.style;
+  style.left = style.top = "0px";
+  if (fit) style.maxHeight = "";
   const rect = anchor.getBoundingClientRect();
   const size = panel.getBoundingClientRect();
-  const below = rect.bottom + gap;
-  const top = below + size.height > window.innerHeight - 8 ? rect.top - size.height - gap : below;
-  panel.style.left = `${clamp(rect.left, 8, Math.max(8, window.innerWidth - size.width - 8))}px`;
-  panel.style.top = `${clamp(top, 8, Math.max(8, window.innerHeight - size.height - 8))}px`;
+  const below = window.innerHeight - rect.bottom - gap - 8;
+  const above = rect.top - gap - 8;
+  const flip = size.height > below && above > below;
+  const available = Math.max(0, flip ? above : below);
+  const scaleY = panel.offsetHeight / size.height || 1;
+  const height = fit ? Math.min(size.height, available) : size.height;
+  if (height < size.height) style.maxHeight = `${height * scaleY}px`;
+  const top = flip ? rect.top - height - gap : rect.bottom + gap;
+  const left = clamp(rect.left, 8, Math.max(8, window.innerWidth - size.width - 8));
+  style.left = `${(left - size.left) * (panel.offsetWidth / size.width || 1)}px`;
+  style.top = `${(clamp(top, 8, Math.max(8, window.innerHeight - height - 8)) - size.top) * scaleY}px`;
 }
 
 let uidCounter = 0;

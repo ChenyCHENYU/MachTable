@@ -3,7 +3,6 @@ import type { Column } from "../services/column";
 import { ColumnGroup } from "../services/columnGroup";
 import type { PaneType } from "../services/columnModel";
 import { COLUMN_TOOLS_ICON, el, FILTER_ICON, SORT_ASC_ICON, SORT_DESC_ICON } from "../lib/dom";
-import { describeFilter } from "../lib/filterSummary";
 import { setRendererDestroyer, takeRendererDestroyer } from "./runtimeState";
 import { ColumnViewportIndex } from "../services/columnViewportIndex";
 import { PANES } from "./skeleton";
@@ -36,7 +35,6 @@ interface HeaderCell {
   el: HTMLElement;
   sortEl: HTMLElement;
   filterBtn?: HTMLButtonElement;
-  filterTagEl?: HTMLElement;
   selectAllEl?: HTMLInputElement;
 }
 
@@ -156,11 +154,13 @@ export class HeaderRenderer {
     this.appendHeaderContent(cellEl, column);
     const sortEl = el("span", "mach-sort-indicator");
     cellEl.appendChild(sortEl);
-    const { filterBtn, filterTagEl } = this.appendFilterControls(cellEl, column);
-    this.appendColumnMenu(cellEl, column);
+    const filterBtn = column.filterable ? this.appendHeaderTool(cellEl, column, true) : undefined;
+    if (this.core.gridOptions.columnMenu && !column.hasCheckbox && !column.colDef.suppressColumnMenu) {
+      this.appendHeaderTool(cellEl, column, false);
+    }
     this.appendResizeHandle(cellEl, column);
     this.attachLeafInteractions(cellEl, column);
-    return { column, el: cellEl, sortEl, filterBtn, filterTagEl, selectAllEl };
+    return { column, el: cellEl, sortEl, filterBtn, selectAllEl };
   }
 
   private applyLeafPresentation(cellEl: HTMLElement, column: Column): void {
@@ -213,39 +213,27 @@ export class HeaderRenderer {
     cellEl.appendChild(label);
   }
 
-  private appendFilterControls(
-    cellEl: HTMLElement,
-    column: Column
-  ): Pick<HeaderCell, "filterBtn" | "filterTagEl"> {
-    if (!column.filterable) return {};
-    const filterBtn = el("button", "mach-filter-btn");
-    filterBtn.type = "button";
-    filterBtn.setAttribute("aria-label", `filter ${column.id}`);
-    filterBtn.innerHTML = FILTER_ICON;
-    filterBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      this.core.filterPopup.toggle(column, filterBtn);
-    });
-    cellEl.appendChild(filterBtn);
-    const filterTagEl = el("span", "mach-filter-tag");
-    cellEl.appendChild(filterTagEl);
-    return { filterBtn, filterTagEl };
+  private toolLabel(column: Column, key: "columnFilter" | "columnFilterActive" | "columnSettings"): string {
+    const label = column.colDef.headerName ?? column.colDef.field ?? column.id;
+    return `${label} · ${this.core.getLocaleText(key)}`;
   }
 
-  private appendColumnMenu(cellEl: HTMLElement, column: Column): void {
-    if (!this.core.gridOptions.columnMenu || column.hasCheckbox || column.colDef.suppressColumnMenu) return;
-    const menuBtn = el("button", "mach-menu-btn");
-    menuBtn.type = "button";
-    const label = column.colDef.headerName ?? column.colDef.field ?? column.id;
-    const title = `${label} · ${this.core.getLocaleText("columnSettings")}`;
-    menuBtn.setAttribute("aria-label", title);
-    menuBtn.title = title;
-    menuBtn.innerHTML = COLUMN_TOOLS_ICON;
-    menuBtn.addEventListener("click", (event) => {
+  private appendHeaderTool(cellEl: HTMLElement, column: Column, filter: boolean): HTMLButtonElement {
+    const button = el("button", filter ? "mach-filter-btn" : "mach-menu-btn");
+    button.type = "button";
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-expanded", "false");
+    if (!filter) {
+      button.title = this.toolLabel(column, "columnSettings");
+      button.setAttribute("aria-label", button.title);
+    }
+    button.innerHTML = filter ? FILTER_ICON : COLUMN_TOOLS_ICON;
+    button.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.core.columnMenu.toggle(column, menuBtn);
+      (filter ? this.core.filterPopup : this.core.columnMenu).toggle(column, button);
     });
-    cellEl.appendChild(menuBtn);
+    cellEl.appendChild(button);
+    return button;
   }
 
   private appendResizeHandle(cellEl: HTMLElement, column: Column): void {
@@ -437,14 +425,10 @@ export class HeaderRenderer {
     const fm = this.core.rowModel.getFilterModel();
     for (const hc of this.leafCells) {
       if (!hc.filterBtn) continue;
-      const filter = fm[hc.column.id];
-      const active = filter != null;
+      const active = fm[hc.column.id] != null;
       hc.filterBtn.classList.toggle("mach-filter-btn--active", active);
-      if (hc.filterTagEl) {
-        const summary = active ? describeFilter(filter) : "";
-        hc.filterTagEl.style.display = summary ? "" : "none";
-        if (summary) hc.filterTagEl.textContent = summary;
-      }
+      hc.filterBtn.title = this.toolLabel(hc.column, active ? "columnFilterActive" : "columnFilter");
+      hc.filterBtn.setAttribute("aria-label", hc.filterBtn.title);
     }
   }
 

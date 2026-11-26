@@ -7,7 +7,8 @@ import type {
   NumberFilterMatch,
   TextFilterMatch
 } from "../types/colDef";
-import { applyPortalTheme, bindDismissListeners, el, positionAnchoredPortal, textButton } from "../lib/dom";
+import { el, textButton } from "../lib/dom";
+import { openAnchoredDialog } from "../lib/anchoredDialog";
 import { matchLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
@@ -30,54 +31,28 @@ function setValueKey(value: string | number | null): string {
 
 /** @internal Filter popup state stays with its owning grid. */
 export class FilterPopupService {
-  private panel: HTMLElement | null = null;
-  private openColId: string | null = null;
+  private anchor: HTMLElement | null = null;
+  private detachPopup?: (restoreFocus?: boolean) => void;
   private conditionSelect: SelectControl | null = null;
 
   constructor(private core: FilterPopupContext) {}
 
   toggle(column: Column, anchor: HTMLElement): void {
-    if (this.openColId === column.id) {
-      this.close();
-      return;
-    }
+    const wasOpen = this.anchor === anchor;
     this.close();
-    this.open(column, anchor);
+    if (!wasOpen) this.open(column, anchor);
   }
-
-  private docMouseDown = (e: MouseEvent): void => {
-    if (!this.panel) return;
-    const target = e.target as Node;
-    if (this.conditionSelect?.contains(target)) return;
-    if (!this.panel.contains(target)) {
-      this.close();
-      return;
-    }
-    if (!(target instanceof Element) || !target.closest(".mach-filter-select-control")) {
-      this.conditionSelect?.close();
-    }
-  };
-
-  private docKeyDown = (e: KeyboardEvent): void => {
-    if (e.key !== "Escape") return;
-    if (this.conditionSelect?.close(true)) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-    this.close();
-  };
 
   private open(column: Column, anchor: HTMLElement): void {
     const filter = this.core.rowModel.getFilterModel()[column.id] ?? null;
     const type = filter?.type ?? column.filterType;
     const panel = el("div", "mach-filter-panel");
     panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", `${column.id} filter`);
+    panel.setAttribute("aria-label", anchor.title);
 
     const apply = (next: ColumnFilter | null) => {
       this.core.applyColumnFilter(column, next);
-      this.close();
+      if (panel.isConnected) this.close(true);
     };
     const readFilter = type === "set"
       ? this.buildSetBody(panel, column, filter)
@@ -90,26 +65,21 @@ export class FilterPopupService {
     );
     panel.appendChild(footer);
 
-    applyPortalTheme(panel, this.core.skeleton.root);
-    document.body.appendChild(panel);
-    this.panel = panel;
-    this.openColId = column.id;
-
-    positionAnchoredPortal(panel, anchor);
-
-    bindDismissListeners(true, this.docMouseDown, this.docKeyDown);
+    this.anchor = anchor;
+    this.detachPopup = openAnchoredDialog(panel, anchor, this.core.skeleton.root,
+      (focus) => this.close(focus), (target) => this.conditionSelect?.contains(target) ?? false,
+      () => this.conditionSelect?.close(true) ?? false);
     const firstInput = panel.querySelector<HTMLElement>(".mach-filter-select-trigger, input");
-    firstInput?.focus();
+    firstInput?.focus({ preventScroll: true });
   }
 
-  close(): void {
-    if (!this.panel) return;
+  close(restoreFocus = false): void {
     this.conditionSelect?.destroy();
     this.conditionSelect = null;
-    this.panel.remove();
-    this.panel = null;
-    this.openColId = null;
-    bindDismissListeners(false, this.docMouseDown, this.docKeyDown);
+    this.anchor = null;
+    const detach = this.detachPopup;
+    this.detachPopup = undefined;
+    detach?.(restoreFocus);
   }
 
   destroy(): void {
@@ -140,7 +110,7 @@ export class FilterPopupService {
     panel.appendChild(body);
     const readFilter = () => this.readConditionFilter(type, select.value, valueInput.value, value2Input.value);
     const applyOnEnter = (event: KeyboardEvent) => {
-      if (event.key === "Enter") apply(readFilter());
+      if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) apply(readFilter());
     };
     valueInput.addEventListener("keydown", applyOnEnter);
     value2Input.addEventListener("keydown", applyOnEnter);

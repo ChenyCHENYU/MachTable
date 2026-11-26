@@ -120,7 +120,7 @@ createGrid(host, { className: "brand-grid" });
 - 一级表头：`--mach-header-bg` 底 + `--mach-header-fg` 600 字重 + 底部 `--mach-header-accent-color` 强调线（默认灰，可品牌化）
 - 多级分组行：`--mach-header-group-bg` 略深制造层次，文字居中，底边常规分隔线
 - 排序激活列：表头文字变 `--mach-primary`（与指示图标同色）
-- 过滤激活列：漏斗图标高亮 + 条件摘要 tag
+- 筛选激活列：漏斗图标高亮，完整条件可在筛选面板查看
 - 行悬停/选中/斑马纹：单元格背景继承行状态，过渡 `--mach-transition`
 
 ## 视觉开关
@@ -152,7 +152,7 @@ createGrid(host, { className: "brand-grid" });
 | `.mach-filter-panel` / `.mach-context-menu` / `.mach-column-panel` | 弹层 |
 | `.mach-fill-handle` / `.mach-row-drag-handle` / `.mach-detail-toggle` / `.mach-editor-input` | 手柄 / 编辑器 |
 
-筛选、列设置、上下文菜单、操作菜单、抽屉、提示和列拖动预览虽然挂载在 `document.body`，仍会从所属 `.mach-root` 复制已解析的主题变量与 `color-scheme`。因此同页多个不同主题实例互不污染，宿主也不需要为弹层重复声明变量。
+筛选、列设置、上下文菜单、操作菜单、抽屉、提示和列拖动预览会从所属 `.mach-root` 复制已解析的主题变量与 `color-scheme`。表头筛选、列设置和下拉选项优先挂到所属的 `aria-modal="true"` 容器或已打开的原生 `<dialog>`，普通页使用 `document.body`。同页的表格可以各自使用主题，宿主无需为浮层重复声明变量。
 
 ## 数字对齐
 

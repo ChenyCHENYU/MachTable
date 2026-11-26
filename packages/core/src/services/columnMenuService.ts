@@ -1,6 +1,7 @@
 import type { GridCore } from "../core/gridCore";
 import type { Column } from "./column";
-import { applyPortalTheme, bindDismissListeners, el, positionAnchoredPortal, textButton } from "../lib/dom";
+import { el, textButton } from "../lib/dom";
+import { openAnchoredDialog } from "../lib/anchoredDialog";
 import type { MachTableLocaleKey } from "../lib/locale";
 import { createSelectControl, type SelectControl } from "../lib/selectControl";
 
@@ -12,7 +13,8 @@ type ColumnMenuContext = Pick<
 /** @internal The column menu service stays behind the column facade. */
 export class ColumnMenuService {
   private panel: HTMLElement | null = null;
-  private openColId: string | null = null;
+  private anchor: HTMLElement | null = null;
+  private detachPopup?: (restoreFocus?: boolean) => void;
   private standaloneAnchor: HTMLElement | null = null;
   private searchText = "";
   private selectControls = new Set<SelectControl>();
@@ -20,7 +22,7 @@ export class ColumnMenuService {
   constructor(private core: ColumnMenuContext) {}
 
   toggle(column: Column, anchor: HTMLElement): void {
-    const wasOpen = this.openColId === column.id;
+    const wasOpen = this.anchor === anchor;
     this.close();
     if (!wasOpen) this.open(column, anchor);
   }
@@ -45,46 +47,25 @@ export class ColumnMenuService {
     this.open(null, target);
   }
 
-  close(): void {
+  close(restoreFocus = false): void {
     this.destroySelectControls();
-    if (this.standaloneAnchor) {
-      this.standaloneAnchor.remove();
-      this.standaloneAnchor = null;
-    }
-    this.panel?.remove();
-    this.panel = null;
-    this.openColId = null;
-    bindDismissListeners(false, this.docMouseDown, this.docKeyDown);
+    this.standaloneAnchor?.remove();
+    this.standaloneAnchor = this.panel = this.anchor = null;
+    const detach = this.detachPopup;
+    this.detachPopup = undefined;
+    detach?.(restoreFocus);
   }
 
   destroy(): void {
     this.close();
   }
 
-  private docMouseDown = (e: MouseEvent): void => {
-    const target = e.target as Node;
-    if (this.panel && !this.panel.contains(target) && !this.containsSelectTarget(target)) this.close();
-  };
-
-  private docKeyDown = (e: KeyboardEvent): void => {
-    if (e.key !== "Escape") return;
-    for (const control of this.selectControls) {
-      if (!control.close(true)) continue;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      return;
-    }
-    this.close();
-  };
-
   private open(column: Column | null, anchor: HTMLElement): void {
     const api = this.core.api;
     const panel = el("div", "mach-filter-panel mach-column-panel");
-    panel.setAttribute("role", column ? "menu" : "dialog");
-    if (!column) {
-      panel.setAttribute("aria-modal", "false");
-      panel.setAttribute("aria-label", this.core.getLocaleText("columnSettings"));
-    }
+    if (!column) panel.classList.add("mach-column-workbench");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", column ? anchor.title : this.core.getLocaleText("columnSettings"));
 
     const title = el("div", "mach-column-panel-title");
     title.textContent = column
@@ -95,7 +76,7 @@ export class ColumnMenuService {
     const action = (label: MachTableLocaleKey, run: () => void, className = "mach-column-panel-btn") =>
       textButton(className, this.core.getLocaleText(label), () => {
         run();
-        this.close();
+        if (this.panel === panel) this.close(true);
       });
     if (column) {
       const colId = column.id;
@@ -153,20 +134,18 @@ export class ColumnMenuService {
     );
     panel.appendChild(footer);
 
-    applyPortalTheme(panel, this.core.skeleton.root);
-    document.body.appendChild(panel);
     this.panel = panel;
-    this.openColId = column ? column.id : "__standalone__";
-
-    positionAnchoredPortal(panel, anchor);
-
-    bindDismissListeners(true, this.docMouseDown, this.docKeyDown);
+    this.anchor = anchor;
+    this.detachPopup = openAnchoredDialog(panel, anchor, this.core.skeleton.root,
+      (focus) => this.close(focus), (target) => this.containsSelectTarget(target), () => this.closeOpenSelect(),
+      anchor !== this.standaloneAnchor);
+    panel.querySelector<HTMLElement>("button, input")?.focus({ preventScroll: true });
   }
 
   private rebuildListStates(): void {
     if (!this.panel) return;
     const list = this.panel.querySelector<HTMLElement>(".mach-column-panel-list");
-    if (list) this.renderColumnList(list, this.openColId === "__standalone__");
+    if (list) this.renderColumnList(list, this.panel.classList.contains("mach-column-workbench"));
   }
 
   private renderColumnList(list: HTMLElement, workbench: boolean): void {
@@ -242,6 +221,11 @@ export class ColumnMenuService {
 
   private containsSelectTarget(target: Node): boolean {
     for (const control of this.selectControls) if (control.contains(target)) return true;
+    return false;
+  }
+
+  private closeOpenSelect(): boolean {
+    for (const control of this.selectControls) if (control.close(true)) return true;
     return false;
   }
 

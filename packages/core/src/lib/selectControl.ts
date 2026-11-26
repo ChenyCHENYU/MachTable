@@ -1,4 +1,5 @@
-import { applyPortalTheme, bindDismissListeners, clamp, el, nextUid } from "./dom";
+import { bindDismissListeners, el, mountPortal, nextUid, positionAnchoredPortal } from "./dom";
+import { trackAnchoredPortal } from "./anchoredDialog";
 
 export interface SelectControlOption {
   value: string;
@@ -45,7 +46,6 @@ interface ActiveSelectControl {
   owner: HTMLElement | null;
   close: (restoreFocus?: boolean) => boolean;
   contains: (target: Node) => boolean;
-  reposition: () => void;
 }
 
 let activeSelect: ActiveSelectControl | null = null;
@@ -60,10 +60,6 @@ function onActiveSelectMouseDown(event: MouseEvent): void {
   if (!activeSelect?.contains(target)) activeSelect?.close();
 }
 
-function onActiveSelectViewportChange(): void {
-  activeSelect?.reposition();
-}
-
 function onActiveSelectKeyDown(event: KeyboardEvent): void {
   if (event.key !== "Escape" || !activeSelect) return;
   event.preventDefault();
@@ -71,24 +67,17 @@ function onActiveSelectKeyDown(event: KeyboardEvent): void {
   activeSelect.close(true);
 }
 
-function bindActiveSelectEvents(active: boolean): void {
-  bindDismissListeners(active, onActiveSelectMouseDown, onActiveSelectKeyDown);
-  const method = active ? "addEventListener" : "removeEventListener";
-  window[method]("resize", onActiveSelectViewportChange);
-  window[method]("scroll", onActiveSelectViewportChange, true);
-}
-
 function activateSelect(next: ActiveSelectControl): void {
   if (activeSelect?.close !== next.close) activeSelect?.close();
   if (activeSelect) return;
   activeSelect = next;
-  bindActiveSelectEvents(true);
+  bindDismissListeners(true, onActiveSelectMouseDown, onActiveSelectKeyDown);
 }
 
 function deactivateSelect(close: ActiveSelectControl["close"]): void {
   if (activeSelect?.close !== close) return;
   activeSelect = null;
-  bindActiveSelectEvents(false);
+  bindDismissListeners(false, onActiveSelectMouseDown, onActiveSelectKeyDown);
 }
 
 function classNames(base: string, extra?: string): string {
@@ -141,6 +130,7 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
   let items: HTMLButtonElement[] = [];
   let activeIndex = -1;
   let destroyed = false;
+  let stopTracking: (() => void) | undefined;
 
   const currentThemeSource = (): HTMLElement | null =>
     config.themeSource ?? root.closest<HTMLElement>(".mach-root") ?? root;
@@ -160,24 +150,15 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
   };
 
   const positionListbox = (): void => {
-    const rect = trigger.getBoundingClientRect();
-    const listRect = listbox.getBoundingClientRect();
-    const width = Math.max(rect.width, listRect.width);
-    const left = clamp(rect.left, 8, Math.max(8, window.innerWidth - width - 8));
-    const spaceBelow = window.innerHeight - rect.bottom - 8;
-    const openAbove = spaceBelow < Math.min(listRect.height, 240) && rect.top > spaceBelow;
-    const top = openAbove
-      ? Math.max(8, rect.top - listRect.height - 5)
-      : Math.min(window.innerHeight - listRect.height - 8, rect.bottom + 5);
-    listbox.style.minWidth = `${rect.width}px`;
-    listbox.style.left = `${left}px`;
-    listbox.style.top = `${Math.max(8, top)}px`;
-    listbox.classList.toggle("mach-select-listbox--above", openAbove);
+    listbox.style.minWidth = `${trigger.offsetWidth}px`;
+    positionAnchoredPortal(listbox, trigger, 5, true);
   };
 
   const close = (restoreFocus = false): boolean => {
     if (!isOpen()) return false;
-    listbox.classList.remove("mach-select-listbox--open", "mach-select-listbox--above");
+    stopTracking?.();
+    stopTracking = undefined;
+    listbox.classList.remove("mach-select-listbox--open");
     listbox.setAttribute("aria-hidden", "true");
     trigger.setAttribute("aria-expanded", "false");
     trigger.removeAttribute("aria-activedescendant");
@@ -197,20 +178,14 @@ export function createSelectControl(config: SelectControlOptions): SelectControl
   const open = (): void => {
     if (destroyed || trigger.disabled || isOpen()) return;
     const owner = currentThemeSource();
-    activateSelect({
-      owner,
-      close,
-      contains,
-      reposition: positionListbox
-    });
+    activateSelect({ owner, close, contains });
     activeIndex = selectedIndex(options, native.value);
     if (activeIndex < 0) activeIndex = nextEnabledIndex(options, -1, 1);
-    applyPortalTheme(listbox, owner);
-    document.body.appendChild(listbox);
+    mountPortal(listbox, trigger, owner);
     listbox.classList.add("mach-select-listbox--open");
     listbox.setAttribute("aria-hidden", "false");
     trigger.setAttribute("aria-expanded", "true");
-    positionListbox();
+    stopTracking = trackAnchoredPortal(listbox, trigger, positionListbox, close);
     sync();
     items[activeIndex]?.scrollIntoView?.({ block: "nearest" });
   };
