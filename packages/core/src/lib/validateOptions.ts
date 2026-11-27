@@ -58,14 +58,14 @@ function closestOption(input: string): string | undefined {
 
 function validateIdentityAndLayout(source: Record<string, unknown>, report: ReportIssue): void {
   if (source.rowKey != null && typeof source.rowKey !== "string" && typeof source.rowKey !== "function") {
-    report("INVALID_OPTION_VALUE", "rowKey", "rowKey 必须是字段路径或返回稳定业务主键的函数");
+    report("INVALID_OPTION_VALUE", "rowKey", "rowKey 必须是字段路径或返回稳定主键的函数");
   }
   if (source.domLayout === "autoHeight" && source.datasource != null) {
-    report("OPTION_CONFLICT", "domLayout", "autoHeight 会渲染全部已加载行，不适用于 datasource 无限滚动模式");
+    report("OPTION_CONFLICT", "domLayout", "autoHeight 不支持 datasource");
   }
   validateBlockDatasource(source, report);
   if (source.enableColumnResize != null && typeof source.enableColumnResize !== "boolean") {
-    report("INVALID_OPTION_VALUE", "enableColumnResize", "enableColumnResize 必须是 boolean；未配置时默认关闭");
+    report("INVALID_OPTION_VALUE", "enableColumnResize", "enableColumnResize 必须是 boolean");
   }
 }
 
@@ -75,16 +75,16 @@ function validateBlockDatasource(source: Record<string, unknown>, report: Report
     report("OPTION_CONFLICT", "datasourceMode", "datasourceMode='block' requires a datasource");
   }
   if (typeof source.getRowHeight === "function") {
-    report("OPTION_CONFLICT", "getRowHeight", "Random-access block rows require fixed rowHeight so unloaded offsets remain deterministic");
+    report("OPTION_CONFLICT", "getRowHeight", "Block rows require fixed rowHeight");
   }
   if (source.masterDetail === true) {
-    report("OPTION_CONFLICT", "masterDetail", "masterDetail is not supported by the sparse random-access block row model");
+    report("OPTION_CONFLICT", "masterDetail", "Block rows do not support masterDetail");
   }
   if (source.treeData === true) {
-    report("OPTION_CONFLICT", "treeData", "treeData requires the local/tree row model and cannot use random-access blocks");
+    report("OPTION_CONFLICT", "treeData", "Block rows do not support treeData");
   }
   if (source.rowKey == null) {
-    report("MISSING_STABLE_ROW_ID", "rowKey", "Random-access blocks require rowKey to preserve selection and identity after eviction");
+    report("MISSING_STABLE_ROW_ID", "rowKey", "Block rows require a stable rowKey");
   }
 }
 
@@ -122,7 +122,7 @@ function validateServerPagination(
 ): void {
   if (config.mode !== "server") return;
   if (source.rowKey == null) {
-    report("MISSING_STABLE_ROW_ID", "rowKey", "服务端分页建议提供稳定 rowKey，否则跨页选择与增量更新无法可靠保持");
+    report("MISSING_STABLE_ROW_ID", "rowKey", "服务端分页建议配置稳定 rowKey");
   }
   const total = config.total;
   if (total !== undefined && (typeof total !== "number" || !Number.isFinite(total) || total < 0)) {
@@ -136,7 +136,7 @@ function validatePagination(source: Record<string, unknown>, report: ReportIssue
     report("INVALID_OPTION_VALUE", "pagination", "pagination 必须是 boolean 或配置对象");
   }
   if (source.datasource != null && pagination !== undefined && pagination !== false) {
-    report("OPTION_CONFLICT", "pagination", "datasource 顺序无限模式与 pagination 不能同时启用；普通服务端分页请使用 pagination.mode='server'");
+    report("OPTION_CONFLICT", "pagination", "datasource 和 pagination 互斥，服务端分页请用 pagination.mode='server'");
   }
   if (pagination && typeof pagination === "object") {
     validateServerPagination(source, pagination as Record<string, unknown>, report);
@@ -150,7 +150,7 @@ export function validateGridOptions(options: Partial<GridOptions<any>> | Record<
   const report: ReportIssue = (code, option, message) => { issues.push({ code, option, message }); };
   validatePagination(source, report);
   if (source.treeData === true && source.masterDetail === true) {
-    report("OPTION_CONFLICT", "masterDetail", "treeData 与 masterDetail 不能同时启用，主从明细将被忽略");
+    report("OPTION_CONFLICT", "masterDetail", "treeData 已启用，忽略 masterDetail");
   }
   validateMetadataValues(source, report);
   validateIdentityAndLayout(source, report);

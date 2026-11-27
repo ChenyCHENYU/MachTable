@@ -1,5 +1,15 @@
 # @agile-team/mach-table-vue
 
+## 0.42.4
+
+### Patch Changes
+
+- 内置分页可选跳页，支持键盘提交，沿用本地与服务端分页协议。
+- 可独立配置点行联动和复选框批量勾选。
+- Vue 和 React 远程查询保留完整响应类型，动态列与汇总可直接从已接受的结果读取。
+- Updated dependencies
+  - @agile-team/mach-table@0.42.4
+
 ## 0.42.3
 
 ### Patch Changes

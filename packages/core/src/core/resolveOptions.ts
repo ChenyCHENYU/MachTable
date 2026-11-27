@@ -16,18 +16,17 @@ export const DEFAULT_COL_DEF: Partial<ColDef> = {
 export interface GridSizePreset {
   rowHeight: number;
   headerHeight: number;
-  fontSize: number;
-  cellPadding: number;
 }
 
 export const GRID_SIZE_PRESETS: Record<GridSize, GridSizePreset> = {
-  compact: { rowHeight: 30, headerHeight: 34, fontSize: 12, cellPadding: 6 },
-  normal: { rowHeight: 36, headerHeight: 40, fontSize: 13, cellPadding: 9 },
-  large: { rowHeight: 44, headerHeight: 48, fontSize: 14, cellPadding: 12 }
+  compact: { rowHeight: 30, headerHeight: 34 },
+  normal: { rowHeight: 36, headerHeight: 40 },
+  large: { rowHeight: 44, headerHeight: 48 }
 };
 
 // Primitive defaults share one immutable schema; object defaults remain grid-local.
 export const VALUE_DEFAULTS = {
+  selectOnRowClick: true,
   multiSort: true,
   stripedRows: false,
   showCellBorders: false,
@@ -138,8 +137,9 @@ function resolvePagination<TData>(options: GridOptions<TData>) {
     paginationTotal: finiteAtLeast(config?.total, 0, 0, true),
     paginationPageSize: pageSize,
     paginationPageSizeOptions: resolvePageSizeOptions(options, pageSize),
-    paginationShowTotal: config ? config.showTotal !== false : true,
-    paginationShowSizeSelector: config ? config.showPageSizeSelector !== false : true
+    paginationShowTotal: config?.showTotal !== false,
+    paginationShowSizeSelector: config?.showPageSizeSelector !== false,
+    paginationShowPageJump: config?.showPageJump === true
   };
 }
 

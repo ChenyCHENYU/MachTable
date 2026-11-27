@@ -2340,16 +2340,20 @@
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 24px;
-  border: var(--mach-border-width) solid var(--mach-border-color);
-  border-radius: var(--mach-radius-sm);
-  background: var(--mach-body-bg);
-  color: var(--mach-header-fg);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
   transition: border-color var(--mach-transition), color var(--mach-transition),
     background-color var(--mach-transition);
+}
+
+.mach-pagination-btn,
+.mach-pagination-jump input {
+  height: 24px;
+  border: var(--mach-border-width) solid var(--mach-border-color);
+  border-radius: var(--mach-radius-sm);
+  background: var(--mach-body-bg);
+  color: var(--mach-header-fg);
 }
 
 .mach-pagination-btn:hover:not(:disabled) {
@@ -2377,6 +2381,26 @@
   border-radius: var(--mach-radius-sm);
   color: var(--mach-header-fg);
   box-shadow: none;
+}
+
+.mach-pagination:has(.mach-pagination-jump) {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 40px;
+  padding-block: 7px;
+}
+
+.mach-pagination-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mach-pagination-jump input {
+  width: 7ch;
+  padding: 0 4px;
+  font: inherit;
+  text-align: center;
 }
 
 .mach-watermark {

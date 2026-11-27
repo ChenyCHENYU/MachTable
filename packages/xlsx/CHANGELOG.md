@@ -1,5 +1,12 @@
 # @agile-team/mach-table-xlsx
 
+## 0.42.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @agile-team/mach-table@0.42.4
+
 ## 0.42.3
 
 ### Patch Changes

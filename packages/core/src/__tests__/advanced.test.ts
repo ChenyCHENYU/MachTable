@@ -392,6 +392,35 @@ describe("column state persistence", () => {
     api.destroy();
   });
 
+  it("does not change checked rows when using row clicks to navigate", () => {
+    const host = createHost();
+    const onRowClicked = vi.fn();
+    const api = createGrid<Row>(host, {
+      columnDefs: [selectionColumn(), { field: "name" }],
+      rowData: makeRows(3),
+      rowKey: "id",
+      rowSelection: "multiple",
+      selectOnRowClick: false,
+      onRowClicked
+    });
+
+    try {
+      const cell = host.querySelector<HTMLElement>('.mach-row[data-id="2"] [data-col-id="name"]')!;
+      api.selection.setById("0");
+      host.querySelector<HTMLInputElement>('.mach-row[data-id="1"] .mach-row-checkbox')!.click();
+      cell.click();
+      expect(onRowClicked).toHaveBeenCalledWith(expect.objectContaining({ rowNode: expect.objectContaining({ id: "2" }) }));
+      expect(api.selection.getIds()).toEqual(["0", "1"]);
+
+      api.updateOptions({ selectOnRowClick: undefined });
+      cell.click();
+      expect(api.selection.getIds()).toEqual(["2"]);
+    } finally {
+      api.destroy();
+      host.remove();
+    }
+  });
+
   it.each(["single", "none"] as const)("enforces %s through selection APIs and restoration", (mode) => {
     const data = makeRows(3);
     const api = createGrid<Row>(createHost(), {

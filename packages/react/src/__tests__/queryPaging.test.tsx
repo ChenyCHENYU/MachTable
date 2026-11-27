@@ -1,6 +1,6 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { GridApi, PaginationChangedEvent, SortChangedEvent } from "@agile-team/mach-table";
 import { useMachTableQuery, type MachTablePageResult, type UseMachTableQueryOptions, type UseMachTableQueryReturn } from "../useMachTableQuery";
 
@@ -37,6 +37,47 @@ async function setup(options: Partial<UseMachTableQueryOptions<Row, { status: st
 }
 
 describe("React remote page recovery", () => {
+  it("infers the complete accepted response and preserves explicit row and query types", async () => {
+    type Criteria = { plant: string };
+    type ReportPage = MachTablePageResult<Row> & { columns: readonly string[]; variant: "detail" };
+    expectTypeOf<UseMachTableQueryOptions<Row, Criteria, ReportPage>["onSuccess"]>()
+      .toEqualTypeOf<((result: ReportPage) => void) | undefined>();
+    const response: ReportPage = { rows: [], total: 0, columns: ["id"], variant: "detail" };
+    const query: Criteria = { plant: "CC1" };
+    const onSuccess = vi.fn<(result: ReportPage) => void>();
+    let remote!: UseMachTableQueryReturn<Row>;
+    function Harness({ showPageJump }: { showPageJump?: boolean }) {
+      const legacy = useMachTableQuery<Row, Criteria>({
+        query, rowKey: "id", immediate: false, request: async () => response,
+        onSuccess: (result) => expectTypeOf(result).toEqualTypeOf<MachTablePageResult<Row>>()
+      });
+      expectTypeOf(legacy.rows).toEqualTypeOf<Row[]>();
+      const inferred = useMachTableQuery({
+        query, rowKey: "id", immediate: false, showPageJump,
+        request: async (params) => {
+          expectTypeOf(params.query).toEqualTypeOf<Criteria>();
+          return response;
+        },
+        onSuccess: (result) => {
+          expectTypeOf(result).toEqualTypeOf<ReportPage>();
+          onSuccess(result);
+        }
+      });
+      expectTypeOf(inferred.rows).toEqualTypeOf<Row[]>();
+      remote = inferred;
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    disposers.push(async () => { await act(async () => root.unmount()); });
+    await act(async () => root.render(createElement(Harness)));
+    expect(remote.bindings.pagination).not.toHaveProperty("showPageJump", true);
+    await act(async () => root.render(createElement(Harness, { showPageJump: true })));
+    expect(remote.bindings.pagination).toHaveProperty("showPageJump", true);
+    await act(async () => { await remote.reload(); });
+    expect(remote.rows).toEqual(response.rows);
+    expect(onSuccess.mock.calls[0]?.[0]).toBe(response);
+  });
+
   it("reloads the last valid page once without publishing an empty page or pruning selection", async () => {
     const fixture = await setup({ selectionScope: "page" });
     const { request, onSuccess } = fixture;

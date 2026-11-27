@@ -697,6 +697,7 @@ export class GridApiImpl<TData = any> {
     if (config.showPageSizeSelector != null) {
       resolved.paginationShowSizeSelector = config.showPageSizeSelector;
     }
+    resolved.paginationShowPageJump = config.showPageJump === true;
   }
 
   private updatePresentationOptions(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
@@ -810,6 +811,9 @@ export class GridApiImpl<TData = any> {
 
   private updateSelectionAndColumns(options: Partial<GridOptions<TData>>, effects: OptionUpdateEffects): void {
     const resolved = this.core.gridOptions;
+    if (hasOwnOption(options, "selectOnRowClick")) {
+      resolved.selectOnRowClick = options.selectOnRowClick ?? VALUE_DEFAULTS.selectOnRowClick;
+    }
     if (copyChangedOption(options, resolved, "rowSelection")) {
       this.core.selectionService.onModeChanged();
       effects.header = true;

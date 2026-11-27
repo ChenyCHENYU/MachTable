@@ -828,7 +828,16 @@ export class GridCore<TData = any> {
     return error;
   }
 
+  private loadingState?: { element: HTMLElement; label: HTMLElement };
+
   buildDefaultLoadingState(): HTMLElement {
+    const text = this.getLocaleText("loading");
+    // Refreshes should preserve the active animation and the live region node.
+    if (this.loadingState) {
+      const { element, label } = this.loadingState;
+      if (label.textContent !== text) label.textContent = text;
+      return element;
+    }
     const loading = el("div", "mach-loading");
 
     const visual = el("div", "mach-loading__visual");
@@ -839,8 +848,9 @@ export class GridCore<TData = any> {
     }
 
     const label = el("span", "mach-loading__label");
-    label.textContent = this.getLocaleText("loading");
+    label.textContent = text;
     loading.append(visual, label);
+    this.loadingState = { element: loading, label };
     return loading;
   }
 

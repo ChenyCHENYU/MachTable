@@ -22,8 +22,21 @@ test("loading is compact, themed and static under reduced motion", async ({ page
   await expect(loading.locator(".mach-spinner")).toHaveCount(0);
   const row = loading.locator(".mach-loading__row").first();
   await expect(row).toHaveCSS("animation-name", "mach-loading-pulse");
-  expect((await loading.boundingBox())!.width).toBeLessThan(200);
-  expect((await loading.boundingBox())!.height).toBeLessThan(70);
+  const { width, height } = await loading.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  });
+  expect(width).toBeGreaterThan(0);
+  expect(width).toBeLessThan(200);
+  expect(height).toBeGreaterThan(0);
+  expect(height).toBeLessThan(70);
+  const loadingNode = await loading.elementHandle();
+  await page.evaluate(() => {
+    const { grid } = window as unknown as { grid: import("../../packages/core/src/index").GridApi };
+    grid.updateOptions({ locale: { loading: "正在查询订单…" } });
+  });
+  await expect(loading).toHaveText("正在查询订单…");
+  expect(await loadingNode?.evaluate(element => element.isConnected)).toBe(true);
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
     // matchMedia change is asynchronous; wait for the owning grid before reading its palette.

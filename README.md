@@ -345,7 +345,9 @@ const columns = [
 
 远程 B 端列表从适配包的 `/workflows` 使用 `useMachTableQuery`：内置取消旧请求、防止过期响应覆盖、加载/空/错状态、服务端分页和跨页选择。`useMachTableEditing` 提供脏状态、部分成功、失败定位和乐观锁冲突闭环。
 
-删除后直接 `reload()`；当前页越界时最多补查一次最后有效页，最终结果一起更新页码、数据和总数。手动查询变更条件会取消旧请求，仍等待显式提交。动态表头在接受最新响应时同步更新，字典由项目独立刷新显示，见[远程查询](./docs/recipes/remote-query.md)与[动态报表](./docs/recipes/schema-driven.md)。
+远程工作流传 `showPageJump: true` 即可启用内置跳页，普通表格使用 `pagination: { showPageJump: true }`。主从页面可用 `selectOnRowClick: false` 保留点行联动，同时通过复选框独立维护批量勾选。 [分页](./docs/recipes/pagination-io.md) · [选择](./docs/recipes/selection.md)
+
+删除后直接 `reload()`，当前页越界时最多补查一次最后有效页。动态表格的 `onSuccess` 保留请求结果的类型，可以直接读取同一次响应的列和合计。字典通过项目的独立订阅刷新显示。 [远程查询](./docs/recipes/remote-query.md) · [动态报表](./docs/recipes/schema-driven.md)
 
 ## 架构原则
 

@@ -18,7 +18,8 @@ createGrid(host, {
     pageSize: 20,
     pageSizeOptions: [10, 20, 50, 100],
     showTotal: true,            // "共 55 条"
-    showPageSizeSelector: true  // "20 条/页" 下拉
+    showPageSizeSelector: true, // "20 条/页" 下拉
+    showPageJump: true          // 两页起显示跳页，默认关闭
   }
 });
 ```
@@ -32,6 +33,7 @@ createGrid(host, {
 | 单页数据 | 分页条正常显示（翻页按钮禁用）；`pagination: false` 完全关闭 |
 | 翻页 | « ‹ 第 1 / 3 页 › »，边界自动禁用；翻页回到页首 |
 | 每页条数 | 切换后保持首个可见行所在页 |
+| 跳到指定页 | 录入页码后按 Enter 或点击确认按钮，Esc 恢复当前页。非法输入不跳转，超出页数时使用最接近的页码 |
 | 过滤/排序 | 应用后页码自动收敛（超出时回到第 1 页） |
 | 序号列 | 跨页绝对编号（第 2 页首页显示 21） |
 | CSV 导出 / 打印 | 客户端完整数据集覆盖全部本地页；服务端分页或无限数据源只包含浏览器已加载的行 |
@@ -39,7 +41,8 @@ createGrid(host, {
 
 API：`api.pagination.setPage(n)` `api.pagination.setPageSize(n)` `api.pagination.getPage()` `api.pagination.getPageCount()` `api.pagination.getTotalRowCount()` `api.pagination.isEnabled()` `api.pagination.setEnabled(bool)`；运行时 `api.updateOptions({ pagination: false })`。
 
-服务端分页：用 `manualSorting` + `manualFiltering` + 自己的分页 UI，或走 [无限滚动](/recipes/infinite-scroll)。
+服务端分页可配置 `pagination: { mode: "server", page, pageSize, total, showPageJump: true }`。
+使用 Vue 或 React 的 [远程列表控制器](/recipes/remote-query) 时，在 `useMachTableQuery` 中传 `showPageJump: true`，继续绑定原有 `bindings` 即可。客户端和服务端共用分页条，只有目标页发生变化时才由跳页控件触发分页。
 
 ## 导出
 

@@ -1973,7 +1973,7 @@ export class BodyRenderer {
     if (!cellEl || !column) return;
     this.focusGridRoot();
     if (!this.core.gridOptions.suppressCellFocus) this.setFocusedCell(index, colId);
-    this.core.selectionService.onRowClick(node, e, false);
+    if (this.core.gridOptions.selectOnRowClick) this.core.selectionService.onRowClick(node, e, false);
     this.emitCellClick(e, node, index, column);
     this.maybeStartSingleClickEdit(node, index, column);
   }

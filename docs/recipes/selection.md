@@ -22,12 +22,30 @@ createGrid(host, {
 
 | 操作 | 行为 |
 | --- | --- |
-| 点击行 / 复选框 | 单选该行 |
+| 点击行 | 选中当前行并清除其他已选行 |
+| 点击复选框 | 切换当前行勾选状态 |
 | Ctrl(Win) / Cmd(Mac) + 点击 | 加选/减选 |
 | Shift + 点击 | 从锚点行到当前行范围选 |
 | 表头复选框 | 全选当前过滤结果（半选态表示部分选中） |
 | 空格键 | 选中焦点行 |
 | Ctrl/Cmd + A | 全选 |
+
+## 点行联动详情，勾选批量操作
+
+主从表用 `rowClicked` 切换明细，用 `selectOnRowClick: false` 保留独立的批量勾选。
+
+```ts
+createGrid(host, {
+  rowData,
+  rowKey: "id",
+  columnDefs: [selectionColumn(), { field: "name", headerName: "名称" }],
+  rowSelection: "multiple",
+  selectOnRowClick: false,
+  onRowClicked: ({ rowNode }) => openDetail(rowNode.data)
+});
+```
+
+Vue 使用 `:select-on-row-click="false"` 和 `@row-clicked`。按住 Shift、Ctrl 或 Cmd 点击普通单元格也只触发行点击，不改变已选行。复选框、键盘选择和 `api.selection` 继续按原规则工作。单元格焦点跟随点击，页面可自行保存当前明细行。
 
 ## 单选（radio 形态）
 
@@ -102,6 +120,3 @@ onSelectionChanged: (e) => {
 
 **Q：跨页（无限模式）全选了 50 行，表头为什么是半选？**
 表头全选态以服务端总行数为分母；已加载行全选时呈半选。用 `api.selection.getIds()` 获取完整选中集合。
-
-**Q：不想让点击行选中，只要复选框？**
-暂不支持分离（可监听 `rowClicked` 忽略）；该行为与 AG Grid 一致。

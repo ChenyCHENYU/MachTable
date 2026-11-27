@@ -48,14 +48,21 @@ export interface MachTablePageResult<TData> {
   total: number;
 }
 
-export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown>> {
-  request(params: MachTablePageRequest<TQuery>): Promise<MachTablePageResult<TData>>;
+export interface UseMachTableQueryOptions<
+  TData,
+  TQuery = Record<string, unknown>,
+  TResult extends MachTablePageResult<TData> = MachTablePageResult<TData>
+> {
+  /** Keep the base signature last so inline promises still infer their contextual row type. */
+  request: ((params: MachTablePageRequest<TQuery>) => Promise<TResult>) &
+    ((params: MachTablePageRequest<TQuery>) => Promise<MachTablePageResult<TData>>);
   query: MachTableQuerySource<TQuery>;
   /** Stable row key used for updates and cross-page selection. */
   rowKey: string | ((row: TData) => string | number);
   initialPage?: number;
   pageSize?: number;
   pageSizeOptions?: readonly number[];
+  showPageJump?: boolean;
   immediate?: boolean;
   /** auto reloads when query/grid criteria change; manual waits for reload/reset. */
   mode?: "auto" | "manual";
@@ -70,7 +77,8 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   /** Renders inside the first-class error overlay for the latest failed request. */
   errorOverlay?(context: { error: unknown; retry(): Promise<void> }): OverlayContent;
   emptyOverlay?: OverlayTemplate;
-  onSuccess?(result: MachTablePageResult<TData>): void;
+  /** Receives the accepted response, including metadata returned by request. */
+  onSuccess?(result: NoInfer<TResult>): void;
   onError?(error: unknown): void;
 }
 
@@ -115,8 +123,12 @@ function lastResultPage<T>(result: MachTablePageResult<T>, pageSize: number): nu
  * B-side remote-list controller: paging, sorting, filtering, cancellation,
  * stale-response protection and cross-page selection in one typed binding.
  */
-export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
-  options: UseMachTableQueryOptions<TData, TQuery>
+export function useMachTableQuery<
+  TData,
+  TQuery = Record<string, unknown>,
+  TResult extends MachTablePageResult<TData> = MachTablePageResult<TData>
+>(
+  options: UseMachTableQueryOptions<TData, TQuery, TResult>
 ): UseMachTableQueryReturn<TData> {
   const rows = shallowRef<TData[]>([]);
   const loading = ref(false);
@@ -135,7 +147,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
   let api: GridApi<TData> | null = null;
   let controller: AbortController | null = null;
   let generation = 0;
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let suppressGridEvents = false;
   let handledQuickFilterText = quickFilterText.value;
   let disposed = false;
@@ -155,13 +167,13 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     generation++;
     controller?.abort();
     controller = null;
-    if (debounceTimer != null) clearTimeout(debounceTimer);
-    debounceTimer = null;
+    clearTimeout(debounceTimer);
+    debounceTimer = undefined;
     loading.value = false;
   };
 
   const applyPageResult = (
-    result: MachTablePageResult<TData>,
+    result: TResult,
     acceptedPage: number
   ): Promise<void> => {
     const nextRows = [...result.rows];
@@ -274,7 +286,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     quickFilterText: quickFilterText.value,
     error: error.value,
     overlayErrorTemplate: error.value
-      ? () => options.errorOverlay?.({ error: error.value, retry: load }) ?? "Remote request failed. Please retry."
+      ? () => options.errorOverlay?.({ error: error.value, retry: load }) ?? "Request failed. Retry."
       : undefined,
     overlayNoRowsTemplate: options.emptyOverlay,
     pagination: {
@@ -284,7 +296,8 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
       pageSizeOptions: pageSizes,
       total: total.value,
       showTotal: true,
-      showPageSizeSelector: true
+      showPageSizeSelector: true,
+      showPageJump: options.showPageJump
     },
     onGridReady,
     onPaginationChanged,

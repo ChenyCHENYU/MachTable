@@ -43,19 +43,19 @@ onMounted(loadReport);
 import { shallowRef } from "vue";
 import type { ColDef } from "@agile-team/mach-table-vue";
 import { useMachTableQuery } from "@agile-team/mach-table-vue/workflows";
-import { getReportPageApi, type ReportPage, type ReportRow } from "@/api/report";
+import { getReportPageApi, type ReportRow } from "@/api/report";
 
 const columns = shallowRef<ColDef<ReportRow>[]>([]);
-const table = useMachTableQuery({
+const { bindings } = useMachTableQuery({
   query,
   rowKey: "id",
   request: getReportPageApi,
-  onSuccess: result => { columns.value = (result as ReportPage).columns; }
+  onSuccess: ({ columns: nextColumns }) => { columns.value = nextColumns; }
 });
-// <MachTable v-bind="table.bindings.value" :column-defs="columns" />
+// <MachTable v-bind="bindings" :column-defs="columns" />
 ```
 
-这里的类型恢复对应项目接口已验证的 `ReportPage`，不替代运行时校验。元数据必须在 `request` 返回前校验，不要在 `onSuccess` 中才处理坏结构。只有最新有效响应会进入 `onSuccess`；在同一个同步回调中替换列，Vue 会将列和行一起交给表格。旧请求晚到、取消及末页补查的中间结果都不会改变表头。不要在 `request` 等待后直接写列状态，也不要在 `onSuccess` 中再次等待异步请求。
+`onSuccess` 从 `getReportPageApi` 的返回值推断完整类型。项目在 `request` 返回前校验列元数据，只在 `onSuccess` 中同步应用已接收的列。Vue 会将列和行一起交给表格，包含列变化但返回零行的情况。旧请求晚到、取消及末页补查的中间结果都不会改变表头。
 
 字典晚到时由项目订阅字典并调用 `api.view.refreshCells()`，普通 `valueFormatter` 重新读取标签即可。无需重新请求业务数据、替换列、按单元格发请求或把字典实例传进表格。需要更新下拉选项时，由项目更新普通 `cellEditorParams.options` / `filterOptions` 配置，并在替换编辑配置前处理已有草稿。
 

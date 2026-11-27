@@ -36,8 +36,14 @@ export type MachTableRemoteSelectionState =
   | { mode: "explicit"; selectedKeys: string[] }
   | { mode: "allMatching"; excludedKeys: string[] };
 
-export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown>> {
-  request(params: MachTablePageRequest<TQuery>): Promise<MachTablePageResult<TData>>;
+export interface UseMachTableQueryOptions<
+  TData,
+  TQuery = Record<string, unknown>,
+  TResult extends MachTablePageResult<TData> = MachTablePageResult<TData>
+> {
+  /** Keep the base signature last so inline promises still infer their contextual row type. */
+  request: ((params: MachTablePageRequest<TQuery>) => Promise<TResult>) &
+    ((params: MachTablePageRequest<TQuery>) => Promise<MachTablePageResult<TData>>);
   query: MachTableQuerySource<TQuery>;
   /** Memoize object queries in React; queryKey can explicitly control reload dependencies. */
   queryKey?: unknown;
@@ -45,6 +51,7 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   initialPage?: number;
   pageSize?: number;
   pageSizeOptions?: readonly number[];
+  showPageJump?: boolean;
   immediate?: boolean;
   mode?: "auto" | "manual";
   debounceMs?: number;
@@ -55,7 +62,8 @@ export interface UseMachTableQueryOptions<TData, TQuery = Record<string, unknown
   initialQuickFilterText?: string | null;
   errorOverlay?(context: { error: unknown; retry(): Promise<void> }): OverlayContent;
   emptyOverlay?: OverlayTemplate;
-  onSuccess?(result: MachTablePageResult<TData>): void;
+  /** Receives the accepted response, including metadata returned by request. */
+  onSuccess?(result: NoInfer<TResult>): void;
   onError?(error: unknown): void;
 }
 
@@ -102,8 +110,12 @@ function lastResultPage<T>(result: MachTablePageResult<T>, pageSize: number): nu
 }
 
 /** React remote-list controller with cancellation, stale guards and cross-page selection. */
-export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
-  options: UseMachTableQueryOptions<TData, TQuery>
+export function useMachTableQuery<
+  TData,
+  TQuery = Record<string, unknown>,
+  TResult extends MachTablePageResult<TData> = MachTablePageResult<TData>
+>(
+  options: UseMachTableQueryOptions<TData, TQuery, TResult>
 ): UseMachTableQueryReturn<TData> {
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -163,7 +175,7 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     controller.signal.aborted || generation !== generationRef.current, []);
 
   const applyPageResult = useCallback((
-    result: MachTablePageResult<TData>,
+    result: TResult,
     acceptedPage: number
   ): void => {
     const nextRows = [...result.rows];
@@ -414,19 +426,19 @@ export function useMachTableQuery<TData, TQuery = Record<string, unknown>>(
     advancedFilterModel,
     quickFilterText,
     overlayErrorTemplate: error
-      ? () => optionsRef.current.errorOverlay?.({ error, retry: load }) ?? "Remote request failed. Please retry."
+      ? () => optionsRef.current.errorOverlay?.({ error, retry: load }) ?? "Request failed. Retry."
       : undefined,
     overlayNoRowsTemplate: options.emptyOverlay,
     pagination: {
       mode: "server", page, pageSize, pageSizeOptions: pageSizes, total,
-      showTotal: true, showPageSizeSelector: true
+      showTotal: true, showPageSizeSelector: true, showPageJump: options.showPageJump
     },
     onGridReady: ({ api }) => { apiRef.current = api; queueMicrotask(syncVisibleSelection); },
     onPaginationChanged,
     onSortChanged,
     onFilterChanged,
     onSelectionChanged
-  }), [advancedFilterModel, error, load, loading, onFilterChanged, onPaginationChanged, onSelectionChanged, onSortChanged, options.emptyOverlay, page, pageSize, pageSizes, quickFilterText, rowId, rows, syncVisibleSelection, total]);
+  }), [advancedFilterModel, error, load, loading, onFilterChanged, onPaginationChanged, onSelectionChanged, onSortChanged, options.emptyOverlay, options.showPageJump, page, pageSize, pageSizes, quickFilterText, rowId, rows, syncVisibleSelection, total]);
 
   const selectedKeys = allMatching.current ? [] : [...selectedIds.current];
   const selectedRows = [...selectedById.current.entries()]

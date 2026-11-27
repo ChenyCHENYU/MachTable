@@ -207,6 +207,8 @@ export interface PaginationConfig {
   pageSizeOptions?: number[];
   showTotal?: boolean;
   showPageSizeSelector?: boolean;
+  /** Show the page jump control when there are at least two pages. Defaults to false. */
+  showPageJump?: boolean;
 }
 
 export interface WatermarkConfig {
@@ -268,6 +270,8 @@ export interface GridOptions<TData = any> extends EventHandlers<TData> {
   /** Maximum body height in CSS pixels for autoHeight. Larger results scroll virtually. */
   maxBodyHeight?: number;
   rowSelection?: RowSelectionMode;
+  /** Set to false to keep row clicks separate from checkbox and keyboard selection. Defaults to true. */
+  selectOnRowClick?: boolean;
   multiSort?: boolean;
   size?: GridSize;
   stripedRows?: boolean;
@@ -398,6 +402,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   domLayout: DomLayoutMode;
   maxBodyHeight?: number;
   rowSelection: RowSelectionMode;
+  selectOnRowClick: boolean;
   multiSort: boolean;
   size: GridSize;
   stripedRows: boolean;
@@ -453,6 +458,7 @@ export interface ResolvedGridOptions<TData = any> extends EventHandlers<TData> {
   paginationPageSizeOptions: number[];
   paginationShowTotal: boolean;
   paginationShowSizeSelector: boolean;
+  paginationShowPageJump: boolean;
   watermarkEnabled: boolean;
   watermarkConfig: WatermarkConfig | null;
   suppressWarnings: boolean;

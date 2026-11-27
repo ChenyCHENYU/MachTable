@@ -37,7 +37,7 @@ const columns: ColDef<Order>[] = [
 
 默认就是 `list`，无需声明场景、外部分页器、手动 `loading` 或请求序号。`bindings` 连接服务端分页、排序、过滤、加载和错误状态，表格继续使用内置 Overlay；标准页面不需要重复写 `#empty` 插槽。查询失败后可调用 `table.retry()`；内置错误文案不代表自动提供了重试按钮。
 
-需要防抖时再加 `debounceMs`；需要不同页大小时再加 `pageSize/pageSizeOptions`。品牌化空态或就地重试按钮也按需提供：
+需要防抖时添加 `debounceMs`，自定义每页条数使用 `pageSize` 和 `pageSizeOptions`。页数较多时可用 `showPageJump: true` 启用跳页输入框。品牌化空态或就地重试按钮按需配置。
 
 ```ts
 useMachTableQuery({
@@ -92,6 +92,8 @@ interface MachTablePageRequest<TQuery> {
 ```ts
 { rows: TData[]; total: number }
 ```
+
+响应也可以携带业务元数据，例如列定义或报表版本。Vue 和 React 的 `onSuccess` 从 `request` 推断完整响应类型，并接收当次通过校验的响应。已有的两个类型参数用法仍可使用。需要显式标注扩展响应时，传入第三个类型参数 `useMachTableQuery<Row, Query, Page>()`。 [带分页的动态报表](/recipes/schema-driven#带分页、取消和重试的动态报表)
 
 例如项目的 `getOrdersApi` 实际返回 `{ records, total }`，则在接口层完成映射。下面只示意这个已声明的响应结构；如果 HTTP 客户端还包了一层 `data`，应在项目现有请求层按真实协议解包。
 

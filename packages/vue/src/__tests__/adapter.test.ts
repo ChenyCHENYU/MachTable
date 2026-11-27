@@ -1483,7 +1483,7 @@ describe("Vue adapter", () => {
     );
     const errorOverlay = remote!.bindings.value
       .overlayErrorTemplate as () => string;
-    expect(errorOverlay()).toContain("Remote request failed");
+    expect(errorOverlay()).toBe("Request failed. Retry.");
     await remote!.retry();
     expect(remote!.error.value).toBeInstanceOf(TypeError);
     await remote!.reload({ resetPage: true });

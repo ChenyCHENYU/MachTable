@@ -60,6 +60,8 @@ api.destroy();
 
 公共命令按 `rows`、`columns`、`selection`、`editing`、`filtering`、`sorting`、`pagination`、`hierarchy`、`view`、`state`、`io`、`diagnostics` 划分。完整签名见 [GridApi](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/api/grid-api.md)。
 
+使用 `pagination: { showPageJump: true }` 可直接跳到指定页。可配置 `selectOnRowClick: false`，让点行定位和复选框勾选互相独立。
+
 大型本地数据 Worker 使用独立入口：
 
 ```ts

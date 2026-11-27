@@ -91,6 +91,8 @@ import machTableConfig from "@/config/mach-table.config";
 
 远程页删除后只需调用 `reload()`：当前页越界时最多补查一次最后有效页，不先发布中间空页。手动查询模式的条件变化会取消旧请求，仍等待显式提交。详见[远程查询](https://github.com/ChenyCHENYU/MachTable/blob/main/docs/recipes/remote-query.md)。
 
+需要跳到指定页时，在 `useMachTableQuery` 中启用 `showPageJump: true`。`onSuccess` 保留接口返回的列定义和汇总等扩展字段类型。主从表可用 `selectOnRowClick={false}` 将点行联动和勾选批量独立配置。
+
 ## 按需加载
 
 React 不模拟全局组件注册。路由本身懒加载时普通 import 已自然拆包；需要独立边界时：

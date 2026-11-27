@@ -44,6 +44,7 @@ export const GRID_OPTION_KINDS = {
   domLayout: "string",
   maxBodyHeight: "number",
   rowSelection: "string",
+  selectOnRowClick: "boolean",
   multiSort: "boolean",
   size: "string",
   stripedRows: "boolean",

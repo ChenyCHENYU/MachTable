@@ -1,5 +1,5 @@
 import { effectScope, nextTick, ref } from "vue";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { GridApi, PaginationChangedEvent, SortChangedEvent } from "@agile-team/mach-table";
 import { useMachTableQuery, type MachTablePageResult, type UseMachTableQueryOptions } from "../useMachTableQuery";
 
@@ -28,6 +28,45 @@ function setup(options: Partial<UseMachTableQueryOptions<Row, { status: string }
 }
 
 describe("Vue remote page recovery", () => {
+  it("infers the complete accepted response and preserves explicit row and query types", async () => {
+    type Criteria = { plant: string };
+    type ReportPage = MachTablePageResult<Row> & { columns: readonly string[]; variant: "detail" };
+    expectTypeOf<UseMachTableQueryOptions<Row, Criteria, ReportPage>["onSuccess"]>()
+      .toEqualTypeOf<((result: ReportPage) => void) | undefined>();
+    const response: ReportPage = { rows: [], total: 0, columns: ["id"], variant: "detail" };
+    const query = ref<Criteria>({ plant: "CC1" });
+    const onSuccess = vi.fn<(result: ReportPage) => void>();
+    const scope = effectScope();
+    disposers.push(() => scope.stop());
+    const remote = scope.run(() => {
+      const legacy = useMachTableQuery<Row, Criteria>({
+        query, rowKey: "id", immediate: false, request: async () => response,
+        onSuccess: (result) => expectTypeOf(result).toEqualTypeOf<MachTablePageResult<Row>>()
+      });
+      expectTypeOf(legacy.rows.value).toEqualTypeOf<Row[]>();
+      return useMachTableQuery({
+        query, rowKey: "id", immediate: false,
+        request: async (params) => {
+          expectTypeOf(params.query).toEqualTypeOf<Criteria>();
+          return response;
+        },
+        onSuccess: (result) => {
+          expectTypeOf(result).toEqualTypeOf<ReportPage>();
+          onSuccess(result);
+        }
+      });
+    })!;
+    expectTypeOf(remote.rows.value).toEqualTypeOf<Row[]>();
+    await remote.reload();
+    expect(remote.rows.value).toEqual(response.rows);
+    expect(onSuccess.mock.calls[0]?.[0]).toBe(response);
+  });
+
+  it("passes through the page jump option without changing the default", () => {
+    expect(setup().remote.bindings.value.pagination).not.toHaveProperty("showPageJump", true);
+    expect(setup({ showPageJump: true }).remote.bindings.value.pagination).toHaveProperty("showPageJump", true);
+  });
+
   it("does not start a request when the scope is disposed while reset flushes grid criteria", async () => {
     const scope = effectScope();
     const request = vi.fn<UseMachTableQueryOptions<Row>["request"]>()

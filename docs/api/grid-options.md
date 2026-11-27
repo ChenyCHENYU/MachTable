@@ -72,6 +72,7 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 | 配置 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `rowSelection` | `"none" \| "single" \| "multiple"` | `"none"` | 行选择模式 |
+| `selectOnRowClick` | `boolean` | `true` | 普通行点击是否改变选择。设为 `false` 保留行点击事件、复选框与键盘选择 |
 | `editType` | `"cell" \| "fullRow"` | `"cell"` | 单元格或原子整行编辑 |
 | `editableIndicator` | `"hover" \| "always" \| "none"` | `"hover"` | 可编辑铅笔提示策略 |
 | `singleClickEdit` | `boolean` | `false` | 单击开始编辑 |
@@ -108,7 +109,7 @@ rowKey: (row) => `${row.tenantId}:${row.id}`
 
 | 配置 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `pagination` | `boolean \| PaginationConfig` | `true` | 默认客户端分页，每页 20 条。`false` 关闭，`datasource` 无限模式自动关闭 |
+| `pagination` | `boolean \| PaginationConfig` | `true` | 默认客户端分页，每页 20 条。`false` 关闭，`datasource` 无限模式自动关闭。`showPageJump: true` 在至少两页时显示跳页 |
 | `datasource` | `GridDatasource<T>` | — | 无限/随机访问数据源 |
 | `datasourceMode` | `"sequential" \| "block"` | `"sequential"` | 顺序追加或随机块模型 |
 | `blockSize` | `number` | `100` | 每块行数 |

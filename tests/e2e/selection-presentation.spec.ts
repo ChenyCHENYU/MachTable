@@ -69,3 +69,32 @@ test("marker follows the leading pane and controls preserve keyboard, radio and 
     await expect(checkbox).toBeChecked();
   }
 });
+
+test("row navigation can preserve independently checked rows", async ({ page }) => {
+  const cell = (id: string) => page.locator(`.mach-pane--center .mach-row[data-id="${id}"] [data-col-id="id"]`);
+  const checkbox = (id: string) => page.locator(`.mach-pane--left .mach-row[data-id="${id}"] input`);
+
+  await page.evaluate(() => window.selectionPresentation.updateOptions({
+    selectOnRowClick: false,
+    onRowClicked: ({ rowNode }) => { document.getElementById("grid")!.dataset.activeRow = rowNode.id; }
+  }));
+  expect(await page.evaluate(() => window.selectionPresentation.getOption("selectOnRowClick"))).toBe(false);
+  await checkbox("0").check();
+  await checkbox("1").check();
+  for (const [id, modifiers] of [["2", []], ["4", ["Shift"]], ["2", ["ControlOrMeta"]]] as const) {
+    await cell(id).click({ modifiers: [...modifiers] });
+    await expect(page.locator("#grid")).toHaveAttribute("data-active-row", id);
+    await expect(checkbox("0")).toBeChecked();
+    await expect(checkbox("1")).toBeChecked();
+    await expect(checkbox(id)).not.toBeChecked();
+  }
+
+  await checkbox("3").focus();
+  await page.keyboard.press("Space");
+  await expect(checkbox("3")).toBeChecked();
+  await page.evaluate(() => window.selectionPresentation.updateOptions({ selectOnRowClick: undefined }));
+  await cell("2").click();
+  await expect(checkbox("2")).toBeChecked();
+  await expect(checkbox("0")).not.toBeChecked();
+  await expect(checkbox("3")).not.toBeChecked();
+});

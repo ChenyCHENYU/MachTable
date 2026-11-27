@@ -587,7 +587,7 @@ describe("React B-side workflows", () => {
 
     await act(async () => { await query!.reload(); });
     expect(query!.error).toEqual(expect.objectContaining({ message: "offline" }));
-    expect((query!.bindings.overlayErrorTemplate as () => string)()).toContain("Remote request failed");
+    expect((query!.bindings.overlayErrorTemplate as () => string)()).toBe("Request failed. Retry.");
     await act(async () => { await query!.retry(); });
     expect(query!.error).toBeInstanceOf(TypeError);
     await act(async () => { await query!.reload({ resetPage: true }); });

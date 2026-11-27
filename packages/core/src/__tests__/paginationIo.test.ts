@@ -51,6 +51,7 @@ describe("pagination", () => {
     expect(bar.style.display).toBe("");
     expect(bar.textContent).toContain("共 55 条");
     expect(bar.textContent).toContain("1 / 3");
+    expect(bar.querySelector(".mach-pagination-jump")).toBeNull();
     const nativeSize = bar.querySelector<HTMLSelectElement>(".mach-pagination-size")!;
     const sizeTrigger = bar.querySelector<HTMLButtonElement>(".mach-pagination-size-control .mach-select-trigger")!;
     expect(nativeSize.hidden).toBe(true);
@@ -100,6 +101,54 @@ describe("pagination", () => {
     api.pagination.setPage(2);
     const firstRow = host.querySelector('.mach-row[data-index="0"]') as HTMLElement;
     expect(firstRow.textContent?.trimStart().startsWith("21")).toBe(true);
+    api.destroy();
+  });
+
+  it("jumps by keyboard or button, synchronizes page changes and ignores invalid input", () => {
+    const { api, host } = createPagedGrid(155, { showPageJump: true });
+    const listener = vi.fn();
+    api.on("paginationChanged", listener);
+    const jump = host.querySelector<HTMLElement>(".mach-pagination-jump")!;
+    const input = jump.querySelector("input")!;
+    const confirm = jump.querySelector("button")!;
+    const enter = (value: string) => {
+      input.value = value;
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", cancelable: true, bubbles: true }));
+    };
+
+    expect(input.value).toBe("1");
+    enter("5");
+    expect(api.rows.getAt(0)?.data?.id).toBe("r80");
+    expect(listener).toHaveBeenCalledTimes(1);
+    for (const value of ["5", "  ", "text", "2.5", "2e1", "-2"]) {
+      enter(value);
+      expect(input.value).toBe("5");
+    }
+    expect(listener).toHaveBeenCalledTimes(1);
+    input.value = "4";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(input.value).toBe("5");
+
+    input.value = "999";
+    confirm.click();
+    expect(input.value).toBe("8");
+    enter("0");
+    expect(input.value).toBe("1");
+    api.pagination.setPage(3);
+    expect(input.value).toBe("3");
+    api.rows.setData(makeRows(5));
+    expect(host.querySelector(".mach-pagination-jump")).toBeNull();
+    api.rows.setData(makeRows(155));
+    expect(host.querySelector<HTMLInputElement>(".mach-pagination-jump input")?.value).toBe("1");
+    api.destroy();
+  });
+
+  it("creates and removes the optional jump control when pagination options change", () => {
+    const { api, host } = createPagedGrid(100);
+    api.updateOptions({ pagination: { pageSize: 20, showPageJump: true } });
+    expect(host.querySelector(".mach-pagination-jump")).toBeTruthy();
+    api.updateOptions({ pagination: { pageSize: 20, showPageJump: false } });
+    expect(host.querySelector(".mach-pagination-jump")).toBeNull();
     api.destroy();
   });
 
@@ -189,16 +238,23 @@ describe("pagination", () => {
     const api = createGrid(host, {
       columnDefs: [{ field: "id" }],
       rowData: [{ id: 21 }, { id: 22 }],
-      pagination: { mode: "server", page: 3, pageSize: 10, total: 42 },
+      pagination: { mode: "server", page: 3, pageSize: 10, total: 42, showPageJump: true },
       onPaginationChanged: listener
     });
     expect(api.rows.getCount()).toBe(2);
     expect(api.pagination.getPage()).toBe(3);
     expect(api.pagination.getPageCount()).toBe(5);
     expect(api.pagination.getTotalRowCount()).toBe(42);
-    api.pagination.setPage(4);
-    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ page: 4, total: 42 }));
-    api.updateOptions({ pagination: { mode: "server", page: 4, pageSize: 10, total: 33 } });
+    const input = host.querySelector<HTMLInputElement>(".mach-pagination-jump input")!;
+    const jump = host.querySelector<HTMLButtonElement>(".mach-pagination-go")!;
+    expect(input.value).toBe("3");
+    listener.mockClear();
+    input.value = "5";
+    jump.click();
+    jump.click();
+    expect(listener).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ page: 5, total: 42 }));
+    api.updateOptions({ pagination: { mode: "server", page: 4, pageSize: 10, total: 33, showPageJump: true } });
+    expect(input.value).toBe("4");
     expect(api.pagination.getPage()).toBe(4);
     expect(api.pagination.getPageCount()).toBe(4);
     api.destroy();
